@@ -1,0 +1,31 @@
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Backend
+backend/.gradle/
+backend/build/
+backend/out/
+
+# Python and Airflow
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+pipeline/logs/
+
+# Local infrastructure
+*.log
+minio-data/
+postgres-data/
