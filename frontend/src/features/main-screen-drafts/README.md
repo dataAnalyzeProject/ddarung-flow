@@ -1,7 +1,7 @@
 # 메인 화면 스타일 시안
 
 실제 지도, 따릉이 API, 로그인, 예측 계산을 연결하지 않은 PC 화면용 디자인 시안입니다.
-세 시안은 모두 `data/mockData.js`의 같은 문구와 숫자를 사용합니다.
+여섯 시안은 모두 `data/mockData.js`의 같은 문구와 숫자를 사용합니다.
 
 ## 컴포넌트
 
@@ -10,6 +10,9 @@
 | 시안 1 | `drafts/Draft1MapFirst.jsx` | `Draft1MapFirst` | 지도를 화면 전체에 크게 배치하고 검색창과 추천 결과를 지도 위에 표시 |
 | 시안 2 | `drafts/Draft2MapAndList.jsx` | `Draft2MapAndList` | 검색, 지도, 대여소 목록을 좌우 3영역으로 분리 |
 | 시안 3 | `drafts/Draft3SearchFirst.jsx` | `Draft3SearchFirst` | 검색 영역을 가장 먼저 강조하고 아래에 카드 결과와 지도를 표시 |
+| 시안 4 | `drafts/Draft4Dashboard.jsx` | `Draft4Dashboard` | 어두운 관제 대시보드 형태로 지도와 실시간 예측 목록을 배치 |
+| 시안 5 | `drafts/Draft5JourneyTimeline.jsx` | `Draft5JourneyTimeline` | 대여소 추천 결과를 이동 경로 타임라인 형태로 표시 |
+| 시안 6 | `drafts/Draft6CardCanvas.jsx` | `Draft6CardCanvas` | 큰 숫자 카드와 지도 타일을 나란히 배치한 밝은 편집 디자인 |
 
 ## 조장에게 요청할 연결 예시
 
@@ -23,7 +26,7 @@ function App() {
 }
 ```
 
-시안 2는 `Draft2MapAndList`, 시안 3은 `Draft3SearchFirst`로 이름만 바꿔 연결합니다.
+시안 2부터 시안 6까지는 표에 적힌 컴포넌트 이름으로 바꿔 연결합니다.
 
 ## 범위
 
@@ -32,4 +35,3 @@ function App() {
 - 로그인, 보안, DB, 백엔드 연결 없음
 - 모바일 대응 및 시안 비교 화면 없음
 - 새 라이브러리 사용 없음
-
