@@ -27,12 +27,12 @@
 
 .header-area h1 {
     font-size: 28px;
-    margin-bottom: 15px;
+    margin-bottom: 10 px;
 }
 
 .header-area p {
     margin: 8px 0;
-    margin-bottom: 15px;
+    margin-bottom: 40px;
 }
 
 
@@ -45,23 +45,36 @@
 }
 
 
-/* 소셜 버튼 브랜드 컬러 및 세부 디테일 */
-.social-login-area button {
-    height: 44px;
-    border: 1px solid #ddd;
-    border-radius: 6px;
-    font-size: 15px;
-    font-weight: 500;
+
+/* [추가] 이메일 로그인 / 회원가입 보조 링크 스타일 */
+.sub-links {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+.sub-links .link-btn {
+    background: none;
+    border: none;
+    height: auto;
+    padding: 0;
+    font-size: 13px;
+    color: #777;
     cursor: pointer;
-    transition: background-color 0.2s, opacity 0.2s;
 }
 
-
-/* 비활성 상태 */
-.social-login-area button:disabled {
-    cursor: not-allowed;
-    opacity: 0.5;
+.sub-links .link-btn:hover {
+    text-decoration: underline;
+    color: #333;
 }
+
+.sub-links .divider {
+    font-size: 11px;
+    color: #ccc;
+}
+
 
 
 /* 상태 표시 영역 */
@@ -69,24 +82,6 @@
     margin-top: 30px;
 
     text-align: center;
-}
-
-/* 개별 버튼 색상 구분 (원할 경우 추가) */
-.social-login-area button.kakao {
-    background-color: #FEE500;
-    color: #000;
-    border: none;
-}
-
-.social-login-area button.naver {
-    background-color: #03C75A;
-    color: #fff;
-    border: none;
-}
-
-.social-login-area button.google {
-    background-color: #ffffff;
-    color: #757575;
 }
 
 /* 상태 결과 박스 (성공/실패 시각화) */

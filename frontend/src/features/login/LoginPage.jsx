@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import './LoginPage.css';
+import SocialLoginButton from './components/SocialLoginButton';
 
 // 상태 정의
 const LOGIN_STATUS = {
@@ -48,36 +49,37 @@ export default function LoginPage() {
         <div className="login-page-container">
             {/* 1. Header 영역 */}
             <header className="header-area">
-                <h1>따릉이 예측 서비스</h1>
+                <h1>따릉이 거리 예측 서비스</h1>
                 {loginStatus === LOGIN_STATUS.WAITING && (
                     <p>예측을 확인하려면 로그인이 필요합니다.</p>
                 )}
             </header>
 
             {/* 2. SocialLoginArea 영역 (로그인 전/실패/취소/로그아웃 완료 상태일 때 표시) */}
-            {[LOGIN_STATUS.WAITING, LOGIN_STATUS.LOADING].includes(loginStatus) && (
+            {![LOGIN_STATUS.SUCCESS, LOGIN_STATUS.LOGGING_OUT].includes(loginStatus) && (
                 <div className="social-login-area">
-                    <button
-                        className="kakao"
+                    <SocialLoginButton
+                        provider="Kakao"
                         disabled={isButtonDisabled}
                         onClick={() => handleLogin('Kakao')}
-                    >
-                        카카오로 시작하기
-                    </button>
-                    <button
-                        className="naver"
+                    />
+                    <SocialLoginButton
+                        provider="Naver"
                         disabled={isButtonDisabled}
                         onClick={() => handleLogin('Naver')}
-                    >
-                        네이버로 시작하기
-                    </button>
-                    <button
-                        className="google"
+                    />
+                    <SocialLoginButton
+                        provider="Google"
                         disabled={isButtonDisabled}
                         onClick={() => handleLogin('Google')}
-                    >
-                        구글로 시작하기
-                    </button>
+                    />
+                    <div className="sub-links">
+                        <button className="link-btn" disabled={isButtonDisabled}>이메일로 로그인</button>
+                        <span className="divider">|</span>
+                        <button className="link-btn" disabled={isButtonDisabled}>회원가입</button>
+                        <span className="divider">|</span>
+                        <button className="link-btn" disabled={isButtonDisabled}>둘러보기</button>
+                    </div>
                 </div>
             )}
 
