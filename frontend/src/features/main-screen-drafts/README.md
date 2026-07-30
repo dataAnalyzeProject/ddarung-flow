@@ -12,7 +12,7 @@
 
 `frontend/src/features/main-screen-drafts/`
 
-이 폴더 밖의 파일은 수정하지 않습니다. 특히 `frontend/src/App.tsx`는 조장 또는 화면 통합 담당자가 연결합니다.
+이 폴더 밖의 파일은 수정하지 않습니다. 특히 `frontend/src/App.jsx`는 조장 또는 화면 통합 담당자가 연결합니다.
 
 ## 3. 먼저 만들 폴더
 
@@ -22,7 +22,7 @@
 
 ## 4. 만들어야 하는 파일
 
-### `MainScreenDraftsPage.tsx`
+### `MainScreenDraftsPage.jsx`
 
 1안부터 4안까지 한 화면에서 선택하고 비교하게 만드는 파일입니다.
 
@@ -30,7 +30,7 @@
 
 예시안 선택 버튼과 비교 화면의 크기, 간격, 작은 화면 모양을 정하는 파일입니다.
 
-### `mockStations.ts`
+### `mockStations.js`
 
 화면에서 사용할 가짜 대여소 자료를 적는 파일입니다.
 
@@ -43,19 +43,19 @@
 - 걸리는 시간
 - 자료 기준시각
 
-### `drafts/Draft1MapFirst.tsx`
+### `drafts/Draft1MapFirst.jsx`
 
 1안입니다. 지도를 가장 크게 보여 주고 검색창과 자세한 정보를 지도 위나 아래에 배치합니다.
 
-### `drafts/Draft2MapAndList.tsx`
+### `drafts/Draft2MapAndList.jsx`
 
 2안입니다. 지도와 대체 대여소 목록을 한 화면에서 함께 비교하게 만듭니다.
 
-### `drafts/Draft3SearchFirst.tsx`
+### `drafts/Draft3SearchFirst.jsx`
 
 3안입니다. 출발지와 자전거를 빌릴 장소 입력을 먼저 보여 주고 그다음 지도를 보여 줍니다.
 
-### `drafts/Draft4QuickPrediction.tsx`
+### `drafts/Draft4QuickPrediction.jsx`
 
 4안입니다. 현재 위치와 “몇 분 후” 선택을 가장 먼저 보여 줍니다.
 
@@ -90,9 +90,9 @@ npm start
 ## 7. 작업 순서
 
 1. `drafts` 폴더와 위 파일을 정확한 이름으로 만듭니다.
-2. `mockStations.ts`에 가짜 대여소 자료 5개 이상을 만듭니다.
+2. `mockStations.js`에 가짜 대여소 자료 5개 이상을 만듭니다.
 3. 1안부터 차례대로 화면을 만듭니다.
-4. `MainScreenDraftsPage.tsx`에서 각 안을 선택해 볼 수 있게 합니다.
+4. `MainScreenDraftsPage.jsx`에서 각 안을 선택해 볼 수 있게 합니다.
 5. 조장에게 `MainScreenDraftsPage`를 전체 화면에 연결해 달라고 요청합니다.
 6. 각 안의 장점 2개와 단점 2개를 Notion 작업 카드에 적습니다.
 7. 추천안 하나와 추천 이유를 적습니다.
@@ -110,5 +110,5 @@ npm start
 
 - 실제 Kakao 지도 API 연결
 - 실제 예측 서버 연결
-- `App.tsx`, `pages`, `shared` 직접 수정
+- `App.jsx`, `pages`, `shared` 직접 수정
 - 최종 디자인이나 공통 부품을 임의로 확정
