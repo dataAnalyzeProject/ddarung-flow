@@ -1,18 +1,8 @@
 import { useState } from 'react';
 import './LoginPage.css';
 import SocialLoginButton from './components/SocialLoginButton';
+import { LOGIN_STATUS, MOCK_USERS, STATUS_MESSAGES } from './data/authDemoData';
 
-// 상태 정의
-const LOGIN_STATUS = {
-    WAITING: 'WAITING',
-    LOADING: 'LOADING',
-    SUCCESS: 'SUCCESS',
-    FAILED: 'FAILED',
-    CANCELLED: 'CANCELLED',
-    EXPIRED: 'EXPIRED',
-    LOGGED_OUT: 'LOGGED_OUT',
-    LOGGING_OUT: 'LOGGING_OUT',
-};
 
 export default function LoginPage() {
     const [loginStatus, setLoginStatus] = useState(LOGIN_STATUS.WAITING);
@@ -24,7 +14,7 @@ export default function LoginPage() {
 
         // 시뮬레이션용 타임아웃 (예시)
         setTimeout(() => {
-            setUserInfo({ name: '홍길동', provider });
+            setUserInfo(MOCK_USERS[provider]);
             setLoginStatus(LOGIN_STATUS.SUCCESS);
         }, 1500);
     };
@@ -50,7 +40,7 @@ export default function LoginPage() {
             {/* 1. Header 영역 */}
             <header className="header-area">
                 <h1>따릉이 거리 예측 서비스</h1>
-                {loginStatus === LOGIN_STATUS.WAITING && (
+                {loginStatus !== LOGIN_STATUS.SUCCESS && loginStatus !== LOGIN_STATUS.LOADING && (
                     <p>예측을 확인하려면 로그인이 필요합니다.</p>
                 )}
             </header>
@@ -84,15 +74,7 @@ export default function LoginPage() {
             )}
 
             {/* 3. StatusArea (상태에 맞는 UI 분기) */}
-            <div className="status-area">
-                {loginStatus === LOGIN_STATUS.WAITING && (
-                    <p className="status-text">상태 : 로그인 전</p>
-                )}
-
-                {loginStatus === LOGIN_STATUS.LOADING && (
-                    <p className="status-text">로그인 처리 중입니다...</p>
-                )}
-
+            <div>
                 {loginStatus === LOGIN_STATUS.SUCCESS && (
                     <div className="success-box">
                         <h2>환영합니다.</h2>
@@ -102,38 +84,8 @@ export default function LoginPage() {
                     </div>
                 )}
 
-                {loginStatus === LOGIN_STATUS.FAILED && (
-                    <div className="error-box">
-                        <p>로그인에 실패했습니다.</p>
-                        <p>다시 시도해주세요.</p>
-                        <button onClick={resetToLogin}>다시 시도</button>
-                    </div>
-                )}
-
-                {loginStatus === LOGIN_STATUS.CANCELLED && (
-                    <div className="cancel-box">
-                        <p>로그인이 취소되었습니다.</p>
-                        <button onClick={resetToLogin}>다시 로그인</button>
-                    </div>
-                )}
-
-                {loginStatus === LOGIN_STATUS.EXPIRED && (
-                    <div className="expired-box">
-                        <p>세션이 만료되었습니다.</p>
-                        <p>다시 로그인해주세요.</p>
-                        <button onClick={resetToLogin}>로그인</button>
-                    </div>
-                )}
-
-                {loginStatus === LOGIN_STATUS.LOGGING_OUT && (
-                    <p className="status-text">로그아웃 중입니다...</p>
-                )}
-
-                {loginStatus === LOGIN_STATUS.LOGGED_OUT && (
-                    <div className="logout-box">
-                        <p>로그아웃되었습니다.</p>
-                        <button onClick={resetToLogin}>다시 로그인</button>
-                    </div>
+                {STATUS_MESSAGES[loginStatus] && (
+                    <p className="status-text">{STATUS_MESSAGES[loginStatus].notice}</p>
                 )}
             </div>
         </div>
