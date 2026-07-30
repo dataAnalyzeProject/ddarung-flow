@@ -58,22 +58,25 @@ export default function LoginPage() {
             {[LOGIN_STATUS.WAITING, LOGIN_STATUS.LOADING].includes(loginStatus) && (
                 <div className="social-login-area">
                     <button
+                        className="kakao"
                         disabled={isButtonDisabled}
                         onClick={() => handleLogin('Kakao')}
                     >
-                        카카오 로그인
+                        카카오로 시작하기
                     </button>
                     <button
+                        className="naver"
                         disabled={isButtonDisabled}
                         onClick={() => handleLogin('Naver')}
                     >
-                        네이버 로그인
+                        네이버로 시작하기
                     </button>
                     <button
+                        className="google"
                         disabled={isButtonDisabled}
                         onClick={() => handleLogin('Google')}
                     >
-                        구글 로그인
+                        구글로 시작하기
                     </button>
                 </div>
             )}
