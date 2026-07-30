@@ -1,20 +1,58 @@
-# ddarung-flow
+# 따릉이 도착시점 대여 가능성 서비스
 
-따릉이 대여소의 60·120·180분 후 부족 위험을 확인하는 운영 지원 MVP입니다.
+사용자가 자전거를 빌리려는 곳까지 가는 시간을 계산하고, 도착했을 때 자전거가 남아 있을 가능성을 보여 주는 소비자용 웹 서비스입니다.
 
-## 기본 구조
+현재 단계에서는 세 명의 조원이 서로 파일을 건드리지 않고 시작할 수 있도록 기본 골격만 준비합니다.
 
-- `frontend/`: React + TypeScript + Vite 화면
-- `backend/`: Java 21 + Spring Boot 3.5 서비스 API
-- `pipeline/`: Python + Pandas + Airflow 데이터 처리
-- `infra/`: Docker Compose 등 로컬 실행환경
-- `docs/`: 설계 및 협업 문서
+## 먼저 맡을 세 작업
 
-현재 커밋은 팀 작업을 시작하기 위한 기본 골자만 제공합니다. 세부 구현은 담당 영역별 작업으로 추가합니다.
+| 작업 | 작업 폴더 | 무엇을 만들면 되는가 |
+|---|---|---|
+| 로그인 화면 | `frontend/src/features/login/` | 카카오·네이버·구글 로그인 화면 |
+| 메인 화면 예시안 | `frontend/src/features/main-screen-drafts/` | 지도 중심 화면을 서로 다른 방식으로 3~4개 |
+| 로그인 서버 | `backend/src/main/java/com/ddarungflow/auth/` | 소셜 로그인과 로그인 상태 확인 |
 
-## 작업 원칙
+각 폴더의 `README.md`에 만들어야 하는 폴더·파일 이름, 각 파일의 역할, 입력할 명령, 작업 순서와 완료 조건을 적어 두었습니다.
 
-- 담당 폴더 밖의 파일을 수정해야 하면 먼저 팀에 공유합니다.
-- 화면 작업은 우선 임시 데이터로 구현할 수 있습니다.
-- `frontend/src/App.tsx`, `frontend/src/main.tsx`, `frontend/src/pages/`, `frontend/src/shared/`의 통합 변경은 통합 담당자가 관리합니다.
-- 기존 테스트용 파일은 초기 정리 전까지 보존합니다.
+백엔드 로그인 담당자는 조장이 승인된 ERD를 전달하기 전까지 사용자 Entity와 Repository를 만들지 않습니다. ERD를 받은 뒤 표와 칸 이름을 그대로 사용합니다.
+
+## 실행 준비
+
+필요한 프로그램:
+
+- Node.js 18 이상
+- Java 21
+
+프론트 실행:
+
+```powershell
+cd frontend
+npm install
+npm start
+```
+
+백엔드 테스트:
+
+```powershell
+cd backend
+.\gradlew.bat test
+```
+
+백엔드 실행:
+
+```powershell
+cd backend
+.\gradlew.bat bootRun
+```
+
+실행 후 오류 없이 Spring Boot가 시작되면 기본 서버가 정상입니다. 아직 API 주소는 만들지 않습니다.
+
+## 꼭 지킬 작업 규칙
+
+1. 자신의 작업 폴더부터 수정합니다.
+2. 다른 사람 폴더나 공통 파일을 바꿔야 하면 먼저 조장에게 알립니다.
+3. 비밀키와 비밀번호는 GitHub에 올리지 않습니다.
+4. 작업이 끝나면 실행 방법, 확인 결과, 아직 안 되는 부분을 기록합니다.
+5. 실행과 검토가 끝나기 전에는 완료로 표시하지 않습니다.
+
+`test1.py`, `test2.py`, `TSETS.PY`는 기존 임시 파일이므로 별도 정리 결정 전까지 유지합니다.
