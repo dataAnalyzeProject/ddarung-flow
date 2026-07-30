@@ -12,11 +12,11 @@
 
 `frontend/src/features/login/`
 
-이 폴더 밖의 파일은 수정하지 않습니다. 특히 `frontend/src/App.tsx`는 조장 또는 화면 통합 담당자가 연결합니다.
+이 폴더 밖의 파일은 수정하지 않습니다. 특히 `frontend/src/App.jsx`는 조장 또는 화면 통합 담당자가 연결합니다.
 
 ## 3. 만들어야 하는 파일
 
-### `LoginPage.tsx`
+### `LoginPage.jsx`
 
 로그인 화면 전체를 담는 파일입니다.
 
@@ -29,11 +29,11 @@
 
 ### `LoginPage.css`
 
-`LoginPage.tsx` 화면의 크기, 색상, 간격을 정하는 파일입니다.
+`LoginPage.jsx` 화면의 크기, 색상, 간격을 정하는 파일입니다.
 
 작은 화면과 큰 화면에서 모두 글과 버튼이 잘 보이게 만듭니다.
 
-### `SocialLoginButton.tsx`
+### `SocialLoginButton.jsx`
 
 카카오·네이버·구글 버튼이 공통으로 사용하는 파일입니다.
 
@@ -44,7 +44,7 @@
 - 현재 사용할 수 있는지 여부
 - 버튼을 눌렀을 때 실행할 내용
 
-### `loginDemoState.ts`
+### `loginDemoState.js`
 
 실제 서버 대신 화면 상태를 바꾸기 위한 자료를 적는 파일입니다.
 
@@ -56,7 +56,7 @@
 - `error`: 로그인 실패
 - `cancelled`: 사용자가 취소
 
-### `LoginPage.test.tsx`
+### `LoginPage.test.jsx`
 
 로그인 화면이 기본적으로 작동하는지 확인하는 파일입니다. 테스트 도구 추가가 필요하면 먼저 조장에게 알립니다.
 
@@ -81,9 +81,9 @@ npm start
 ## 5. 작업 순서
 
 1. 위 다섯 파일을 정확한 이름으로 만듭니다.
-2. `LoginPage.tsx`에서 기본 로그인 화면을 만듭니다.
-3. `SocialLoginButton.tsx`로 로그인 버튼 3개를 만듭니다.
-4. `loginDemoState.ts`의 가짜 상태를 이용해 성공·실패·취소 화면을 확인합니다.
+2. `LoginPage.jsx`에서 기본 로그인 화면을 만듭니다.
+3. `SocialLoginButton.jsx`로 로그인 버튼 3개를 만듭니다.
+4. `loginDemoState.js`의 가짜 상태를 이용해 성공·실패·취소 화면을 확인합니다.
 5. 조장에게 `LoginPage`를 전체 화면에 연결해 달라고 요청합니다.
 6. 작은 화면과 큰 화면에서 확인합니다.
 7. 화면별 캡처와 아직 안 되는 부분을 Notion 작업 카드에 남깁니다.
@@ -101,5 +101,5 @@ npm start
 
 - 실제 카카오·네이버·구글 비밀키 입력
 - 서버 연결
-- `App.tsx`, `pages`, `shared` 직접 수정
+- `App.jsx`, `pages`, `shared` 직접 수정
 - 게시판, 즐겨찾기 등 다른 기능 추가

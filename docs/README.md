@@ -11,3 +11,14 @@
 - ERD와 `schema.sql`
 
 Notion에서 확정되지 않은 내용을 코드의 사실처럼 적지 않습니다.
+
+## 프론트엔드 골격 기준
+
+프론트엔드는 현재 저장소에 준비된 **Create React App + React + JavaScript/JSX** 골격을 사용합니다.
+
+- 실행: `npm start`
+- 테스트: `npm test`
+- 배포 빌드: `npm run build`
+- Vite나 TypeScript로 변경하거나 관련 설정 파일을 추가하지 않습니다.
+
+공통 골격과 실행 명령을 바꾸는 작업은 조장 또는 통합 담당자의 검토 후 진행합니다.
