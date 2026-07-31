@@ -3,20 +3,48 @@
 /* 전체 화면 */
 .login-page-container {
     min-height: 100vh;
-
     display: flex;
     flex-direction: column;
-
     justify-content: center;
     align-items: center;
+    background-color: #f8f9fa;
+    /* 🎯 배경 이미지 적용 (원하는 이미지 경로/URL 지정) */
+    background: url('https://images.unsplash.com/photo-1507035895480-2b3156c31fc8?q=80&w=1920') no-repeat center center / cover;
+    position: relative;
 }
 
+.login-page-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.35);
+    /* 배경 사진 살짝 어둡게 */
+}
+
+/* 2. 중앙에 뜨는 흰색 독립 로그인 카드 상자 */
+.login-card {
+    position: relative;
+    z-index: 1;
+    width: 560px;
+    /* 카드 가로 폭 조절 */
+    padding: 60px 50px;
+    /* 안쪽 여백 */
+    background-color: #ffffff;
+    /* 카드 배경 흰색 */
+    border-radius: 24px;
+    /* 카드의 둥근 모서리 */
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.25);
+    /* 은은하고 입체적인 그림자 */
+}
 
 /* 로그인 화면 카드 */
 .header-area,
 .social-login-area,
 .status-area {
-    width: 400px;
+    width: 100%;
 }
 
 
@@ -26,13 +54,15 @@
 }
 
 .header-area h1 {
-    font-size: 28px;
+    font-size: 44px;
     margin-bottom: 10 px;
 }
 
 .header-area p {
+    font-size: 22px;
+    color: #505050;
     margin: 8px 0;
-    margin-bottom: 100px;
+    margin-bottom: 40px;
 }
 
 
@@ -44,45 +74,6 @@
     gap: 10px;
 }
 
-
-
-/* [추가] 이메일 로그인 / 회원가입 보조 링크 스타일 */
-.sub-links {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 8px;
-    margin-top: 16px;
-}
-
-.sub-links .link-btn {
-    background: none;
-    border: none;
-    height: auto;
-    padding: 0;
-    font-size: 13px;
-    color: #777;
-    cursor: pointer;
-}
-
-.sub-links .link-btn:hover {
-    text-decoration: underline;
-    color: #333;
-}
-
-.sub-links .divider {
-    font-size: 11px;
-    color: #ccc;
-}
-
-
-
-/* 상태 표시 영역 */
-.status-area {
-    margin-top: 30px;
-
-    text-align: center;
-}
 
 /* 상태 결과 박스 (성공/실패 시각화) */
 .success-box {

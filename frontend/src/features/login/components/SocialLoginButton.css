@@ -8,12 +8,13 @@
 }
 
 .social-login-btn {
-    height: 48px;
+    height: 64px;
+    /* 🎯 버튼 전체 높이를 56px로 강제 확대 */
     border: none;
     background: transparent;
     padding: 0;
     cursor: pointer;
-    display: inline-flex;
+    display: flex;
     justify-content: center;
     align-items: center;
 }
@@ -24,10 +25,29 @@
     pointer-events: none;
 }
 
+/* 버튼 이미지 테두리 및 그림자 설정 */
 .social-login-btn .btn-image {
     height: 100%;
-    width: auto;
+    width: 100%;
     max-width: 100%;
-    object-fit: contain;
-    border-radius: 24px;
+    object-fit: fill;
+    border-radius: 32px;
+
+    /* 🎯 얇은 가장자리 테두리 추가 (버튼 윤곽선 또렷해짐) */
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    box-sizing: border-box;
+    /* 테두리가 크기에 영향 안 주도록 설정 */
+}
+
+/* 마우스 올려놓았을 때 (Hover) 살짝 어두워지는 피드백 효과 */
+.social-login-btn:not(:disabled):hover .btn-image {
+    filter: brightness(0.92);
+    /* <--- 살짝 어두워짐 */
+    transition: filter 0.2s ease, transform 0.15s ease;
+}
+
+/* 마우스 클릭하는 순간 (Active) 미세하게 눌리는 효과 */
+.social-login-btn:not(:disabled):active .btn-image {
+    filter: brightness(0.85);
+    transform: scale(0.98);
 }
