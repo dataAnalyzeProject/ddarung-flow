@@ -1,0 +1,25 @@
+package com.ddarungflow.repository;
+
+import com.ddarungflow.entity.Users;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.Optional;
+import java.util.UUID;
+
+@Repository
+public interface UsersRepository extends JpaRepository<Users, Long> {
+
+    // 1. provider("google", "naver", "kakao")와 providerUserId(고유 ID)로 유저 조회 (소셜 로그인용)
+    Optional<Users> findByProviderAndProviderUserId(String provider, String providerUserId);
+
+    // 2. publicId(UUID)로 유저 조회
+    Optional<Users> findByPublicId(UUID publicId);
+
+    // 3. email로 유저 조회 (필요 시 사용)
+    Optional<Users> findByEmail(String email);
+
+    // 4. 특정 provider와 providerUserId 존재 여부 확인
+    boolean existsByProviderAndProviderUserId(String provider, String providerUserId);
+
+}
