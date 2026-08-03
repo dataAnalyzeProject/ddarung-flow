@@ -16,6 +16,7 @@ export function Draft6CardCanvas() {
           <label><span>{serviceData.originLabel}</span><input placeholder={serviceData.originPlaceholder} /></label>
           <i>→</i>
           <label><span>{serviceData.destinationLabel}</span><input placeholder={serviceData.destinationPlaceholder} /></label>
+          <label className="draft6-time"><span>{serviceData.expectedTimeLabel}</span><input value={serviceData.expectedTimeValue} readOnly /></label>
         </div>
         <div className="draft6-actions">
           {serviceData.modes.map((mode) => <button className={mode === serviceData.selectedMode ? "active" : ""} key={mode} type="button">{mode}</button>)}
@@ -40,7 +41,7 @@ export function Draft6CardCanvas() {
             {stations.map((station, index) => <span className={`draft6-dot dot-${index + 1}`} key={station.id}>{index + 1}</span>)}
           </div>
         </div>
-        <div className="draft6-login"><span>+</span><p>{serviceData.loginNotice}</p><button type="button">{serviceData.loginButton}</button></div>
+        <div className="draft6-login"><span>!</span><p>{serviceData.loginNotice}</p><button type="button">{serviceData.loginButton}</button><button className="draft6-retry" type="button">{serviceData.retryButton}</button></div>
       </section>
     </main>
   );

@@ -6,14 +6,19 @@ export const serviceData = {
   originPlaceholder: "출발지를 입력하세요",
   destinationLabel: "목적지",
   destinationPlaceholder: "목적지를 입력하세요",
+  expectedTimeLabel: "예상시간",
+  expectedTimeValue: "오후 2:30",
   modes: ["도보", "대중교통"],
   selectedMode: "도보",
   predictButton: "대여 가능성 예측",
   mapLabel: "예측 지도",
   resultTitle: "목적지 주변 대여소",
-  resultSummary: "예상 도착시간 기준 추천 결과",
-  loginNotice: "로그인하면 자주 가는 경로와 예측 기록을 저장할 수 있어요.",
+  resultSummary: "대여소별 예상 도착시간 기준 대여 가능성",
+  loginNotice: "예측을 실행하려면 로그인해 주세요. 로그인 후 입력값을 확인하고 다시 예측할 수 있습니다.",
   loginButton: "로그인",
+  retryButton: "다시 예측",
+  noResultNotice: "조건에 맞는 대여소가 없습니다. 입력값을 수정해 주세요.",
+  errorNotice: "결과를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
 };
 
 export const stations = [

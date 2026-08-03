@@ -37,7 +37,7 @@ export function Draft4Dashboard() {
           </section>
 
           <section className="draft4-list">
-            <header><div><p>LIVE FORECAST</p><h2>{serviceData.resultTitle}</h2></div><strong>3</strong></header>
+            <header><div><p>STATION FORECAST</p><h2>{serviceData.resultTitle}</h2></div><strong>3</strong></header>
             {stations.map((station, index) => (
               <article className={index === 0 ? "best" : ""} key={station.id}>
                 <div className="draft4-rank">{index + 1}</div>
