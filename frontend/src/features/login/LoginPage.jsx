@@ -52,7 +52,7 @@ export default function LoginPage({
         setLoginStatus(LOGIN_STATUS.LOGGED_OUT);
     };
 
-    // 버튼 비활성화 조건 (로그인 처리 중일 때 중복 클릭 방지)
+    // 버튼 비활성화 조건
     const isButtonDisabled = loginStatus === LOGIN_STATUS.LOADING;
 
     return (
@@ -75,11 +75,9 @@ export default function LoginPage({
                     )}
                 </header>
 
-                {/* 2. SocialLoginArea 영역 (로그인 전/실패/취소/로그아웃 완료 상태일 때 표시) */}
-                {/* [수정 후] 오직 성공(SUCCESS) 상태가 아닐 때는 항상 소셜 로그인 버튼들을 보여줌 */}
-                {loginStatus !== LOGIN_STATUS.SUCCESS && (
+                {/* 2. SocialLoginArea 영역 */}
+                {![LOGIN_STATUS.SUCCESS, LOGIN_STATUS.LOGGING_OUT].includes(loginStatus) && (
                     <div className="social-login-area">
-
                         <SocialLoginButton
                             provider="Kakao"
                             iconUrl={kakaoImg}
@@ -101,7 +99,7 @@ export default function LoginPage({
                     </div>
                 )}
 
-                {/* 3. StatusArea (상태에 맞는 UI 분기) */}
+                {/* 3. StatusArea */}
                 <div>
                     {loginStatus === LOGIN_STATUS.SUCCESS && (
                         <div className="success-box">
