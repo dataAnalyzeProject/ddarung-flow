@@ -1,8 +1,21 @@
 /* LoginPage.css */
+/* 브라우저 기본 바깥 여백 제거 */
+html,
+body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
 
 /* 전체 화면 */
 .login-page-container {
-    min-height: 100vh;
+    width: 100vw;
+    height: 100vh;
+    /* min-height 대신 exact 100vh 고정 */
+    overflow: hidden;
+    /* 화면 전체 불필요한 스크롤바 완전히 제거 */
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -10,7 +23,7 @@
     background-color: #f8f9fa;
     /* 🎯 배경 이미지 적용 (원하는 이미지 경로/URL 지정) */
     background: url('https://images.unsplash.com/photo-1507035895480-2b3156c31fc8?q=80&w=1920') no-repeat center center / cover;
-    position: relative;
+    box-sizing: border-box;
 }
 
 .login-page-container::before {
@@ -24,19 +37,64 @@
     /* 배경 사진 살짝 어둡게 */
 }
 
+/* 화면 맨 위에 좌우로 뻗는 흰색 헤더 바 */
+.top-navbar {
+    width: 100%;
+    padding: 20px 40px;
+    background-color: #ffffff;
+    border-bottom: 1px solid #1A1A1A;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+/* [수정] 흰색 상단 헤더 안쪽 로고 영역 */
+.top-navbar .top-logo-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* [검은색 로고 박스] 'SEOUL BIKE' 글자 전체를 감싸는 검은 박스 */
+.top-navbar .logo-badge-box {
+    background-color: #1A1A1A;
+    /* 검은색 박스 배경 */
+    color: #FFFFFF;
+    /* 흰색 글자 반전 */
+    font-size: 11px;
+    font-weight: 900;
+    padding: 6px 10px;
+    /* 글자 주변 검은 박스 여백 */
+    border-radius: 3px;
+    /* 미세한 모서리 */
+    letter-spacing: 1px;
+    display: inline-block;
+    line-height: 1;
+}
+
+
+/* [추가] '따릉이 도착 대여 예측' 텍스트 스타일 */
+.top-navbar .logo-text {
+    font-size: 16px;
+    font-weight: 500;
+    color: #505050;
+}
+
 /* 2. 중앙에 뜨는 흰색 독립 로그인 카드 상자 */
 .login-card {
     position: relative;
     z-index: 1;
-    width: 560px;
+    width: 480px;
     /* 카드 가로 폭 조절 */
-    padding: 60px 50px;
+    padding: 48px 40px;
     /* 안쪽 여백 */
     background-color: #ffffff;
     /* 카드 배경 흰색 */
-    border-radius: 24px;
+    border: 1.5px solid #1A1A1A;
+    /* 이미지 특유의 명확한 실선 테두리 */
+    border-radius: 12px;
     /* 카드의 둥근 모서리 */
-    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
     /* 은은하고 입체적인 그림자 */
 }
 
@@ -47,19 +105,32 @@
     width: 100%;
 }
 
+/* 상단 메인 브랜드 서브 텍스트 (SEOUL BIKE PREDICT 톤) */
+.header-area .brand-tag {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: #FF5722;
+    /* 이미지 속 주황색 포인트 컬러 */
+    text-transform: uppercase;
+    margin-bottom: 8px;
+}
 
 /* 제목 영역 */
 .header-area {
     text-align: center;
 }
 
+/* 3. 제목 텍스트 및 서브 포인트 스타일 */
 .header-area h1 {
-    font-size: 44px;
-    margin-bottom: 10 px;
+    font-size: 32px;
+    font-weight: 650;
+    color: #1A1A1A;
+    margin-bottom: 12px;
 }
 
 .header-area p {
-    font-size: 22px;
+    font-size: 18px;
     color: #505050;
     margin: 8px 0;
     margin-bottom: 40px;
