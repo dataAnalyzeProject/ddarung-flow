@@ -1,0 +1,21 @@
+{
+  "bikeList": {
+    "list_total_count": 2,
+    "RESULT": {
+      "CODE": "INFO-000",
+      "MESSAGE": "정상 처리되었습니다."
+    },
+    "row": [
+      {
+        "stationId": "ST-1001",
+        "stationName": "테스트 대여소 1",
+        "parkingBikeTotCnt": "0"
+      },
+      {
+        "stationId": "ST-1002",
+        "stationName": "테스트 대여소 2",
+        "parkingBikeTotCnt": "4"
+      }
+    ]
+  }
+}
