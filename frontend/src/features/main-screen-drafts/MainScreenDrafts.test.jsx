@@ -30,6 +30,14 @@ describe("메인 화면 시안", () => {
     expect(screen.getByText(serviceData.loginNotice)).toBeInTheDocument();
   });
 
+  test("시안 6에서 예상시간을 직접 입력하고 확인한다", () => {
+    render(<Draft6CardCanvas />);
+    const timeInput = screen.getByRole("textbox", { name: serviceData.expectedTimeLabel });
+    fireEvent.change(timeInput, { target: { value: "오후 3:10" } });
+    fireEvent.click(screen.getByRole("button", { name: "시간 확인" }));
+    expect(screen.getByText(/오후 3:10/)).toBeInTheDocument();
+  });
+
   test("시안 6에서 로그인·복원·결과 없음·오류 상태를 전환한다", () => {
     render(<Draft6CardCanvas />);
 
@@ -44,5 +52,17 @@ describe("메인 화면 시안", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "오류" }));
     expect(screen.getByText(serviceData.errorNotice)).toBeInTheDocument();
+  });
+
+  test("시안 6에서 상세정보 닫기, 내 위치 확인, 지도 확대를 실행한다", () => {
+    render(<Draft6CardCanvas />);
+    fireEvent.click(screen.getByRole("button", { name: "상세정보 닫기" }));
+    expect(screen.queryByText("선택한 대여소")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "내 위치 확인" }));
+    expect(screen.getByText(/현재 위치를 확인했습니다/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "지도 확대" }));
+    expect(screen.getByRole("dialog", { name: "확대된 예측 지도" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "지도 닫기 ×" }));
+    expect(screen.queryByRole("dialog", { name: "확대된 예측 지도" })).not.toBeInTheDocument();
   });
 });
