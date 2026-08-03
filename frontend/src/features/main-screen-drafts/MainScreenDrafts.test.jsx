@@ -38,6 +38,16 @@ describe("메인 화면 시안", () => {
     expect(screen.getByText(/오후 3:10/)).toBeInTheDocument();
   });
 
+  test("비로그인 상태에서 예측하면 로그인 필요 창을 표시한다", () => {
+    render(<Draft6CardCanvas />);
+    fireEvent.click(screen.getByRole("button", { name: "로그인 필요" }));
+    fireEvent.click(screen.getByRole("button", { name: serviceData.predictButton }));
+    expect(screen.getByRole("dialog", { name: "로그인 필요 안내" })).toBeInTheDocument();
+    expect(screen.getAllByText("로그인이 필요합니다").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: "로그인하기" }));
+    expect(screen.getByText("입력값을 불러왔습니다")).toBeInTheDocument();
+  });
+
   test("시안 6에서 로그인·복원·결과 없음·오류 상태를 전환한다", () => {
     render(<Draft6CardCanvas />);
 

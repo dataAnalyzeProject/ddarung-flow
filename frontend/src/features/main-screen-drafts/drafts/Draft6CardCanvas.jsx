@@ -17,6 +17,7 @@ export function Draft6CardCanvas() {
   const [locationChecked, setLocationChecked] = useState(false);
   const [expectedTime, setExpectedTime] = useState(serviceData.expectedTimeValue);
   const [timeConfirmed, setTimeConfirmed] = useState(false);
+  const [loginPromptOpen, setLoginPromptOpen] = useState(false);
   const loggedIn = view !== "login";
 
   const showResult = view === "result";
@@ -45,7 +46,7 @@ export function Draft6CardCanvas() {
         </div>
         <div className="draft6-actions">
           {serviceData.modes.map((mode) => <button className={mode === serviceData.selectedMode ? "active" : ""} key={mode} type="button">{mode}</button>)}
-          <button className="draft6-submit" type="button" onClick={() => setView(loggedIn ? "result" : "login")}>{loggedIn ? serviceData.retryButton : serviceData.predictButton}</button>
+          <button className="draft6-submit" type="button" onClick={() => loggedIn ? setView("result") : setLoginPromptOpen(true)}>{loggedIn ? serviceData.retryButton : serviceData.predictButton}</button>
         </div>
       </section>
       {timeConfirmed && <p className="draft6-time-notice">예상시간을 <strong>{expectedTime}</strong>으로 확인했습니다. 이 시간을 기준으로 대여 가능성을 비교합니다.</p>}
@@ -86,6 +87,13 @@ export function Draft6CardCanvas() {
         <header><div><span>확대 지도</span><h2>내 위치와 목적지 주변 대여소</h2></div><button type="button" onClick={() => setMapExpanded(false)}>지도 닫기 ×</button></header>
         <div className="draft6-large-map"><div className="draft6-map-grid" />{mapRoads.map((road) => <span key={road.id} className={road.className} />)}{stations.map((station, index) => <span className={`draft6-dot dot-${index + 1}`} key={station.id}>{index + 1}</span>)}{locationChecked && <span className="draft6-my-location">내 위치</span>}</div>
         <footer><p>실제 위치·지도 API를 연결하지 않은 화면 확인용 예시입니다.</p><button type="button" onClick={() => setLocationChecked(true)}>내 위치 확인</button></footer>
+      </section>}
+
+      {loginPromptOpen && <section className="draft6-login-modal" role="dialog" aria-modal="true" aria-label="로그인 필요 안내">
+        <span aria-hidden="true">!</span>
+        <h2>로그인이 필요합니다</h2>
+        <p>{serviceData.loginNotice}</p>
+        <div><button type="button" onClick={() => setLoginPromptOpen(false)}>닫기</button><button className="primary" type="button" onClick={() => { setLoginPromptOpen(false); setView("restored"); }}>로그인하기</button></div>
       </section>}
     </main>
   );
