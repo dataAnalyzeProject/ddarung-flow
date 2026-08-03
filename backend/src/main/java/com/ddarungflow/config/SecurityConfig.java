@@ -50,12 +50,18 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
                 .oauth2Login(oauth2 -> oauth2
+                        .loginPage("/login")
                         .userInfoEndpoint(userInfo -> userInfo
                                 .userService(customOAuth2UserService))
                         .successHandler((request, response, authentication) -> {
                             request.getSession().setMaxInactiveInterval(86400 * 30);
                             response.sendRedirect("http://localhost:3000");
                         })
+                )
+                .formLogin(form -> form
+                        .loginPage("/login")
+                        .defaultSuccessUrl("http://localhost:3000", true)
+                        .permitAll()
                 )
                 .logout(logout -> logout
                         .logoutUrl("/api/auth/logout")

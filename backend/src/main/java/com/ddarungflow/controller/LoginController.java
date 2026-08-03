@@ -7,22 +7,28 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.core.user.OAuth2User;
+import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.ResponseBody;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
-@RestController
-@RequestMapping("/api/auth")
+@Controller
 @RequiredArgsConstructor
 public class LoginController {
 
     private final UsersRepository usersRepository;
 
-    @GetMapping("/me")
+    @GetMapping("/login")
+    public String showLoginPage() {
+        return "login";
+    }
+
+    @GetMapping("/api/auth/me")
+    @ResponseBody
     public ResponseEntity<?> getCurrentUser(@AuthenticationPrincipal Object principal) {
         Map<String, Object> response = new HashMap<>();
 
