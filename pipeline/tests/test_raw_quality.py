@@ -41,6 +41,16 @@ def test_negative_inventory_is_rejected():
     assert result["metrics"]["negative_bike_count"] == 1
 
 
+def test_missing_curated_input_field_is_rejected_before_curated_task():
+    payload = load_fixture("bike_inventory_success.json")
+    del payload["bikeList"]["row"][0]["rackTotCnt"]
+
+    result = validate_raw_quality("bike_inventory", payload)
+
+    assert result["passed"] is False
+    assert "missing_required_field" in result["reasons"]
+
+
 def test_future_target_field_is_rejected():
     payload = load_fixture("bike_inventory_success.json")
     payload["bikeList"]["row"][0]["future_bike_count"] = 3

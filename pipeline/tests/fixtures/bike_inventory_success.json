@@ -9,12 +9,18 @@
       {
         "stationId": "ST-1001",
         "stationName": "테스트 대여소 1",
-        "parkingBikeTotCnt": "0"
+        "parkingBikeTotCnt": "0",
+        "rackTotCnt": "10",
+        "stationLatitude": "37.5665",
+        "stationLongitude": "126.9780"
       },
       {
         "stationId": "ST-1002",
         "stationName": "테스트 대여소 2",
-        "parkingBikeTotCnt": "4"
+        "parkingBikeTotCnt": "4",
+        "rackTotCnt": "12",
+        "stationLatitude": "37.5700",
+        "stationLongitude": "126.9820"
       }
     ]
   }

@@ -42,13 +42,15 @@ PostgreSQL 결과 게시와 운영 배포는 포함하지 않습니다.
 
 | 검증 | 결과 |
 |---|---|
-| Python fixture·수집·품질·중복방지 테스트 | Docker에서 `22 passed` |
+| 새 Windows 가상환경 패키지 설치 | `requirements.txt` 인코딩 오류 없이 성공 |
+| Python fixture·수집·품질·중복방지 테스트 | 새 Windows 가상환경에서 `23 passed` |
 | Docker Compose 설정 해석 | 성공 |
 | Airflow 3.3.0 이미지 빌드 | 성공 |
 | PostgreSQL 메타데이터 초기화 | 성공, `airflow-init` 종료코드 0 |
 | DAG 목록 | `bike_weather_raw_curated` 확인 |
 | DAG import 오류 | 없음 |
 | 정상 fixture DAG test | 성공 |
+| Curated 필수 필드 누락 fixture | 품질검사에서 Curated 실행 전 차단 |
 | 서울시 실시간 API 전체 페이지 수집 | 3페이지, 대여소 2,743개, 성공 |
 | 실제 API Raw JSON 저장 | 3개 원본 페이지·2,743행 보존, 성공 |
 | 실제 API DAG test | 따릉이·기상청 초단기실황을 함께 호출해 전체 DAG 성공 |

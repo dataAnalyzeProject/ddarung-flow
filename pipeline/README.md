@@ -32,6 +32,7 @@ collect_weather ────────┘                        └─ build_
 ### Python 테스트
 
 저장소 루트의 PowerShell에서 실행합니다.
+`requirements.txt`는 Windows 기본 인코딩과 무관하게 설치되도록 ASCII로 유지합니다.
 
 ```powershell
 py -3.11 -m venv .venv

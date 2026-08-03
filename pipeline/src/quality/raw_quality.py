@@ -55,13 +55,22 @@ def _bike_quality(payload):
         if not isinstance(row, dict):
             metrics["missing_required_count"] += 1
             continue
-        station_id = row.get("stationId")
-        bike_count = row.get("parkingBikeTotCnt")
-        if station_id in (None, "") or bike_count in (None, ""):
+        required_values = [
+            row.get("stationId"),
+            row.get("stationName"),
+            row.get("parkingBikeTotCnt"),
+            row.get("rackTotCnt"),
+            row.get("stationLatitude"),
+            row.get("stationLongitude"),
+        ]
+        if any(value in (None, "") for value in required_values):
             metrics["missing_required_count"] += 1
             continue
         try:
-            numeric_count = int(bike_count)
+            numeric_count = int(row["parkingBikeTotCnt"])
+            int(row["rackTotCnt"])
+            float(row["stationLatitude"])
+            float(row["stationLongitude"])
         except (TypeError, ValueError):
             metrics["missing_required_count"] += 1
             continue
