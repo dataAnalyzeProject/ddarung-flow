@@ -3,6 +3,7 @@ package com.ddarungflow.service;
 import com.ddarungflow.entity.UserRole;
 import com.ddarungflow.entity.Users;
 import com.ddarungflow.repository.UsersRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,6 +21,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+@Slf4j
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
 
@@ -46,6 +48,7 @@ class AuthServiceTest {
 
         // when
         Users result = authService.saveOrUpdateOAuthUser(provider, providerUserId, displayName, email, now);
+        log.info("result정보 : result={}", result);
 
         // then
         assertThat(result).isNotNull();
@@ -55,6 +58,8 @@ class AuthServiceTest {
         assertThat(result.getEmail()).isNull();
         assertThat(result.getPublicId()).isNotNull();
         assertThat(result.getLastLoginAt()).isEqualTo(now);
+
+        log.info("UserId : UserId={}", result.getProviderUserId());
 
         verify(usersRepository).save(any(Users.class));
     }
@@ -80,13 +85,15 @@ class AuthServiceTest {
 
         // when
         Users result = authService.saveOrUpdateOAuthUser(provider, providerUserId, newName, newEmail, now);
-
+        log.info("사용자정보 : result={}", result);
         // then
         assertThat(result.getDisplayName()).isEqualTo("새이름");
         assertThat(result.getEmail()).isEqualTo("new@example.com");
         assertThat(result.getCreatedAt()).isEqualTo(pastTime);
         assertThat(result.getUpdatedAt()).isEqualTo(now);
         assertThat(result.getLastLoginAt()).isEqualTo(now);
+
+        log.info("사용자 이름: result.getDisplayName={}", result.getDisplayName());
 
         // Dirty Checking 방식을 사용하므로 save 명시적 호출 없음
         verify(usersRepository, never()).save(any(Users.class));
