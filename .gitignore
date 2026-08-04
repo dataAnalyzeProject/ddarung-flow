@@ -30,3 +30,7 @@ pipeline/logs/
 *.log
 minio-data/
 postgres-data/
+
+# Generated artifacts
+output/
+docs/model-design-direction-and-data-2.0-handoff.md
