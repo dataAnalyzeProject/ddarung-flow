@@ -2,41 +2,63 @@ import { useState, useEffect } from 'react';
 import './LoginPage.css';
 import SocialLoginButton from './components/SocialLoginButton';
 import { LOGIN_STATUS, MOCK_USERS } from './data/authDemoData';
-import { savePendingPrediction } from './loginStorage';
+import { getCurrentUser, logout, startSocialLogin } from './authApi';
+import { loadPendingPrediction, savePendingPrediction } from './loginStorage';
 import kakaoImg from './components/kakao_login_large_wide.png';
 import naverImg from './components/NAVER_login_Dark_KR_green_center_H56.png';
 import googleImg from './components/019fb652-80d1-7692-b81b-73a811ebf1d9.png';
-import { loadPendingPrediction } from './loginStorage'; // 추가
 
 // 1. 매개변수(Props 3개)를 받아오도록 함수 선언부 변경 (기본값 세팅 포함)
 export default function LoginPage({
-    initialStatus = LOGIN_STATUS.WAITING,
-    mockOutcome = 'success',
+    initialStatus,
+    mockOutcome,
     initialPredictionInput = null
 }) {
     // 2. 고정된 WAITING 대신 전달받은 initialStatus로 초기 상태 세팅
-    const [loginStatus, setLoginStatus] = useState(initialStatus);
+    const [loginStatus, setLoginStatus] = useState(initialStatus || LOGIN_STATUS.LOADING);
     const [userInfo, setUserInfo] = useState(null);
     const [predictionData, setPredictionData] = useState(null); // 추가
 
-    // 🎯 3-1. initialPredictionInput이 전달되면 즉시 sessionStorage에 4개 값 저장
-    // 🎯 useEffect 안에서 setPredictionData 사용
     useEffect(() => {
         if (initialPredictionInput) {
             savePendingPrediction(initialPredictionInput);
         }
-
-        // 💡 세션에서 데이터를 읽어와 predictionData 상태에 넣어줌!
         setPredictionData(loadPendingPrediction());
-    }, [initialPredictionInput, loginStatus]);
 
-    // 로그인 시뮬레이션
+        if (initialStatus) {
+            return;
+        }
+
+        const loginResult = new URLSearchParams(window.location.search).get('login');
+        if (loginResult === 'failed') {
+            setLoginStatus(LOGIN_STATUS.FAILED);
+            return;
+        }
+        if (loginResult === 'cancelled') {
+            setLoginStatus(LOGIN_STATUS.CANCELLED);
+            return;
+        }
+
+        getCurrentUser()
+            .then((auth) => {
+                if (auth.authenticated) {
+                    setUserInfo({
+                        name: auth.user.displayName,
+                        provider: auth.user.provider,
+                    });
+                    setLoginStatus(LOGIN_STATUS.SUCCESS);
+                    return;
+                }
+                setLoginStatus(LOGIN_STATUS.WAITING);
+            })
+            .catch(() => setLoginStatus(LOGIN_STATUS.FAILED));
+    }, [initialPredictionInput, initialStatus]);
+
     const handleLogin = (provider) => {
-        // 1. 먼저 로딩 상태로 변경
         setLoginStatus(LOGIN_STATUS.LOADING);
-        // 2. 300ms 타임아웃 후 mockOutcome 결과에 따라 분기 처리
-        setTimeout(() => {
-            // mockOutcome이 'failed'일 경우
+
+        if (mockOutcome) {
+            setTimeout(() => {
             if (mockOutcome === 'failed') {
                 setLoginStatus(LOGIN_STATUS.FAILED);
                 return;
@@ -49,12 +71,28 @@ export default function LoginPage({
             // 기본값 / 'success'일 경우 로그인 성공 처리
             setUserInfo(MOCK_USERS[provider] || { name: '테스트유저', provider });
             setLoginStatus(LOGIN_STATUS.SUCCESS);
-        }, 300); // <--- 명세에 맞춰 1500ms에서 300ms로 대기시간 변경
+            }, 300);
+            return;
+        }
+
+        startSocialLogin(provider);
     };
-    // 로그아웃 시뮬레이션
-    const handleLogout = () => {
-        setUserInfo(null);
-        setLoginStatus(LOGIN_STATUS.LOGGED_OUT);
+
+    const handleLogout = async () => {
+        if (mockOutcome) {
+            setUserInfo(null);
+            setLoginStatus(LOGIN_STATUS.LOGGED_OUT);
+            return;
+        }
+
+        setLoginStatus(LOGIN_STATUS.LOGGING_OUT);
+        try {
+            await logout();
+            setUserInfo(null);
+            setLoginStatus(LOGIN_STATUS.LOGGED_OUT);
+        } catch (error) {
+            setLoginStatus(LOGIN_STATUS.FAILED);
+        }
     };
 
     // 버튼 비활성화 조건
@@ -138,13 +176,18 @@ export default function LoginPage({
                     {loginStatus === LOGIN_STATUS.FAILED && (
                         <div className="error-box">
                             <h2>로그인에 실패했습니다.</h2>
-                            <p> 아이디 또는 비밀번호를 확인한 후 다시 시도해주세요.</p>
+                            <p>소셜 로그인 연결을 확인한 후 다시 시도해주세요.</p>
                         </div>
                     )}
                     {loginStatus === LOGIN_STATUS.CANCELLED && (
                         <div className="cancel-box">
                             <h2>로그인 취소</h2>
                             <p> 로그인 처리 중 사용자가 로그인을 취소했습니다.</p>
+                        </div>
+                    )}
+                    {loginStatus === LOGIN_STATUS.LOGGING_OUT && (
+                        <div className="loading-box">
+                            <h2>로그아웃 처리 중입니다.</h2>
                         </div>
                     )}
                     {loginStatus === LOGIN_STATUS.EXPIRED && (

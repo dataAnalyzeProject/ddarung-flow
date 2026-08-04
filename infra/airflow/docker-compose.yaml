@@ -1,0 +1,100 @@
+name: ddarung-flow-airflow
+
+# Airflow 서비스가 공유하는 이미지·환경변수·볼륨 설정이다.
+x-airflow-common: &airflow-common
+  build:
+    context: ../..
+    dockerfile: infra/airflow/Dockerfile
+    args:
+      AIRFLOW_VERSION: "3.3.0"
+  image: ${DDARUNG_AIRFLOW_IMAGE:-ddarung-flow-airflow:3.3.0}
+  environment: &airflow-common-env
+    # 2주차 개발환경은 한 서버에서 한 작업씩 실행하는 LocalExecutor를 사용한다.
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__PARALLELISM: "1"
+    AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: "1"
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
+    PYTHONPATH: /opt/airflow
+    PIPELINE_FIXTURE_DIR: /opt/airflow/pipeline/tests/fixtures
+    RAW_ROOT_DIR: /opt/airflow/data/raw
+    RAW_STORAGE_MODE: ${RAW_STORAGE_MODE:-local}
+    BIKE_INVENTORY_FIXTURE: ${BIKE_INVENTORY_FIXTURE:-bike_inventory_success.json}
+    BIKE_INVENTORY_SOURCE: ${BIKE_INVENTORY_SOURCE:-fixture}
+    WEATHER_FIXTURE: ${WEATHER_FIXTURE:-weather_success.json}
+    WEATHER_SOURCE: ${WEATHER_SOURCE:-fixture}
+    # 실제 값은 infra/airflow/.env에서 런타임에 전달하며 저장소에 기록하지 않는다.
+    SEOUL_OPEN_API_KEY: ${SEOUL_OPEN_API_KEY:-}
+    KMA_SERVICE_KEY: ${KMA_SERVICE_KEY:-}
+    KMA_NX: ${KMA_NX:-60}
+    KMA_NY: ${KMA_NY:-127}
+    OCI_CONFIG_FILE: ${OCI_CONFIG_FILE:-/opt/airflow/.oci/config}
+    OCI_CONFIG_PROFILE: ${OCI_CONFIG_PROFILE:-DDARUNG_AIRFLOW}
+    OCI_AUTH_MODE: ${OCI_AUTH_MODE:-config_file}
+    OCI_BUCKET_NAME: ${OCI_BUCKET_NAME:-}
+  user: "${AIRFLOW_UID:-50000}:0"
+  depends_on:
+    postgres:
+      condition: service_healthy
+  volumes:
+    - ../../pipeline/dags:/opt/airflow/dags
+    - ../../pipeline:/opt/airflow/pipeline
+    - type: bind
+      source: ${DDARUNG_DATA_ROOT:-D:/ddarung-flow-data}/platform
+      target: /opt/airflow/data
+    - airflow-logs:/opt/airflow/logs
+
+services:
+  # Spring 서비스 DB와 분리된 Airflow 메타데이터 전용 PostgreSQL이다.
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - airflow-postgres:/var/lib/postgresql/data
+
+  airflow-init:
+    <<: *airflow-common
+    environment:
+      <<: *airflow-common-env
+      _AIRFLOW_DB_MIGRATE: "true"
+      _AIRFLOW_WWW_USER_CREATE: "true"
+      _AIRFLOW_WWW_USER_USERNAME: airflow
+      _AIRFLOW_WWW_USER_PASSWORD: airflow
+    command: version
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    restart: unless-stopped
+
+  airflow-dag-processor:
+    <<: *airflow-common
+    command: dag-processor
+    restart: unless-stopped
+
+  airflow-api-server:
+    <<: *airflow-common
+    command: api-server
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  airflow-worker:
+    # LocalExecutor에는 상시 worker가 없으므로 CLI 검증 명령을 실행하는 도구 서비스다.
+    <<: *airflow-common
+    profiles: ["tools"]
+    command: version
+
+volumes:
+  airflow-logs:
+  airflow-postgres:

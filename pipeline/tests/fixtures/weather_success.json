@@ -1,0 +1,33 @@
+{
+  "weather_source": "observation",
+  "observed_at": "2026-08-03T09:00:00+09:00",
+  "location_key": "60,127",
+  "response": {
+    "header": {
+      "resultCode": "00",
+      "resultMsg": "NORMAL_SERVICE"
+    },
+    "body": {
+      "items": {
+        "item": [
+          {
+            "baseDate": "20260803",
+            "baseTime": "0900",
+            "category": "T1H",
+            "nx": 60,
+            "ny": 127,
+            "obsrValue": "28.1"
+          },
+          {
+            "baseDate": "20260803",
+            "baseTime": "0900",
+            "category": "RN1",
+            "nx": 60,
+            "ny": 127,
+            "obsrValue": "0"
+          }
+        ]
+      }
+    }
+  }
+}
