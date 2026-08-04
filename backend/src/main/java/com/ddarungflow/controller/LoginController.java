@@ -28,11 +28,6 @@ public class LoginController {
 
     private final UsersRepository usersRepository;
 
-    @GetMapping("/login")
-    public String showLoginPage() {
-        return "login";
-    }
-
     @GetMapping("/api/v1/auth/oauth2/{provider}/start")
     public ResponseEntity<?> startOAuth(@PathVariable String provider) {
         String normalizedProvider = provider.toLowerCase();
