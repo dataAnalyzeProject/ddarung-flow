@@ -45,6 +45,7 @@ class LoginControllerSecurityTest {
     void unauthenticatedMeReturnsContractResponse() throws Exception {
         mockMvc.perform(get("/api/v1/auth/me"))
                 .andExpect(status().isOk())
+                .andExpect(header().doesNotExist("WWW-Authenticate"))
                 .andExpect(jsonPath("$.authenticated").value(false))
                 .andExpect(jsonPath("$.user").doesNotExist());
     }
@@ -77,6 +78,34 @@ class LoginControllerSecurityTest {
         mockMvc.perform(get("/api/v1/auth/oauth2/google/start"))
                 .andExpect(status().isFound())
                 .andExpect(header().string("Location", "/oauth2/authorization/google"));
+    }
+
+    @Test
+    void backendLoginPageDoesNotExist() throws Exception {
+        mockMvc.perform(get("/login"))
+                .andExpect(status().isFound())
+                .andExpect(redirectedUrl("http://localhost:3000/login"));
+    }
+
+    @Test
+    void googleLoginAlwaysRequestsAccountSelection() throws Exception {
+        mockMvc.perform(get("/oauth2/authorization/google"))
+                .andExpect(status().isFound())
+                .andExpect(header().string("Location", org.hamcrest.Matchers.containsString("prompt=select_account")));
+    }
+
+    @Test
+    void kakaoLoginAlwaysRequestsReauthentication() throws Exception {
+        mockMvc.perform(get("/oauth2/authorization/kakao"))
+                .andExpect(status().isFound())
+                .andExpect(header().string("Location", org.hamcrest.Matchers.containsString("prompt=login")));
+    }
+
+    @Test
+    void naverLoginAlwaysRequestsReauthentication() throws Exception {
+        mockMvc.perform(get("/oauth2/authorization/naver"))
+                .andExpect(status().isFound())
+                .andExpect(header().string("Location", org.hamcrest.Matchers.containsString("auth_type=reauthenticate")));
     }
 
     @Test
