@@ -1,9 +1,5 @@
 package com.ddarungflow.service;
 
-import com.ddarungflow.entity.UserRole;
-import com.ddarungflow.entity.Users;
-import com.ddarungflow.repository.UsersRepository;
-import lombok.RequiredArgsConstructor;
 import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
@@ -14,10 +10,13 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Map;
 
 @Service
-@RequiredArgsConstructor
 public class CustomOAuth2UserService extends DefaultOAuth2UserService {
 
-    private final UsersRepository usersRepository;
+    private final AuthService authService;
+
+    public CustomOAuth2UserService(AuthService authService) {
+        this.authService = authService;
+    }
 
     @Override
     @Transactional
@@ -43,10 +42,8 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
             email = (String) attributes.get("email");
             displayName = (String) attributes.get("name");
         } else if ("kakao".equals(provider)) {
-            // 1. providerUserId는 String으로 변환
             providerUserId = String.valueOf(attributes.get("id"));
 
-            // 2. String 타입을 붙이지 않고 기존 변수에 할당 + Null 방어 로직 추가
             Map<String, Object> kakaoAccount = (Map<String, Object>) attributes.get("kakao_account");
             if (kakaoAccount != null) {
                 email = (String) kakaoAccount.get("email");
@@ -65,28 +62,8 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
                     : providerUserId);
         }
 
-        saveOrUpdateUser(provider, providerUserId, displayName, email);
+        authService.saveOrUpdateOAuthUser(provider, providerUserId, displayName, email);
 
         return oAuth2User;
-    }
-
-    private Users saveOrUpdateUser(String provider, String providerUserId, String displayName, String email) {
-        return usersRepository.findByProviderAndProviderUserId(provider, providerUserId)
-                .map(user -> {
-                    user.updateProfile(displayName, email);
-                    user.updateLastLoginAt();
-                    return usersRepository.save(user);
-                })
-                .orElseGet(() -> {
-                    Users newUser = Users.builder()
-                            .provider(provider)
-                            .providerUserId(providerUserId)
-                            .displayName(displayName)
-                            .email(email)
-                            .role(UserRole.USER) // 명시적 기본 권한 부여
-                            .build();
-                    newUser.updateLastLoginAt();
-                    return usersRepository.save(newUser);
-                });
     }
 }
