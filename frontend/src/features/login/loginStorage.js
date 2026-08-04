@@ -1,7 +1,7 @@
 // 1. 세션스토리지 저장 키 상수
 export const PENDING_PREDICTION_KEY = "ddarung.pendingPrediction.v1";
 // 2. 허용할 예측 입력 키 4개 정의
-const ALLOWED_KEYS = ["startStation", "endStation", "transport", "time"];
+const ALLOWED_KEYS = ["origin", "destination", "travelMode", "directMinutes"];
 /**
  * 예측 입력 4개만 골라 sessionStorage에 저장하는 함수
  */
