@@ -103,3 +103,20 @@ npm start
 - 서버 연결
 - `App.jsx`, `pages`, `shared` 직접 수정
 - 게시판, 즐겨찾기 등 다른 기능 추가
+
+## 8. 모듈 시뮬레이션 및 테스트 결과
+
+### 1) 실제 서버 연동 없음 안내
+- 본 모듈은 실제 백엔드 서버 API 호출 및 OAuth 인증 이동 없이 `authDemoData.js`의 모조(Mock) 데이터를 활용하여 상태 및 UI 동작을 시뮬레이션합니다.
+- 토큰, 비밀번호 등 민감한 인증 정보는 sessionStorage나 화면에 저장/표시되지 않습니다.
+
+### 2) sessionStorage 저장 키 4개
+대기 중인 예측 입력 데이터는 아래 4개 허용 키만 추출하여 `sessionStorage`(`ddarung.pendingPrediction.v1`)에 안전하게 저장·복원·삭제됩니다:
+1. `startStation` (출발지)
+2. `endStation` (목적지)
+3. `transport` (이동 수단)
+4. `time` (대여/예측 시간)
+
+### 3) 담당자 추가 경계 테스트 및 사유
+- **테스트 항목**: `savePendingPrediction(null)` 및 객체가 아닌 비정상 데이터 입력 테스트
+- **추가 이유**: 사용자가 잘못된 타입의 데이터를 전달하더라도 런타임 오류(Crash)가 발생하지 않고 안전하게 예외 처리되는지 검증하기 위함.
