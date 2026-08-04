@@ -1,6 +1,2 @@
-# Local unit-test dependency. Airflow itself is provided by the Docker image.
-pytest==8.4.2
-# Time-zone database used by Windows Python for Asia/Seoul.
-tzdata==2025.2
-# OCI SDK for Object Storage and Instance Principal authentication.
-oci==2.182.1
+pandas>=2.0.0
+numpy>=1.24.0
