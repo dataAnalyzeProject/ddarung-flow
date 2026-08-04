@@ -1,0 +1,16 @@
+services:
+  airflow-init:
+    volumes:
+      - ${OCI_CONFIG_DIR:-C:/Users/toxh1/.oci}:/opt/airflow/.oci:ro
+  airflow-scheduler:
+    volumes:
+      - ${OCI_CONFIG_DIR:-C:/Users/toxh1/.oci}:/opt/airflow/.oci:ro
+  airflow-dag-processor:
+    volumes:
+      - ${OCI_CONFIG_DIR:-C:/Users/toxh1/.oci}:/opt/airflow/.oci:ro
+  airflow-api-server:
+    volumes:
+      - ${OCI_CONFIG_DIR:-C:/Users/toxh1/.oci}:/opt/airflow/.oci:ro
+  airflow-worker:
+    volumes:
+      - ${OCI_CONFIG_DIR:-C:/Users/toxh1/.oci}:/opt/airflow/.oci:ro
