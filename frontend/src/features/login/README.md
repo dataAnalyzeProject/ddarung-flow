@@ -112,15 +112,20 @@ npm start
 
 ### 2) sessionStorage 저장 키 5개
 대기 중인 예측 입력 데이터는 아래 5개 허용 키만 추출하여 `sessionStorage`(`ddarung.pendingPrediction.v1`)에 안전하게 저장·복원·삭제됩니다:
-1. `startStation` (출발지)
-2. `endStation` (목적지)
-3. `transport` (이동 수단)
-4. `time` (대여/예측 시간)
+1. `origin` (출발지)
+2. `destination` (목적지)
+3. `travelMode` (이동 수단)
+4. `directMinutes` (예상 소요 시간)
 5. `requiredBikeCount` (필요 자전거 대수)
 
-### 3) 담당자 추가 경계 테스트 및 사유
-- **테스트 항목**: `savePendingPrediction(null)` 및 객체가 아닌 비정상 데이터 입력 테스트
-- **추가 이유**: 사용자가 잘못된 타입의 데이터를 전달하더라도 런타임 오류(Crash)가 발생하지 않고 안전하게 예외 처리되는지 검증하기 위함.
+### 3) 담당자 추가 경계 테스트 및 강화 사유
+- **테스트 항목**: 
+  1. `savePendingPrediction(null)` 및 객체가 아닌 비정상 입력 안전 처리 검증
+  2. `requiredBikeCount`가 문자열 `"2"`, `"abc"`, 범위를 벗어난 수량(`0`, `6`)일 때 기본값 `1` 보정 검증
+  3. `null`, `undefined`, 불리언(`true`), 소수점 실수(`2.5`) 등 기괴한 예외 타입 입력 시 기본값 `1` 보정 검증
+  4. `savePendingPrediction` (저장 시) 및 `loadPendingPrediction` (읽기 시) 양방향 엄격 검증
+- **추가 사유**: 
+  - 자바스크립트의 자동 형변환으로 인해 문자열 `"2"`가 숫자 `2`로 통과되는 버그를 차단하고, 오직 `number` 타입의 정수 1~5만 허용하도록 가드문(`typeof value !== 'number'`)을 강화하여 런타임 안정성을 보장하기 위함.
 
 ### 4) 작업 시 참고 사항
 - 담당자가 작업하는 과정이나, 작업 중간 결과물, 결과물에 대한 자신의 견해를 Notion 작업 카드에 남겨야 합니다.
@@ -144,14 +149,17 @@ npm start
 > ddarung-flow-frontend@0.1.0 test
 > react-scripts test --watchAll=false
 
- PASS  src/features/login/LoginPage.test.jsx
- PASS  src/App.test.jsx
  PASS  src/features/login/loginStorage.test.js
-                                                                                                                                               
-Test Suites: 3 passed, 3    total                                                                                                                 
-Tests:       7 passed, 7 total
+ PASS  src/App.test.jsx
+ PASS  src/features/login/LoginPage.test.jsx
+ PASS  src/features/main/MainPage.test.jsx
+ PASS  src/features/main-screen-drafts/MainScreenDrafts.test.jsx
+
+Test Suites: 5 passed, 5 total
+Tests:       29 passed, 29 total
 Snapshots:   0 total
-Time:        1.476 s
+Time:        2.454 s
+Ran all test suites.
 
 ### 💡 조장 통합(Integration) 안내 및 연동 경계
 1. **재예측 콜백 연결**: `LoginPage` 컴포넌트는 `onRepeatPrediction` prop이 유효한 함수로 전달될 때만 해당 함수를 1회 호출하고 임시 저장값(`sessionStorage`)을 삭제하도록 안전 방어 로직이 구현되어 있습니다.
