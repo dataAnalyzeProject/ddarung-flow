@@ -1,7 +1,5 @@
-package com.ddarungflow.service;
+package com.ddarungflow.prediction;
 
-import com.ddarungflow.dto.PredictionTimeResult;
-import com.ddarungflow.dto.PredictionTimeResult.PredictionStatus;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -10,23 +8,23 @@ import java.time.LocalDateTime;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-class PredictionTimeServiceTest {
+class PredictionTimeCalculatorTest {
 
-    private final PredictionTimeService predictionTimeService = new PredictionTimeService();
+    private final PredictionTimeCalculator calculator = new PredictionTimeCalculator();
 
     @Test
-    @DisplayName("필수 테스트 1: arrivalAt + 30분의 hour floor 계산 및 정확히 30분일 때 다음 정시 선택")
+    @DisplayName("필수 테스트 1: floorToHour(arrivalAt + 30분) 정시 계산 및 정확히 30분이면 다음 정시 선택")
     void testFloorToHourPlus30Minutes() {
         LocalDateTime featureAsOf = LocalDateTime.of(2026, 8, 5, 10, 0);
-        
+
         // 10:29 + 30m = 10:59 -> floor = 10:00
         LocalDateTime arrival1 = LocalDateTime.of(2026, 8, 5, 10, 29);
-        PredictionTimeResult result1 = predictionTimeService.calculate(arrival1, featureAsOf);
+        PredictionTimeResult result1 = calculator.calculate(arrival1, featureAsOf);
         assertThat(result1.predictionTargetAt()).isEqualTo(LocalDateTime.of(2026, 8, 5, 10, 0));
 
         // 10:30 + 30m = 11:00 -> floor = 11:00 (정확히 30분이면 다음 정시 선택)
         LocalDateTime arrival2 = LocalDateTime.of(2026, 8, 5, 10, 30);
-        PredictionTimeResult result2 = predictionTimeService.calculate(arrival2, featureAsOf);
+        PredictionTimeResult result2 = calculator.calculate(arrival2, featureAsOf);
         assertThat(result2.predictionTargetAt()).isEqualTo(LocalDateTime.of(2026, 8, 5, 11, 0));
     }
 
@@ -35,9 +33,9 @@ class PredictionTimeServiceTest {
     void testTargetOffsetMinutesCalculation() {
         LocalDateTime featureAsOf = LocalDateTime.of(2026, 8, 5, 10, 0);
         LocalDateTime arrivalAt = LocalDateTime.of(2026, 8, 5, 11, 30); // -> target 12:00
-        
-        PredictionTimeResult result = predictionTimeService.calculate(arrivalAt, featureAsOf);
-        
+
+        PredictionTimeResult result = calculator.calculate(arrivalAt, featureAsOf);
+
         assertThat(result.predictionTargetAt()).isEqualTo(LocalDateTime.of(2026, 8, 5, 12, 0));
         assertThat(result.targetOffsetMinutes()).isEqualTo(120L);
     }
@@ -49,13 +47,13 @@ class PredictionTimeServiceTest {
 
         // Target: 10:00 (equal to featureAsOf)
         LocalDateTime arrivalSame = LocalDateTime.of(2026, 8, 5, 9, 30); // 9:30 + 30m = 10:00
-        PredictionTimeResult resultSame = predictionTimeService.calculate(arrivalSame, featureAsOf);
-        assertThat(resultSame.status()).isEqualTo(PredictionStatus.TOO_SOON);
+        PredictionTimeResult resultSame = calculator.calculate(arrivalSame, featureAsOf);
+        assertThat(resultSame.status()).isEqualTo(PredictionTimeStatus.TOO_SOON);
 
         // Target: 09:00 (past relative to featureAsOf)
         LocalDateTime arrivalPast = LocalDateTime.of(2026, 8, 5, 8, 45); // 8:45 + 30m = 9:15 -> 9:00
-        PredictionTimeResult resultPast = predictionTimeService.calculate(arrivalPast, featureAsOf);
-        assertThat(resultPast.status()).isEqualTo(PredictionStatus.TOO_SOON);
+        PredictionTimeResult resultPast = calculator.calculate(arrivalPast, featureAsOf);
+        assertThat(resultPast.status()).isEqualTo(PredictionTimeStatus.TOO_SOON);
     }
 
     @Test
@@ -64,7 +62,7 @@ class PredictionTimeServiceTest {
         LocalDateTime featureAsOf = LocalDateTime.of(2026, 8, 5, 10, 0);
         LocalDateTime arrivalAt = LocalDateTime.of(2026, 8, 5, 12, 40); // 12:40 + 30m = 13:10 -> 13:00
 
-        PredictionTimeResult result = predictionTimeService.calculate(arrivalAt, featureAsOf);
+        PredictionTimeResult result = calculator.calculate(arrivalAt, featureAsOf);
 
         assertThat(result.horizonMinutes()).isEqualTo(180L);
     }
@@ -79,10 +77,10 @@ class PredictionTimeServiceTest {
 
         for (int i = 0; i < expectedHorizons.length; i++) {
             LocalDateTime arrivalAt = LocalDateTime.of(2026, 8, 5, arrivalHours[i], 30);
-            PredictionTimeResult result = predictionTimeService.calculate(arrivalAt, featureAsOf);
+            PredictionTimeResult result = calculator.calculate(arrivalAt, featureAsOf);
 
             assertThat(result.horizonMinutes()).isEqualTo(expectedHorizons[i]);
-            assertThat(result.status()).isEqualTo(PredictionStatus.NORMAL);
+            assertThat(result.status()).isEqualTo(PredictionTimeStatus.NORMAL);
         }
     }
 
@@ -93,10 +91,10 @@ class PredictionTimeServiceTest {
 
         // 300 minutes (5 hours): 14:30 + 30m -> 15:00 (15:00 - 10:00 = 300 minutes)
         LocalDateTime arrivalAt = LocalDateTime.of(2026, 8, 5, 14, 30);
-        PredictionTimeResult result = predictionTimeService.calculate(arrivalAt, featureAsOf);
+        PredictionTimeResult result = calculator.calculate(arrivalAt, featureAsOf);
 
         assertThat(result.horizonMinutes()).isEqualTo(300L);
-        assertThat(result.status()).isEqualTo(PredictionStatus.UNAVAILABLE);
+        assertThat(result.status()).isEqualTo(PredictionTimeStatus.UNAVAILABLE);
     }
 
     @Test
@@ -104,11 +102,11 @@ class PredictionTimeServiceTest {
     void testNullArgumentsHandling() {
         LocalDateTime now = LocalDateTime.now();
 
-        assertThatThrownBy(() -> predictionTimeService.calculate(null, now))
+        assertThatThrownBy(() -> calculator.calculate(null, now))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("must not be null");
 
-        assertThatThrownBy(() -> predictionTimeService.calculate(now, null))
+        assertThatThrownBy(() -> calculator.calculate(now, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("must not be null");
     }
@@ -120,10 +118,10 @@ class PredictionTimeServiceTest {
         // 23:45 + 30m = 00:15 next day -> 00:00 next day (2 hours / 120 mins diff)
         LocalDateTime arrivalAt = LocalDateTime.of(2026, 8, 5, 23, 45);
 
-        PredictionTimeResult result = predictionTimeService.calculate(arrivalAt, featureAsOf);
+        PredictionTimeResult result = calculator.calculate(arrivalAt, featureAsOf);
 
         assertThat(result.predictionTargetAt()).isEqualTo(LocalDateTime.of(2026, 8, 6, 0, 0));
         assertThat(result.horizonMinutes()).isEqualTo(120L);
-        assertThat(result.status()).isEqualTo(PredictionStatus.NORMAL);
+        assertThat(result.status()).isEqualTo(PredictionTimeStatus.NORMAL);
     }
 }
