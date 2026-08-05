@@ -1,19 +1,36 @@
 // 1. 세션스토리지 저장 키 상수
 export const PENDING_PREDICTION_KEY = "ddarung.pendingPrediction.v1";
 // 2. 허용할 예측 입력 키 4개 정의
-const ALLOWED_KEYS = ["origin", "destination", "travelMode", "directMinutes"];
+const ALLOWED_KEYS = ["origin", "destination", "travelMode", "directMinutes", "requiredBikeCount"];
 /**
  * 예측 입력 4개만 골라 sessionStorage에 저장하는 함수
  */
 export function savePendingPrediction(input) {
     if (!input || typeof input !== "object") return;
-    // 허용된 4개 키만 추출하여 새 객체 생성
     const filteredInput = {};
+
+    // 허용된 5개 키만 추출하여 새 객체 생성
     ALLOWED_KEYS.forEach((key) => {
         if (input[key] !== undefined) {
             filteredInput[key] = input[key];
         }
     });
+
+    // requiredBikeCount가 정수 1~5 사이가 아니면 기본값 1 적용
+    const bikeCount = Number(input.requiredBikeCount);
+    const MIN_BIKE_COUNT = 1;
+    const MAX_BIKE_COUNT = 5;
+    const DEFAULT_BIKE_COUNT = 1;
+    const validBikeCount =
+        Number.isInteger(bikeCount) &&
+            bikeCount >= MIN_BIKE_COUNT &&
+            bikeCount <= MAX_BIKE_COUNT
+            ? bikeCount
+            : DEFAULT_BIKE_COUNT;
+    // loop 아래나 마지막 저장 전에 넣어주기
+    filteredInput.requiredBikeCount = validBikeCount;
+
+
     // sessionStorage에 JSON 문자열로 저장
     sessionStorage.setItem(PENDING_PREDICTION_KEY, JSON.stringify(filteredInput));
 }

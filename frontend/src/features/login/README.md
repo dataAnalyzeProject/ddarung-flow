@@ -120,3 +120,35 @@ npm start
 ### 3) 담당자 추가 경계 테스트 및 사유
 - **테스트 항목**: `savePendingPrediction(null)` 및 객체가 아닌 비정상 데이터 입력 테스트
 - **추가 이유**: 사용자가 잘못된 타입의 데이터를 전달하더라도 런타임 오류(Crash)가 발생하지 않고 안전하게 예외 처리되는지 검증하기 위함.
+
+### 4) 작업 시 참고 사항
+- 담당자가 작업하는 과정이나, 작업 중간 결과물, 결과물에 대한 자신의 견해를 Notion 작업 카드에 남겨야 합니다.
+
+## 9. 이번 작업 수정 파일 목록 및 테스트 결과
+
+### 1) 이번 작업 관련 5개 파일 목록
+- `frontend/src/features/login/LoginPage.jsx`
+- `frontend/src/features/login/LoginPage.test.jsx`
+- `frontend/src/features/login/loginStorage.js`
+- `frontend/src/features/login/loginStorage.test.js`
+- `frontend/src/features/login/README.md`
+
+### 2) 핵심 테스트 검증 결과
+- **5개 입력 복원 테스트**: `origin`, `destination`, `travelMode`, `directMinutes`, `requiredBikeCount` 5개 입력값이 세션에 보존되어 화면에 정상 복원됨을 검증함. (`PASS`)
+
+- **자동 호출 0회 테스트**: 로그인 성공(`SUCCESS`) 시점에 `onRepeatPrediction` 함수가 자동으로 실행되지 않고 정확히 0회 호출됨을 검증함. (`PASS`)
+
+- **수동 클릭 1회 호출 & 삭제 테스트**: 사용자가 `[다시 예측]` 버튼을 누를 때만 복원 객체로 `onRepeatPrediction`이 1회 호출되고 세션스토리지 데이터가 삭제됨을 검증함. (`PASS`)
+
+> ddarung-flow-frontend@0.1.0 test
+> react-scripts test --watchAll=false
+
+ PASS  src/features/login/LoginPage.test.jsx
+ PASS  src/App.test.jsx
+ PASS  src/features/login/loginStorage.test.js
+                                                                                                                                               
+Test Suites: 3 passed, 3 total                                                                                                                 
+Tests:       7 passed, 7 total
+Snapshots:   0 total
+Time:        1.476 s
+

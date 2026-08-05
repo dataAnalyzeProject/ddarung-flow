@@ -2,24 +2,25 @@ import { useState, useEffect } from 'react';
 import './LoginPage.css';
 import SocialLoginButton from './components/SocialLoginButton';
 import { LOGIN_STATUS, MOCK_USERS } from './data/authDemoData';
-import { savePendingPrediction } from './loginStorage';
 import kakaoImg from './components/kakao_login_large_wide.png';
 import naverImg from './components/NAVER_login_Dark_KR_green_center_H56.png';
 import googleImg from './components/019fb652-80d1-7692-b81b-73a811ebf1d9.png';
-import { loadPendingPrediction } from './loginStorage'; // 추가
+import { loadPendingPrediction, savePendingPrediction, clearPendingPrediction } from './loginStorage'; // 추가
 
 // 1. 매개변수(Props 3개)를 받아오도록 함수 선언부 변경 (기본값 세팅 포함)
 export default function LoginPage({
     initialStatus = LOGIN_STATUS.WAITING,
     mockOutcome = 'success',
-    initialPredictionInput = null
+    initialPredictionInput = null,
+    onRepeatPrediction // 🎯 1. onRepeatPrediction prop 추가
 }) {
     // 2. 고정된 WAITING 대신 전달받은 initialStatus로 초기 상태 세팅
     const [loginStatus, setLoginStatus] = useState(initialStatus);
     const [userInfo, setUserInfo] = useState(null);
     const [predictionData, setPredictionData] = useState(null); // 추가
+    const [isPredicted, setIsPredicted] = useState(false); // 🎯 버튼 중복 클릭 방지용
 
-    // 🎯 3-1. initialPredictionInput이 전달되면 즉시 sessionStorage에 4개 값 저장
+    // 🎯 initialPredictionInput이 전달되면 즉시 sessionStorage에 4개 값 저장
     // 🎯 useEffect 안에서 setPredictionData 사용
     useEffect(() => {
         if (initialPredictionInput) {
@@ -29,6 +30,16 @@ export default function LoginPage({
         // 💡 세션에서 데이터를 읽어와 predictionData 상태에 넣어줌!
         setPredictionData(loadPendingPrediction());
     }, [initialPredictionInput, loginStatus]);
+
+    // 🎯 2. 다시 예측 버튼 클릭 핸들러
+    const handleRepeatPredict = () => {
+        if (isPredicted) return;
+        setIsPredicted(true); // 버튼 비활성화
+        if (onRepeatPrediction && typeof onRepeatPrediction === 'function') {
+            onRepeatPrediction(predictionData); // 1회 호출
+        }
+        clearPendingPrediction(); // 세션 삭제
+    };
 
     // 로그인 시뮬레이션
     const handleLogin = (provider) => {
@@ -124,9 +135,11 @@ export default function LoginPage({
                                     ? `${predictionData.directMinutes}분`
                                     : '이동수단으로 계산'}
                             </p>
+                            {/* 🎯 5번째 항목 필요 자전거 표시 */}
+                            <p>필요 자전거: {predictionData?.requiredBikeCount ?? 1}대</p>
                             <br />
                             <p className="confirm-text">입력값을 확인한 후 다시 예측해 주세요.</p>
-                            <button className="predict-btn">다시 예측</button>
+                            <button className="predict-btn" onClick={handleRepeatPredict} disabled={isPredicted}>다시 예측</button>
                             <button className="logout-btn" onClick={handleLogout}>로그아웃</button>
                         </div>
                     )}
