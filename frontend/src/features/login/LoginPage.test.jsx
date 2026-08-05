@@ -1,48 +1,123 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import LoginPage from './LoginPage';
 import { LOGIN_STATUS } from './data/authDemoData';
 import { savePendingPrediction, loadPendingPrediction } from './loginStorage';
-describe('LoginPage 핵심 4개 테스트', () => {
-    test('1. 로그인 성공 후 5개 입력값과 기본 필요 수량(1개)이 표시된다', () => {
+import { getCurrentUser, startSocialLogin } from './authApi';
+
+jest.mock('./authApi', () => ({
+    getCurrentUser: jest.fn(() => Promise.resolve({ authenticated: false, user: null })),
+    logout: jest.fn(() => Promise.resolve()),
+    startSocialLogin: jest.fn(),
+}));
+
+describe('LoginPage 핵심 테스트', () => {
+    beforeEach(() => {
+        sessionStorage.clear();
+        jest.clearAllMocks();
+        getCurrentUser.mockResolvedValue({ authenticated: false, user: null });
+    });
+
+    test('Google, Kakao, Naver 소셜 로그인 버튼 3개가 모두 표시된다', () => {
+        render(<LoginPage initialStatus={LOGIN_STATUS.WAITING} />);
+        expect(screen.getByTitle('Kakao 로그인')).toBeInTheDocument();
+        expect(screen.getByTitle('Naver 로그인')).toBeInTheDocument();
+        expect(screen.getByTitle('Google 로그인')).toBeInTheDocument();
+    });
+
+    test('LOADING 처리 중에는 버튼이 비활성화되어 중복 클릭할 수 없다', () => {
+        render(<LoginPage initialStatus={LOGIN_STATUS.LOADING} />);
+        expect(screen.getByTitle('Kakao 로그인')).toBeDisabled();
+    });
+
+    test('소셜 로그인 버튼은 선택한 공급자의 OAuth 로그인을 시작한다', () => {
+        render(<LoginPage initialStatus={LOGIN_STATUS.WAITING} />);
+        fireEvent.click(screen.getByTitle('Kakao 로그인'));
+        expect(startSocialLogin).toHaveBeenCalledWith('Kakao');
+    });
+
+    test('OAuth 실패 복귀 주소에서 실패 안내를 표시한다', () => {
+        window.history.pushState({}, '', '/?login=failed&code=AUTH_OAUTH_FAILED');
+        render(<LoginPage />);
+        expect(screen.getByText(/로그인에 실패했습니다/i)).toBeInTheDocument();
+        window.history.pushState({}, '', '/');
+    });
+
+    test('OAuth 취소 복귀 주소에서 취소 안내를 표시한다', () => {
+        window.history.pushState({}, '', '/?login=cancelled&code=AUTH_OAUTH_CANCELLED');
+        render(<LoginPage />);
+        expect(screen.getByText(/로그인 취소/i)).toBeInTheDocument();
+        window.history.pushState({}, '', '/');
+    });
+
+    test('FAILED 상태에서 실패 안내 메시지가 표시되고 소셜 버튼으로 다시 시도할 수 있다', () => {
+        render(<LoginPage initialStatus={LOGIN_STATUS.FAILED} />);
+        expect(screen.getByText(/로그인에 실패했습니다/i)).toBeInTheDocument();
+        expect(screen.getByTitle('Kakao 로그인')).not.toBeDisabled();
+    });
+
+    test('SUCCESS 상태에서 5개 입력값을 복원하고 로그아웃할 수 있다', async () => {
         const sampleInput = {
             origin: '서울역',
             destination: '광화문',
             travelMode: 'WALK',
             directMinutes: null,
-            requiredBikeCount: 2
+            requiredBikeCount: 2,
         };
         savePendingPrediction(sampleInput);
-        render(<LoginPage initialStatus={LOGIN_STATUS.SUCCESS} />);
-        expect(screen.getByText(/출발지: 서울역/i)).toBeInTheDocument();
-        expect(screen.getByText(/목적지: 광화문/i)).toBeInTheDocument();
+        expect(loadPendingPrediction()).toEqual(sampleInput);
+
+        render(<LoginPage initialStatus={LOGIN_STATUS.SUCCESS} mockOutcome="success" />);
+
+        await waitFor(() => {
+            expect(screen.getByText(/출발지: 서울역/i)).toBeInTheDocument();
+            expect(screen.getByText(/목적지: 광화문/i)).toBeInTheDocument();
+        });
         expect(screen.getByText(/이동수단: WALK/i)).toBeInTheDocument();
         expect(screen.getByText(/이동수단으로 계산/i)).toBeInTheDocument();
         expect(screen.getByText(/필요 자전거: 2/i)).toBeInTheDocument();
+        expect(screen.getByText(/입력값을 확인한 후 다시 예측해 주세요/i)).toBeInTheDocument();
+
+        fireEvent.click(screen.getByText(/로그아웃/i));
+        expect(screen.getByText(/로그아웃 되었습니다/i)).toBeInTheDocument();
     });
-    test('2. 로그인 성공만으로는 onRepeatPrediction 함수가 자동으로 호출되지 않는다 (0회)', () => {
-        const mockOnRepeat = jest.fn(); // 모의 함수 생성
+
+    test('로그인 성공만으로는 onRepeatPrediction을 자동 호출하지 않는다', () => {
+        const onRepeatPrediction = jest.fn();
 
         render(
             <LoginPage
                 initialStatus={LOGIN_STATUS.SUCCESS}
-                onRepeatPrediction={mockOnRepeat}
+                onRepeatPrediction={onRepeatPrediction}
             />
         );
-        // 로그인 성공만으로는 호출 횟수가 0이어야 함
-        expect(mockOnRepeat).toHaveBeenCalledTimes(0);
+
+        expect(onRepeatPrediction).not.toHaveBeenCalled();
     });
-    test('3. 다시 예측 버튼 클릭 시 onRepeatPrediction이 복원 객체로 1회 호출되고 세션이 삭제된다', () => {
-        const mockOnRepeat = jest.fn();
-        const sampleInput = { origin: '서울역', destination: '광화문', travelMode: 'WALK', directMinutes: null, requiredBikeCount: 2 };
+
+    test('다시 예측 버튼은 복원 객체로 한 번 호출하고 저장값을 삭제한다', () => {
+        const onRepeatPrediction = jest.fn();
+        const sampleInput = {
+            origin: '서울역',
+            destination: '광화문',
+            travelMode: 'WALK',
+            directMinutes: null,
+            requiredBikeCount: 2,
+        };
         savePendingPrediction(sampleInput);
-        render(<LoginPage initialStatus={LOGIN_STATUS.SUCCESS} onRepeatPrediction={mockOnRepeat} />);
-        // 버튼 클릭
-        const predictBtn = screen.getByRole('button', { name: /다시 예측/i });
-        fireEvent.click(predictBtn);
-        // 1회 호출 검증
-        expect(mockOnRepeat).toHaveBeenCalledTimes(1);
-        expect(mockOnRepeat).toHaveBeenCalledWith(sampleInput);
-        // 세션 삭제 검증
+
+        render(
+            <LoginPage
+                initialStatus={LOGIN_STATUS.SUCCESS}
+                onRepeatPrediction={onRepeatPrediction}
+            />
+        );
+
+        const predictButton = screen.getByRole('button', { name: /다시 예측/i });
+        fireEvent.click(predictButton);
+        fireEvent.click(predictButton);
+
+        expect(onRepeatPrediction).toHaveBeenCalledTimes(1);
+        expect(onRepeatPrediction).toHaveBeenCalledWith(sampleInput);
         expect(loadPendingPrediction()).toBeNull();
     });
 });
