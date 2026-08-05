@@ -5,6 +5,21 @@ const ALLOWED_KEYS = ["origin", "destination", "travelMode", "directMinutes", "r
 /**
  * 예측 입력 4개만 골라 sessionStorage에 저장하는 함수
  */
+const MIN_BIKE_COUNT = 1;
+const MAX_BIKE_COUNT = 5;
+const DEFAULT_BIKE_COUNT = 1;
+
+function normalizeRequiredBikeCount(value) {
+    const bikeCount = Number(value);
+
+    return (
+        Number.isInteger(bikeCount) &&
+        bikeCount >= MIN_BIKE_COUNT &&
+        bikeCount <= MAX_BIKE_COUNT
+    )
+        ? bikeCount
+        : DEFAULT_BIKE_COUNT;
+}
 export function savePendingPrediction(input) {
     if (!input || typeof input !== "object") return;
     const filteredInput = {};
@@ -17,19 +32,7 @@ export function savePendingPrediction(input) {
     });
 
     // requiredBikeCount가 정수 1~5 사이가 아니면 기본값 1 적용
-    const bikeCount = Number(input.requiredBikeCount);
-    const MIN_BIKE_COUNT = 1;
-    const MAX_BIKE_COUNT = 5;
-    const DEFAULT_BIKE_COUNT = 1;
-    const validBikeCount =
-        Number.isInteger(bikeCount) &&
-            bikeCount >= MIN_BIKE_COUNT &&
-            bikeCount <= MAX_BIKE_COUNT
-            ? bikeCount
-            : DEFAULT_BIKE_COUNT;
-    // loop 아래나 마지막 저장 전에 넣어주기
-    filteredInput.requiredBikeCount = validBikeCount;
-
+    filteredInput.requiredBikeCount = normalizeRequiredBikeCount(input.requiredBikeCount);
 
     // sessionStorage에 JSON 문자열로 저장
     sessionStorage.setItem(PENDING_PREDICTION_KEY, JSON.stringify(filteredInput));
@@ -46,7 +49,13 @@ export function loadPendingPrediction() {
         // 저장된 값이 없으면 null 반환
         if (!data) return null;
         // JSON 문자열을 객체로 변환하여 반환
-        return JSON.parse(data);
+        const parsed = JSON.parse(data);
+
+        // 2. 저장된 값을 불러와 사용할 때도 보정
+        return {
+            ...parsed,
+            requiredBikeCount: normalizeRequiredBikeCount(parsed.requiredBikeCount)
+        };
     } catch (error) {
         // JSON 파싱 실패 등 예외 발생 시 안전하게 null 반환
         return null;

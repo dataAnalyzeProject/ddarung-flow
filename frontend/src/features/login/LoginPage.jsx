@@ -57,15 +57,13 @@ export default function LoginPage({
     }, [initialPredictionInput, initialStatus]);
 
     const handleRepeatPredict = () => {
-        if (isPredicted) {
-            return;
-        }
+        if (isPredicted) return;
 
-        setIsPredicted(true);
         if (typeof onRepeatPrediction === 'function') {
-            onRepeatPrediction(predictionData);
+            setIsPredicted(true); // 1. 버튼 비활성화
+            onRepeatPrediction(predictionData); // 2. 함수 호출
+            clearPendingPrediction(); // 3. 세션 삭제
         }
-        clearPendingPrediction();
     };
 
     const handleLogin = (provider) => {
@@ -73,18 +71,18 @@ export default function LoginPage({
 
         if (mockOutcome) {
             setTimeout(() => {
-            if (mockOutcome === 'failed') {
-                setLoginStatus(LOGIN_STATUS.FAILED);
-                return;
-            }
-            // mockOutcome이 'cancelled'일 경우
-            if (mockOutcome === 'cancelled') {
-                setLoginStatus(LOGIN_STATUS.CANCELLED);
-                return;
-            }
-            // 기본값 / 'success'일 경우 로그인 성공 처리
-            setUserInfo(MOCK_USERS[provider] || { name: '테스트유저', provider });
-            setLoginStatus(LOGIN_STATUS.SUCCESS);
+                if (mockOutcome === 'failed') {
+                    setLoginStatus(LOGIN_STATUS.FAILED);
+                    return;
+                }
+                // mockOutcome이 'cancelled'일 경우
+                if (mockOutcome === 'cancelled') {
+                    setLoginStatus(LOGIN_STATUS.CANCELLED);
+                    return;
+                }
+                // 기본값 / 'success'일 경우 로그인 성공 처리
+                setUserInfo(MOCK_USERS[provider] || { name: '테스트유저', provider });
+                setLoginStatus(LOGIN_STATUS.SUCCESS);
             }, 300);
             return;
         }
