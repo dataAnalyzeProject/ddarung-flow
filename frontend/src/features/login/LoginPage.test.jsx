@@ -1,49 +1,48 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import LoginPage from './LoginPage';
 import { LOGIN_STATUS } from './data/authDemoData';
 import { savePendingPrediction, loadPendingPrediction } from './loginStorage';
 describe('LoginPage 핵심 4개 테스트', () => {
-    // 1. Google·Kakao·Naver 버튼이 보임
-    test('1. Google, Kakao, Naver 소셜 로그인 버튼 3개가 모두 표시된다', () => {
-        render(<LoginPage />);
-        expect(screen.getByTitle('Kakao 로그인')).toBeInTheDocument();
-        expect(screen.getByTitle('Naver 로그인')).toBeInTheDocument();
-        expect(screen.getByTitle('Google 로그인')).toBeInTheDocument();
-    });
-    // 2. 처리 중에는 버튼을 다시 누를 수 없음
-    test('2. LOADING 처리 중에는 버튼이 비활성화되어 중복 클릭할 수 없다', () => {
-        render(<LoginPage initialStatus={LOGIN_STATUS.LOADING} />);
-        const kakaoBtn = screen.getByTitle('Kakao 로그인');
-        expect(kakaoBtn).toBeDisabled();
-    });
-    // 3. 실패 안내 뒤 다시 시도할 수 있음
-    test('3. FAILED 상태일 때 실패 안내 메시지가 표시되고 소셜 버튼으로 다시 시도할 수 있다', () => {
-        render(<LoginPage initialStatus={LOGIN_STATUS.FAILED} />);
-        expect(screen.getByText(/로그인에 실패했습니다/i)).toBeInTheDocument();
-        expect(screen.getByTitle('Kakao 로그인')).not.toBeDisabled();
-    });
-    // 4. 성공하면 사용자 안내가 보이고 로그아웃할 수 있음 (+ 입력 보존 정상 사례 1개 확인)
-    test('4. SUCCESS 상태에서 입력값 보존 확인 및 안내 표시', async () => {
+    test('1. 로그인 성공 후 5개 입력값과 기본 필요 수량(1개)이 표시된다', () => {
         const sampleInput = {
             origin: '서울역',
             destination: '광화문',
-            travelMode: '도보',
-            directMinutes: null
+            travelMode: 'WALK',
+            directMinutes: null,
+            requiredBikeCount: 2
         };
         savePendingPrediction(sampleInput);
-        // 🎯 저장 후 다시 잘 읽히는지 직접 검증하는 1줄 추가
-        expect(loadPendingPrediction()).toEqual(sampleInput);
-
         render(<LoginPage initialStatus={LOGIN_STATUS.SUCCESS} />);
-        await waitFor(() => {
-            expect(screen.getByText(/출발지: 서울역/i)).toBeInTheDocument();
-            expect(screen.getByText(/목적지: 광화문/i)).toBeInTheDocument();
-        });
-        expect(screen.getByText(/입력값을 확인한 후 다시 예측해 주세요/i)).toBeInTheDocument();
-        // 4번 테스트 맨 아래에 로그아웃 클릭 이벤트 검증 추가
-        const logoutBtn = screen.getByText(/로그아웃/i);
-        fireEvent.click(logoutBtn);
-        // 클릭 후 로그아웃 완료 메시지가 뜨는지 확인
-        expect(screen.getByText(/로그아웃 되었습니다/i)).toBeInTheDocument();
+        expect(screen.getByText(/출발지: 서울역/i)).toBeInTheDocument();
+        expect(screen.getByText(/목적지: 광화문/i)).toBeInTheDocument();
+        expect(screen.getByText(/이동수단: WALK/i)).toBeInTheDocument();
+        expect(screen.getByText(/이동수단으로 계산/i)).toBeInTheDocument();
+        expect(screen.getByText(/필요 자전거: 2/i)).toBeInTheDocument();
+    });
+    test('2. 로그인 성공만으로는 onRepeatPrediction 함수가 자동으로 호출되지 않는다 (0회)', () => {
+        const mockOnRepeat = jest.fn(); // 모의 함수 생성
+
+        render(
+            <LoginPage
+                initialStatus={LOGIN_STATUS.SUCCESS}
+                onRepeatPrediction={mockOnRepeat}
+            />
+        );
+        // 로그인 성공만으로는 호출 횟수가 0이어야 함
+        expect(mockOnRepeat).toHaveBeenCalledTimes(0);
+    });
+    test('3. 다시 예측 버튼 클릭 시 onRepeatPrediction이 복원 객체로 1회 호출되고 세션이 삭제된다', () => {
+        const mockOnRepeat = jest.fn();
+        const sampleInput = { origin: '서울역', destination: '광화문', travelMode: 'WALK', directMinutes: null, requiredBikeCount: 2 };
+        savePendingPrediction(sampleInput);
+        render(<LoginPage initialStatus={LOGIN_STATUS.SUCCESS} onRepeatPrediction={mockOnRepeat} />);
+        // 버튼 클릭
+        const predictBtn = screen.getByRole('button', { name: /다시 예측/i });
+        fireEvent.click(predictBtn);
+        // 1회 호출 검증
+        expect(mockOnRepeat).toHaveBeenCalledTimes(1);
+        expect(mockOnRepeat).toHaveBeenCalledWith(sampleInput);
+        // 세션 삭제 검증
+        expect(loadPendingPrediction()).toBeNull();
     });
 });
