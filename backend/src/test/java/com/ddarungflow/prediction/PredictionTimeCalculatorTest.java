@@ -9,6 +9,10 @@ import java.time.ZoneOffset;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/**
+ * PredictionTimeCalculator 단위 테스트 클래스.
+ * 필수 테스트 6종, 고정 예시 5종 및 담당자 추가 경계 테스트 2종을 포함합니다.
+ */
 class PredictionTimeCalculatorTest {
 
     private final PredictionTimeCalculator calculator = new PredictionTimeCalculator();
@@ -19,7 +23,7 @@ class PredictionTimeCalculatorTest {
     void testFloorToHourPlus30Minutes() {
         OffsetDateTime featureAsOf = OffsetDateTime.of(2026, 8, 5, 10, 0, 0, 0, KST);
 
-        // 10:29 + 30m = 10:59 -> floor = 10:00
+        // 10:29 + 30m = 10:59 -> floor = 10:00 (이전 정시 선택)
         OffsetDateTime arrival1 = OffsetDateTime.of(2026, 8, 5, 10, 29, 0, 0, KST);
         PredictionTimeResult result1 = calculator.calculate(arrival1, featureAsOf);
         assertThat(result1.predictionTargetAt()).isEqualTo(OffsetDateTime.of(2026, 8, 5, 10, 0, 0, 0, KST));
@@ -34,7 +38,7 @@ class PredictionTimeCalculatorTest {
     @DisplayName("필수 테스트 2: arrivalAt부터 target까지 targetOffsetMinutes 계산 검증")
     void testTargetOffsetMinutesCalculation() {
         OffsetDateTime featureAsOf = OffsetDateTime.of(2026, 8, 5, 10, 0, 0, 0, KST);
-        // arrivalAt = 10:45 -> plus 30m = 11:15 -> target = 11:00. Difference between 10:45 and 11:00 is 15 minutes.
+        // arrivalAt = 10:45 -> plus 30m = 11:15 -> target = 11:00. 10:45부터 11:00까지의 차이는 15분.
         OffsetDateTime arrivalAt = OffsetDateTime.of(2026, 8, 5, 10, 45, 0, 0, KST);
 
         PredictionTimeResult result = calculator.calculate(arrivalAt, featureAsOf);
@@ -48,12 +52,12 @@ class PredictionTimeCalculatorTest {
     void testTooSoonStatus() {
         OffsetDateTime featureAsOf = OffsetDateTime.of(2026, 8, 5, 10, 0, 0, 0, KST);
 
-        // Target: 10:00 (equal to featureAsOf)
+        // 목표가 10:00 (featureAsOf와 동일 시각) -> TOO_SOON
         OffsetDateTime arrivalSame = OffsetDateTime.of(2026, 8, 5, 9, 30, 0, 0, KST); // 9:30 + 30m = 10:00
         PredictionTimeResult resultSame = calculator.calculate(arrivalSame, featureAsOf);
         assertThat(resultSame.status()).isEqualTo(PredictionTimeStatus.TOO_SOON);
 
-        // Target: 09:00 (past relative to featureAsOf)
+        // 목표가 09:00 (featureAsOf 기준 과거 시각) -> TOO_SOON
         OffsetDateTime arrivalPast = OffsetDateTime.of(2026, 8, 5, 8, 45, 0, 0, KST); // 8:45 + 30m = 9:15 -> 9:00
         PredictionTimeResult resultPast = calculator.calculate(arrivalPast, featureAsOf);
         assertThat(resultPast.status()).isEqualTo(PredictionTimeStatus.TOO_SOON);
@@ -63,7 +67,7 @@ class PredictionTimeCalculatorTest {
     @DisplayName("필수 테스트 4: featureAsOf부터 target까지 horizonMinutes 계산 검증")
     void testHorizonMinutesCalculation() {
         OffsetDateTime featureAsOf = OffsetDateTime.of(2026, 8, 5, 10, 0, 0, 0, KST);
-        OffsetDateTime arrivalAt = OffsetDateTime.of(2026, 8, 5, 12, 40, 0, 0, KST); // 12:40 + 30m = 13:10 -> 13:00
+        OffsetDateTime arrivalAt = OffsetDateTime.of(2026, 8, 5, 12, 40, 0, 0, KST); // 12:40 + 30m = 13:10 -> 13:00 (180분 차이)
 
         PredictionTimeResult result = calculator.calculate(arrivalAt, featureAsOf);
 
@@ -92,7 +96,7 @@ class PredictionTimeCalculatorTest {
     void testUnavailableStatusForOtherHorizons() {
         OffsetDateTime featureAsOf = OffsetDateTime.of(2026, 8, 5, 10, 0, 0, 0, KST);
 
-        // 300 minutes (5 hours): 14:30 + 30m -> 15:00 (15:00 - 10:00 = 300 minutes)
+        // horizon 300분 (5시간): 14:30 + 30m -> 15:00 (15:00 - 10:00 = 300분)
         OffsetDateTime arrivalAt = OffsetDateTime.of(2026, 8, 5, 14, 30, 0, 0, KST);
         PredictionTimeResult result = calculator.calculate(arrivalAt, featureAsOf);
 
@@ -106,12 +110,12 @@ class PredictionTimeCalculatorTest {
         OffsetDateTime kstTime = OffsetDateTime.now(KST);
         OffsetDateTime utcTime = OffsetDateTime.now(ZoneOffset.UTC);
 
-        // Null 검사
+        // Null 인자 입력 시 예외 검증
         assertThatThrownBy(() -> calculator.calculate(null, kstTime))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("must not be null");
 
-        // UTC Offset 불일치 검사
+        // UTC Offset 불일치 입력 시 예외 검증
         assertThatThrownBy(() -> calculator.calculate(kstTime, utcTime))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("matching UTC offsets");
@@ -120,8 +124,8 @@ class PredictionTimeCalculatorTest {
     @Test
     @DisplayName("고정 작업 예시 5종 검증")
     void testFixedExamples() {
-        // 1. 15:01 요청(requestedAt), 15:29 도착, feature 14:00 -> target 15:00, offset -29, horizon 60, TOO_SOON
-        // (요청시각 15:01 기준으로 target 15:00은 늦지 않으므로 TOO_SOON)
+        // 예시 1. 15:01 요청(requestedAt), 15:29 도착, feature 14:00 -> target 15:00, offset -29, horizon 60, TOO_SOON
+        // (요청시각 15:01 기준 target 15:00은 늦지 않으므로 TOO_SOON)
         OffsetDateTime req1 = OffsetDateTime.of(2026, 8, 5, 15, 1, 0, 0, KST);
         OffsetDateTime arr1 = OffsetDateTime.of(2026, 8, 5, 15, 29, 0, 0, KST);
         OffsetDateTime feat1 = OffsetDateTime.of(2026, 8, 5, 14, 0, 0, 0, KST);
@@ -131,7 +135,7 @@ class PredictionTimeCalculatorTest {
         assertThat(res1.horizonMinutes()).isEqualTo(60L);
         assertThat(res1.status()).isEqualTo(PredictionTimeStatus.TOO_SOON);
 
-        // 2. 15:01 요청, 15:30 도착, feature 15:00 -> target 16:00, offset 30, horizon 60, NORMAL
+        // 예시 2. 15:01 요청, 15:30 도착, feature 15:00 -> target 16:00, offset 30, horizon 60, NORMAL
         OffsetDateTime req2 = OffsetDateTime.of(2026, 8, 5, 15, 1, 0, 0, KST);
         OffsetDateTime arr2 = OffsetDateTime.of(2026, 8, 5, 15, 30, 0, 0, KST);
         OffsetDateTime feat2 = OffsetDateTime.of(2026, 8, 5, 15, 0, 0, 0, KST);
@@ -141,7 +145,7 @@ class PredictionTimeCalculatorTest {
         assertThat(res2.horizonMinutes()).isEqualTo(60L);
         assertThat(res2.status()).isEqualTo(PredictionTimeStatus.NORMAL);
 
-        // 3. 15:01 요청, 15:41 도착, feature 15:00 -> target 16:00, offset 19, horizon 60, NORMAL
+        // 예시 3. 15:01 요청, 15:41 도착, feature 15:00 -> target 16:00, offset 19, horizon 60, NORMAL
         OffsetDateTime req3 = OffsetDateTime.of(2026, 8, 5, 15, 1, 0, 0, KST);
         OffsetDateTime arr3 = OffsetDateTime.of(2026, 8, 5, 15, 41, 0, 0, KST);
         OffsetDateTime feat3 = OffsetDateTime.of(2026, 8, 5, 15, 0, 0, 0, KST);
@@ -151,7 +155,7 @@ class PredictionTimeCalculatorTest {
         assertThat(res3.horizonMinutes()).isEqualTo(60L);
         assertThat(res3.status()).isEqualTo(PredictionTimeStatus.NORMAL);
 
-        // 4. 15:01 요청, 18:31 도착, feature 15:00 -> target 19:00, offset 29, horizon 240, NORMAL
+        // 예시 4. 15:01 요청, 18:31 도착, feature 15:00 -> target 19:00, offset 29, horizon 240, NORMAL
         OffsetDateTime req4 = OffsetDateTime.of(2026, 8, 5, 15, 1, 0, 0, KST);
         OffsetDateTime arr4 = OffsetDateTime.of(2026, 8, 5, 18, 31, 0, 0, KST);
         OffsetDateTime feat4 = OffsetDateTime.of(2026, 8, 5, 15, 0, 0, 0, KST);
@@ -160,7 +164,7 @@ class PredictionTimeCalculatorTest {
         assertThat(res4.horizonMinutes()).isEqualTo(240L);
         assertThat(res4.status()).isEqualTo(PredictionTimeStatus.NORMAL);
 
-        // 5. 15:01 요청, 19:31 도착, feature 15:00 -> target 20:00, offset 29, horizon 300, UNAVAILABLE
+        // 예시 5. 15:01 요청, 19:31 도착, feature 15:00 -> target 20:00, offset 29, horizon 300, UNAVAILABLE
         OffsetDateTime req5 = OffsetDateTime.of(2026, 8, 5, 15, 1, 0, 0, KST);
         OffsetDateTime arr5 = OffsetDateTime.of(2026, 8, 5, 19, 31, 0, 0, KST);
         OffsetDateTime feat5 = OffsetDateTime.of(2026, 8, 5, 15, 0, 0, 0, KST);
@@ -170,4 +174,3 @@ class PredictionTimeCalculatorTest {
         assertThat(res5.status()).isEqualTo(PredictionTimeStatus.UNAVAILABLE);
     }
 }
-
