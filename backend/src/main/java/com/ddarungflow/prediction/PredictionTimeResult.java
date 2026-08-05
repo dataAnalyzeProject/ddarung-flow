@@ -1,9 +1,9 @@
 package com.ddarungflow.prediction;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 public record PredictionTimeResult(
-    LocalDateTime predictionTargetAt,
+    OffsetDateTime predictionTargetAt,
     long targetOffsetMinutes,
     long horizonMinutes,
     PredictionTimeStatus status
