@@ -56,3 +56,15 @@ cd backend
 5. 실행과 검토가 끝나기 전에는 완료로 표시하지 않습니다.
 
 `test1.py`, `test2.py`, `TSETS.PY`는 기존 임시 파일이므로 별도 정리 결정 전까지 유지합니다.
+
+## 예측 대상 시각 및 예측 지평(Horizon) 상태 규칙
+
+- **목표 정시 계산**: `floorToHour(arrivalAt + 30분)` (도착 예정시각에 30분을 더한 후 정시 단위 절삭. 정확히 30분인 경우 다음 정시 선택)
+- **오프셋 및 지평 계산**: 
+  - `targetOffsetMinutes = predictionTargetAt - featureAsOf`
+  - `horizonMinutes = predictionTargetAt - featureAsOf`
+- **상태 구분**:
+  - 목표 정시가 요청시각(`featureAsOf`) 이하인 경우 (과거 또는 현재 정시): `TOO_SOON`
+  - `horizonMinutes`가 60, 120, 180, 240분인 경우: `NORMAL`
+  - 그 외의 미래 `horizonMinutes`인 경우: `UNAVAILABLE`
+
