@@ -10,14 +10,17 @@ const MAX_BIKE_COUNT = 5;
 const DEFAULT_BIKE_COUNT = 1;
 
 function normalizeRequiredBikeCount(value) {
-    const bikeCount = Number(value);
-
+    // 입력값의 타입이 number가 아니면 바로 기본값 반환
+    if (typeof value !== "number") {
+        return DEFAULT_BIKE_COUNT;
+    }
+    // 정수이면서 범위 안의 값이면 그대로 반환
     return (
-        Number.isInteger(bikeCount) &&
-        bikeCount >= MIN_BIKE_COUNT &&
-        bikeCount <= MAX_BIKE_COUNT
+        Number.isInteger(value) &&
+        value >= MIN_BIKE_COUNT &&
+        value <= MAX_BIKE_COUNT
     )
-        ? bikeCount
+        ? value
         : DEFAULT_BIKE_COUNT;
 }
 export function savePendingPrediction(input) {
