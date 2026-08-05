@@ -27,4 +27,16 @@
 ## 조장 / 후속 작업 담당자 인계 사항
 
 - **Spring 의존성 분리**: `PredictionTimeCalculator`는 Spring 의존성 없이 유닛 테스트가 용이하도록 설계되었습니다. 서비스 계층이나 배치 처리기에서 빈으로 등록하여 사용하거나 직접 인스턴스화하여 호출할 수 있습니다.
-- **예외 처리**: `arrivalAt` 또는 `featureAsOf`가 `null`인 경우 `IllegalArgumentException`을 던지므로, Controller/Service 레이어에서 비즈니스 요청 파라미터 검증과 연계하시기 바랍니다.
+- **예외 처리**: `arrivalAt`, `featureAsOf`, `requestedAt`가 `null`이거나 `UTC offset`이 일치하지 않을 경우 `IllegalArgumentException`을 반환하므로, Controller/Service 레이어에서 비즈니스 요청 파라미터 검증과 연계하시기 바랍니다.
+
+## Notion 제출 결과 요약
+
+- **원격 작업 브랜치 확인**: `codex/prediction-backend-time-rules` 수신 및 변경 파일 없는 clean 상태 확인 완료.
+- **전체 기존 테스트 수행**: `.\gradlew.bat compileJava test` 통과 확인.
+- **TDD 순서 및 단위 구현 완료**:
+  - `PredictionTimeStatus.java` (Enum: `NORMAL`, `TOO_SOON`, `UNAVAILABLE`)
+  - `PredictionTimeResult.java` (Record: `predictionTargetAt`, `targetOffsetMinutes`, `horizonMinutes`, `status`)
+  - `PredictionTimeCalculator.java` (Spring 어노테이션 없는 Pure Java 구현)
+  - `PredictionTimeCalculatorTest.java` (필수 6종, 고정 예시 5종, null/offset 불일치/자정 경계 추가 테스트 통과)
+- **컴파일 증거 제출**: `compileJava` 및 `test` 100% SUCCESS (`BUILD SUCCESSFUL`).
+
