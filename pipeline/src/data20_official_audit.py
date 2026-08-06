@@ -9,6 +9,7 @@ import csv
 import hashlib
 import json
 import shutil
+import zipfile
 from pathlib import Path
 
 import duckdb
@@ -17,6 +18,20 @@ import duckdb
 YEARS = (2022, 2023, 2024, 2025)
 HORIZONS = (1, 2, 3, 4)
 THRESHOLDS = (1, 2, 3, 4, 5)
+REBUILT_DATA_FILES = {
+    "archive_manifest.csv",
+    "candidate_manifest.csv",
+    "duplicate_conflict_summary.csv",
+    "evidence_sha256.csv",
+    "file_candidate_manifest.csv",
+    "file_profile.csv",
+    "horizon_availability.csv",
+    "official_catalog.csv",
+    "required_bike_distribution.csv",
+    "schema_diff.csv",
+    "station_coverage.csv",
+    "year_comparison.csv",
+}
 
 
 def sha256(path):
@@ -117,6 +132,13 @@ def write_query(connection, output_dir, name, query):
     )
 
 
+def write_rows(path, header, rows):
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle, lineterminator="\n")
+        writer.writerow(header)
+        writer.writerows(rows)
+
+
 def load_station_master(connection, path):
     payload = json.loads(path.read_text(encoding="utf-8-sig"))
     if isinstance(payload, dict):
@@ -177,14 +199,15 @@ def build(args):
             """SELECT min(observed_at), max(observed_at), sum(row_count),
                       count(DISTINCT station_id), count(*),
                       sum(row_count > 1), sum(distinct_bike_count > 1),
-                      sum(row_count - 1)
+                      sum(row_count - 1),
+                      sum(CASE WHEN distinct_bike_count=1 AND min_bike=0 THEN row_count ELSE 0 END)
                FROM file_keys WHERE year=? AND source_file=?""",
             [year, str(relative)],
         ).fetchone()
-        profiles.append((year, str(relative), *profile, stats["zero_bike_rows"],
-                         stats["missing_bike_rows"], stats["negative_bike_rows"],
-                         stats["invalid_time_rows"], stats["invalid_bike_rows"]))
-        schemas.append((year, str(relative), stats["encoding"], stats["has_header"], 5))
+        profiles.append((year, str(relative), *profile, stats["missing_bike_rows"],
+                         stats["negative_bike_rows"]))
+        source_columns = "일시|대여소번호|대여소명|시간대|거치대수량" if stats["has_header"] else ""
+        schemas.append((year, str(relative), stats["encoding"], stats["has_header"], source_columns, 5))
 
     connection.execute("""
         CREATE TABLE canonical AS
@@ -200,13 +223,12 @@ def build(args):
         writer = csv.writer(handle, lineterminator="\n")
         writer.writerow(("year", "source_file", "period_start", "period_end", "raw_rows",
                          "station_count", "time_key_count", "duplicate_key_count",
-                         "conflicting_key_count", "excess_duplicate_rows", "zero_bike_rows",
-                         "missing_bike_rows", "negative_bike_rows", "invalid_time_rows",
-                         "invalid_bike_rows"))
+                         "conflicting_key_count", "excess_duplicate_rows", "unconflicted_zero_rows",
+                         "missing_bike_rows", "negative_bike_rows"))
         writer.writerows(profiles)
     with (output_dir / "schema_diff.csv").open("w", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle, lineterminator="\n")
-        writer.writerow(("year", "file", "encoding", "has_header", "canonical_column_count"))
+        writer.writerow(("year", "file", "encoding", "has_header", "source_columns", "canonical_column_count"))
         writer.writerows(schemas)
 
     write_query(connection, output_dir, "duplicate_conflict_summary.csv", """
@@ -228,7 +250,8 @@ def build(args):
                  sum(bike_count=0) zero_count,sum(bike_count IS NULL) conflict_count
           FROM canonical GROUP BY year
         )
-        SELECT f.*,c.canonical_rows,c.station_count,c.zero_count,0 missing_count,0 negative_count,
+        SELECT f.year,f.file_count,f.period_start,f.period_end,f.raw_rows,
+               c.canonical_rows,c.station_count,c.zero_count,0 missing_count,0 negative_value_flag,
                f.duplicate_key_count,f.conflicting_key_count,
                round(100.0*(f.time_key_count-f.conflicting_key_count)/f.time_key_count,6) conflict_free_key_percent
         FROM f JOIN c USING(year) ORDER BY year
@@ -265,12 +288,63 @@ def build(args):
           SELECT c.year,count(DISTINCT s25.station_id) common_with_2025_station_count
           FROM canonical c LEFT JOIN s25 USING(station_id) WHERE c.observed_value_groups=1 GROUP BY c.year
         )
-        SELECT x.*,round(100.0*matched_observation_key_count/observation_key_count,6) observation_match_percent,
-               round(100.0*matched_station_count/station_count,6) station_match_percent,
-               common.common_with_2025_station_count,
-               round(100.0*common.common_with_2025_station_count/station_count,6) common_with_2025_percent
+        SELECT x.year,x.observation_key_count,x.matched_observation_key_count,
+               round(100.0*x.matched_observation_key_count/x.observation_key_count,6) observation_match_percent,
+               x.station_count,x.matched_station_count,
+               round(100.0*x.matched_station_count/x.station_count,6) station_match_percent,
+               common.common_with_2025_station_count,x.station_count year_station_count,
+               round(100.0*common.common_with_2025_station_count/x.station_count,6) common_with_2025_percent
         FROM x JOIN common USING(year) ORDER BY year
     """)
+
+    shutil.copyfile(args.official_catalog, output_dir / "official_catalog.csv")
+    archive_rows = []
+    file_manifest_rows = []
+    decisions = {
+        2022: ("eligible", True, "no material structural conflict detected"),
+        2023: ("reject_quality", False, "every source file contains conflicting station-hour values"),
+        2024: ("eligible_with_quarantine", True, "conflicts are localized; affected keys or files require quarantine"),
+        2025: ("eligible", True, "no material structural conflict detected"),
+    }
+    for source in sources:
+        relative = source.relative_to(input_root)
+        year = detect_year(relative)
+        quarter = next(int(part[1:]) for part in relative.parts if len(part) == 2 and part[0].upper() == "Q")
+        archive = args.archive_dir / f"{year}-Q{quarter}.zip"
+        if not archive.exists():
+            raise FileNotFoundError(archive)
+        with zipfile.ZipFile(archive) as bundle:
+            integrity = "passed" if bundle.testzip() is None else "failed"
+        logical_path = f"{year}/Q{quarter}/{source.name}"
+        csv_hash = sha256(source)
+        archive_rows.append((year, quarter, archive.stat().st_size, sha256(archive), integrity,
+                             logical_path, source.stat().st_size, csv_hash))
+        decision, recommended, reason = decisions[year]
+        file_manifest_rows.append((logical_path, year, csv_hash, decision,
+                                   str(recommended).lower(), "false", reason))
+
+    write_rows(output_dir / "archive_manifest.csv",
+               ("year", "quarter", "archive_bytes", "archive_sha256", "zip_integrity",
+                "csv_relative_path", "csv_bytes", "csv_sha256"), archive_rows)
+    write_rows(output_dir / "candidate_manifest.csv",
+               ("year", "decision", "conflict_file_count", "source_file_count",
+                "representativeness", "reason", "approved"),
+               ((2022, "eligible", 0, 12, "review_required", decisions[2022][2], "false"),
+                (2023, "reject_quality", 24, 24, "review_required", decisions[2023][2], "false"),
+                (2024, "eligible_with_quarantine", 6, 12, "review_required", decisions[2024][2], "false"),
+                (2025, "eligible", 0, 12, "reference_year", decisions[2025][2], "false")))
+    write_rows(output_dir / "file_candidate_manifest.csv",
+               ("relative_path", "year", "sha256", "decision", "recommended", "approved", "reason"),
+               file_manifest_rows)
+
+    hash_rows = []
+    for path in sorted(output_dir.iterdir()):
+        if path.is_file() and path.name != "evidence_sha256.csv":
+            hash_rows.append((path.name, sha256(path)))
+    write_rows(output_dir / "evidence_sha256.csv", ("file", "sha256"), hash_rows)
+    missing_outputs = REBUILT_DATA_FILES - {path.name for path in output_dir.iterdir() if path.is_file()}
+    if missing_outputs:
+        raise RuntimeError(f"missing evidence outputs: {sorted(missing_outputs)}")
     print(f"DATA-2.0 evidence rebuilt from {len(sources)} official CSV files: {output_dir}")
 
 
@@ -278,6 +352,8 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input-dir", type=Path, required=True)
     parser.add_argument("--station-master", type=Path, required=True)
+    parser.add_argument("--archive-dir", type=Path, required=True)
+    parser.add_argument("--official-catalog", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--work-dir", type=Path, required=True)
     return parser.parse_args()

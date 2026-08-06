@@ -79,7 +79,7 @@ DATA-2.0의 목적인 “DATA-2.1에 넣을 수 있는 연도와 파일을 수�
 .\.local-harness\.venv-week2\Scripts\python.exe -m pytest pipeline\tests -q --basetemp .local-harness\tmp\week2-data20-pytest-final
 ```
 
-검증 결과는 각각 `7 tests, OK`, `30 passed`입니다. 공개 증거 자체의 SHA-256은 `evidence_sha256.csv`, 실행 기록은 `verification-log.md`에 남겼습니다.
+검증 결과는 각각 `10 tests, OK`, `33 passed`입니다. 공개 증거 자체의 SHA-256은 `evidence_sha256.csv`, 실행 기록은 `verification-log.md`에 남겼습니다.
 
 원본, 대용량 CSV, 로컬 절대경로와 로컬 하네스는 Git에 포함하지 않았습니다. 황준형의 기존 `data_source_audit.py`는 원 제출 이력으로 보존하지만 고정값·조인 오류가 있어 최종 승인 경로에서 제외합니다. DATA-2.0 최종 검증 경로는 이 문서, 공개 evidence, `data20_official_audit.py`와 `test_data_source_audit_evidence.py`입니다.
 

@@ -6,6 +6,8 @@ import unittest
 from collections import defaultdict
 from pathlib import Path
 
+from pipeline.src.data20_official_audit import REBUILT_DATA_FILES
+
 
 EVIDENCE_DIR = Path(__file__).parents[1] / "docs" / "DATA-2.0-evidence"
 EXPECTED_RAW_ROWS = {
@@ -24,6 +26,12 @@ def read_rows(name):
 
 
 class Data20EvidenceTest(unittest.TestCase):
+    def test_reproducer_contract_covers_all_published_data_outputs(self):
+        published_data_files = {
+            path.name for path in EVIDENCE_DIR.glob("*.csv")
+        }
+        self.assertEqual(published_data_files, REBUILT_DATA_FILES)
+
     def test_published_evidence_hashes_match(self):
         rows = read_rows("evidence_sha256.csv")
         expected_files = {

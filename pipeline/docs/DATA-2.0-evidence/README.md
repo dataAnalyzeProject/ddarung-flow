@@ -51,6 +51,8 @@ python -m unittest pipeline.tests.test_data_source_audit_evidence -v
 ```powershell
 python pipeline/src/data20_official_audit.py `
   --input-dir "<OA-22382 CSV 60개 해제 폴더>" `
+  --archive-dir "<OA-22382 분기 ZIP 16개 폴더>" `
+  --official-catalog "pipeline/docs/DATA-2.0-evidence/official_catalog.csv" `
   --station-master "<대여소 기준정보 JSON>" `
   --output-dir "<새 evidence 출력 폴더>" `
   --work-dir "<임시 작업 폴더>"

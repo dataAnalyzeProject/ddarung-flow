@@ -11,7 +11,7 @@
 .\.local-harness\.venv-week2\Scripts\python.exe -m unittest pipeline.tests.test_data_source_audit_evidence -v
 ```
 
-결과: `9 tests, OK`
+결과: `10 tests, OK`
 
 검증 항목:
 
@@ -28,6 +28,6 @@
 .\.local-harness\.venv-week2\Scripts\python.exe -m pytest pipeline\tests -q --basetemp .local-harness\tmp\week2-data20-pytest
 ```
 
-결과: `32 passed`
+결과: `33 passed`
 
 이 로그는 DATA-2.0 증거와 기존 파이프라인 테스트가 함께 통과했음을 기록합니다. 원본부터의 재생성은 공식 파일 SHA-256 대조가 선행되어야 하며, 데이터 계약의 `approved=true` 승인을 의미하지 않습니다.
