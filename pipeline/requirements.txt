@@ -4,3 +4,9 @@ pytest==8.4.2
 tzdata==2025.2
 # OCI SDK for Object Storage and Instance Principal authentication.
 oci==2.182.1
+# Data processing, analysis, and Excel reading for DATA-2.0 audit
+pandas>=2.0.0
+numpy>=1.24.0
+openpyxl>=3.1.0
+# Reproducible, disk-backed aggregation for the DATA-2.0 official-source audit
+duckdb==1.5.5

@@ -148,3 +148,13 @@ docker compose -f infra\airflow\docker-compose.yaml run --rm -e BIKE_INVENTORY_F
 ```
 
 이 명령은 `Raw quality failed; Curated tasks are blocked` 오류와 실패 종료코드를 반환해야 정상입니다.
+
+---
+
+## DATA-2.0 데이터 소스 감사 및 검증 실행
+
+DATA-2.0 조사 단계에서 시계열 데이터셋의 무결성, 스키마, 결합률 및 H1~H4 (60/120/180/240분) 관측 존재율과 7대 품질 검증(Pandas Assertion)을 재현 검증하기 위한 스크립트 실행 명령어입니다.
+
+```powershell
+python pipeline/src/data_source_audit.py --input-dir "C:\Users\M\Desktop\데이터셋" --output-dir "output"
+```

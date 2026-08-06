@@ -1,0 +1,5 @@
+year,decision,conflict_file_count,source_file_count,representativeness,reason,approved
+2022,eligible,0,12,review_required,no material structural conflict detected,false
+2023,reject_quality,24,24,review_required,every source file contains conflicting station-hour values,false
+2024,eligible_with_quarantine,6,12,review_required,conflicts are localized; affected keys or files require quarantine,false
+2025,eligible,0,12,reference_year,no material structural conflict detected,false

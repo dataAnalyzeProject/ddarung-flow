@@ -34,3 +34,13 @@ postgres-data/
 # Generated artifacts
 output/
 docs/model-design-direction-and-data-2.0-handoff.md
+
+# 대용량 데이터셋 폴더 제외
+pipeline/데이터셋/
+pipeline/dataset/
+dataset/
+데이터셋/
+*.csv
+!output/*.csv
+!docs/DATA-2.0-output/*.csv
+
