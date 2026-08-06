@@ -9,6 +9,7 @@
 |---|---|---|---|
 | 이 파일의 기존 본문과 기존 분석 코드 | 황준형 | 최초 조사, 분석 코드, 보고서, PR 제출 | 기여 기록으로 보존; 수치 결론은 독립검증으로 교정 |
 | [`DATA-2.0-leader-independent-audit.md`](./DATA-2.0-leader-independent-audit.md) | 조장 보강 | 공식 원본 2022~2025 재다운로드, 60개 CSV 독립검증, 연도 판정 교정 | DATA-2.0 검토의 우선 근거 |
+| [`DATA-2.0-evidence/`](./DATA-2.0-evidence/README.md) 및 `pipeline/tests/test_data_source_audit_evidence.py` | 조장 보강 | 파일별 SHA-256·기간·행·품질·H1~H4·1~5대·manifest와 무결성 검증 | 최종 재현·검토 증거 |
 | DATA-2.1 데이터 계약 | 조장 승인 예정 | 2022 포함 여부, 2024 격리 규칙, 2025 holdout 확정 | DATA-2.0 범위 밖; 아직 미승인 |
 
 변경 사유와 변경 전후 값은 조장 독립검증 문서의 `담당자 기여와 조장 보강 구분` 및 `변경 이력`에서 확인합니다.

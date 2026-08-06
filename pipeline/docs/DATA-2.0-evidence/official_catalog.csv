@@ -1,0 +1,17 @@
+seq,year,quarter,archive_name,display_size_mb,modified_date,source_page,download_endpoint,download_post_fields
+1,2022,1,2022-Q1.zip,64.5,2024-08-14,https://data.seoul.go.kr/dataList/OA-22382/F/1/datasetView.do,https://datafile.seoul.go.kr/bigfile/iot/inf/nio_download.do?useCache=false,infId=OA-22382&seq=1&infSeq=1
+2,2022,2,2022-Q2.zip,86.46,2024-08-14,https://data.seoul.go.kr/dataList/OA-22382/F/1/datasetView.do,https://datafile.seoul.go.kr/bigfile/iot/inf/nio_download.do?useCache=false,infId=OA-22382&seq=2&infSeq=1
+3,2022,3,2022-Q3.zip,98.63,2024-08-14,https://data.seoul.go.kr/dataList/OA-22382/F/1/datasetView.do,https://datafile.seoul.go.kr/bigfile/iot/inf/nio_download.do?useCache=false,infId=OA-22382&seq=3&infSeq=1
+4,2022,4,2022-Q4.zip,100.35,2024-08-14,https://data.seoul.go.kr/dataList/OA-22382/F/1/datasetView.do,https://datafile.seoul.go.kr/bigfile/iot/inf/nio_download.do?useCache=false,infId=OA-22382&seq=4&infSeq=1
+5,2023,1,2023-Q1.zip,540.56,2024-08-12,https://data.seoul.go.kr/dataList/OA-22382/F/1/datasetView.do,https://datafile.seoul.go.kr/bigfile/iot/inf/nio_download.do?useCache=false,infId=OA-22382&seq=5&infSeq=1
+6,2023,2,2023-Q2.zip,550.93,2024-08-12,https://data.seoul.go.kr/dataList/OA-22382/F/1/datasetView.do,https://datafile.seoul.go.kr/bigfile/iot/inf/nio_download.do?useCache=false,infId=OA-22382&seq=6&infSeq=1
+7,2023,3,2023-Q3.zip,518.34,2024-08-12,https://data.seoul.go.kr/dataList/OA-22382/F/1/datasetView.do,https://datafile.seoul.go.kr/bigfile/iot/inf/nio_download.do?useCache=false,infId=OA-22382&seq=7&infSeq=1
+8,2023,4,2023-Q4.zip,531.94,2024-08-12,https://data.seoul.go.kr/dataList/OA-22382/F/1/datasetView.do,https://datafile.seoul.go.kr/bigfile/iot/inf/nio_download.do?useCache=false,infId=OA-22382&seq=8&infSeq=1
+9,2024,1,2024-Q1.zip,89.06,2025-06-09,https://data.seoul.go.kr/dataList/OA-22382/F/1/datasetView.do,https://datafile.seoul.go.kr/bigfile/iot/inf/nio_download.do?useCache=false,infId=OA-22382&seq=9&infSeq=1
+10,2024,2,2024-Q2.zip,74.35,2025-06-09,https://data.seoul.go.kr/dataList/OA-22382/F/1/datasetView.do,https://datafile.seoul.go.kr/bigfile/iot/inf/nio_download.do?useCache=false,infId=OA-22382&seq=10&infSeq=1
+11,2024,3,2024-Q3.zip,181.49,2025-06-09,https://data.seoul.go.kr/dataList/OA-22382/F/1/datasetView.do,https://datafile.seoul.go.kr/bigfile/iot/inf/nio_download.do?useCache=false,infId=OA-22382&seq=11&infSeq=1
+12,2024,4,2024-Q4.zip,107.9,2025-06-09,https://data.seoul.go.kr/dataList/OA-22382/F/1/datasetView.do,https://datafile.seoul.go.kr/bigfile/iot/inf/nio_download.do?useCache=false,infId=OA-22382&seq=12&infSeq=1
+13,2025,1,2025-Q1.zip,91.94,2026-06-26,https://data.seoul.go.kr/dataList/OA-22382/F/1/datasetView.do,https://datafile.seoul.go.kr/bigfile/iot/inf/nio_download.do?useCache=false,infId=OA-22382&seq=13&infSeq=1
+14,2025,2,2025-Q2.zip,95.6,2026-06-26,https://data.seoul.go.kr/dataList/OA-22382/F/1/datasetView.do,https://datafile.seoul.go.kr/bigfile/iot/inf/nio_download.do?useCache=false,infId=OA-22382&seq=14&infSeq=1
+15,2025,3,2025-Q3.zip,97.11,2026-06-26,https://data.seoul.go.kr/dataList/OA-22382/F/1/datasetView.do,https://datafile.seoul.go.kr/bigfile/iot/inf/nio_download.do?useCache=false,infId=OA-22382&seq=15&infSeq=1
+16,2025,4,2025-Q4.zip,97.26,2026-06-26,https://data.seoul.go.kr/dataList/OA-22382/F/1/datasetView.do,https://datafile.seoul.go.kr/bigfile/iot/inf/nio_download.do?useCache=false,infId=OA-22382&seq=16&infSeq=1
