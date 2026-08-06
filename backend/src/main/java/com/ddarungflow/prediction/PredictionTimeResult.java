@@ -1,10 +1,10 @@
 package com.ddarungflow.prediction;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 public record PredictionTimeResult(
-    PredictionTimeStatus status,
-    LocalDateTime requestedTime,
-    LocalDateTime calculatedTime,
-    String message
+    OffsetDateTime predictionTargetAt,
+    long targetOffsetMinutes,
+    long horizonMinutes,
+    PredictionTimeStatus status
 ) {}

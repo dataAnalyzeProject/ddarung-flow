@@ -1,89 +1,54 @@
 package com.ddarungflow.prediction;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.Duration;
+import java.time.temporal.ChronoUnit;
 
-public class PredictionTimeCalculator {
+public final class PredictionTimeCalculator {
 
-    private static final Duration MIN_LEAD_TIME = Duration.ofMinutes(10);
-    private static final Duration MAX_PREDICTION_LIMIT = Duration.ofHours(24);
+    // 인스턴스화 방지를 위한 private 생성자
+    private PredictionTimeCalculator() {}
 
     /**
-     * 예측 시간의 상태와 보정된 대상 시간을 계산합니다.
-     * 요구사항에 따라 Spring 어노테이션은 일절 사용하지 않습니다.
+     * 예측 시간 상태 및 보정된 목표 시각과의 분 차이를 계산합니다.
+     * Spring 어노테이션은 어떠한 경우에도 사용하지 않습니다.
      *
-     * @param currentTime   현재 기준 시간
-     * @param requestedTime 예측을 요청한 시간
-     * @return 예측 상태, 요청 시간, 보정된 시간, 설명 메시지를 포함한 PredictionTimeResult 객체
+     * @param requestedAt 예측 요청 시각
+     * @param arrivalAt   도착 예정 시각
+     * @param featureAsOf 피처 기준 시각
+     * @return 계산 결과를 포함한 PredictionTimeResult 객체
      */
-    public static PredictionTimeResult calculate(LocalDateTime currentTime, LocalDateTime requestedTime) {
-        if (currentTime == null || requestedTime == null) {
-            throw new IllegalArgumentException("Current time and requested time must not be null");
+    public static PredictionTimeResult calculate(OffsetDateTime requestedAt, OffsetDateTime arrivalAt, OffsetDateTime featureAsOf) {
+        if (requestedAt == null || arrivalAt == null || featureAsOf == null) {
+            throw new IllegalArgumentException("모든 입력 값(requestedAt, arrivalAt, featureAsOf)은 null이 될 수 없습니다.");
         }
 
-        LocalDateTime calculatedTime = roundToNearest10Minutes(requestedTime);
+        // 목표 시각 계산: arrivalAt + 30분 후 정시(정각)로 자름
+        OffsetDateTime predictionTargetAt = arrivalAt.plusMinutes(30).truncatedTo(ChronoUnit.HOURS);
 
-        if (calculatedTime.isBefore(currentTime)) {
-            return new PredictionTimeResult(
-                PredictionTimeStatus.TOO_SOON,
-                requestedTime,
-                calculatedTime,
-                "Requested time (rounded to " + calculatedTime + ") is in the past."
-            );
-        }
+        // 분 차이 계산 (arrivalAt -> 목표 시각, featureAsOf -> 목표 시각)
+        long targetOffsetMinutes = Duration.between(arrivalAt, predictionTargetAt).toMinutes();
+        long horizonMinutes = Duration.between(featureAsOf, predictionTargetAt).toMinutes();
 
-        Duration duration = Duration.between(currentTime, calculatedTime);
+        PredictionTimeStatus status;
 
-        if (duration.compareTo(MIN_LEAD_TIME) < 0) {
-            return new PredictionTimeResult(
-                PredictionTimeStatus.TOO_SOON,
-                requestedTime,
-                calculatedTime,
-                "Prediction requires at least 10 minutes of lead time. Current lead time: " + duration.toMinutes() + " minute(s)."
-            );
-        }
-
-        if (duration.compareTo(MAX_PREDICTION_LIMIT) > 0) {
-            return new PredictionTimeResult(
-                PredictionTimeStatus.UNAVAILABLE,
-                requestedTime,
-                calculatedTime,
-                "Prediction is only available up to 24 hours in advance. Requested lead time: " + duration.toHours() + " hour(s)."
-            );
-        }
-
-        return new PredictionTimeResult(
-            PredictionTimeStatus.NORMAL,
-            requestedTime,
-            calculatedTime,
-            "Prediction time is valid."
-        );
-    }
-
-    /**
-     * 입력받은 LocalDateTime 시간을 가장 가까운 10분 단위로 반올림(보정)합니다.
-     * 예: 11:23:45 -> 11:20:00, 11:27:12 -> 11:30:00
-     */
-    public static LocalDateTime roundToNearest10Minutes(LocalDateTime time) {
-        int minute = time.getMinute();
-        int remainder = minute % 10;
-        int roundedMinute;
-        int hourAdjustment = 0;
-
-        if (remainder < 5) {
-            roundedMinute = minute - remainder;
+        // 목표 시각이 요청 시각과 같거나 이전인 경우
+        if (!predictionTargetAt.isAfter(requestedAt)) {
+            status = PredictionTimeStatus.TOO_SOON;
         } else {
-            roundedMinute = minute + (10 - remainder);
-            if (roundedMinute == 60) {
-                roundedMinute = 0;
-                hourAdjustment = 1;
+            // 미래 목표이면서 horizon이 60, 120, 180, 240 중 하나면 NORMAL, 그 외에는 UNAVAILABLE
+            if (horizonMinutes == 60 || horizonMinutes == 120 || horizonMinutes == 180 || horizonMinutes == 240) {
+                status = PredictionTimeStatus.NORMAL;
+            } else {
+                status = PredictionTimeStatus.UNAVAILABLE;
             }
         }
 
-        LocalDateTime result = time.withMinute(roundedMinute).withSecond(0).withNano(0);
-        if (hourAdjustment > 0) {
-            result = result.plusHours(hourAdjustment);
-        }
-        return result;
+        return new PredictionTimeResult(
+            predictionTargetAt,
+            targetOffsetMinutes,
+            horizonMinutes,
+            status
+        );
     }
 }
