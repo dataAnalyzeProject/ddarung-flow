@@ -72,7 +72,7 @@ DATA-2.0의 목적인 “DATA-2.1에 넣을 수 있는 연도와 파일을 수�
 5. 충돌 없는 시간 키만 사용해 정확한 H1~H4와 미래 재고 1~5대 이상 분포를 계산했습니다.
 6. 동일 입력으로 두 번 실행하여 핵심 결과 CSV의 SHA-256 일치를 확인했습니다.
 
-검토 가능한 소형 증거는 [`DATA-2.0-evidence`](./DATA-2.0-evidence/README.md)에 공개했습니다. 공식 URL 16개, CSV 60개 상대경로·크기·SHA-256·기간·행 수, 파일별 스키마·충돌, 연도별 품질, H1~H4 분자·분모, 필요 수량 1~5 성공 건수와 `approved=false` 후보 manifest를 포함합니다.
+검토 가능한 소형 증거는 [`DATA-2.0-evidence`](./DATA-2.0-evidence/README.md)에 공개했습니다. 공식 URL 16개, CSV 60개 상대경로·크기·SHA-256·기간·행 수, 파일별 0대·누락·음수·스키마·충돌, 대여소 기준정보 결합률, H1~H4 분자·분모, 필요 수량 1~5 성공 건수와 파일 단위 `approved=false` 후보 manifest를 포함합니다.
 
 ```powershell
 .\.local-harness\.venv-week2\Scripts\python.exe -m unittest pipeline.tests.test_data_source_audit_evidence -v
@@ -81,7 +81,7 @@ DATA-2.0의 목적인 “DATA-2.1에 넣을 수 있는 연도와 파일을 수�
 
 검증 결과는 각각 `7 tests, OK`, `30 passed`입니다. 공개 증거 자체의 SHA-256은 `evidence_sha256.csv`, 실행 기록은 `verification-log.md`에 남겼습니다.
 
-원본, 대용량 CSV, 로컬 절대경로와 로컬 하네스는 Git에 포함하지 않았습니다. 황준형의 기존 `data_source_audit.py`는 원 제출 이력으로 보존하지만 고정값·조인 오류가 있어 최종 승인 경로에서 제외합니다. DATA-2.0 최종 검증 경로는 이 문서, 공개 evidence와 `test_data_source_audit_evidence.py`입니다.
+원본, 대용량 CSV, 로컬 절대경로와 로컬 하네스는 Git에 포함하지 않았습니다. 황준형의 기존 `data_source_audit.py`는 원 제출 이력으로 보존하지만 고정값·조인 오류가 있어 최종 승인 경로에서 제외합니다. DATA-2.0 최종 검증 경로는 이 문서, 공개 evidence, `data20_official_audit.py`와 `test_data_source_audit_evidence.py`입니다.
 
 ## DATA-2.0 완료 범위와 남은 승인
 

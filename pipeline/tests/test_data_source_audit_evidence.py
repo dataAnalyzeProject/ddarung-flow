@@ -79,6 +79,9 @@ class Data20EvidenceTest(unittest.TestCase):
                 int(row["conflicting_key_count"]), int(row["duplicate_key_count"])
             )
             self.assertLessEqual(int(row["time_key_count"]), int(row["raw_rows"]))
+            self.assertGreaterEqual(int(row["unconflicted_zero_rows"]), 0)
+            self.assertEqual(0, int(row["missing_bike_rows"]))
+            self.assertEqual(0, int(row["negative_bike_rows"]))
 
         self.assertEqual(EXPECTED_RAW_ROWS, dict(totals))
         self.assertEqual({2022: 12, 2023: 24, 2024: 12, 2025: 12}, dict(file_counts))
@@ -133,6 +136,34 @@ class Data20EvidenceTest(unittest.TestCase):
         self.assertEqual("reject_quality", decisions[2023])
         self.assertEqual("eligible_with_quarantine", decisions[2024])
         self.assertEqual("eligible", decisions[2025])
+
+    def test_file_candidate_manifest_is_complete_and_unapproved(self):
+        archive_rows = read_rows("archive_manifest.csv")
+        rows = read_rows("file_candidate_manifest.csv")
+
+        self.assertEqual(60, len(rows))
+        self.assertEqual(
+            {row["csv_relative_path"] for row in archive_rows},
+            {row["relative_path"] for row in rows},
+        )
+        self.assertTrue(all(row["approved"].lower() == "false" for row in rows))
+        self.assertTrue(all(row["recommended"].lower() == "false" for row in rows if row["year"] == "2023"))
+
+    def test_station_coverage_has_explicit_numerators_and_denominators(self):
+        rows = read_rows("station_coverage.csv")
+        self.assertEqual(4, len(rows))
+        for row in rows:
+            observations = int(row["observation_key_count"])
+            matched_observations = int(row["matched_observation_key_count"])
+            stations = int(row["station_count"])
+            matched_stations = int(row["matched_station_count"])
+            common = int(row["common_with_2025_station_count"])
+            self.assertLessEqual(matched_observations, observations)
+            self.assertLessEqual(matched_stations, stations)
+            self.assertLessEqual(common, int(row["year_station_count"]))
+            for field in ("observation_match_percent", "station_match_percent", "common_with_2025_percent"):
+                self.assertGreaterEqual(float(row[field]), 0.0)
+                self.assertLessEqual(float(row[field]), 100.0)
 
 
 if __name__ == "__main__":
