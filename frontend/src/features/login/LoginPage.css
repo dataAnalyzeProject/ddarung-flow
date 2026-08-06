@@ -7,6 +7,9 @@ body {
     width: 100%;
     height: 100%;
     overflow: hidden;
+    /* 🎯Draft6 글자색 및 폰트 */
+    font-family: "Pretendard", "Segoe UI", system-ui, -apple-system, sans-serif;
+    color: #17212b;
 }
 
 /* 전체 화면 */
@@ -20,9 +23,9 @@ body {
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    background-color: #f8f9fa;
-    /* 🎯 배경 이미지 적용 (원하는 이미지 경로/URL 지정) */
-    background: url('https://images.unsplash.com/photo-1507035895480-2b3156c31fc8?q=80&w=1920') no-repeat center center / cover;
+    /* 🎯 Draft6: 흰색 배경 제거 및 그라데이션 적용 */
+    background-color: #f2f0eb;
+    /* 배경 이미지 대신 깔끔한 그라데이션 */
     box-sizing: border-box;
 }
 
@@ -33,69 +36,76 @@ body {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.35);
-    /* 배경 사진 살짝 어둡게 */
+    display: none;
 }
 
 /* 화면 맨 위에 좌우로 뻗는 흰색 헤더 바 */
 .top-navbar {
     width: 100%;
     padding: 20px 40px;
-    background-color: #ffffff;
-    border-bottom: 1px solid #1A1A1A;
+    /* 크림톤 오프화이트 */
+    background-color: #fffdf8;
+    /* 굵고 또렷한 2px 테두리 */
+    border-bottom: 2px solid #17212b;
     position: absolute;
     top: 0;
     left: 0;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    /* 수직 중앙 정렬 */
 }
 
 /* [수정] 흰색 상단 헤더 안쪽 로고 영역 */
 .top-navbar .top-logo-bar {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 14px;
 }
 
 /* [검은색 로고 박스] 'SEOUL BIKE' 글자 전체를 감싸는 검은 박스 */
 .top-navbar .logo-badge-box {
-    background-color: #1A1A1A;
+    background-color: #17212b;
+    /* 진한 딥 블랙 */
     /* 검은색 박스 배경 */
     color: #FFFFFF;
     /* 흰색 글자 반전 */
-    font-size: 11px;
+    font-size: 9px;
     font-weight: 900;
-    padding: 6px 10px;
-    /* 글자 주변 검은 박스 여백 */
-    border-radius: 3px;
-    /* 미세한 모서리 */
-    letter-spacing: 1px;
+    padding: 7px 9px;
+    /* 각진 사각형 */
+    border-radius: 0px;
+    /* 자간 강조 */
+    letter-spacing: 0.12em;
     display: inline-block;
     line-height: 1;
 }
 
 
-/* [추가] '따릉이 도착 대여 예측' 텍스트 스타일 */
+/* [따릉이 도착 대여 예측] 제목 텍스트 */
 .top-navbar .logo-text {
-    font-size: 16px;
-    font-weight: 500;
-    color: #505050;
+    font-size: 19px;
+    font-weight: 900;
+    /* 선명한 글자색 */
+    color: #17212b;
 }
 
-/* 2. 중앙에 뜨는 흰색 독립 로그인 카드 상자 */
+/* 중앙에 뜨는 네오브루탈리즘 로그인 카드 상자 */
 .login-card {
     position: relative;
     z-index: 1;
     width: 480px;
-    /* 카드 가로 폭 조절 */
-    padding: 48px 40px;
-    /* 안쪽 여백 */
-    background-color: #ffffff;
-    /* 카드 배경 흰색 */
-    border: 1.5px solid #1A1A1A;
-    /* 이미지 특유의 명확한 실선 테두리 */
-    border-radius: 12px;
-    /* 카드의 둥근 모서리 */
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
-    /* 은은하고 입체적인 그림자 */
+    padding: 40px 36px;
+    /* 1440x900 비율에 알맞은 내부 여백 */
+    background-color: #fffdf8;
+    /* 크림 오프화이트 배경 */
+    border: 2px solid #17212b;
+    /* 굵은 2px 검은 테두리 */
+    border-radius: 4px;
+    /* 12px -> 4px로 각진 모서리 적용 */
+    box-shadow: 6px 6px 0 #c7c3bb;
+    /* 또렷하고 단단한 하드 섀도우 */
+    box-sizing: border-box;
 }
 
 /* 로그인 화면 카드 */
@@ -105,15 +115,16 @@ body {
     width: 100%;
 }
 
-/* 상단 메인 브랜드 서브 텍스트 (SEOUL BIKE PREDICT 톤) */
+/* 상단 서브 브랜드 태그 */
 .header-area .brand-tag {
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 1px;
-    color: #FF5722;
-    /* 이미지 속 주황색 포인트 컬러 */
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.16em;
+    /* 자간을 조금 더 길게 */
+    color: #ff6238;
+    /* 🎯 #FF5722 -> #ff6238 로 변경 */
     text-transform: uppercase;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
 }
 
 /* 제목 영역 */
@@ -121,18 +132,20 @@ body {
     text-align: center;
 }
 
-/* 3. 제목 텍스트 및 서브 포인트 스타일 */
+/* 카드 메인 타이틀 */
 .header-area h1 {
-    font-size: 32px;
-    font-weight: 650;
-    color: #1A1A1A;
-    margin-bottom: 12px;
+    font-size: 24px;
+    font-weight: 900;
+    color: #17212b;
+    /* 진한 글자색 */
+    margin: 0 0 8px 0;
 }
 
 .header-area p {
-    font-size: 18px;
-    color: #505050;
-    margin: 8px 0;
+    font-size: 14px;
+    color: #565f66;
+    /* 🎯 #505050 -> #565f66 로 변경 */
+    margin: 0;
     margin-bottom: 40px;
 }
 
@@ -145,55 +158,98 @@ body {
     gap: 10px;
 }
 
-/* 성공 요약 박스 스타일 */
-.success-box {
-    background-color: #F8F9FA;
-    border: 1.5px solid #1A1A1A;
-    border-radius: 8px;
+/* 공통 상태 박스 스타일 (Draft6 피드백 박스 톤) */
+.success-box,
+.loading-box,
+.error-box,
+.cancel-box,
+.expired-box,
+.logout-box {
+    background-color: #fffdf8;
+    border: 2px solid #17212b;
+    border-left: 10px solid #ff6238;
+    /* 🎯 왼쪽에 주황색 포인트 바 */
+    border-radius: 4px;
     padding: 20px;
-    margin-top: 16px;
+    margin-top: 20px;
     text-align: left;
+    color: #17212b;
+}
+
+/* 실패/에러 상태 시 왼쪽 바 색상 변경 */
+.error-box {
+    border-left-color: #d94040;
+    /* 빨간색 포인트 */
+}
+
+/* 취소/만료 상태 시 왼쪽 바 색상 변경 */
+.cancel-box,
+.expired-box {
+    border-left-color: #e8a629;
+    /* 노란색 포인트 */
+}
+
+/* 성공 요약 박스 (기존 중복 속성 제거 및 왼쪽 바 포인트) */
+.success-box {
+    border-left-color: #ff6238;
+    /* 주황 포인트 바 */
 }
 
 .success-box h3 {
-    font-size: 16px;
-    font-weight: 700;
+    font-size: 15px;
+    font-weight: 900;
     margin-bottom: 12px;
-    color: #1A1A1A;
+    color: #17212b;
 }
 
 .success-box p {
-    font-size: 14px;
+    font-size: 13px;
+    font-weight: 700;
     margin: 4px 0;
-    color: #333333;
+    padding-bottom: 4px;
+    border-bottom: 1px dashed #d1cdb8;
+    /* 점선 구분선으로 깔끔하게 디테일 추가 */
+    color: #17212b;
 }
 
 /* 안내 문구 */
 .success-box .confirm-text {
     font-size: 13px;
-    font-weight: 700;
-    color: #FF5722;
-    /* 주황색 강조 */
+    font-weight: 900;
+    color: #ff6238;
+    /* 강조 텍스트 주황색 */
     margin: 12px 0;
 }
 
-/* 1. 다시 예측 버튼 (주황 메인 버튼) */
+/* 다시 예측 버튼 (주황 메인 버튼) */
 .predict-btn {
     width: 100%;
     height: 44px;
-    background-color: #FF5722;
+    background-color: #ff6238;
     color: #ffffff;
     font-size: 14px;
-    font-weight: 700;
-    border: 1.5px solid #1A1A1A;
-    border-radius: 6px;
+    font-weight: 900;
+    border: 2px solid #17212b;
+    border-radius: 4px;
     cursor: pointer;
+    margin-top: 12px;
     margin-bottom: 8px;
-    /* 아래 로그아웃 버튼과의 간격 */
+    box-shadow: 3px 3px 0 #17212b;
+    /* 입체 그림자 */
 }
 
-.predict-btn:hover {
-    background-color: #E64A19;
+/* 마우스 호버 시 살짝 반응 */
+.predict-btn:hover:not(:disabled) {
+    background-color: #e5532b;
+    transform: translate(-1px, -1px);
+    box-shadow: 4px 4px 0 #17212b;
+}
+
+/* 클릭 불가능 상태일 때 */
+.predict-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    box-shadow: none;
 }
 
 /* 2. 로그아웃 버튼 (깔끔한 서브 버튼) */
@@ -213,13 +269,10 @@ body {
     background-color: #F5F5F5;
 }
 
-/* 1. 로딩 박스 */
+/* 로딩 박스 */
 .loading-box {
-    background-color: #F8F9FA;
-    border: 1.5px solid #1A1A1A;
-    border-radius: 8px;
-    padding: 16px 20px;
-    margin-top: 16px;
+    border-left-color: #697078;
+    /* 로딩 시 무채색 회색 포인트 */
     text-align: center;
 }
 
@@ -232,12 +285,9 @@ body {
 
 /* 2. 실패(에러) 박스 */
 .error-box {
-    background-color: #FFF5F5;
-    border: 1.5px solid #E53E3E;
-    border-radius: 8px;
-    padding: 16px 20px;
-    margin-top: 16px;
-    text-align: left;
+    border-left-color: #d94040;
+    /* 에러 시 빨간 포인트 */
+    background-color: #fffdf8;
 }
 
 .error-box h2 {
@@ -249,42 +299,36 @@ body {
 
 .error-box p {
     font-size: 13px;
-    color: #666666;
+    color: #68717a;
     margin: 0;
 }
 
-/* 3. 취소 박스 */
+/* 취소 박스 */
 .cancel-box {
-    background-color: #FFFAF0;
-    border: 1.5px solid #DD6B20;
-    border-radius: 8px;
-    padding: 16px 20px;
-    margin-top: 16px;
-    text-align: left;
+    border-left-color: #e8a629;
+    /* 취소 시 노란 포인트 */
+    background-color: #fffdf8;
 }
 
 .cancel-box h2 {
     font-size: 15px;
     font-weight: 700;
-    color: #DD6B20;
+    color: #e8a629;
     margin-bottom: 4px;
 }
 
 .cancel-box p {
     font-size: 13px;
-    color: #666666;
+    color: #68717a;
     margin: 0;
 }
 
 
-/* 4. 만료 박스 */
+/* 만료 박스 */
 .expired-box {
-    background-color: #FFFAF0;
-    border: 1.5px solid #6a1b9a;
-    border-radius: 8px;
-    padding: 16px 20px;
-    margin-top: 16px;
-    text-align: left;
+    border-left-color: #e8a629;
+    /* 만료 시 경고 포인트 */
+    background-color: #fffdf8;
 }
 
 .expired-box h2 {
@@ -302,23 +346,20 @@ body {
 
 /* 5. 로그아웃 완료 박스 */
 .logout-box {
-    background-color: #F8F9FA;
-    border: 1.5px solid #616161;
-    border-radius: 8px;
-    padding: 16px 20px;
-    margin-top: 16px;
-    text-align: left;
+    border-left-color: #17212b;
+    /* 진한 검은색 포인트 */
+    background-color: #fffdf8;
 }
 
 .logout-box h2 {
     font-size: 15px;
-    font-weight: 700;
-    color: #1A1A1A;
+    font-weight: 900;
+    color: #17212b;
     margin-bottom: 4px;
 }
 
 .logout-box p {
     font-size: 13px;
-    color: #666666;
+    color: #68717a;
     margin: 0;
 }

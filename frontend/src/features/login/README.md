@@ -167,3 +167,12 @@ Ran all test suites.
 
 ### 💡 허용 목록 외 파일 (`MainPage.test.jsx`) 수정 관련 사유
 - `frontend/src/features/main/MainPage.test.jsx` 파일은 팀원 브랜치 통합 과정에서 포함되었거나 통합 검증을 위해 유지된 파일로, 이번 로그인 기능 모듈 수정과는 독립적입니다.
+
+### 📌 개발/테스트 환경 초기 상태 동작 참고 (getCurrentUser 비동기 흐름)
+
+**현상**: 백엔드 API 서버(http://localhost:8080)가 동작하지 않는 상태에서 initialStatus 없이 LoginPage에 최초 접근할 경우, WAITING(로그인 대기) 화면 대신 FAILED(로그인 실패) 박스가 즉시 출력됨.
+
+**원인 분석**:
+
+- LoginPage.jsx 로드 시 useEffect에서 getCurrentUser()를 호출함.
+- 백엔드 서버 미실행/인증 실패(401)로 인해 fetch 예외가 발생하며 .catch(() => setLoginStatus(LOGIN_STATUS.FAILED))가 실행되어 실패 상태로 전환됨.
