@@ -2,21 +2,42 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import PredictionResults from "./PredictionResults";
 import { emptyResult, lowWithAlternativesResult, normalResult } from "./data/predictionResultMock";
 
-test("정상 결과에서 후보와 필요 수량 확률을 표시한다", () => {
+test("정상 결과에서 승인된 후보별 결과를 그대로 표시한다", () => {
   render(<PredictionResults result={normalResult} />);
   expect(screen.getByRole("heading", { name: "목적지 주변 예측 결과" })).toBeInTheDocument();
+  expect(screen.getAllByRole("article")).toHaveLength(3);
   expect(screen.getByText("성수역 3번 출구")).toBeInTheDocument();
+  expect(screen.getByText("성수동 카페거리")).toBeInTheDocument();
+  expect(screen.getByText("서울숲 남문")).toBeInTheDocument();
+  expect(screen.getByText("오후 3:41")).toBeInTheDocument();
+  expect(screen.getByText("오후 3:45")).toBeInTheDocument();
+  expect(screen.getByText("오후 3:51")).toBeInTheDocument();
+  expect(screen.getAllByText("오후 4:00", { exact: false })).toHaveLength(3);
   expect(screen.getByText("87%")).toBeInTheDocument();
-  fireEvent.change(screen.getByRole("combobox", { name: "필요 수량" }), { target: { value: "5" } });
-  expect(screen.getByText("45%")).toBeInTheDocument();
+  expect(screen.getByText("62%")).toBeInTheDocument();
+  expect(screen.getByText("31%")).toBeInTheDocument();
+  expect(screen.getByText("8")).toBeInTheDocument();
+  expect(screen.getByText("5")).toBeInTheDocument();
+  expect(screen.getByText("2")).toBeInTheDocument();
+  expect(screen.getByText("높음")).toBeInTheDocument();
+  expect(screen.getByText("중간")).toBeInTheDocument();
+  expect(screen.getByText("낮음")).toBeInTheDocument();
+  expect(screen.queryByRole("combobox", { name: "필요 수량" })).not.toBeInTheDocument();
 });
 
 test("결과가 없으면 안내와 입력 수정 버튼을 표시한다", () => {
-  const onModify = jest.fn();
-  render(<PredictionResults result={emptyResult} onModify={onModify} />);
+  const onEditInput = jest.fn();
+  render(<PredictionResults result={emptyResult} onEditInput={onEditInput} />);
   expect(screen.getByText("조건에 맞는 예측 결과가 없습니다.")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "입력 수정" }));
-  expect(onModify).toHaveBeenCalledTimes(1);
+  expect(onEditInput).toHaveBeenCalledTimes(1);
+});
+
+test("대여소를 선택하면 선택 콜백에 stationId를 전달한다", () => {
+  const onSelectStation = jest.fn();
+  render(<PredictionResults result={normalResult} onSelectStation={onSelectStation} />);
+  fireEvent.click(screen.getByRole("button", { name: /ST-2 62% 성수동 카페거리/ }));
+  expect(onSelectStation).toHaveBeenCalledWith("ST-2");
 });
 
 test("상세정보를 펼치면 누적확률과 데이터 기준시각을 표시한다", () => {
