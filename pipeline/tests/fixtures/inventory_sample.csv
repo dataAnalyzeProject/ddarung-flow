@@ -1,0 +1,9 @@
+observed_date,station_id,station_name,hour,bike_count
+2024-01-01,ST001,Sample Station,10,3
+2024-01-01,ST001,Sample Station,11,0
+2024-01-01,ST001,Sample Station,11,0
+2024-01-01,ST001,Sample Station,12,
+2024-01-01,ST001,Sample Station,13,-1
+2024-01-01,ST001,Sample Station,14,5
+2024-01-01,ST001,Sample Station,15,2
+2024-01-01,ST001,Sample Station,15,3

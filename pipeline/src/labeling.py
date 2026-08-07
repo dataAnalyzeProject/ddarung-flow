@@ -1,154 +1,274 @@
-import os
-import json
 import argparse
-import pandas as pd
+import json
+import os
+
+import duckdb
 import numpy as np
+import pandas as pd
+
+
+HORIZONS = (1, 2, 3, 4)
+THRESHOLDS = (1, 2, 3, 4, 5)
+
 
 def load_data_split_config(config_path=None):
-    """
-    data_split.json 경계 설정 파일을 읽어옵니다.
-    """
     if not config_path:
-        config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "data_split.json")
-    
-    if os.path.exists(config_path):
-        with open(config_path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {
-        "train_range": {"start_timestamp": "2024-01-01 00:00:00", "end_timestamp": "2025-05-14 23:00:00"},
-        "holdout_test_range": {"start_timestamp": "2025-05-15 00:00:00", "end_timestamp": "2025-12-31 23:00:00"}
-    }
-
-def generate_h1_h4_labels(df_curated, config_path=None):
-    """
-    정제된 시계열 데이터에서 H1~H4 (60, 120, 180, 240분 뒤) exact matching을 수행하고
-    valid 플래그 (target_valid_h1~h4) 및 필요 수량 1~5대 라벨 (label_hX_tY)을 생성합니다.
-    """
-    print("\n[Labeling Pipeline] H1~H4 라벨링 및 시계열 Split 시작...")
-
-    df = df_curated.copy()
-    if 'dt' not in df.columns:
-        df['dt'] = pd.to_datetime(df['observed_at'])
-    if 'st' not in df.columns:
-        df['st'] = df['station_id']
-    if 'bike_cnt' not in df.columns:
-        df['bike_cnt'] = pd.to_numeric(df['bike_count'], errors='coerce')
-
-    df = df.dropna(subset=['st', 'dt', 'bike_cnt']).sort_values(['st', 'dt']).reset_index(drop=True)
-
-    df_res = pd.DataFrame({
-        'station_id': df['st'],
-        'feature_as_of': df['dt'],
-        'current_bike_count': df['bike_cnt']
-    })
-
-    # H1(60m), H2(120m), H3(180m), H4(240m) 미래 매칭
-    for h_step in [1, 2, 3, 4]:
-        h_mins = h_step * 60
-        df_future = df[['st', 'dt', 'bike_cnt']].copy()
-        df_future['dt_target'] = df_future['dt'] - pd.Timedelta(hours=h_step)
-        
-        df_future_sub = df_future[['st', 'dt_target', 'dt', 'bike_cnt']].rename(columns={
-            'dt': f'dt_future_h{h_step}',
-            'bike_cnt': f'future_bike_count_h{h_step}'
-        })
-
-        merged = pd.merge(
-            df_res[['station_id', 'feature_as_of']],
-            df_future_sub,
-            left_on=['station_id', 'feature_as_of'],
-            right_on=['st', 'dt_target'],
-            how='left'
+        config_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "config",
+            "data_split.json",
         )
 
-        df_res[f'prediction_target_at_h{h_step}'] = df_res['feature_as_of'] + pd.Timedelta(hours=h_step)
-        df_res[f'future_bike_count_h{h_step}'] = merged[f'future_bike_count_h{h_step}']
-        df_res[f'target_valid_h{h_step}'] = ~merged[f'future_bike_count_h{h_step}'].isnull()
+    if os.path.exists(config_path):
+        with open(config_path, "r", encoding="utf-8") as config_file:
+            return json.load(config_file)
+    return {
+        "train_range": {
+            "start_timestamp": "2024-01-01 00:00:00",
+            "end_timestamp": "2025-05-14 23:00:00",
+        },
+        "holdout_test_range": {
+            "start_timestamp": "2025-05-15 00:00:00",
+            "end_timestamp": "2025-12-31 23:00:00",
+        },
+    }
 
-        # 필요 수량 1~5대 라벨 생성 (target_valid_hX가 False인 경우 NaN 보존)
-        for t in range(1, 6):
-            col_name = f'label_h{h_step}_t{t}'
-            future_cnts = merged[f'future_bike_count_h{h_step}']
-            
-            label_series = pd.Series(np.nan, index=df_res.index)
-            valid_mask = ~future_cnts.isnull()
-            label_series[valid_mask] = (future_cnts[valid_mask] >= t).astype(int)
-            df_res[col_name] = label_series
 
-    # 시계열 Split (Train vs Test Holdout) 지정 및 H4 경계 누출 차단
-    cfg = load_data_split_config(config_path)
-    train_end = pd.to_datetime(cfg['train_range']['end_timestamp'])
-    test_start = pd.to_datetime(cfg['holdout_test_range']['start_timestamp'])
+def _assign_split(feature_as_of, train_end, test_start):
+    split = pd.Series("buffer_excluded", index=feature_as_of.index, dtype="object")
+    split.loc[feature_as_of <= train_end] = "train"
+    split.loc[feature_as_of >= test_start] = "test_holdout"
+    return split
 
-    def assign_split(dt):
-        if dt <= train_end:
-            return 'train'
-        elif dt >= test_start:
-            return 'test_holdout'
-        else:
-            return 'buffer_excluded'
 
-    df_res['split'] = df_res['feature_as_of'].apply(assign_split)
+def generate_h1_h4_labels(df_curated, config_path=None):
+    """Generate exact H1-H4 labels for small in-memory inputs and unit tests."""
+    df = df_curated.copy()
+    if "dt" not in df.columns:
+        df["dt"] = pd.to_datetime(df["observed_at"])
+    if "st" not in df.columns:
+        df["st"] = df["station_id"].astype(str)
+    if "bike_cnt" not in df.columns:
+        df["bike_cnt"] = pd.to_numeric(df["bike_count"], errors="coerce")
 
-    # 경계 누출 차단: Train 데이터 중 H4 미래 시각이 Test Start 범위를 넘어서는 경우 valid 플래그 차단
-    leakage_mask = (df_res['split'] == 'train') & (df_res['prediction_target_at_h4'] >= test_start)
-    if leakage_mask.sum() > 0:
-        print(f"  - [Boundary Leakage Guard] H4 경계 누출 가능성 {leakage_mask.sum()}건 감지 ➡️ target_valid_h4 차단 조치 완료")
-        df_res.loc[leakage_mask, 'target_valid_h4'] = False
-        for t in range(1, 6):
-            df_res.loc[leakage_mask, f'label_h4_t{t}'] = np.nan
+    df = (
+        df.dropna(subset=["st", "dt", "bike_cnt"])
+        .sort_values(["st", "dt"])
+        .drop_duplicates(["st", "dt"], keep="first")
+        .reset_index(drop=True)
+    )
+    result = pd.DataFrame(
+        {
+            "station_id": df["st"],
+            "feature_as_of": df["dt"],
+            "current_bike_count": df["bike_cnt"],
+        }
+    )
 
-    print(f"  - Labeled Dataset total rows: {len(df_res):,}행")
-    print(f"  - Train rows: {(df_res['split'] == 'train').sum():,}행")
-    print(f"  - Test Holdout rows: {(df_res['split'] == 'test_holdout').sum():,}행")
+    config = load_data_split_config(config_path)
+    train_end = pd.to_datetime(config["train_range"]["end_timestamp"])
+    test_start = pd.to_datetime(config["holdout_test_range"]["start_timestamp"])
+    result["split"] = _assign_split(result["feature_as_of"], train_end, test_start)
 
-    return df_res
+    lookup = df.set_index(["st", "dt"])["bike_cnt"]
+    for horizon in HORIZONS:
+        target_at = result["feature_as_of"] + pd.Timedelta(hours=horizon)
+        target_index = pd.MultiIndex.from_arrays([result["station_id"], target_at])
+        future_count = pd.Series(lookup.reindex(target_index).to_numpy(), index=result.index)
+        no_boundary_leakage = ~(
+            (result["split"] == "train") & (target_at >= test_start)
+        )
+        valid = future_count.notna() & no_boundary_leakage
 
-def run_labeling_pipeline(curated_csv_path="output/curated_inventory.csv", output_dir="output", config_path=None):
-    """
-    Curated inventory CSV 파일에서 H1~H4 라벨링 및 시계열 Split 데이터셋 생성
-    """
+        result[f"prediction_target_at_h{horizon}"] = target_at
+        result[f"future_bike_count_h{horizon}"] = future_count
+        result[f"target_valid_h{horizon}"] = valid
+        for threshold in THRESHOLDS:
+            result[f"label_h{horizon}_t{threshold}"] = np.where(
+                valid,
+                (future_count >= threshold).astype(float),
+                np.nan,
+            )
+
+    return result
+
+
+def _sql_path(path):
+    return os.path.abspath(path).replace("\\", "/").replace("'", "''")
+
+
+def _sql_timestamp(value):
+    return str(pd.to_datetime(value)).replace("'", "''")
+
+
+def _configure_duckdb(connection, memory_limit, temp_dir):
+    os.makedirs(temp_dir, exist_ok=True)
+    connection.execute(f"SET memory_limit = '{memory_limit}'")
+    connection.execute(f"SET temp_directory = '{_sql_path(temp_dir)}'")
+    connection.execute("SET preserve_insertion_order = false")
+
+
+def _label_select_sql(test_start):
+    select_columns = [
+        "base.station_id",
+        "base.observed_at AS feature_as_of",
+        "base.bike_count AS current_bike_count",
+    ]
+    joins = []
+    for horizon in HORIZONS:
+        target_expression = f"base.observed_at + INTERVAL '{horizon} hours'"
+        valid_expression = (
+            f"future_h{horizon}.bike_count IS NOT NULL "
+            f"AND NOT (base.split = 'train' AND {target_expression} >= "
+            f"TIMESTAMP '{test_start}')"
+        )
+        select_columns.extend(
+            [
+                f"{target_expression} AS prediction_target_at_h{horizon}",
+                f"future_h{horizon}.bike_count AS future_bike_count_h{horizon}",
+                f"({valid_expression}) AS target_valid_h{horizon}",
+            ]
+        )
+        for threshold in THRESHOLDS:
+            select_columns.append(
+                f"CASE WHEN {valid_expression} THEN "
+                f"CAST(future_h{horizon}.bike_count >= {threshold} AS INTEGER) "
+                f"ELSE NULL END AS label_h{horizon}_t{threshold}"
+            )
+        joins.append(
+            f"LEFT JOIN curated future_h{horizon} "
+            f"ON future_h{horizon}.station_id = base.station_id "
+            f"AND future_h{horizon}.observed_at = {target_expression}"
+        )
+    select_columns.append("base.split")
+    return (
+        "SELECT\n  "
+        + ",\n  ".join(select_columns)
+        + "\nFROM split_curated base\n"
+        + "\n".join(joins)
+    )
+
+
+def run_labeling_pipeline(
+    curated_csv_path="output/curated_inventory.csv",
+    output_dir="output",
+    config_path=None,
+    memory_limit="4GB",
+    temp_dir=None,
+):
+    """Create the labeled CSV with disk-backed DuckDB joins."""
     if not os.path.exists(curated_csv_path):
-        raise FileNotFoundError(f"[Labeling Error] Curated CSV 파일이 없습니다: {curated_csv_path}")
-
-    df_curated = pd.read_csv(curated_csv_path)
-    df_labeled = generate_h1_h4_labels(df_curated, config_path=config_path)
+        raise FileNotFoundError(f"Curated CSV does not exist: {curated_csv_path}")
 
     os.makedirs(output_dir, exist_ok=True)
-    df_labeled.to_csv(os.path.join(output_dir, "labeled_dataset.csv"), index=False, encoding='utf-8-sig')
-    
-    # H1~H4 및 1~5대 정산 요약표 출력
-    summary_rows = []
-    for h in [1, 2, 3, 4]:
-        val_cnt = int(df_labeled[f'target_valid_h{h}'].sum())
-        total_cnt = len(df_labeled)
-        rate = round((val_cnt / total_cnt) * 100, 2)
-        
-        t_rates = {}
-        for t in range(1, 6):
-            succ = int((df_labeled[f'label_h{h}_t{t}'] == 1).sum())
-            t_rates[f't{t}_success_rate'] = round((succ / val_cnt) * 100, 2) if val_cnt > 0 else 0.0
+    if temp_dir is None:
+        temp_dir = os.path.join(output_dir, ".duckdb_tmp")
+    labeled_path = os.path.join(output_dir, "labeled_dataset.csv")
+    summary_path = os.path.join(output_dir, "labeling_summary.csv")
 
-        summary_rows.append({
-            'horizon': f'H{h}',
-            'minutes': h * 60,
-            'valid_count': val_cnt,
-            'total_base': total_cnt,
-            'presence_rate': rate,
-            **t_rates
-        })
+    config = load_data_split_config(config_path)
+    train_end = _sql_timestamp(config["train_range"]["end_timestamp"])
+    test_start = _sql_timestamp(config["holdout_test_range"]["start_timestamp"])
 
-    df_summary = pd.DataFrame(summary_rows)
-    df_summary.to_csv(os.path.join(output_dir, "labeling_summary.csv"), index=False, encoding='utf-8-sig')
+    os.makedirs(temp_dir, exist_ok=True)
+    database_path = os.path.join(temp_dir, "labeling.duckdb")
+    connection = duckdb.connect(database_path)
+    try:
+        _configure_duckdb(connection, memory_limit, temp_dir)
+        connection.execute(
+            f"""
+            CREATE OR REPLACE TABLE curated AS
+            SELECT
+                CAST(station_id AS VARCHAR) AS station_id,
+                CAST(observed_at AS TIMESTAMP) AS observed_at,
+                TRY_CAST(bike_count AS DOUBLE) AS bike_count
+            FROM read_csv_auto('{_sql_path(curated_csv_path)}', header=true)
+            WHERE station_id IS NOT NULL
+              AND TRY_CAST(observed_at AS TIMESTAMP) IS NOT NULL
+              AND TRY_CAST(bike_count AS DOUBLE) IS NOT NULL
+            """
+        )
+        duplicate_count = connection.execute(
+            """
+            SELECT COUNT(*) - COUNT(DISTINCT (station_id, observed_at))
+            FROM curated
+            """
+        ).fetchone()[0]
+        if duplicate_count:
+            raise ValueError(
+                "Curated input contains duplicate station/time keys: "
+                f"{duplicate_count:,}"
+            )
+        connection.execute(
+            f"""
+            CREATE TEMP VIEW split_curated AS
+            SELECT *,
+                CASE
+                    WHEN observed_at <= TIMESTAMP '{train_end}' THEN 'train'
+                    WHEN observed_at >= TIMESTAMP '{test_start}' THEN 'test_holdout'
+                    ELSE 'buffer_excluded'
+                END AS split
+            FROM curated
+            """
+        )
+        label_sql = _label_select_sql(test_start)
+        connection.execute(
+            f"""
+            COPY (
+                {label_sql}
+                ORDER BY station_id, feature_as_of
+            ) TO '{_sql_path(labeled_path)}' (HEADER, DELIMITER ',')
+            """
+        )
+        connection.execute(
+            f"""
+            CREATE TEMP VIEW labeled AS
+            SELECT * FROM read_csv_auto('{_sql_path(labeled_path)}', header=true)
+            """
+        )
+        summary_queries = []
+        for horizon in HORIZONS:
+            threshold_rates = []
+            for threshold in THRESHOLDS:
+                threshold_rates.append(
+                    f"ROUND(100.0 * SUM(CASE WHEN label_h{horizon}_t{threshold} = 1 "
+                    f"THEN 1 ELSE 0 END) / NULLIF(SUM(CASE WHEN target_valid_h{horizon} "
+                    f"THEN 1 ELSE 0 END), 0), 2) AS t{threshold}_success_rate"
+                )
+            summary_queries.append(
+                f"""
+                SELECT 'H{horizon}' AS horizon, {horizon * 60} AS minutes,
+                    SUM(CASE WHEN target_valid_h{horizon} THEN 1 ELSE 0 END) AS valid_count,
+                    COUNT(*) AS total_base,
+                    ROUND(100.0 * SUM(CASE WHEN target_valid_h{horizon} THEN 1 ELSE 0 END)
+                        / NULLIF(COUNT(*), 0), 2) AS presence_rate,
+                    {', '.join(threshold_rates)}
+                FROM labeled
+                """
+            )
+        summary = connection.execute(" UNION ALL ".join(summary_queries)).fetchdf()
+        summary.to_csv(summary_path, index=False, encoding="utf-8-sig")
+    finally:
+        connection.close()
 
-    print(f"\n[Labeling Summary Table]\n{df_summary.to_string()}")
-    return df_labeled, df_summary
+    print(f"[Labeling] wrote {labeled_path}")
+    print(f"[Labeling] memory_limit={memory_limit}, temp_directory={temp_dir}")
+    print(summary.to_string(index=False))
+    return labeled_path, summary
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="DATA-2.1 H1~H4 Labeling Pipeline")
-    parser.add_argument("--curated-csv", type=str, default="output/curated_inventory.csv", help="Path to curated inventory CSV")
-    parser.add_argument("--output-dir", type=str, default="output", help="Path to output directory")
-    parser.add_argument("--config", type=str, default=None, help="Path to data_split.json config")
-    args = parser.parse_args()
 
-    run_labeling_pipeline(curated_csv_path=args.curated_csv, output_dir=args.output_dir, config_path=args.config)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="DATA-2.1 H1-H4 labeling pipeline")
+    parser.add_argument("--curated-csv", default="output/curated_inventory.csv")
+    parser.add_argument("--output-dir", default="output")
+    parser.add_argument("--config", default=None)
+    parser.add_argument("--memory-limit", default="4GB")
+    parser.add_argument("--temp-dir", default=None)
+    arguments = parser.parse_args()
+    run_labeling_pipeline(
+        curated_csv_path=arguments.curated_csv,
+        output_dir=arguments.output_dir,
+        config_path=arguments.config,
+        memory_limit=arguments.memory_limit,
+        temp_dir=arguments.temp_dir,
+    )
