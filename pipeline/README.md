@@ -157,4 +157,37 @@ DATA-2.0 조사 단계에서 시계열 데이터셋의 무결성, 스키마, 결
 
 ```powershell
 python pipeline/src/data_source_audit.py --input-dir "C:\Users\M\Desktop\데이터셋" --output-dir "output"
+
+---
+
+## DATA-2.1 H1~H4 Baseline 데이터셋 구축 및 라벨링 실행
+
+DATA-2.1 단계에서 승인 매니페스트 사전 검증, SHA-256 무결성 검증, 데이터 정제(Curated/Quarantine), H1~H4 라벨링, 8:2 시계열 Holdout 분할 및 베이스라인 모델 성능 평가를 수행하는 스크립트 실행 명령어입니다.
+
+### 1. 가상환경 및 의존성 설치
+```powershell
+.\project\Scripts\activate.bat
+pip install -r pipeline\requirements.txt
+```
+
+### 2. DATA-2.1 전처리 & SHA-256 검증 및 Curated 정제
+```powershell
+python pipeline/src/inventory_cleaning.py --manifest "C:\Users\M\Desktop\데이터셋\approved_inventory_manifest.csv" --data-root "C:\Users\M\Desktop\데이터셋" --output-dir "output"
+```
+
+### 3. H1~H4 라벨링 및 시계열 Split 데이터셋 생성
+```powershell
+python pipeline/src/labeling.py --curated-csv "output/curated_inventory.csv" --output-dir "output"
+```
+
+### 4. 베이스라인 모델 평가 및 4대 지표 산출
+```powershell
+python pipeline/src/baseline.py --labeled-csv "output/labeled_dataset.csv" --output-dir "output"
+```
+
+### 5. 파이프라인 단위 테스트 구동
+```powershell
+python -m pytest pipeline/tests/
+```
+
 ```
