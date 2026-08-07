@@ -1,7 +1,6 @@
 package com.ddarungflow.prediction;
 
 import java.time.OffsetDateTime;
-import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 
 public final class PredictionTimeCalculator {
@@ -28,8 +27,8 @@ public final class PredictionTimeCalculator {
         OffsetDateTime predictionTargetAt = arrivalAt.plusMinutes(30).truncatedTo(ChronoUnit.HOURS);
 
         // 분 차이 계산 (arrivalAt -> 목표 시각, featureAsOf -> 목표 시각)
-        long targetOffsetMinutes = Duration.between(arrivalAt, predictionTargetAt).toMinutes();
-        long horizonMinutes = Duration.between(featureAsOf, predictionTargetAt).toMinutes();
+        long targetOffsetMinutes = ChronoUnit.MINUTES.between(arrivalAt, predictionTargetAt);
+        long horizonMinutes = ChronoUnit.MINUTES.between(featureAsOf, predictionTargetAt);
 
         PredictionTimeStatus status;
 

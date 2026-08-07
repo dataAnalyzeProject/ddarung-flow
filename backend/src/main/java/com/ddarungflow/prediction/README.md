@@ -23,7 +23,7 @@
    - **`horizonMinutes`**: 피처 기준 시각(`featureAsOf`)에서 목표 시각(`predictionTargetAt`)까지의 분 차이
 
 4. **예측 시간 상태 검증 (PredictionTimeStatus)**
-   - **`TOO_SOON`** (예측 불가 - 너무 이름):
+   - **`TOO_SOON`** (예측 불가 - 너무 이른 요청):
      - 계산된 목표 시각(`predictionTargetAt`)이 요청 시각(`requestedAt`)과 같거나 이전 시점인 경우.
    - **`NORMAL`** (예측 가능 - 정상):
      - 미래 목표 시각이면서, `horizonMinutes`가 정확히 **60, 120, 180, 240** 분 중 하나인 경우.
@@ -44,7 +44,7 @@
 ## 3. 조장 인계 기록 (Handoff Notes)
 
 ### 📌 설계 주안점
-- **순수 시간 및 오프셋 연산**: 입력 시각 데이터 간의 시간 차이 및 동시성 판단을 안전하게 계산하기 위해 `OffsetDateTime`과 `Duration` 연산을 활용했습니다. 세 입력의 UTC offset이 서로 다른 경우에는 `IllegalArgumentException`을 발생시켜 처리를 거부합니다.
+- **순수 시간 및 오프셋 연산**: 입력 시각 데이터 간의 시간 차이 및 동시성 판단을 안전하게 계산하기 위해 `OffsetDateTime`과 `ChronoUnit` 연산을 활용했습니다. 세 입력의 UTC offset이 서로 다른 경우에는 `IllegalArgumentException`을 발생시켜 처리를 거부합니다.
 - **불변 데이터 캡슐화**: `PredictionTimeResult`는 수정 불가능한 레코드 구조로 캡슐화되어 데이터 무결성을 보장합니다.
 
 ### 🧪 테스트 가이드
