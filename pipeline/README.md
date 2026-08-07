@@ -177,7 +177,7 @@ python pipeline/src/inventory_cleaning.py --manifest "C:\Users\M\Desktop\데이�
 
 ### 3. H1~H4 라벨링 및 시계열 Split 데이터셋 생성
 ```powershell
-python pipeline/src/labeling.py --curated-csv "output/curated_inventory.csv" --output-dir "output" --memory-limit "4GB" --temp-dir "D:\ddarung-flow-data\tmp"
+python pipeline/src/labeling.py --curated-csv "output/curated_inventory.csv" --output-dir "output" --memory-limit "4GB" --temp-dir "D:\ddarung-flow-data\tmp" --partitions 32
 ```
 
 ### 4. 베이스라인 모델 평가 및 4대 지표 산출
@@ -194,6 +194,8 @@ python -m pytest pipeline/tests/
 next file. `labeling.py` and `baseline.py` use DuckDB so large joins and
 aggregations can spill to `--temp-dir` rather than keeping every intermediate
 table in RAM. The temporary drive must have enough free space. The default
-memory limit is `4GB`; lower it on a worker PC with limited RAM.
+memory limit is `4GB`; lower it on a worker PC with limited RAM. Labeling also
+splits stations into 32 deterministic hash partitions so each H1-H4 join stays
+within the configured memory limit.
 
 ```

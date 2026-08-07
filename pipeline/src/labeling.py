@@ -108,7 +108,7 @@ def _configure_duckdb(connection, memory_limit, temp_dir):
     connection.execute("SET preserve_insertion_order = false")
 
 
-def _label_select_sql(test_start):
+def _label_select_sql(test_start, relation="curated"):
     select_columns = [
         "base.station_id",
         "base.observed_at AS feature_as_of",
@@ -136,7 +136,7 @@ def _label_select_sql(test_start):
                 f"ELSE NULL END AS label_h{horizon}_t{threshold}"
             )
         joins.append(
-            f"LEFT JOIN curated future_h{horizon} "
+            f"LEFT JOIN {relation} future_h{horizon} "
             f"ON future_h{horizon}.station_id = base.station_id "
             f"AND future_h{horizon}.observed_at = {target_expression}"
         )
@@ -144,9 +144,22 @@ def _label_select_sql(test_start):
     return (
         "SELECT\n  "
         + ",\n  ".join(select_columns)
-        + "\nFROM split_curated base\n"
+        + f"\nFROM {relation} base\n"
         + "\n".join(joins)
     )
+
+
+def _combine_csv_parts(part_paths, output_path):
+    with open(output_path, "wb") as output_file:
+        for index, part_path in enumerate(part_paths):
+            with open(part_path, "rb") as part_file:
+                if index > 0:
+                    part_file.readline()
+                while True:
+                    block = part_file.read(8 * 1024 * 1024)
+                    if not block:
+                        break
+                    output_file.write(block)
 
 
 def run_labeling_pipeline(
@@ -155,6 +168,7 @@ def run_labeling_pipeline(
     config_path=None,
     memory_limit="4GB",
     temp_dir=None,
+    partitions=32,
 ):
     """Create the labeled CSV with disk-backed DuckDB joins."""
     if not os.path.exists(curated_csv_path):
@@ -175,13 +189,17 @@ def run_labeling_pipeline(
     connection = duckdb.connect(database_path)
     try:
         _configure_duckdb(connection, memory_limit, temp_dir)
+        if partitions < 1:
+            raise ValueError("partitions must be at least 1")
         connection.execute(
             f"""
             CREATE OR REPLACE TABLE curated AS
             SELECT
                 CAST(station_id AS VARCHAR) AS station_id,
                 CAST(observed_at AS TIMESTAMP) AS observed_at,
-                TRY_CAST(bike_count AS DOUBLE) AS bike_count
+                TRY_CAST(bike_count AS DOUBLE) AS bike_count,
+                CAST(hash(CAST(station_id AS VARCHAR)) % {partitions} AS INTEGER)
+                    AS bucket_id
             FROM read_csv_auto('{_sql_path(curated_csv_path)}', header=true)
             WHERE station_id IS NOT NULL
               AND TRY_CAST(observed_at AS TIMESTAMP) IS NOT NULL
@@ -199,27 +217,39 @@ def run_labeling_pipeline(
                 "Curated input contains duplicate station/time keys: "
                 f"{duplicate_count:,}"
             )
-        connection.execute(
-            f"""
-            CREATE TEMP VIEW split_curated AS
-            SELECT *,
-                CASE
-                    WHEN observed_at <= TIMESTAMP '{train_end}' THEN 'train'
-                    WHEN observed_at >= TIMESTAMP '{test_start}' THEN 'test_holdout'
-                    ELSE 'buffer_excluded'
-                END AS split
-            FROM curated
-            """
-        )
-        label_sql = _label_select_sql(test_start)
-        connection.execute(
-            f"""
-            COPY (
-                {label_sql}
-                ORDER BY station_id, feature_as_of
-            ) TO '{_sql_path(labeled_path)}' (HEADER, DELIMITER ',')
-            """
-        )
+        parts_dir = os.path.join(output_dir, ".label_parts")
+        os.makedirs(parts_dir, exist_ok=True)
+        part_paths = []
+        for bucket_id in range(partitions):
+            part_path = os.path.join(parts_dir, f"labeled-{bucket_id:03d}.csv")
+            part_paths.append(part_path)
+            connection.execute(
+                f"""
+                CREATE OR REPLACE TABLE label_bucket AS
+                SELECT station_id, observed_at, bike_count,
+                    CASE
+                        WHEN observed_at <= TIMESTAMP '{train_end}' THEN 'train'
+                        WHEN observed_at >= TIMESTAMP '{test_start}' THEN 'test_holdout'
+                        ELSE 'buffer_excluded'
+                    END AS split
+                FROM curated
+                WHERE bucket_id = {bucket_id}
+                """
+            )
+            label_sql = _label_select_sql(test_start, relation="label_bucket")
+            connection.execute(
+                f"""
+                COPY (
+                    {label_sql}
+                    ORDER BY station_id, feature_as_of
+                ) TO '{_sql_path(part_path)}' (HEADER, DELIMITER ',')
+                """
+            )
+            print(f"[Labeling] completed partition {bucket_id + 1}/{partitions}")
+        _combine_csv_parts(part_paths, labeled_path)
+        for part_path in part_paths:
+            os.remove(part_path)
+        os.rmdir(parts_dir)
         connection.execute(
             f"""
             CREATE TEMP VIEW labeled AS
@@ -264,6 +294,7 @@ if __name__ == "__main__":
     parser.add_argument("--config", default=None)
     parser.add_argument("--memory-limit", default="4GB")
     parser.add_argument("--temp-dir", default=None)
+    parser.add_argument("--partitions", type=int, default=32)
     arguments = parser.parse_args()
     run_labeling_pipeline(
         curated_csv_path=arguments.curated_csv,
@@ -271,4 +302,5 @@ if __name__ == "__main__":
         config_path=arguments.config,
         memory_limit=arguments.memory_limit,
         temp_dir=arguments.temp_dir,
+        partitions=arguments.partitions,
     )
