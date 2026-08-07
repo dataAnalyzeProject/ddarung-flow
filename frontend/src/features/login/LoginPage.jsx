@@ -7,6 +7,7 @@ import { clearPendingPrediction, loadPendingPrediction, savePendingPrediction } 
 import kakaoImg from './components/kakao_login_large_wide.png';
 import naverImg from './components/NAVER_login_Dark_KR_green_center_H56.png';
 import googleImg from './components/019fb652-80d1-7692-b81b-73a811ebf1d9.png';
+import logoImg from './KakaoTalk_20260807_125703109.png';
 
 // 1. 매개변수(Props 3개)를 받아오도록 함수 선언부 변경 (기본값 세팅 포함)
 export default function LoginPage({
@@ -22,6 +23,20 @@ export default function LoginPage({
     const [isPredicted, setIsPredicted] = useState(false); // 🎯 버튼 중복 클릭 방지용
 
     useEffect(() => {
+
+        // 🎯 기존 index.html에 고정되어 있던 파비콘 태그들을 싹 다 찾아서 이미지 변경!
+        const existingIcons = document.querySelectorAll("link[rel*='icon']");
+        if (existingIcons.length > 0) {
+            existingIcons.forEach(icon => {
+                icon.href = logoImg;
+            });
+        } else {
+            const link = document.createElement('link');
+            link.rel = 'shortcut icon';
+            link.href = logoImg;
+            document.head.appendChild(link);
+        }
+
         if (initialPredictionInput) {
             savePendingPrediction(initialPredictionInput);
         }
@@ -115,7 +130,7 @@ export default function LoginPage({
             {/* [수정] 화면 맨 위에 좌우로 뻗는 흰색 상단 헤더 바 */}
             <header className="top-navbar">
                 <div className="top-logo-bar">
-                    <span className="logo-badge-box">SEOUL BIKE</span>
+                    <img src={logoImg} alt="SEOUL BIKE" className="top-logo-img" />
                     <span className="logo-text">따릉이 도착 대여 예측</span>
                 </div>
             </header>

@@ -176,3 +176,8 @@ Ran all test suites.
 
 - LoginPage.jsx 로드 시 useEffect에서 getCurrentUser()를 호출함.
 - 백엔드 서버 미실행/인증 실패(401)로 인해 fetch 예외가 발생하며 .catch(() => setLoginStatus(LOGIN_STATUS.FAILED))가 실행되어 실패 상태로 전환됨.
+
+### 💡 공통 브라우저 탭 설정 (파비콘 및 타이틀) 조장 통합 참고 사항(인공지능의 개입)
+- **이슈 내용**: `LoginPage` 컴포넌트 내부에서 자바스크립트로 `document.title` 및 파비콘(`link[rel='icon']`)을 동적으로 조작할 경우, `public/index.html` 공통 메타 태그와 충돌하거나 타 메인 화면 컴포넌트와의 사이드 이펙트가 발생할 수 있음.
+- **조치 사항**: 컴포넌트 모듈의 독립성과 작업 경계 규칙을 준수하기 위해 `LoginPage.jsx` 내부의 탭 조작 코드를 제거함.
+- **통합 제안**: 전체 서비스 차원의 브라우저 탭 제목(`SEOUL BIKE | 따릉이 도착 대여 예측`) 및 따릉이 파비콘 로고 설정은 조장이 통합 단계에서 `public/index.html` 파일의 메타 태그로 공통 적용하는 것을 권장함.
