@@ -44,9 +44,8 @@
 ## 3. 조장 인계 기록 (Handoff Notes)
 
 ### 📌 설계 주안점
-- **순수 시간 및 오프셋 연산**: 서로 다른 타임존(UTC offset)에서 입력된 시각 데이터 간의 시간 차이 및 동시성 판단을 안전하게 계산하기 위해 `OffsetDateTime`과 `Duration` 연산을 활용했습니다.
+- **순수 시간 및 오프셋 연산**: 입력 시각 데이터 간의 시간 차이 및 동시성 판단을 안전하게 계산하기 위해 `OffsetDateTime`과 `Duration` 연산을 활용했습니다. 세 입력의 UTC offset이 서로 다른 경우에는 `IllegalArgumentException`을 발생시켜 처리를 거부합니다.
 - **불변 데이터 캡슐화**: `PredictionTimeResult`는 수정 불가능한 레코드 구조로 캡슐화되어 데이터 무결성을 보장합니다.
-- **인스턴스화 방지**: `PredictionTimeCalculator`는 유틸리티 클래스로서의 의도에 맞게 `final class`로 선언하고 `private` 생성자를 적용하여 인스턴스화를 방지했습니다.
 
 ### 🧪 테스트 가이드
 - 이 프로젝트는 Gradle 기반으로 빌드됩니다. 다음 명령어로 전체 단위 테스트를 구동할 수 있습니다.
