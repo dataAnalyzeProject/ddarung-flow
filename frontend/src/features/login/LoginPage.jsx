@@ -7,7 +7,8 @@ import { clearPendingPrediction, loadPendingPrediction, savePendingPrediction } 
 import kakaoImg from './components/kakao_login_large_wide.png';
 import naverImg from './components/NAVER_login_Dark_KR_green_center_H56.png';
 import googleImg from './components/019fb652-80d1-7692-b81b-73a811ebf1d9.png';
-import logoImg from './KakaoTalk_20260807_125703109.png';
+import logoImg1 from './KakaoTalk_20260807_125703109.png';
+import logoImg2 from './KakaoTalk_20260807_152317926.png';
 
 // 1. 매개변수(Props 3개)를 받아오도록 함수 선언부 변경 (기본값 세팅 포함)
 export default function LoginPage({
@@ -28,12 +29,12 @@ export default function LoginPage({
         const existingIcons = document.querySelectorAll("link[rel*='icon']");
         if (existingIcons.length > 0) {
             existingIcons.forEach(icon => {
-                icon.href = logoImg;
+                icon.href = logoImg1;
             });
         } else {
             const link = document.createElement('link');
             link.rel = 'shortcut icon';
-            link.href = logoImg;
+            link.href = logoImg1;
             document.head.appendChild(link);
         }
 
@@ -130,20 +131,17 @@ export default function LoginPage({
             {/* [수정] 화면 맨 위에 좌우로 뻗는 흰색 상단 헤더 바 */}
             <header className="top-navbar">
                 <div className="top-logo-bar">
-                    <img src={logoImg} alt="SEOUL BIKE" className="top-logo-img" />
+                    <img src={logoImg1} alt="SEOUL BIKE" className="top-logo-img" />
                     <span className="logo-text">따릉이 도착 대여 예측</span>
                 </div>
             </header>
             {/* 1. Header 및 카드 영역 */}
-            <div className="login-card">
-                <header className="header-area">
-                    <p className="brand-tag">SEOUL BIKE PREDICT</p>
 
-                    <h1>따릉이 도착 대여 예측 서비스</h1>
-                    {loginStatus !== LOGIN_STATUS.SUCCESS && loginStatus !== LOGIN_STATUS.LOADING && (
-                        <p>예측을 확인하려면 로그인이 필요합니다.</p>
-                    )}
-                </header>
+            <div className="hero-logo-area">
+                <img src={logoImg2} alt="따라가요" className="hero-main-logo" />
+            </div>
+
+            <div className="login-card">
 
                 {/* 2. SocialLoginArea 영역 */}
                 {![LOGIN_STATUS.SUCCESS, LOGIN_STATUS.LOGGING_OUT].includes(loginStatus) && (
