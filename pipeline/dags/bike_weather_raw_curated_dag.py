@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 from airflow.sdk import dag, get_current_context, task
 from airflow.sdk.exceptions import AirflowFailException
 
+from pipeline.src.inventory_cleaning import curate_live_inventory_rows
 from pipeline.src.collectors.bike_inventory_collector import (
     SeoulBikeApiClient,
     collect_bike_inventory,
@@ -211,22 +212,14 @@ def bike_weather_raw_curated():
         show_return_value_in_logs=False,
     )
     def build_curated_inventory_task(quality_result):
-        # DATA-2.1 연결 전 검증용 최소 표준 열만 만든다.
         bike_raw = quality_result["bike_raw"]
         rows = bike_raw["payload"]["rentBikeStatus"]["row"]
-        return [
-            {
-                "station_id": row["stationId"],
-                "station_name": row["stationName"],
-                "observed_at": bike_raw["observed_at"],
-                "bike_count": int(row["parkingBikeTotCnt"]),
-                "rack_count": int(row["rackTotCnt"]),
-                "latitude": float(row["stationLatitude"]),
-                "longitude": float(row["stationLongitude"]),
-                "collected_at": bike_raw["collected_at"],
-            }
-            for row in rows
-        ]
+        curated, quarantine = curate_live_inventory_rows(
+            rows,
+            observed_at=bike_raw["observed_at"],
+            collected_at=bike_raw["collected_at"],
+        )
+        return {"curated": curated, "quarantine": quarantine}
 
     @task(
         task_id="build_curated_weather",

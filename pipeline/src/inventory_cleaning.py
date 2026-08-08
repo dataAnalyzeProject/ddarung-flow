@@ -38,6 +38,42 @@ FILE_POLICY_ALIASES = {
 }
 
 
+def curate_live_inventory_rows(rows, observed_at, collected_at):
+    """Apply DATA-2.1 duplicate and conflict rules to one valid API snapshot."""
+    normalized = [
+        {
+            "station_id": str(row["stationId"]),
+            "station_name": row["stationName"],
+            "observed_at": observed_at,
+            "bike_count": int(row["parkingBikeTotCnt"]),
+            "rack_count": int(row["rackTotCnt"]),
+            "latitude": float(row["stationLatitude"]),
+            "longitude": float(row["stationLongitude"]),
+            "collected_at": collected_at,
+        }
+        for row in rows
+    ]
+    counts_by_key = {}
+    for row in normalized:
+        key = (row["station_id"], row["observed_at"])
+        counts_by_key.setdefault(key, set()).add(row["bike_count"])
+
+    conflict_keys = {
+        key for key, bike_counts in counts_by_key.items() if len(bike_counts) > 1
+    }
+    curated = []
+    quarantine = []
+    seen = set()
+    for row in normalized:
+        key = (row["station_id"], row["observed_at"])
+        if key in conflict_keys:
+            quarantine.append({**row, "quarantine_reason": "conflicting_bike_count"})
+        elif key not in seen:
+            curated.append(row)
+            seen.add(key)
+    return curated, quarantine
+
+
 def calculate_sha256(file_path):
     sha256_hash = hashlib.sha256()
     with open(file_path, "rb") as source_file:

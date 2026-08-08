@@ -1,8 +1,25 @@
 # AIRFLOW-2.1 개발 실행환경 결과
 
+## DATA-2.1 연결 보완 · 2026-08-08
+
+- 작업 기준: `codex/data-platform-setup` 최신 커밋 `d47d32a`
+- DATA-2.1 선행 코드: `codex/data-h1-h4-baseline`의 `36c7512`
+- 공식 상태: 담당자 Notion 제출·조장 최종 승인은 아직 대기 중
+- 임시 선행 근거: 조장 로컬에서 승인 manifest 후보로 정제·H1~H4·기준선을
+  끝까지 실행하고 대용량 재현 결과를 확인함
+- 연결 결과: DAG의 임시 재고 변환을 DATA-2.1 정제 모듈의
+  `curate_live_inventory_rows` 호출로 교체함
+- 적용 규칙: 실제 0대 보존, 같은 대여소·관측시각의 동일 중복 제거,
+  서로 다른 재고값 충돌의 Quarantine 분리
+- 경계: H1~H4 라벨링과 기준선 계산은 과거 학습 데이터용 별도 배치로 유지하며,
+  실시간 수집 DAG에서 6천만 행 과거 데이터를 다시 처리하지 않음
+- 주의: 이 보완은 AIRFLOW-2.1 개발 완료 검증을 위한 선행 통합이며,
+  DATA-2.1 담당자 제출 또는 공식 승인 완료를 대신하지 않음
+
 ## 범위
 
-- 브랜치: `codex/data-platform-setup`
+- 기준 브랜치: `codex/data-platform-setup`
+- 마무리 브랜치: `codex/airflow-2.1-final`
 - 기준 커밋: `646e273`
 - 검증일: 2026-08-03
 - Airflow: `apache/airflow:3.3.0`
@@ -35,7 +52,8 @@ PostgreSQL 결과 게시와 운영 배포는 포함하지 않습니다.
 
 - 재고 논리 열: `station_id`, `station_name`, `observed_at`, `bike_count`, `rack_count`, `latitude`, `longitude`, `collected_at`
 - 날씨 논리 열: `observed_at`, `location_key`, `temperature`, `precipitation`, `weather_source`, `collected_at`
-- 현재는 DAG 실행 결과로 검증합니다. DATA-2.1 승인 후 실제 정제 함수의 입출력과 연결합니다.
+- 재고 Curated는 DATA-2.1 정제 모듈을 호출해 `curated`와 `quarantine`으로
+  분리하며, 날씨 Curated는 기존 개발용 표준화를 유지합니다.
 - Raw 원문은 PostgreSQL에 게시하지 않습니다.
 
 ## 검증 결과
@@ -44,6 +62,8 @@ PostgreSQL 결과 게시와 운영 배포는 포함하지 않습니다.
 |---|---|
 | 새 Windows 가상환경 패키지 설치 | `requirements.txt` 인코딩 오류 없이 성공 |
 | Python fixture·수집·품질·중복방지 테스트 | 새 Windows 가상환경에서 `23 passed` |
+| DATA-2.1 연결 포함 핵심 회귀 테스트 | `36 passed` |
+| 전체 pipeline 테스트 | `46개 중 45 passed`; Windows 줄바꿈으로 기존 DATA-2.0 evidence SHA 검사 1건 실패 |
 | Docker Compose 설정 해석 | 성공 |
 | Airflow 3.3.0 이미지 빌드 | 성공 |
 | PostgreSQL 메타데이터 초기화 | 성공, `airflow-init` 종료코드 0 |
@@ -72,7 +92,7 @@ PostgreSQL 결과 게시와 운영 배포는 포함하지 않습니다.
 
 ## 후속 작업
 
-- DATA-2.1 승인 결과의 실제 Curated 함수 연결
+- DATA-2.1 담당자 Notion 제출과 조장 최종 승인 후 선행 스택 확정
 - 기상청 과거자료 계약 확정 후 실시간 Curated 열과 동일하게 표준화
 - 서울 대여소 좌표를 기상청 격자로 묶는 위치 매핑 확장
 - OCI 서버 정식 Airflow 배포

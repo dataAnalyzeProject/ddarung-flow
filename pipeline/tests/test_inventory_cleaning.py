@@ -11,9 +11,49 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 from pipeline.src.inventory_cleaning import (  # noqa: E402
     calculate_sha256,
     clean_inventory_dataset,
+    curate_live_inventory_rows,
     find_actual_csv_file,
     load_and_verify_manifest,
 )
+
+
+def _live_inventory_row(bike_count="0"):
+    return {
+        "stationId": "ST-1",
+        "stationName": "테스트 대여소",
+        "parkingBikeTotCnt": bike_count,
+        "rackTotCnt": "10",
+        "stationLatitude": "37.5",
+        "stationLongitude": "127.0",
+    }
+
+
+def test_live_inventory_keeps_zero_and_collapses_exact_duplicate():
+    base = _live_inventory_row()
+    curated, quarantine = curate_live_inventory_rows(
+        [base, dict(base)],
+        observed_at="2026-08-08T10:00:00+09:00",
+        collected_at="2026-08-08T10:01:00+09:00",
+    )
+
+    assert len(curated) == 1
+    assert curated[0]["bike_count"] == 0
+    assert quarantine == []
+
+
+def test_live_inventory_quarantines_conflicting_count():
+    base = _live_inventory_row()
+    curated, quarantine = curate_live_inventory_rows(
+        [base, {**base, "parkingBikeTotCnt": "2"}],
+        observed_at="2026-08-08T10:00:00+09:00",
+        collected_at="2026-08-08T10:01:00+09:00",
+    )
+
+    assert curated == []
+    assert len(quarantine) == 2
+    assert {row["quarantine_reason"] for row in quarantine} == {
+        "conflicting_bike_count"
+    }
 
 
 def test_manifest_loading_and_2023_rejection():
