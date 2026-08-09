@@ -3,7 +3,7 @@ import './LoginPage.css';
 import SocialLoginButton from './components/SocialLoginButton';
 import { LOGIN_STATUS, MOCK_USERS } from './data/authDemoData';
 import { getCurrentUser, logout, startSocialLogin } from './authApi';
-import { loadPendingPrediction, savePendingPrediction } from './loginStorage';
+import { clearPendingPrediction, loadPendingPrediction, savePendingPrediction } from './loginStorage';
 import kakaoImg from './components/kakao_login_large_wide.png';
 import naverImg from './components/NAVER_login_Dark_KR_green_center_H56.png';
 import googleImg from './components/019fb652-80d1-7692-b81b-73a811ebf1d9.png';
@@ -12,12 +12,14 @@ import googleImg from './components/019fb652-80d1-7692-b81b-73a811ebf1d9.png';
 export default function LoginPage({
     initialStatus,
     mockOutcome,
-    initialPredictionInput = null
+    initialPredictionInput = null,
+    onRepeatPrediction
 }) {
     // 2. 고정된 WAITING 대신 전달받은 initialStatus로 초기 상태 세팅
     const [loginStatus, setLoginStatus] = useState(initialStatus || LOGIN_STATUS.LOADING);
     const [userInfo, setUserInfo] = useState(null);
     const [predictionData, setPredictionData] = useState(null); // 추가
+    const [isPredicted, setIsPredicted] = useState(false); // 🎯 버튼 중복 클릭 방지용
 
     useEffect(() => {
         if (initialPredictionInput) {
@@ -54,23 +56,33 @@ export default function LoginPage({
             .catch(() => setLoginStatus(LOGIN_STATUS.FAILED));
     }, [initialPredictionInput, initialStatus]);
 
+    const handleRepeatPredict = () => {
+        if (isPredicted) return;
+
+        if (typeof onRepeatPrediction === 'function') {
+            setIsPredicted(true); // 1. 버튼 비활성화
+            onRepeatPrediction(predictionData); // 2. 함수 호출
+            clearPendingPrediction(); // 3. 세션 삭제
+        }
+    };
+
     const handleLogin = (provider) => {
         setLoginStatus(LOGIN_STATUS.LOADING);
 
         if (mockOutcome) {
             setTimeout(() => {
-            if (mockOutcome === 'failed') {
-                setLoginStatus(LOGIN_STATUS.FAILED);
-                return;
-            }
-            // mockOutcome이 'cancelled'일 경우
-            if (mockOutcome === 'cancelled') {
-                setLoginStatus(LOGIN_STATUS.CANCELLED);
-                return;
-            }
-            // 기본값 / 'success'일 경우 로그인 성공 처리
-            setUserInfo(MOCK_USERS[provider] || { name: '테스트유저', provider });
-            setLoginStatus(LOGIN_STATUS.SUCCESS);
+                if (mockOutcome === 'failed') {
+                    setLoginStatus(LOGIN_STATUS.FAILED);
+                    return;
+                }
+                // mockOutcome이 'cancelled'일 경우
+                if (mockOutcome === 'cancelled') {
+                    setLoginStatus(LOGIN_STATUS.CANCELLED);
+                    return;
+                }
+                // 기본값 / 'success'일 경우 로그인 성공 처리
+                setUserInfo(MOCK_USERS[provider] || { name: '테스트유저', provider });
+                setLoginStatus(LOGIN_STATUS.SUCCESS);
             }, 300);
             return;
         }
@@ -111,7 +123,6 @@ export default function LoginPage({
             <div className="login-card">
                 <header className="header-area">
                     <p className="brand-tag">SEOUL BIKE PREDICT</p>
-
                     <h1>따릉이 도착 대여 예측 서비스</h1>
                     {loginStatus !== LOGIN_STATUS.SUCCESS && loginStatus !== LOGIN_STATUS.LOADING && (
                         <p>예측을 확인하려면 로그인이 필요합니다.</p>
@@ -162,9 +173,11 @@ export default function LoginPage({
                                     ? `${predictionData.directMinutes}분`
                                     : '이동수단으로 계산'}
                             </p>
+                            {/* 🎯 5번째 항목 필요 자전거 표시 */}
+                            <p>필요 자전거: {predictionData?.requiredBikeCount ?? 1}대</p>
                             <br />
                             <p className="confirm-text">입력값을 확인한 후 다시 예측해 주세요.</p>
-                            <button className="predict-btn">다시 예측</button>
+                            <button className="predict-btn" onClick={handleRepeatPredict} disabled={isPredicted}>다시 예측</button>
                             <button className="logout-btn" onClick={handleLogout}>로그아웃</button>
                         </div>
                     )}

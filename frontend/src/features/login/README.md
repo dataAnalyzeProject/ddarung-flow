@@ -110,13 +110,76 @@ npm start
 - 본 모듈은 실제 백엔드 서버 API 호출 및 OAuth 인증 이동 없이 `authDemoData.js`의 모조(Mock) 데이터를 활용하여 상태 및 UI 동작을 시뮬레이션합니다.
 - 토큰, 비밀번호 등 민감한 인증 정보는 sessionStorage나 화면에 저장/표시되지 않습니다.
 
-### 2) sessionStorage 저장 키 4개
-대기 중인 예측 입력 데이터는 아래 4개 허용 키만 추출하여 `sessionStorage`(`ddarung.pendingPrediction.v1`)에 안전하게 저장·복원·삭제됩니다:
-1. `startStation` (출발지)
-2. `endStation` (목적지)
-3. `transport` (이동 수단)
-4. `time` (대여/예측 시간)
+### 2) sessionStorage 저장 키 5개
+대기 중인 예측 입력 데이터는 아래 5개 허용 키만 추출하여 `sessionStorage`(`ddarung.pendingPrediction.v1`)에 안전하게 저장·복원·삭제됩니다:
+1. `origin` (출발지)
+2. `destination` (목적지)
+3. `travelMode` (이동 수단)
+4. `directMinutes` (예상 소요 시간)
+5. `requiredBikeCount` (필요 자전거 대수)
 
-### 3) 담당자 추가 경계 테스트 및 사유
-- **테스트 항목**: `savePendingPrediction(null)` 및 객체가 아닌 비정상 데이터 입력 테스트
-- **추가 이유**: 사용자가 잘못된 타입의 데이터를 전달하더라도 런타임 오류(Crash)가 발생하지 않고 안전하게 예외 처리되는지 검증하기 위함.
+### 3) 담당자 추가 경계 테스트 및 강화 사유
+- **테스트 항목**: 
+  1. `savePendingPrediction(null)` 및 객체가 아닌 비정상 입력 안전 처리 검증
+  2. `requiredBikeCount`가 문자열 `"2"`, `"abc"`, 범위를 벗어난 수량(`0`, `6`)일 때 기본값 `1` 보정 검증
+  3. `null`, `undefined`, 불리언(`true`), 소수점 실수(`2.5`) 등 기괴한 예외 타입 입력 시 기본값 `1` 보정 검증
+  4. `savePendingPrediction` (저장 시) 및 `loadPendingPrediction` (읽기 시) 양방향 엄격 검증
+- **추가 사유**: 
+  - 자바스크립트의 자동 형변환으로 인해 문자열 `"2"`가 숫자 `2`로 통과되는 버그를 차단하고, 오직 `number` 타입의 정수 1~5만 허용하도록 가드문(`typeof value !== 'number'`)을 강화하여 런타임 안정성을 보장하기 위함.
+
+### 4) 작업 시 참고 사항
+- 담당자가 작업하는 과정이나, 작업 중간 결과물, 결과물에 대한 자신의 견해를 Notion 작업 카드에 남겨야 합니다.
+
+## 9. 이번 작업 수정 파일 목록 및 테스트 결과
+
+### 1) 이번 작업 관련 5개 파일 목록
+- `frontend/src/features/login/LoginPage.jsx`
+- `frontend/src/features/login/LoginPage.test.jsx`
+- `frontend/src/features/login/loginStorage.js`
+- `frontend/src/features/login/loginStorage.test.js`
+- `frontend/src/features/login/README.md`
+
+### 2) 핵심 테스트 검증 결과
+- **5개 입력 복원 테스트**: `origin`, `destination`, `travelMode`, `directMinutes`, `requiredBikeCount` 5개 입력값이 세션에 보존되어 화면에 정상 복원됨을 검증함. (`PASS`)
+
+- **자동 호출 0회 테스트**: 로그인 성공(`SUCCESS`) 시점에 `onRepeatPrediction` 함수가 자동으로 실행되지 않고 정확히 0회 호출됨을 검증함. (`PASS`)
+
+- **수동 클릭 1회 호출 & 삭제 테스트**: 사용자가 `[다시 예측]` 버튼을 누를 때만 복원 객체로 `onRepeatPrediction`이 1회 호출되고 세션스토리지 데이터가 삭제됨을 검증함. (`PASS`)
+
+> ddarung-flow-frontend@0.1.0 test
+> react-scripts test --watchAll=false
+
+ PASS  src/features/login/loginStorage.test.js
+ PASS  src/App.test.jsx
+ PASS  src/features/login/LoginPage.test.jsx
+ PASS  src/features/main/MainPage.test.jsx
+ PASS  src/features/main-screen-drafts/MainScreenDrafts.test.jsx
+
+Test Suites: 5 passed, 5 total
+Tests:       29 passed, 29 total
+Snapshots:   0 total
+Time:        2.454 s
+Ran all test suites.
+
+### 💡 조장 통합(Integration) 안내 및 연동 경계
+1. **재예측 콜백 연결**: `LoginPage` 컴포넌트는 `onRepeatPrediction` prop이 유효한 함수로 전달될 때만 해당 함수를 1회 호출하고 임시 저장값(`sessionStorage`)을 삭제하도록 안전 방어 로직이 구현되어 있습니다.
+2. **실제 API 연동 경계**: `LoginPage` 내부에서는 실제 백엔드 예측 API(`fetch`/`axios`)를 직접 호출하거나 결과 페이지로 이동하지 않으며, 조장이 통합 단계에서 `onRepeatPrediction` 콜백에 실제 API 호출 및 라우팅 함수를 연결해 사용할 예정입니다.
+
+### 💡 허용 목록 외 파일 (`MainPage.test.jsx`) 수정 관련 사유
+- `frontend/src/features/main/MainPage.test.jsx` 파일은 팀원 브랜치 통합 과정에서 포함되었거나 통합 검증을 위해 유지된 파일로, 이번 로그인 기능 모듈 수정과는 독립적입니다.
+
+### 📌 개발/테스트 환경 초기 상태 동작 참고 (getCurrentUser 비동기 흐름)
+
+**현상**: 백엔드 API 서버(http://localhost:8080)가 동작하지 않는 상태에서 initialStatus 없이 LoginPage에 최초 접근할 경우, WAITING(로그인 대기) 화면 대신 FAILED(로그인 실패) 박스가 즉시 출력됨.
+
+**원인 분석**:
+
+- LoginPage.jsx 로드 시 useEffect에서 getCurrentUser()를 호출함.
+- 백엔드 서버 미실행/인증 실패(401)로 인해 fetch 예외가 발생하며 .catch(() => setLoginStatus(LOGIN_STATUS.FAILED))가 실행되어 실패 상태로 전환됨.
+
+## AUTH-FE-3.2 최종 범위 보완
+
+- 변경 파일은 `LoginPage.css`, `LoginPage.jsx`, `LoginPage.test.jsx`, `README.md`의 승인 범위만 사용합니다.
+- 새 로고 이미지와 파비콘 변경은 작업 계약 밖이므로 제거했습니다.
+- 실패, 취소, 만료, 로그아웃 안내는 해당 상태가 바뀔 때까지 화면에 유지합니다.
+- 로그인, 입력값 복원, 다시 예측, 로그아웃 동작은 변경하지 않았습니다.
