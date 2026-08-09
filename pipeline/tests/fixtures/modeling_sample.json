@@ -1,0 +1,10 @@
+[
+  {"station_id":"ST001","feature_as_of":"2025-01-01T09:00:00+09:00","current_bike_count":4,"horizon_minutes":60,"required_bike_count":1,"target":1,"split":"train"},
+  {"station_id":"ST001","feature_as_of":"2025-01-01T09:00:00+09:00","current_bike_count":4,"horizon_minutes":60,"required_bike_count":3,"target":1,"split":"train"},
+  {"station_id":"ST002","feature_as_of":"2025-01-01T10:00:00+09:00","current_bike_count":1,"horizon_minutes":120,"required_bike_count":2,"target":0,"split":"train"},
+  {"station_id":"ST002","feature_as_of":"2025-02-01T10:00:00+09:00","current_bike_count":2,"horizon_minutes":120,"required_bike_count":1,"target":1,"split":"validation"},
+  {"station_id":"ST003","feature_as_of":"2025-02-01T18:00:00+09:00","current_bike_count":0,"horizon_minutes":180,"required_bike_count":1,"target":0,"split":"validation"},
+  {"station_id":"ST004","feature_as_of":"2025-05-15T08:00:00+09:00","current_bike_count":5,"horizon_minutes":240,"required_bike_count":5,"target":1,"split":"test"},
+  {"station_id":"ST004","feature_as_of":"2025-05-15T08:00:00+09:00","current_bike_count":5,"horizon_minutes":240,"required_bike_count":4,"target":1,"split":"test"},
+  {"station_id":"ST005","feature_as_of":"2025-05-15T22:00:00+09:00","current_bike_count":1,"horizon_minutes":60,"required_bike_count":2,"target":0,"split":"test"}
+]

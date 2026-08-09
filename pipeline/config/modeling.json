@@ -1,0 +1,35 @@
+{
+  "task_id": "DATA-3.1",
+  "time_zone": "Asia/Seoul",
+  "random_seed": 20260810,
+  "horizon_minutes": [60, 120, 180, 240],
+  "required_bike_counts": [1, 2, 3, 4, 5],
+  "validation_policy": {
+    "source": "DATA-2.1 train rows only",
+    "method": "last 20 percent of unique timestamps, time ordered",
+    "test_holdout_must_not_be_read_during_selection": true
+  },
+  "models": [
+    "statistical_baseline",
+    "persistence_baseline",
+    "logistic_regression",
+    "hist_gradient_boosting"
+  ],
+  "primary_metric": "brier_score",
+  "required_metrics": [
+    "brier_score",
+    "deficit_recall",
+    "accuracy",
+    "calibration_error"
+  ],
+  "allowed_features": [
+    "station_id",
+    "day_of_week",
+    "hour_of_day",
+    "month",
+    "is_weekend",
+    "current_bike_count",
+    "horizon_minutes",
+    "required_bike_count"
+  ]
+}
