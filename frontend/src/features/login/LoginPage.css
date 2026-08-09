@@ -68,13 +68,17 @@ body {
 }
 
 
-/* 상단 헤더 이미지 로고 스타일 (아담하게 크기 축소) */
-.top-navbar .top-logo-img {
-    height: 26px;
-    /* 🎯 32px -> 26px 로 아담하게 축소 (20px~26px 추천!) */
-    width: auto;
-    object-fit: contain;
-    vertical-align: middle;
+/* 상단 브랜드 배지 */
+.top-navbar .logo-badge-box {
+    display: inline-block;
+    padding: 6px 10px;
+    background-color: #17212b;
+    color: #ffffff;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    line-height: 1;
 }
 
 /* [따릉이 도착 대여 예측] 제목 텍스트 */
@@ -85,23 +89,29 @@ body {
     color: #17212b;
 }
 
-/* 🎯 카드 밖 히어로 로고 영역 위아래 여백을 싹 줄여서 밀착! */
-.hero-logo-area {
+/* 로그인 카드 제목 영역 */
+.header-area {
     width: 100%;
     text-align: center;
-    margin-top: -120px;
-    /* 🎯 60px -> -50px 로 상단 바에 바짝 밀착! */
-    margin-bottom: -24px;
-    /* 🎯 아래 카드와의 간격도 밀착! */
-    z-index: 10;
+    margin-bottom: 28px;
 }
 
-.hero-logo-area .hero-main-logo {
-    max-width: 640px;
-    /* 🎯 큼지막하고 시원한 360px 대형 히어로 사이즈! */
-    height: auto;
-    object-fit: contain;
-    display: inline-block;
+.header-area .brand-tag {
+    margin: 0 0 8px;
+    color: #ff6238;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 1px;
+}
+
+.header-area h1 {
+    margin: 0 0 12px;
+    color: #17212b;
+    font-size: 30px;
+}
+
+.header-area p {
+    color: #68717a;
 }
 
 /* 중앙에 뜨는 네오브루탈리즘 로그인 카드 상자 */
@@ -350,31 +360,7 @@ body {
     margin: 0;
 }
 
-/* 🎯 3초 토스트 애니메이션 키프레임 정의 */
-@keyframes toastSlideFade {
-    0% {
-        opacity: 0;
-        transform: translate(-50%, -15px);
-    }
-
-    15% {
-        opacity: 1;
-        transform: translate(-50%, 0);
-    }
-
-    85% {
-        opacity: 1;
-        transform: translate(-50%, 0);
-    }
-
-    100% {
-        opacity: 0;
-        transform: translate(-50%, -15px);
-        visibility: hidden;
-    }
-}
-
-/* 🎯 4가지 알림 박스만 3초 상단 토스트 팝업으로 변경 (상단 헤더바 바로 아래 둥둥 뜸) */
+/* 활성 상태가 바뀔 때까지 안내 문구를 유지한다. */
 .error-box,
 .cancel-box,
 .expired-box,
@@ -388,32 +374,4 @@ body {
     z-index: 999;
     margin-top: 0;
     box-shadow: 4px 4px 0 #17212b;
-    /* 네오브루탈리즘 하드 섀도우 통일 */
-    animation: toastSlideFade 3s forwards ease-in-out;
-}
-
-/* 3초 동안 하단 선이 100% -> 0%로 줄어드는 애니메이션 */
-@keyframes timerBar {
-    0% {
-        width: 100%;
-    }
-
-    100% {
-        width: 0%;
-    }
-}
-
-/* 알림 박스 하단에 3초 게이지 선 생성 */
-.error-box::after,
-.cancel-box::after,
-.expired-box::after,
-.logout-box::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    height: 4px;
-    background-color: #17212b;
-    /* 검은색 미니 게이지 바 */
-    animation: timerBar 3s linear forwards;
 }

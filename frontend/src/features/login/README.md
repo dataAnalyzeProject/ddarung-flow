@@ -176,3 +176,10 @@ Ran all test suites.
 
 - LoginPage.jsx 로드 시 useEffect에서 getCurrentUser()를 호출함.
 - 백엔드 서버 미실행/인증 실패(401)로 인해 fetch 예외가 발생하며 .catch(() => setLoginStatus(LOGIN_STATUS.FAILED))가 실행되어 실패 상태로 전환됨.
+
+## AUTH-FE-3.2 최종 범위 보완
+
+- 변경 파일은 `LoginPage.css`, `LoginPage.jsx`, `LoginPage.test.jsx`, `README.md`의 승인 범위만 사용합니다.
+- 새 로고 이미지와 파비콘 변경은 작업 계약 밖이므로 제거했습니다.
+- 실패, 취소, 만료, 로그아웃 안내는 해당 상태가 바뀔 때까지 화면에 유지합니다.
+- 로그인, 입력값 복원, 다시 예측, 로그아웃 동작은 변경하지 않았습니다.
