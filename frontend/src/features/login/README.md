@@ -119,12 +119,12 @@ npm start
 5. `requiredBikeCount` (필요 자전거 대수)
 
 ### 3) 담당자 추가 경계 테스트 및 강화 사유
-- **테스트 항목**: 
+- **테스트 항목**:
   1. `savePendingPrediction(null)` 및 객체가 아닌 비정상 입력 안전 처리 검증
   2. `requiredBikeCount`가 문자열 `"2"`, `"abc"`, 범위를 벗어난 수량(`0`, `6`)일 때 기본값 `1` 보정 검증
   3. `null`, `undefined`, 불리언(`true`), 소수점 실수(`2.5`) 등 기괴한 예외 타입 입력 시 기본값 `1` 보정 검증
   4. `savePendingPrediction` (저장 시) 및 `loadPendingPrediction` (읽기 시) 양방향 엄격 검증
-- **추가 사유**: 
+- **추가 사유**:
   - 자바스크립트의 자동 형변환으로 인해 문자열 `"2"`가 숫자 `2`로 통과되는 버그를 차단하고, 오직 `number` 타입의 정수 1~5만 허용하도록 가드문(`typeof value !== 'number'`)을 강화하여 런타임 안정성을 보장하기 위함.
 
 ### 4) 작업 시 참고 사항
