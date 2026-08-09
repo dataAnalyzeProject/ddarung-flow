@@ -38,8 +38,17 @@ FILE_POLICY_ALIASES = {
 }
 
 
+def _to_utc_z(value):
+    timestamp = pd.Timestamp(value)
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.tz_localize("Asia/Seoul")
+    return timestamp.tz_convert("UTC").strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def curate_live_inventory_rows(rows, observed_at, collected_at):
     """Apply DATA-2.1 duplicate and conflict rules to one valid API snapshot."""
+    observed_at = _to_utc_z(observed_at)
+    collected_at = _to_utc_z(collected_at)
     normalized = [
         {
             "station_id": str(row["stationId"]),
@@ -53,6 +62,7 @@ def curate_live_inventory_rows(rows, observed_at, collected_at):
         }
         for row in rows
     ]
+    normalized.sort(key=lambda row: (row["station_id"], row["bike_count"]))
     counts_by_key = {}
     for row in normalized:
         key = (row["station_id"], row["observed_at"])

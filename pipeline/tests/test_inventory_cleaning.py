@@ -38,6 +38,8 @@ def test_live_inventory_keeps_zero_and_collapses_exact_duplicate():
 
     assert len(curated) == 1
     assert curated[0]["bike_count"] == 0
+    assert curated[0]["observed_at"] == "2026-08-08T01:00:00Z"
+    assert curated[0]["collected_at"] == "2026-08-08T01:01:00Z"
     assert quarantine == []
 
 
@@ -54,6 +56,20 @@ def test_live_inventory_quarantines_conflicting_count():
     assert {row["quarantine_reason"] for row in quarantine} == {
         "conflicting_bike_count"
     }
+
+
+def test_live_inventory_is_independent_of_input_order():
+    first = _live_inventory_row("2")
+    second = {**_live_inventory_row("4"), "stationId": "ST-2"}
+    arguments = {
+        "observed_at": "2026-08-08T10:00:00+09:00",
+        "collected_at": "2026-08-08T10:01:00+09:00",
+    }
+
+    forward = curate_live_inventory_rows([first, second], **arguments)
+    reverse = curate_live_inventory_rows([second, first], **arguments)
+
+    assert forward == reverse
 
 
 def test_manifest_loading_and_2023_rejection():
