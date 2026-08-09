@@ -99,7 +99,7 @@ public class PredictionTimeCalculatorTest {
     public void testTargetTimeBeforeRequestedTime_TooSoon() {
         // 목표 시각이 요청 시각 이전인 경우 -> TOO_SOON
         // 도착 시각 13:29 (13:29 + 30분 = 13:59 -> 13:00으로 잘림)
-        OffsetDateTime arrivalAt = OffsetDateTime.of(2026, 8, 6, 13, 29, 0, 0, 0, ZoneOffset.ofHours(9));
+        OffsetDateTime arrivalAt = OffsetDateTime.of(2026, 8, 6, 13, 29, 0, 0, ZoneOffset.ofHours(9));
 
         PredictionTimeResult result = calculator.calculate(baseRequestedAt, arrivalAt, baseFeatureAsOf);
         assertTrue(result.predictionTargetAt().isBefore(baseRequestedAt)); // 목표 시각 13:00 < 요청 시각 14:00
