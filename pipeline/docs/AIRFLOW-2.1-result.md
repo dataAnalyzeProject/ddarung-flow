@@ -1,8 +1,23 @@
 # AIRFLOW-2.1 개발 실행환경 결과
 
+## DATA-2.1 연결 완료 · 2026-08-09
+
+- 작업 기준: `codex/data-2-1-leader-completion`의 `44ed0b6`
+- DATA-2.1 상태: 실데이터 2회 실행과 6개 산출물 SHA 일치, PR #41 리뷰 대기
+- 연결 결과: DAG의 임시 재고 변환을 DATA-2.1 정제 모듈의
+  `curate_live_inventory_rows` 호출로 교체함
+- 적용 규칙: 실제 0대 보존, 같은 대여소·관측시각의 동일 중복 제거,
+  서로 다른 재고값 충돌의 Quarantine 분리, Curated 시각 UTC `Z` 직렬화,
+  입력 순서 독립 정렬
+- 경계: H1~H4 라벨링과 기준선 계산은 과거 학습 데이터용 별도 배치로 유지하며,
+  실시간 수집 DAG에서 6천만 행 과거 데이터를 다시 처리하지 않음
+- 대용량 과거 배치 결과는 DAG XCom으로 전달하지 않으며, 실시간 API 한 회차
+  재고만 동일 정제 계약으로 Curated·Quarantine에 분리함
+
 ## 범위
 
-- 브랜치: `codex/data-platform-setup`
+- 기준 브랜치: `codex/data-2-1-leader-completion`
+- 마무리 브랜치: `codex/airflow-2-1-leader-completion`
 - 기준 커밋: `646e273`
 - 검증일: 2026-08-03
 - Airflow: `apache/airflow:3.3.0`
@@ -35,7 +50,10 @@ PostgreSQL 결과 게시와 운영 배포는 포함하지 않습니다.
 
 - 재고 논리 열: `station_id`, `station_name`, `observed_at`, `bike_count`, `rack_count`, `latitude`, `longitude`, `collected_at`
 - 날씨 논리 열: `observed_at`, `location_key`, `temperature`, `precipitation`, `weather_source`, `collected_at`
-- 현재는 DAG 실행 결과로 검증합니다. DATA-2.1 승인 후 실제 정제 함수의 입출력과 연결합니다.
+- 재고 Curated는 DATA-2.1 정제 모듈을 호출해 `curated`와 `quarantine`으로
+  분리하며, 날씨 Curated는 기존 개발용 표준화를 유지합니다.
+- 재고 `observed_at`·`collected_at`은 DATA-2.1 계약과 같이 UTC ISO 8601
+  `Z`로 직렬화합니다.
 - Raw 원문은 PostgreSQL에 게시하지 않습니다.
 
 ## 검증 결과
@@ -44,12 +62,14 @@ PostgreSQL 결과 게시와 운영 배포는 포함하지 않습니다.
 |---|---|
 | 새 Windows 가상환경 패키지 설치 | `requirements.txt` 인코딩 오류 없이 성공 |
 | Python fixture·수집·품질·중복방지 테스트 | 새 Windows 가상환경에서 `23 passed` |
+| DATA-2.1 연결 포함 Airflow·재고 회귀 테스트 | `32 passed` |
+| 전체 pipeline 테스트 | `48개 중 47 passed`; 기존 DATA-2.0 evidence SHA 검사 1건 실패 |
 | Docker Compose 설정 해석 | 성공 |
 | Airflow 3.3.0 이미지 빌드 | 성공 |
 | PostgreSQL 메타데이터 초기화 | 성공, `airflow-init` 종료코드 0 |
 | DAG 목록 | `bike_weather_raw_curated` 확인 |
 | DAG import 오류 | 없음 |
-| 정상 fixture DAG test | 성공 |
+| 현재 브랜치 정상 fixture DAG test | 2026-08-09 전체 태스크 성공 |
 | Curated 필수 필드 누락 fixture | 품질검사에서 Curated 실행 전 차단 |
 | 서울시 실시간 API 전체 페이지 수집 | 3페이지, 대여소 2,743개, 성공 |
 | 실제 API Raw JSON 저장 | 3개 원본 페이지·2,743행 보존, 성공 |
@@ -72,7 +92,7 @@ PostgreSQL 결과 게시와 운영 배포는 포함하지 않습니다.
 
 ## 후속 작업
 
-- DATA-2.1 승인 결과의 실제 Curated 함수 연결
+- PR 리뷰·병합 후 2주차 형식 완료 상태 확정
 - 기상청 과거자료 계약 확정 후 실시간 Curated 열과 동일하게 표준화
 - 서울 대여소 좌표를 기상청 격자로 묶는 위치 매핑 확장
 - OCI 서버 정식 Airflow 배포

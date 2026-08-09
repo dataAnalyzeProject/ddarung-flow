@@ -1,0 +1,32 @@
+{
+  "project": "ddarung-flow",
+  "task_id": "DATA-2.1",
+  "time_zone": "Asia/Seoul",
+  "split_method": "time_based_sequential_holdout",
+  "split_contract": "train_test_only_for_DATA-2.1",
+  "validation_scope": "deferred_to_DATA-3.1",
+  "final_training_variant": "exclude_2022",
+  "train_ratio": 0.80,
+  "holdout_ratio": 0.20,
+  "train_range": {
+    "start_timestamp": "2024-01-01 00:00:00",
+    "end_timestamp": "2025-05-14 23:00:00"
+  },
+  "holdout_test_range": {
+    "start_timestamp": "2025-05-15 00:00:00",
+    "end_timestamp": "2025-12-31 23:00:00"
+  },
+  "training_variants": {
+    "exclude_2022": {
+      "description": "메인 기본 기준선 (2024-01-01 ~ 2025-05-14 연속 시계열 학습)",
+      "train_start": "2024-01-01 00:00:00",
+      "train_end": "2025-05-14 23:00:00"
+    },
+    "include_2022": {
+      "description": "2022년 포함 대조 실험안 (2022년 데이터 + 2024~2025년 데이터 학습)",
+      "train_2022_start": "2022-01-01 00:00:00",
+      "train_2022_end": "2022-12-31 23:00:00"
+    }
+  },
+  "notes": "2024-2025 sequential time-series split without random shuffle. 2022 data evaluated as optional variant against identical 2025 holdout test set."
+}

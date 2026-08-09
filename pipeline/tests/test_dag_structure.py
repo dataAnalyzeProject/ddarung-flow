@@ -35,3 +35,11 @@ def test_collection_and_quality_failure_policies_are_declared():
     assert "timedelta(seconds=60)" in source
     assert "AirflowFailException" in source
     assert "quality_result" in source
+
+
+def test_inventory_curated_task_uses_data21_cleaning_contract():
+    source = DAG_PATH.read_text(encoding="utf-8")
+
+    assert "from pipeline.src.inventory_cleaning import curate_live_inventory_rows" in source
+    assert "curate_live_inventory_rows(" in source
+    assert 'return {"curated": curated, "quarantine": quarantine}' in source
