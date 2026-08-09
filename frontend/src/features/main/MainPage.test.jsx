@@ -34,6 +34,7 @@ describe("시안 6 메인 로그인 통합", () => {
       destination: "성수역",
       travelMode: "대중교통",
       directMinutes: 25,
+      requiredBikeCount: 1,
     });
 
     expect(screen.getByRole("link", { name: "로그인하기" })).toHaveAttribute("href", "/login");
