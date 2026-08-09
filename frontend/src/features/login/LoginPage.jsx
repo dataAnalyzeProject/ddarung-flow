@@ -123,7 +123,6 @@ export default function LoginPage({
             <div className="login-card">
                 <header className="header-area">
                     <p className="brand-tag">SEOUL BIKE PREDICT</p>
-
                     <h1>따릉이 도착 대여 예측 서비스</h1>
                     {loginStatus !== LOGIN_STATUS.SUCCESS && loginStatus !== LOGIN_STATUS.LOADING && (
                         <p>예측을 확인하려면 로그인이 필요합니다.</p>
