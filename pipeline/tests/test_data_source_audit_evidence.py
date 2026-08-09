@@ -25,6 +25,11 @@ def read_rows(name):
         return list(csv.DictReader(handle))
 
 
+def repository_text_sha256(path):
+    """Hash published text using the repository's LF line endings."""
+    return hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+
+
 class Data20EvidenceTest(unittest.TestCase):
     def test_reproducer_contract_covers_all_published_data_outputs(self):
         published_data_files = {
@@ -41,7 +46,7 @@ class Data20EvidenceTest(unittest.TestCase):
         self.assertEqual(expected_files, {row["file"] for row in rows})
 
         for row in rows:
-            digest = hashlib.sha256((EVIDENCE_DIR / row["file"]).read_bytes()).hexdigest()
+            digest = repository_text_sha256(EVIDENCE_DIR / row["file"])
             self.assertEqual(row["sha256"].lower(), digest)
 
     def test_public_evidence_has_no_local_absolute_paths(self):
