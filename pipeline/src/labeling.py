@@ -41,11 +41,20 @@ def _assign_split(feature_as_of, train_end, test_start):
     return split
 
 
+def _as_utc_timestamp(value, source_time_zone="Asia/Seoul"):
+    timestamp = pd.Timestamp(value)
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.tz_localize(source_time_zone)
+    return timestamp.tz_convert("UTC")
+
+
 def generate_h1_h4_labels(df_curated, config_path=None):
     """Generate exact H1-H4 labels for small in-memory inputs and unit tests."""
     df = df_curated.copy()
     if "dt" not in df.columns:
-        df["dt"] = pd.to_datetime(df["observed_at"])
+        df["dt"] = pd.to_datetime(df["observed_at"], utc=True)
+    else:
+        df["dt"] = pd.to_datetime(df["dt"], utc=True)
     if "st" not in df.columns:
         df["st"] = df["station_id"].astype(str)
     if "bike_cnt" not in df.columns:
@@ -66,8 +75,13 @@ def generate_h1_h4_labels(df_curated, config_path=None):
     )
 
     config = load_data_split_config(config_path)
-    train_end = pd.to_datetime(config["train_range"]["end_timestamp"])
-    test_start = pd.to_datetime(config["holdout_test_range"]["start_timestamp"])
+    source_time_zone = config.get("time_zone", "Asia/Seoul")
+    train_end = _as_utc_timestamp(
+        config["train_range"]["end_timestamp"], source_time_zone
+    )
+    test_start = _as_utc_timestamp(
+        config["holdout_test_range"]["start_timestamp"], source_time_zone
+    )
     result["split"] = _assign_split(result["feature_as_of"], train_end, test_start)
 
     lookup = df.set_index(["st", "dt"])["bike_cnt"]
@@ -97,8 +111,10 @@ def _sql_path(path):
     return os.path.abspath(path).replace("\\", "/").replace("'", "''")
 
 
-def _sql_timestamp(value):
-    return str(pd.to_datetime(value)).replace("'", "''")
+def _sql_timestamp(value, source_time_zone="Asia/Seoul"):
+    return _as_utc_timestamp(value, source_time_zone).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
 
 
 def _configure_duckdb(connection, memory_limit, temp_dir):
@@ -106,12 +122,13 @@ def _configure_duckdb(connection, memory_limit, temp_dir):
     connection.execute(f"SET memory_limit = '{memory_limit}'")
     connection.execute(f"SET temp_directory = '{_sql_path(temp_dir)}'")
     connection.execute("SET preserve_insertion_order = false")
+    connection.execute("SET TimeZone = 'UTC'")
 
 
 def _label_select_sql(test_start, relation="curated"):
     select_columns = [
         "base.station_id",
-        "base.observed_at AS feature_as_of",
+        "strftime(base.observed_at, '%Y-%m-%dT%H:%M:%SZ') AS feature_as_of",
         "base.bike_count AS current_bike_count",
     ]
     joins = []
@@ -120,11 +137,12 @@ def _label_select_sql(test_start, relation="curated"):
         valid_expression = (
             f"future_h{horizon}.bike_count IS NOT NULL "
             f"AND NOT (base.split = 'train' AND {target_expression} >= "
-            f"TIMESTAMP '{test_start}')"
+            f"TIMESTAMPTZ '{test_start}')"
         )
         select_columns.extend(
             [
-                f"{target_expression} AS prediction_target_at_h{horizon}",
+                f"strftime({target_expression}, '%Y-%m-%dT%H:%M:%SZ') "
+                f"AS prediction_target_at_h{horizon}",
                 f"future_h{horizon}.bike_count AS future_bike_count_h{horizon}",
                 f"({valid_expression}) AS target_valid_h{horizon}",
             ]
@@ -181,8 +199,13 @@ def run_labeling_pipeline(
     summary_path = os.path.join(output_dir, "labeling_summary.csv")
 
     config = load_data_split_config(config_path)
-    train_end = _sql_timestamp(config["train_range"]["end_timestamp"])
-    test_start = _sql_timestamp(config["holdout_test_range"]["start_timestamp"])
+    source_time_zone = config.get("time_zone", "Asia/Seoul")
+    train_end = _sql_timestamp(
+        config["train_range"]["end_timestamp"], source_time_zone
+    )
+    test_start = _sql_timestamp(
+        config["holdout_test_range"]["start_timestamp"], source_time_zone
+    )
 
     os.makedirs(temp_dir, exist_ok=True)
     database_path = os.path.join(temp_dir, "labeling.duckdb")
@@ -196,13 +219,13 @@ def run_labeling_pipeline(
             CREATE OR REPLACE TABLE curated AS
             SELECT
                 CAST(station_id AS VARCHAR) AS station_id,
-                CAST(observed_at AS TIMESTAMP) AS observed_at,
+                CAST(observed_at AS TIMESTAMPTZ) AS observed_at,
                 TRY_CAST(bike_count AS DOUBLE) AS bike_count,
                 CAST(hash(CAST(station_id AS VARCHAR)) % {partitions} AS INTEGER)
                     AS bucket_id
             FROM read_csv_auto('{_sql_path(curated_csv_path)}', header=true)
             WHERE station_id IS NOT NULL
-              AND TRY_CAST(observed_at AS TIMESTAMP) IS NOT NULL
+              AND TRY_CAST(observed_at AS TIMESTAMPTZ) IS NOT NULL
               AND TRY_CAST(bike_count AS DOUBLE) IS NOT NULL
             """
         )
@@ -228,8 +251,8 @@ def run_labeling_pipeline(
                 CREATE OR REPLACE TABLE label_bucket AS
                 SELECT station_id, observed_at, bike_count,
                     CASE
-                        WHEN observed_at <= TIMESTAMP '{train_end}' THEN 'train'
-                        WHEN observed_at >= TIMESTAMP '{test_start}' THEN 'test_holdout'
+                        WHEN observed_at <= TIMESTAMPTZ '{train_end}' THEN 'train'
+                        WHEN observed_at >= TIMESTAMPTZ '{test_start}' THEN 'test_holdout'
                         ELSE 'buffer_excluded'
                     END AS split
                 FROM curated

@@ -16,7 +16,26 @@ QUARANTINE_COLUMNS = [
     "observed_at",
     "raw_bike_count",
     "bike_count",
+    "quarantine_reason",
 ]
+REQUIRED_MANIFEST_COLUMNS = [
+    "file_path",
+    "sha256",
+    "period_start",
+    "period_end",
+    "year",
+    "approved",
+    "file_policy",
+]
+FILE_POLICY_ALIASES = {
+    "include": "INCLUDE",
+    "include_with_explicit_2022_gap": "INCLUDE",
+    "use_as_is_after_standard_validation": "INCLUDE",
+    "quarantine_keys": "QUARANTINE_KEYS",
+    "quarantine_conflicting_station_time_keys": "QUARANTINE_KEYS",
+    "exclude_file": "EXCLUDE_FILE",
+    "exclude_entire_file_conflict_rate_over_50_percent": "EXCLUDE_FILE",
+}
 
 
 def calculate_sha256(file_path):
@@ -72,16 +91,39 @@ def load_and_verify_manifest(manifest_path):
         if old_column in manifest.columns and new_column not in manifest.columns:
             manifest[new_column] = manifest[old_column]
 
-    required_columns = ["file_path", "sha256", "approved"]
     missing_columns = [
-        column for column in required_columns if column not in manifest.columns
+        column for column in REQUIRED_MANIFEST_COLUMNS if column not in manifest.columns
     ]
     if missing_columns:
         raise ValueError(f"Manifest is missing columns: {missing_columns}")
 
-    if "year" in manifest.columns:
-        manifest = manifest[manifest["year"].astype(str) != "2023"].copy()
-    return manifest
+    if manifest[REQUIRED_MANIFEST_COLUMNS].isna().any().any():
+        raise ValueError("Manifest required columns cannot contain null values")
+
+    sha_values = manifest["sha256"].astype(str).str.strip().str.upper()
+    if not sha_values.str.fullmatch(r"[0-9A-F]{64}").all():
+        raise ValueError("Manifest sha256 values must be 64 hexadecimal characters")
+    manifest["sha256"] = sha_values
+
+    manifest["year"] = pd.to_numeric(manifest["year"], errors="raise").astype(int)
+    if manifest["year"].eq(2023).any():
+        raise ValueError("Manifest must not contain the rejected year 2023")
+    if not manifest["year"].isin({2022, 2024, 2025}).all():
+        raise ValueError("Manifest year must be one of 2022, 2024, or 2025")
+
+    period_start = pd.to_datetime(manifest["period_start"], errors="raise", utc=True)
+    period_end = pd.to_datetime(manifest["period_end"], errors="raise", utc=True)
+    if (period_start > period_end).any():
+        raise ValueError("Manifest period_start must be before or equal to period_end")
+
+    policies = manifest["file_policy"].astype(str).str.strip().str.lower()
+    unknown_policies = sorted(set(policies) - set(FILE_POLICY_ALIASES))
+    if unknown_policies:
+        raise ValueError(f"Manifest contains unknown file_policy values: {unknown_policies}")
+    manifest["canonical_file_policy"] = policies.map(FILE_POLICY_ALIASES)
+    return manifest.sort_values(
+        ["year", "period_start", "file_path"], kind="stable"
+    ).reset_index(drop=True)
 
 
 def find_actual_csv_file(data_root, file_path_str, year=None):
@@ -207,13 +249,8 @@ def clean_inventory_dataset(
             expected_sha = str(manifest_row["sha256"]).strip().upper()
             approved = str(manifest_row.get("approved", "true")).strip().lower()
             approved = approved in {"true", "1", "t", "y", "yes"}
-            policy = str(manifest_row.get("file_policy", "RECOMMENDED")).upper()
-            if (
-                not approved
-                or "EXCLUDED" in policy
-                or "2407" in relative_path
-                or "2408" in relative_path
-            ):
+            policy = manifest_row["canonical_file_policy"]
+            if not approved or policy == "EXCLUDE_FILE":
                 continue
 
             year = manifest_row.get("year")
@@ -227,33 +264,60 @@ def clean_inventory_dataset(
 
             raw = _canonicalize_columns(_read_inventory_csv(actual_file))
             raw_count = len(raw)
-            raw["observed_at"] = pd.to_datetime(
+            observed_local = pd.to_datetime(
                 raw["observed_date"].astype(str)
                 + " "
                 + raw["hour"].astype(str)
                 + ":00:00",
                 errors="coerce",
             )
+            raw["observed_at"] = observed_local.dt.tz_localize(
+                "Asia/Seoul", ambiguous="NaT", nonexistent="NaT"
+            ).dt.tz_convert("UTC")
             raw["bike_count"] = pd.to_numeric(
                 raw["raw_bike_count"], errors="coerce"
             )
             zero_count = int((raw["bike_count"] == 0).sum())
             missing_count = int(raw["bike_count"].isna().sum())
-            valid = raw[
-                raw["observed_at"].notna()
-                & raw["bike_count"].notna()
-                & (raw["bike_count"] >= 0)
-            ].copy()
+            raw["station_id"] = raw["station_id"].astype("string").str.strip()
+            missing_station = raw["station_id"].isna() | raw["station_id"].eq("")
+            invalid_time = raw["observed_at"].isna()
+            invalid_count = raw["bike_count"].isna() | (raw["bike_count"] < 0)
+            invalid_count |= raw["bike_count"].notna() & (
+                raw["bike_count"] % 1 != 0
+            )
+            invalid_mask = missing_station | invalid_time | invalid_count
+            invalid = raw.loc[invalid_mask].copy()
+            invalid["quarantine_reason"] = "invalid_required_value"
+            valid = raw.loc[~invalid_mask].copy()
+            valid["bike_count"] = valid["bike_count"].astype("int64")
 
             conflict_counts = valid.groupby(
                 ["station_id", "observed_at"], sort=False
             )["bike_count"].transform("nunique")
             conflict_mask = conflict_counts > 1
-            quarantine = valid.loc[conflict_mask].copy()
+            conflict_quarantine = valid.loc[conflict_mask].copy()
+            conflict_quarantine["quarantine_reason"] = (
+                "conflicting_station_time_key"
+            )
+            quarantine = pd.concat(
+                [invalid, conflict_quarantine], ignore_index=True
+            )
             clean = valid.loc[~conflict_mask].copy()
             before_deduplication = len(clean)
             clean = clean.drop_duplicates(["station_id", "observed_at"], keep="first")
             duplicate_removed = before_deduplication - len(clean)
+
+            clean = clean.sort_values(["station_id", "observed_at"], kind="stable")
+            quarantine = quarantine.sort_values(
+                ["station_id", "observed_at", "quarantine_reason"],
+                kind="stable",
+                na_position="last",
+            )
+            for frame in (clean, quarantine):
+                frame["observed_at"] = frame["observed_at"].dt.strftime(
+                    "%Y-%m-%dT%H:%M:%SZ"
+                )
 
             curated_header = _append_csv(
                 clean, curated_temp, CURATED_COLUMNS, curated_header
@@ -275,7 +339,7 @@ def clean_inventory_dataset(
                     "missing_count": missing_count,
                 }
             )
-            del raw, valid, quarantine, clean, conflict_counts
+            del raw, valid, invalid, quarantine, clean, conflict_counts
             gc.collect()
 
         if curated_header:

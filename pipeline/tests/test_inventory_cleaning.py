@@ -20,14 +20,44 @@ def test_manifest_loading_and_2023_rejection():
     with tempfile.TemporaryDirectory() as temp_dir:
         manifest_path = pathlib.Path(temp_dir) / "approved_inventory_manifest.csv"
         manifest_path.write_text(
-            "relative_path,sha256,approved,status,year\n"
-            "data_2401.csv,ABC,true,RECOMMENDED,2024\n"
-            "data_2301.csv,DEF,true,RECOMMENDED,2023\n",
+            "relative_path,sha256,period_start,period_end,approved,status,year\n"
+            + "data_2401.csv," + "A" * 64
+            + ",2024-01-01T00:00:00+09:00,2024-01-31T23:00:00+09:00,"
+            + "true,use_as_is_after_standard_validation,2024\n",
             encoding="utf-8-sig",
         )
         manifest = load_and_verify_manifest(str(manifest_path))
         assert len(manifest) == 1
         assert manifest["file_path"].iloc[0] == "data_2401.csv"
+        assert manifest["canonical_file_policy"].iloc[0] == "INCLUDE"
+
+
+def test_manifest_rejects_missing_contract_columns_and_2023():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        manifest_path = pathlib.Path(temp_dir) / "approved_inventory_manifest.csv"
+        manifest_path.write_text(
+            "file_path,sha256,approved,file_policy,year\n"
+            + "data_2401.csv," + "A" * 64 + ",true,INCLUDE,2024\n",
+            encoding="utf-8-sig",
+        )
+        try:
+            load_and_verify_manifest(str(manifest_path))
+            raise AssertionError("missing period columns must be rejected")
+        except ValueError as error:
+            assert "period_start" in str(error)
+
+        manifest_path.write_text(
+            "file_path,sha256,period_start,period_end,approved,file_policy,year\n"
+            + "data_2301.csv," + "A" * 64
+            + ",2023-01-01T00:00:00+09:00,2023-01-31T23:00:00+09:00,"
+            + "true,INCLUDE,2023\n",
+            encoding="utf-8-sig",
+        )
+        try:
+            load_and_verify_manifest(str(manifest_path))
+            raise AssertionError("2023 must be rejected")
+        except ValueError as error:
+            assert "2023" in str(error)
 
 
 def test_find_actual_csv_file_requires_one_match():
@@ -52,8 +82,9 @@ def test_streaming_cleaning_zero_missing_duplicate_and_conflict():
         file_sha = calculate_sha256(copied_fixture)
         manifest_path = temp_path / "approved_inventory_manifest.csv"
         manifest_path.write_text(
-            "file_path,sha256,approved,file_policy,year\n"
-            f"{fixture_path.name},{file_sha},true,RECOMMENDED,2024\n",
+            "file_path,sha256,period_start,period_end,approved,file_policy,year\n"
+            f"{fixture_path.name},{file_sha},2024-01-01T00:00:00+09:00,"
+            "2024-01-31T23:00:00+09:00,true,INCLUDE,2024\n",
             encoding="utf-8-sig",
         )
         output_dir = temp_path / "output"
@@ -69,9 +100,15 @@ def test_streaming_cleaning_zero_missing_duplicate_and_conflict():
         quarantine = pd.read_csv(quarantine_path)
         assert list(curated.columns) == ["station_id", "observed_at", "bike_count"]
         assert len(curated) == 3
+        assert curated["observed_at"].str.endswith("Z").all()
+        assert "2024-01-01T01:00:00Z" in set(curated["observed_at"])
         assert (curated["bike_count"] == 0).sum() == 1
-        assert len(quarantine) == 2
-        assert set(quarantine["bike_count"]) == {2, 3}
+        assert len(quarantine) == 4
+        assert set(quarantine["bike_count"].dropna()) == {-1, 2, 3}
+        assert set(quarantine["quarantine_reason"]) == {
+            "conflicting_station_time_key",
+            "invalid_required_value",
+        }
         assert reconciliation.loc[0, "missing_count"] == 1
         assert reconciliation.loc[0, "duplicate_removed"] == 1
 

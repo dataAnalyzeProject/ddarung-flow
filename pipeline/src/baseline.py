@@ -60,7 +60,9 @@ def _metric_query(relation, variant, horizon, threshold):
     valid = f"target_valid_h{horizon}"
     variant_filter = ""
     if variant == "exclude_2022":
-        variant_filter = "AND feature_as_of >= TIMESTAMP '2024-01-01 00:00:00'"
+        variant_filter = (
+            "AND feature_as_of >= TIMESTAMPTZ '2023-12-31T15:00:00Z'"
+        )
     return f"""
         WITH train_groups AS (
             SELECT
@@ -177,6 +179,7 @@ def _evaluate_relation(connection, relation):
                         },
                     }
                 )
+            print(f"[Baseline] completed {variant} H{horizon}")
     return pd.DataFrame(metric_rows)
 
 
@@ -209,12 +212,14 @@ def run_baseline_pipeline(
     if temp_dir is None:
         temp_dir = os.path.join(output_dir, ".duckdb_tmp")
 
-    connection = duckdb.connect()
+    os.makedirs(temp_dir, exist_ok=True)
+    database_path = os.path.join(temp_dir, "baseline.duckdb")
+    connection = duckdb.connect(database_path)
     try:
         _configure_duckdb(connection, memory_limit, temp_dir)
         connection.execute(
             f"""
-            CREATE TEMP VIEW labeled AS
+            CREATE OR REPLACE TABLE labeled AS
             SELECT * FROM read_csv_auto(
                 '{_sql_path(labeled_csv_path)}', header=true
             )
