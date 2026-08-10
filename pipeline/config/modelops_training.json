@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "1.0",
+  "profiles": {
+    "cpu_repro": {"device": "cpu", "treeMethod": "hist", "seed": 42},
+    "gpu_final": {"device": "cuda", "treeMethod": "hist", "seed": 42}
+  },
+  "artifactFormat": "ubj",
+  "horizons": [60, 120, 180, 240],
+  "requiredBikeCounts": [1, 2, 3, 4, 5]
+}

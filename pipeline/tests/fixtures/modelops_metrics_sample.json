@@ -1,0 +1,3 @@
+[
+  {"horizonMinutes": 60, "requiredBikeCount": 1, "sampleCount": 10, "brierScore": 0.2, "shortageRecall": 0.7, "calibrationError": 0.04, "coverage": 1.0, "monotonicityViolations": 0}
+]
