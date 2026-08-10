@@ -50,3 +50,8 @@ dependencies {
 tasks.named('test') {
 	useJUnitPlatform()
 }
+
+tasks.withType(Test) {
+	systemProperty 'file.encoding', 'UTF-8'
+	systemProperty 'user.timezone', 'Asia/Seoul'
+}
