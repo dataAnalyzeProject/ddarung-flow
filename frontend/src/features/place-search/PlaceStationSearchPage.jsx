@@ -129,13 +129,25 @@ export default function PlaceStationSearchPage({
           {validationMessage}
         </p>
       )}
-      {/* searchStatus가 "empty"일 때 */}
+      {/* 1. idle 상태 */}
+      {searchStatus === "idle" && (
+        <p className="place-search-page__status-message">
+          검색어를 입력해 주세요.
+        </p>
+      )}
+      {/* 2. loading 상태 */}
+      {searchStatus === "loading" && (
+        <p className="place-search-page__status-message">
+          검색 결과를 불러오는 중입니다.
+        </p>
+      )}
+      {/* 3. empty 상태 */}
       {searchStatus === "empty" && (
         <p className="place-search-page__status-message">
           검색 결과가 없습니다. 다른 검색어를 입력해 주세요.
         </p>
       )}
-      {/* searchStatus가 "error"일 때 */}
+      {/* 4. error 상태 */}
       {searchStatus === "error" && (
         <div className="place-search-page__error-container">
           <p className="place-search-page__status-message">
@@ -145,6 +157,23 @@ export default function PlaceStationSearchPage({
             다시 시도
           </button>
         </div>
+      )}
+      {/* 출발지 검색 결과 목록 */}
+      {searchStatus === "success" && placeResults.length > 0 && placeResults.length > 0 && (
+        <ul className="place-search-page__results">
+          {placeResults.map((place) => (
+            <li key={place.placeId}>
+              <span>{place.name}</span>
+              <button
+                type="button"
+                aria-label={`출발지로 ${place.name} 선택`}
+                onClick={() => setSelectedOrigin(place)}
+              >
+                선택
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
       {mode === "ROUTE" && (
         <section className="place-search-page__section">
@@ -162,23 +191,7 @@ export default function PlaceStationSearchPage({
               출발지 검색
             </button>
           </div>
-          {/* 출발지 검색 결과 목록 */}
-          {placeResults.length > 0 && (
-            <ul className="place-search-page__results">
-              {placeResults.map((place) => (
-                <li key={place.placeId}>
-                  <span>{place.name}</span>
-                  <button
-                    type="button"
-                    aria-label={`출발지로 ${place.name} 선택`}
-                    onClick={() => setSelectedOrigin(place)}
-                  >
-                    선택
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+
           {/* 목적지 검색 */}
           <div className="place-search-page__input-group">
             <label htmlFor="destination-input">목적지 검색어</label>
