@@ -67,6 +67,37 @@ public class ModelArtifact {
         ModelArtifactState state,
         OffsetDateTime createdAt
     ) {
+        if (version == null || version.isBlank() || version.length() > 100) {
+            throw new IllegalArgumentException("version must not be null or blank, max length 100");
+        }
+        if (trainerUserId == null) {
+            throw new IllegalArgumentException("trainerUserId must not be null");
+        }
+        if (artifactKey == null || artifactKey.isBlank() || artifactKey.length() > 512) {
+            throw new IllegalArgumentException("artifactKey must not be null or blank, max length 512");
+        }
+        if (sha256 == null || !sha256.matches("^[0-9a-f]{64}$")) {
+            throw new IllegalArgumentException("sha256 must be a 64-character lowercase hexadecimal string");
+        }
+        if (codeCommit == null || codeCommit.isBlank() || codeCommit.length() > 40) {
+            throw new IllegalArgumentException("codeCommit must not be null or blank, max length 40");
+        }
+        if (dataManifestHash == null || !dataManifestHash.matches("^[0-9a-f]{64}$")) {
+            throw new IllegalArgumentException("dataManifestHash must be a 64-character lowercase hexadecimal string");
+        }
+        if (configHash == null || !configHash.matches("^[0-9a-f]{64}$")) {
+            throw new IllegalArgumentException("configHash must be a 64-character lowercase hexadecimal string");
+        }
+        if (featureSchemaVersion == null || featureSchemaVersion.isBlank() || featureSchemaVersion.length() > 64) {
+            throw new IllegalArgumentException("featureSchemaVersion must not be null or blank, max length 64");
+        }
+        if (state == null) {
+            throw new IllegalArgumentException("state must not be null");
+        }
+        if (createdAt == null) {
+            throw new IllegalArgumentException("createdAt must not be null");
+        }
+
         this.version = version;
         this.trainerUserId = trainerUserId;
         this.artifactKey = artifactKey;
@@ -77,5 +108,9 @@ public class ModelArtifact {
         this.featureSchemaVersion = featureSchemaVersion;
         this.state = state;
         this.createdAt = createdAt;
+    }
+
+    public void transitionTo(ModelArtifactState newState) {
+        this.state = newState;
     }
 }

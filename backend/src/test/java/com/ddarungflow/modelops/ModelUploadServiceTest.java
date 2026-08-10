@@ -1,33 +1,177 @@
 package com.ddarungflow.modelops;
 
-import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
-import static org.junit.jupiter.api.Assertions.fail;
+import java.time.OffsetDateTime;
+import java.util.Optional;
+import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
+
+@ExtendWith(MockitoExtension.class)
 class ModelUploadServiceTest {
 
+    @Mock
+    private ModelUploadRepository uploadRepository;
+
+    @InjectMocks
+    private ModelUploadService uploadService;
+
+    private static final String VALID_SHA256 = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
+
     @Test
-    @Disabled("EXP-BE-MODEL 담당자가 업로드 생성 검증을 구현한 뒤 활성화합니다.")
+    @DisplayName("createsUploadInCreatedState: 필수값 검증 및 CREATED 상태 업로드 생성")
     void createsUploadInCreatedState() {
-        fail("필수값과 CREATED 초기 상태를 검증하세요.");
+        // given
+        UUID id = UUID.randomUUID();
+        OffsetDateTime createdAt = OffsetDateTime.now();
+        OffsetDateTime expiresAt = createdAt.plusHours(1);
+
+        ModelUpload upload = new ModelUpload(
+            id, 1L, "models/v1/model.onnx", VALID_SHA256, 1024L,
+            ModelUploadStatus.CREATED, expiresAt, null, createdAt
+        );
+
+        given(uploadRepository.existsByObjectKey("models/v1/model.onnx")).willReturn(false);
+        given(uploadRepository.save(any(ModelUpload.class))).willAnswer(inv -> inv.getArgument(0));
+
+        // when
+        ModelUpload result = uploadService.createUpload(upload);
+
+        // then
+        assertThat(result).isNotNull();
+        assertThat(result.getStatus()).isEqualTo(ModelUploadStatus.CREATED);
+        assertThat(result.getId()).isEqualTo(id);
+        verify(uploadRepository).save(upload);
     }
 
     @Test
-    @Disabled("EXP-BE-MODEL 담당자가 업로드 종료 전이를 구현한 뒤 활성화합니다.")
+    @DisplayName("movesCreatedUploadToOneTerminalState: CREATED에서 COMPLETED/FAILED/EXPIRED 단일 전이")
     void movesCreatedUploadToOneTerminalState() {
-        fail("CREATED에서 COMPLETED/FAILED/EXPIRED 중 하나로 전이되는지 검증하세요.");
+        // given
+        UUID id = UUID.randomUUID();
+        OffsetDateTime createdAt = OffsetDateTime.now();
+        OffsetDateTime expiresAt = createdAt.plusHours(1);
+        OffsetDateTime now = createdAt.plusMinutes(10);
+
+        ModelUpload createdUpload = new ModelUpload(
+            id, 1L, "models/v1/model.onnx", VALID_SHA256, 1024L,
+            ModelUploadStatus.CREATED, expiresAt, null, createdAt
+        );
+
+        given(uploadRepository.findById(id)).willReturn(Optional.of(createdUpload));
+        given(uploadRepository.save(any(ModelUpload.class))).willAnswer(inv -> inv.getArgument(0));
+
+        // when - complete
+        ModelUpload completed = uploadService.complete(id, now);
+        assertThat(completed.getStatus()).isEqualTo(ModelUploadStatus.COMPLETED);
+        assertThat(completed.getCompletedAt()).isEqualTo(now);
+
+        // when - fail
+        ModelUpload createdUpload2 = new ModelUpload(
+            id, 1L, "models/v1/model2.onnx", VALID_SHA256, 1024L,
+            ModelUploadStatus.CREATED, expiresAt, null, createdAt
+        );
+        given(uploadRepository.findById(id)).willReturn(Optional.of(createdUpload2));
+
+        ModelUpload failed = uploadService.fail(id, now);
+        assertThat(failed.getStatus()).isEqualTo(ModelUploadStatus.FAILED);
+
+        // when - expire
+        ModelUpload createdUpload3 = new ModelUpload(
+            id, 1L, "models/v1/model3.onnx", VALID_SHA256, 1024L,
+            ModelUploadStatus.CREATED, expiresAt, null, createdAt
+        );
+        given(uploadRepository.findById(id)).willReturn(Optional.of(createdUpload3));
+
+        ModelUpload expired = uploadService.expire(id, now);
+        assertThat(expired.getStatus()).isEqualTo(ModelUploadStatus.EXPIRED);
     }
 
     @Test
-    @Disabled("EXP-BE-MODEL 담당자가 종료 후 재전이 거부를 구현한 뒤 활성화합니다.")
+    @DisplayName("rejectsTransitionAfterUploadTerminates: 종료 상태에서 다른 종료 상태로 전이 거부")
     void rejectsTransitionAfterUploadTerminates() {
-        fail("종료 상태에서 다른 종료 상태로 바뀌지 않는지 검증하세요.");
+        // given
+        UUID id = UUID.randomUUID();
+        OffsetDateTime createdAt = OffsetDateTime.now();
+        OffsetDateTime expiresAt = createdAt.plusHours(1);
+        OffsetDateTime now = createdAt.plusMinutes(10);
+
+        ModelUpload completedUpload = new ModelUpload(
+            id, 1L, "models/v1/model.onnx", VALID_SHA256, 1024L,
+            ModelUploadStatus.COMPLETED, expiresAt, now, createdAt
+        );
+
+        given(uploadRepository.findById(id)).willReturn(Optional.of(completedUpload));
+
+        // then
+        assertThatThrownBy(() -> uploadService.complete(id, now))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("terminal state");
+
+        assertThatThrownBy(() -> uploadService.fail(id, now))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("terminal state");
+
+        assertThatThrownBy(() -> uploadService.expire(id, now))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("terminal state");
     }
 
     @Test
-    @Disabled("담당자가 계약 범위의 추가 만료 경계 테스트를 작성한 뒤 활성화합니다.")
+    @DisplayName("rejectsInvalidExpirationBoundary: 만료 시각 지난 업로드 완료 거부")
     void rejectsInvalidExpirationBoundary() {
-        fail("만료시각 경계를 검증하세요.");
+        // given
+        UUID id = UUID.randomUUID();
+        OffsetDateTime createdAt = OffsetDateTime.now().minusHours(2);
+        OffsetDateTime expiresAt = createdAt.plusHours(1); // 1 hour ago
+        OffsetDateTime now = OffsetDateTime.now(); // now > expiresAt
+
+        ModelUpload createdUpload = new ModelUpload(
+            id, 1L, "models/v1/model.onnx", VALID_SHA256, 1024L,
+            ModelUploadStatus.CREATED, expiresAt, null, createdAt
+        );
+
+        given(uploadRepository.findById(id)).willReturn(Optional.of(createdUpload));
+
+        // then
+        assertThatThrownBy(() -> uploadService.complete(id, now))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("expired");
+    }
+
+    @Test
+    @DisplayName("rejectsDuplicateObjectKeyAndInvalidSha256: 중복 objectKey 및 유효하지 않은 SHA-256 거부")
+    void rejectsDuplicateObjectKeyAndInvalidSha256() {
+        // given
+        UUID id = UUID.randomUUID();
+        OffsetDateTime createdAt = OffsetDateTime.now();
+        OffsetDateTime expiresAt = createdAt.plusHours(1);
+
+        ModelUpload uploadDuplicate = new ModelUpload(
+            id, 1L, "models/v1/dup.onnx", VALID_SHA256, 1024L,
+            ModelUploadStatus.CREATED, expiresAt, null, createdAt
+        );
+        given(uploadRepository.existsByObjectKey("models/v1/dup.onnx")).willReturn(true);
+
+        assertThatThrownBy(() -> uploadService.createUpload(uploadDuplicate))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Duplicate objectKey");
+
+        assertThatThrownBy(() -> uploadService.createUpload(new ModelUpload(
+            id, 1L, "models/v1/new.onnx", "INVALID_SHA256", 1024L,
+            ModelUploadStatus.CREATED, expiresAt, null, createdAt
+        )))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("expectedSha256 must be a 64-character lowercase hexadecimal string");
     }
 }

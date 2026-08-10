@@ -58,6 +58,31 @@ public class ModelUpload {
         OffsetDateTime completedAt,
         OffsetDateTime createdAt
     ) {
+        if (id == null) {
+            throw new IllegalArgumentException("id must not be null");
+        }
+        if (requestedByUserId == null) {
+            throw new IllegalArgumentException("requestedByUserId must not be null");
+        }
+        if (objectKey == null || objectKey.isBlank()) {
+            throw new IllegalArgumentException("objectKey must not be null or blank");
+        }
+        if (expectedSha256 == null || !expectedSha256.matches("^[0-9a-f]{64}$")) {
+            throw new IllegalArgumentException("expectedSha256 must be a 64-character lowercase hexadecimal string");
+        }
+        if (maxBytes == null || maxBytes <= 0) {
+            throw new IllegalArgumentException("maxBytes must be positive");
+        }
+        if (status == null) {
+            throw new IllegalArgumentException("status must not be null");
+        }
+        if (createdAt == null || expiresAt == null) {
+            throw new IllegalArgumentException("createdAt and expiresAt must not be null");
+        }
+        if (!expiresAt.isAfter(createdAt)) {
+            throw new IllegalArgumentException("expiresAt must be strictly after createdAt");
+        }
+
         this.id = id;
         this.requestedByUserId = requestedByUserId;
         this.objectKey = objectKey;
@@ -67,5 +92,18 @@ public class ModelUpload {
         this.expiresAt = expiresAt;
         this.completedAt = completedAt;
         this.createdAt = createdAt;
+    }
+
+    public void markCompleted(OffsetDateTime now) {
+        this.status = ModelUploadStatus.COMPLETED;
+        this.completedAt = now;
+    }
+
+    public void markFailed() {
+        this.status = ModelUploadStatus.FAILED;
+    }
+
+    public void markExpired() {
+        this.status = ModelUploadStatus.EXPIRED;
     }
 }

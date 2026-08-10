@@ -67,6 +67,34 @@ public class ModelEvaluation {
         BigDecimal coverage,
         Integer monotonicityViolations
     ) {
+        if (modelId == null) {
+            throw new IllegalArgumentException("modelId must not be null");
+        }
+        if (horizonMinutes == null || !(horizonMinutes == 60 || horizonMinutes == 120 || horizonMinutes == 180 || horizonMinutes == 240)) {
+            throw new IllegalArgumentException("horizonMinutes must be 60, 120, 180, or 240");
+        }
+        if (requiredBikeCount == null || requiredBikeCount < 1 || requiredBikeCount > 5) {
+            throw new IllegalArgumentException("requiredBikeCount must be between 1 and 5");
+        }
+        if (sampleCount == null || sampleCount < 0) {
+            throw new IllegalArgumentException("sampleCount must be non-null and non-negative");
+        }
+        if (brierScore == null || brierScore.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("brierScore must be non-null and non-negative");
+        }
+        if (shortageRecall == null || shortageRecall.compareTo(BigDecimal.ZERO) < 0 || shortageRecall.compareTo(BigDecimal.ONE) > 0) {
+            throw new IllegalArgumentException("shortageRecall must be between 0.0 and 1.0");
+        }
+        if (calibrationError == null || calibrationError.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("calibrationError must be non-null and non-negative");
+        }
+        if (coverage == null || coverage.compareTo(BigDecimal.ZERO) < 0 || coverage.compareTo(BigDecimal.ONE) > 0) {
+            throw new IllegalArgumentException("coverage must be between 0.0 and 1.0");
+        }
+        if (monotonicityViolations == null || monotonicityViolations < 0) {
+            throw new IllegalArgumentException("monotonicityViolations must be non-null and non-negative");
+        }
+
         this.modelId = modelId;
         this.horizonMinutes = horizonMinutes;
         this.requiredBikeCount = requiredBikeCount;
