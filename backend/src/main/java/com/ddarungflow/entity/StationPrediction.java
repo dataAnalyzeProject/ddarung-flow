@@ -17,6 +17,8 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 
+import lombok.AllArgsConstructor;
+
 @Entity
 @Table(
     name = "station_predictions",
@@ -27,6 +29,7 @@ import java.time.OffsetDateTime;
 )
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor
 public class StationPrediction {
 
     @Id
