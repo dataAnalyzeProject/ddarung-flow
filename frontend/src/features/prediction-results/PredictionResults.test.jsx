@@ -94,13 +94,13 @@ test("낮음 후보가 선택되면 대체 후보를 표시한다", () => {
   expect(screen.getAllByText("대체 후보")).toHaveLength(2);
 });
 
-test.skip("FE-3.2 기본 정렬은 가능성·도착시간·거리·stationId 순이다", () => {
+test("FE-3.2 기본 정렬은 가능성·도착시간·거리·stationId 순이다", () => {
   render(<PredictionResults result={sortingResult} />);
   const names = screen.getAllByRole("article").map((article) => article.querySelector("h3").textContent);
   expect(names).toEqual(["성수동 카페거리", "서울숲 남문", "성수역 3번 출구"]);
 });
 
-test.skip("FE-3.2 도착 시간 빠른 순으로 전환한다", () => {
+test("FE-3.2 도착 시간 빠른 순으로 전환한다", () => {
   render(<PredictionResults result={sortingResult} />);
   fireEvent.change(screen.getByRole("combobox", { name: "정렬 기준" }), {
     target: { value: "arrival" },
@@ -109,7 +109,7 @@ test.skip("FE-3.2 도착 시간 빠른 순으로 전환한다", () => {
   expect(names).toEqual(["서울숲 남문", "성수역 3번 출구", "성수동 카페거리"]);
 });
 
-test.skip("FE-3.2 정렬해도 선택 대여소를 유지한다", () => {
+test("FE-3.2 정렬해도 선택 대여소를 유지한다", () => {
   render(<PredictionResults result={sortingResult} />);
   expect(screen.getByRole("button", { name: /ST-1 70% 성수역 3번 출구/ })).toHaveAttribute("aria-pressed", "true");
   fireEvent.change(screen.getByRole("combobox", { name: "정렬 기준" }), {
@@ -118,13 +118,13 @@ test.skip("FE-3.2 정렬해도 선택 대여소를 유지한다", () => {
   expect(screen.getByRole("button", { name: /ST-1 70% 성수역 3번 출구/ })).toHaveAttribute("aria-pressed", "true");
 });
 
-test.skip("FE-3.2 전체 기준시각은 가장 이른 collectedAt이다", () => {
+test("FE-3.2 전체 기준시각은 가장 이른 collectedAt이다", () => {
   render(<PredictionResults result={sortingResult} />);
   expect(screen.getByText("전체 현재 재고 기준")).toBeInTheDocument();
   expect(screen.getByText("오후 2:58")).toBeInTheDocument();
 });
 
-test.skip("FE-3.2 서버가 준 지연 상태를 표시한다", () => {
+test("FE-3.2 서버가 준 지연 상태를 표시한다", () => {
   render(<PredictionResults result={sortingResult} />);
   expect(screen.getByText("일부 지연")).toBeInTheDocument();
 });
