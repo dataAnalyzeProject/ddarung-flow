@@ -55,7 +55,6 @@ def test_unsupported_horizon_and_quantity_are_rejected():
         validate_records(invalid_quantity)
 
 
-@pytest.mark.skip(reason="DATA-3.1 담당자가 구현한 뒤 skip을 제거합니다")
 def test_feature_matrix_contains_only_approved_features():
     records = load_json(FIXTURE_PATH)
     config = load_json(CONFIG_PATH)
@@ -64,7 +63,6 @@ def test_feature_matrix_contains_only_approved_features():
     assert len(features) == len(target) == len(row_ids)
 
 
-@pytest.mark.skip(reason="DATA-3.1 담당자가 구현한 뒤 skip을 제거합니다")
 def test_all_models_use_identical_evaluation_rows():
     records = load_json(FIXTURE_PATH)
     config = load_json(CONFIG_PATH)
@@ -73,7 +71,6 @@ def test_all_models_use_identical_evaluation_rows():
     assert set(result["model"]) == set(config["models"])
 
 
-@pytest.mark.skip(reason="DATA-3.1 담당자가 구현한 뒤 skip을 제거합니다")
 def test_quantity_probabilities_are_monotonic():
     predictions = [0.82, 0.76, 0.79, 0.51, 0.42]
     fixed = enforce_quantity_monotonicity(predictions)
