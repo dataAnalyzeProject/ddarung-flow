@@ -40,6 +40,17 @@ const sortingResult = {
   ],
 };
 
+const unavailableResult = {
+  ...sortingResult,
+  candidates: sortingResult.candidates.map((candidate, index) => index === 0 ? {
+    ...candidate,
+    currentInventory: {
+      ...candidate.currentInventory,
+      inventoryStatus: "UNAVAILABLE",
+    },
+  } : candidate),
+};
+
 test("정상 결과에서 승인된 후보별 결과를 그대로 표시한다", () => {
   render(<PredictionResults result={normalResult} />);
   expect(screen.getByRole("heading", { name: "목적지 주변 예측 결과" })).toBeInTheDocument();
@@ -127,4 +138,10 @@ test("FE-3.2 전체 기준시각은 가장 이른 collectedAt이다", () => {
 test("FE-3.2 서버가 준 지연 상태를 표시한다", () => {
   render(<PredictionResults result={sortingResult} />);
   expect(screen.getByText("일부 지연")).toBeInTheDocument();
+});
+
+test("FE-3.2 이용 불가 상태는 정상과 구분해 표시한다", () => {
+  render(<PredictionResults result={unavailableResult} />);
+  expect(screen.getByText("이용 불가")).toBeInTheDocument();
+  expect(screen.queryByText("정상")).not.toBeInTheDocument();
 });

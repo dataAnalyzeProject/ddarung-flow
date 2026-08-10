@@ -67,3 +67,5 @@
 .inventory-reference-time.status-delayed small{background:#e58b18}
 .inventory-reference-time.status-missing{border-color:#c94b3d;background:#ffe9e5}
 .inventory-reference-time.status-missing small{background:#c94b3d}
+.inventory-reference-time.status-unavailable{border-color:#7c2630;background:#f7dfe2}
+.inventory-reference-time.status-unavailable small{background:#7c2630}

@@ -4,6 +4,7 @@ const statusLabels = {
   NORMAL: "정상",
   DELAYED: "일부 지연",
   MISSING: "일부 누락",
+  UNAVAILABLE: "이용 불가",
 };
 
 export default function InventoryReferenceTime({ referenceTime, status = "NORMAL" }) {

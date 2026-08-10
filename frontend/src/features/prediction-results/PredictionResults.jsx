@@ -32,6 +32,7 @@ export default function PredictionResults({ result = normalResult, onEditInput =
 
   const inventoryStatus = useMemo(() => {
     const statuses = (result.candidates ?? []).map((candidate) => candidate.currentInventory?.inventoryStatus);
+    if (statuses.includes("UNAVAILABLE")) return "UNAVAILABLE";
     if (statuses.includes("MISSING")) return "MISSING";
     if (statuses.includes("DELAYED")) return "DELAYED";
     return "NORMAL";
