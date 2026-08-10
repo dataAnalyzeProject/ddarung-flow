@@ -18,11 +18,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-<<<<<<< Updated upstream
 @DataJpaTest
-=======
-@DataJpaTest(properties = "spring.jpa.properties.hibernate.jdbc.time_zone=Asia/Seoul")
->>>>>>> Stashed changes
 @ActiveProfiles("test")
 @Sql("/be-3.2-prediction-fixture.sql")
 class PredictionLookupServiceTest {
@@ -56,29 +52,17 @@ class PredictionLookupServiceTest {
     @Test
     @DisplayName("requestedAt 이후 생성된 배치는 조회 결과에서 제외된다 (generatedAt <= requestedAt).")
     void excludesBatchesGeneratedAfterRequestedAt() {
-<<<<<<< Updated upstream
         // given: Batch 3 was generated at 10:40:00 (after 10:30:00)
         OffsetDateTime beforeBatch3Generated = OffsetDateTime.of(2026, 8, 10, 10, 30, 0, 0, ZoneOffset.UTC);
         OffsetDateTime afterBatch3Generated = OffsetDateTime.of(2026, 8, 10, 10, 45, 0, 0, ZoneOffset.UTC);
 
         // when before generatedAt: Batch 5 (featureAsOf 10:00, prob 0.92) is selected instead of Batch 3
-=======
-        // given: Batch 3 was generated at 10:40:00
-        OffsetDateTime beforeBatch3Generated = OffsetDateTime.of(2026, 8, 10, 10, 30, 0, 0, ZoneOffset.UTC);
-        OffsetDateTime afterBatch3Generated = OffsetDateTime.of(2026, 8, 10, 10, 45, 0, 0, ZoneOffset.UTC);
-
-        // when before generatedAt: Batch 5 (prob 0.92) selected instead of Batch 3 (prob 0.90)
->>>>>>> Stashed changes
         Optional<PredictionLookupResult> resultBefore = service.findLatestValid(STATION_ID, TARGET_AT, 60, 1, beforeBatch3Generated);
         assertThat(resultBefore).isPresent();
         assertThat(resultBefore.get().batchId()).isEqualTo(UUID.fromString("10000000-0000-0000-0000-000000000005"));
 
-<<<<<<< Updated upstream
         // when after generatedAt: Batch 3 (generatedAt 10:40, featureAsOf 10:00) is also candidate,
         // and both Batch 3 and Batch 5 have featureAsOf 10:00, so sorted by generatedAt DESC -> Batch 3 selected
-=======
-        // when after generatedAt: Batch 3 (generatedAt 10:40, featureAsOf 10:00) becomes candidate
->>>>>>> Stashed changes
         Optional<PredictionLookupResult> resultAfter = service.findLatestValid(STATION_ID, TARGET_AT, 60, 1, afterBatch3Generated);
         assertThat(resultAfter).isPresent();
         assertThat(resultAfter.get().batchId()).isEqualTo(UUID.fromString("10000000-0000-0000-0000-000000000003"));
