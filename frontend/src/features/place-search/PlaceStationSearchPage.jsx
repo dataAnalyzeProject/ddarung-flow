@@ -66,7 +66,6 @@ export default function PlaceStationSearchPage({
   // 계속하기 버튼 클릭 처리 확장
   const handleContinue = () => {
     if (!isContinueEnabled || !onContinue) return;
-    // 계속하기 버튼 클릭 처리 확장
     if (mode === "ROUTE") {
       onContinue({
         mode: "ROUTE",
