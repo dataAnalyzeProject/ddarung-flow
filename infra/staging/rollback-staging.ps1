@@ -63,6 +63,7 @@ try {
         "FRONTEND_IMAGE=$frontendImage"
         "BACKEND_IMAGE=$backendImage"
         "REACT_APP_API_BASE_URL=$publicUrl"
+        "DEPLOYED_COMMIT=$PreviousTag"
     ) | Set-Content -LiteralPath $releaseFile -Encoding Ascii
 
     Invoke-External "scp" @("-i", $sshKey, $releaseFile, "${target}:${remoteDir}/release.env")
@@ -75,8 +76,13 @@ finally {
 
 $frontendStatus = [int](curl.exe -s -o NUL -w "%{http_code}" $publicUrl)
 if ($frontendStatus -ne 200) { throw "Rollback frontend HTTP check failed: $frontendStatus" }
-$proxyStatus = [int](curl.exe -s -o NUL -w "%{http_code}" "$publicUrl/api/v1/auth/me")
-if ($proxyStatus -notin @(200, 401, 403)) { throw "Rollback proxy check failed: $proxyStatus" }
+$proxyStatus = 0
+for ($attempt = 1; $attempt -le 18; $attempt++) {
+    $proxyStatus = [int](curl.exe -s -o NUL -w "%{http_code}" "$publicUrl/api/v1/auth/me")
+    if ($proxyStatus -in @(200, 401, 403)) { break }
+    if ($attempt -lt 18) { Start-Sleep -Seconds 5 }
+}
+if ($proxyStatus -notin @(200, 401, 403)) { throw "Rollback proxy check failed after readiness wait: $proxyStatus" }
 
 Write-Output "Rollback smoke passed for tag ${PreviousTag}: frontend=$frontendStatus proxy=$proxyStatus"
 Write-Warning "This deployment reuses crawling_server. Never stop the compute instance; stop only the ddarung-flow-staging Compose project when staging validation ends."
