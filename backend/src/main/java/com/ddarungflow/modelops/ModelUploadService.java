@@ -61,7 +61,7 @@ public class ModelUploadService {
         if (upload.getStatus() != ModelUploadStatus.CREATED) {
             throw new IllegalStateException("Cannot complete upload session in terminal state: " + upload.getStatus());
         }
-        if (now.isAfter(upload.getExpiresAt())) {
+        if (!now.isBefore(upload.getExpiresAt())) {
             throw new IllegalStateException("Upload session has expired and cannot be completed");
         }
 

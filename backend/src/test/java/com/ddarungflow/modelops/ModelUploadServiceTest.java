@@ -209,6 +209,56 @@ class ModelUploadServiceTest {
     }
 
     @Test
+    @DisplayName("validatesExpirationBoundariesForCompleteAndExpire: 만료 직전, 정확한 만료시각, 만료 후 complete 및 expire 경계 동작 검증")
+    void validatesExpirationBoundariesForCompleteAndExpire() {
+        UUID id = UUID.randomUUID();
+        OffsetDateTime createdAt = OffsetDateTime.now();
+        OffsetDateTime expiresAt = createdAt.plusHours(1);
+
+        ModelUpload createdUpload = new ModelUpload(
+            id, 1L, "models/v1/model.onnx", VALID_SHA256, 1024L,
+            ModelUploadStatus.CREATED, expiresAt, null, createdAt
+        );
+
+        given(uploadRepository.findById(id)).willReturn(Optional.of(createdUpload));
+        given(uploadRepository.save(any(ModelUpload.class))).willAnswer(inv -> inv.getArgument(0));
+
+        // 1. 만료시각 직전에는 complete() 성공
+        OffsetDateTime justBefore = expiresAt.minusNanos(1);
+        ModelUpload completed = uploadService.complete(id, justBefore);
+        assertThat(completed.getStatus()).isEqualTo(ModelUploadStatus.COMPLETED);
+
+        // 2. 정확한 만료시각(now == expiresAt)에는 complete() 실패, expire() 성공
+        ModelUpload createdUpload2 = new ModelUpload(
+            id, 1L, "models/v1/model.onnx", VALID_SHA256, 1024L,
+            ModelUploadStatus.CREATED, expiresAt, null, createdAt
+        );
+        given(uploadRepository.findById(id)).willReturn(Optional.of(createdUpload2));
+
+        assertThatThrownBy(() -> uploadService.complete(id, expiresAt))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("expired");
+
+        ModelUpload expiredAtExact = uploadService.expire(id, expiresAt);
+        assertThat(expiredAtExact.getStatus()).isEqualTo(ModelUploadStatus.EXPIRED);
+
+        // 3. 만료시각 이후(now > expiresAt)에는 complete() 실패, expire() 성공
+        OffsetDateTime afterExpires = expiresAt.plusMinutes(1);
+        ModelUpload createdUpload3 = new ModelUpload(
+            id, 1L, "models/v1/model.onnx", VALID_SHA256, 1024L,
+            ModelUploadStatus.CREATED, expiresAt, null, createdAt
+        );
+        given(uploadRepository.findById(id)).willReturn(Optional.of(createdUpload3));
+
+        assertThatThrownBy(() -> uploadService.complete(id, afterExpires))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("expired");
+
+        ModelUpload expiredAfter = uploadService.expire(id, afterExpires);
+        assertThat(expiredAfter.getStatus()).isEqualTo(ModelUploadStatus.EXPIRED);
+    }
+
+    @Test
     @DisplayName("rejectsDuplicateObjectKeyAndInvalidSha256: 중복 objectKey 및 유효하지 않은 SHA-256 거부")
     void rejectsDuplicateObjectKeyAndInvalidSha256() {
         // given
