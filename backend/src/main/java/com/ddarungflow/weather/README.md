@@ -55,9 +55,10 @@ public WeatherForecastResult select(
    - 강수확률 $\ge$ 50% **또는** 강수형태(`ptyCode`)가 우천/강수(1: 비, 2: 비/눈, 3: 눈, 4: 소나기)인 경우 `true`.
    - 그 외(PTY 0: 없음 등)는 `false`.
 
-3. **시간별 예보 필터링 및 정렬 (`hourlyForecasts`)**:
-   - 도착 예정 시각(`arrivalAt`)의 **날짜(`LocalDate`)와 동일한 `forecastAt` 항목만 포함**합니다. (전날 및 다음날 예보 제외)
-   - 추출된 도착일 항목들은 `forecastAt` 기준 **오름차순(시간순)**으로 정렬하여 반환합니다.
+4. **시간대(UTC Offset) 및 필수 입력 검증**:
+   - `arrivalAt`은 `null`일 수 없으며 시간대 Offset이 **`+09:00` (KST)** 이어야 합니다.
+   - `collectedAt`이 전달되는 경우 시간대 Offset이 **`+09:00` (KST)** 이어야 합니다.
+   - `stationId`는 `null`이거나 공백일 수 없으며 위반 시 조용히 넘기지 않고 `IllegalArgumentException`을 발생시켜 명확히 차단합니다.
 
 ## 5. 실행 및 테스트 명령
 

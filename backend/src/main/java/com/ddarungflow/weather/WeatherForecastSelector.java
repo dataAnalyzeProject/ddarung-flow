@@ -31,6 +31,8 @@ public final class WeatherForecastSelector {
      * @param latestFetchFailed 최신 호출 실패 여부
      * @return WeatherForecastResult 선택 결과
      */
+    private static final ZoneOffset KST_OFFSET = ZoneOffset.ofHours(9);
+
     public WeatherForecastResult select(
         String stationId,
         OffsetDateTime arrivalAt,
@@ -41,8 +43,17 @@ public final class WeatherForecastSelector {
         List<ForecastPoint> previous,
         boolean latestFetchFailed
     ) {
+        if (stationId == null || stationId.isBlank()) {
+            throw new IllegalArgumentException("stationId는 필수이며 비어있을 수 없습니다.");
+        }
         if (arrivalAt == null) {
             throw new IllegalArgumentException("arrivalAt은 null일 수 없습니다.");
+        }
+        if (!KST_OFFSET.equals(arrivalAt.getOffset())) {
+            throw new IllegalArgumentException("arrivalAt의 시간대 offset은 +09:00 이어야 합니다.");
+        }
+        if (collectedAt != null && !KST_OFFSET.equals(collectedAt.getOffset())) {
+            throw new IllegalArgumentException("collectedAt의 시간대 offset은 +09:00 이어야 합니다.");
         }
 
         // 도착 시각을 30분 기준으로 가까운 정시에 맞춤 (예: 16:30 -> 17:00, 16:29 -> 16:00)

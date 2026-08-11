@@ -184,10 +184,34 @@ class WeatherForecastSelectorTest {
     }
 
     @Test
-    @DisplayName("잘못된 입력 예외 처리 (arrivalAt null 시 IllegalArgumentException 예외 발생)")
+    @DisplayName("잘못된 입력 예외 처리 (arrivalAt null, stationId 누락, UTC offset mismatch 시 IllegalArgumentException 예외 발생)")
     void testInvalidInputs() {
+        OffsetDateTime validArrival = OffsetDateTime.of(2026, 8, 11, 17, 15, 0, 0, KST);
+        OffsetDateTime validCollected = OffsetDateTime.of(2026, 8, 11, 14, 5, 0, 0, KST);
+
+        // 1. arrivalAt null 시 예외
         assertThrows(IllegalArgumentException.class, () -> {
-            selector.select("ST-01", null, 60, 127, OffsetDateTime.now(), List.of(), List.of(), false);
+            selector.select("ST-01", null, 60, 127, validCollected, List.of(), List.of(), false);
+        });
+
+        // 2. stationId null 또는 빈값 시 예외
+        assertThrows(IllegalArgumentException.class, () -> {
+            selector.select(null, validArrival, 60, 127, validCollected, List.of(), List.of(), false);
+        });
+        assertThrows(IllegalArgumentException.class, () -> {
+            selector.select("   ", validArrival, 60, 127, validCollected, List.of(), List.of(), false);
+        });
+
+        // 3. arrivalAt offset이 +09:00이 아닌 경우 (UTC +00:00) 예외
+        OffsetDateTime utcArrival = OffsetDateTime.of(2026, 8, 11, 17, 15, 0, 0, ZoneOffset.UTC);
+        assertThrows(IllegalArgumentException.class, () -> {
+            selector.select("ST-01", utcArrival, 60, 127, validCollected, List.of(), List.of(), false);
+        });
+
+        // 4. collectedAt offset이 +09:00이 아닌 경우 (UTC +00:00) 예외
+        OffsetDateTime utcCollected = OffsetDateTime.of(2026, 8, 11, 14, 5, 0, 0, ZoneOffset.UTC);
+        assertThrows(IllegalArgumentException.class, () -> {
+            selector.select("ST-01", validArrival, 60, 127, utcCollected, List.of(), List.of(), false);
         });
     }
 }
