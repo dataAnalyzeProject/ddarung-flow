@@ -1,0 +1,11 @@
+node_modules
+build
+coverage
+.env
+.env.*
+npm-debug.log*
+*.log
+.git
+.gitignore
+.idea
+.vscode
