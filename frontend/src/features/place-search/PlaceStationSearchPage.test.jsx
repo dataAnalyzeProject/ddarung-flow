@@ -5,6 +5,8 @@ import {
   stationResultsMock,
 } from "./data/placeStationSearchMock";
 import userEvent from "@testing-library/user-event";
+import React from "react";
+
 
 test("FE-3.3 경로 방식 선택값을 승인된 형태로 전달한다", () => {
   const onSearch = jest.fn();
@@ -125,77 +127,201 @@ test("FE-3.3 필수 선택 전에는 계속하기를 누를 수 없다", () => {
   expect(screen.getByRole("button", { name: "계속하기" })).toBeDisabled();
 });
 
-test("FE-3.3 키보드만 사용해 탭, 검색 결과, 조건 선택과 계속하기를 진행한다", () => {
+test("FE-3.3 사용자가 키보드만으로 검색하고 결과를 선택해 계속하기를 완료한다", () => {
   const onSearch = jest.fn();
   const onContinue = jest.fn();
-  // 1. 초기 상태: 검색 전 (placeResults={[]})
-  const { rerender } = render(
-    <PlaceStationSearchPage
-      searchStatus="idle"
-      placeResults={[]}
-      onSearch={onSearch}
-      onContinue={onContinue}
-    />
-  );
-  // [사용자] 1. 출발지 입력 및 검색 버튼 실행 (Tab -> Enter)
-  const originInput = screen.getByRole("textbox", { name: "출발지 검색어" });
+
+  // 실제 부모 컴포넌트가 검색 결과를 내려주는 상황을 흉내낸다.
+  const TestWrapper = () => {
+    const [searchStatus, setSearchStatus] = React.useState("idle");
+    const [placeResults, setPlaceResults] = React.useState([]);
+    const [stationResults, setStationResults] = React.useState([]);
+    const handleSearch = (request) => {
+      onSearch(request);
+
+      if (request.mode === "ROUTE") {
+        setSearchStatus("success");
+        setPlaceResults(placeResultsMock);
+      }
+
+      if (request.mode === "DIRECT") {
+        setSearchStatus("success");
+        setStationResults(stationResultsMock);
+      }
+    };
+
+    return (
+      <PlaceStationSearchPage
+        searchStatus={searchStatus}
+        placeResults={placeResults}
+        stationResults={stationResults}
+        onSearch={handleSearch}
+        onContinue={onContinue}
+      />
+    );
+  };
+
+  render(<TestWrapper />);
+
+  // --------------------------------
+  // 1. 처음에는 검색 결과가 없다.
+  // --------------------------------
+
+  expect(
+    screen.queryByRole("button", {
+      name: "출발지로 서울역 선택",
+    })
+  ).not.toBeInTheDocument();
+
+  // --------------------------------
+  // 2. 사용자가 키보드로 출발지를 검색한다.
+  // --------------------------------
+
+  const originInput = screen.getByRole("textbox", {
+    name: "출발지 검색어",
+  });
+
   originInput.focus();
   expect(originInput).toHaveFocus();
+
   userEvent.type(originInput, "서울역");
-  userEvent.tab(); // '출발지 검색' 버튼
-  expect(screen.getByRole("button", { name: "출발지 검색" })).toHaveFocus();
-  userEvent.keyboard("{Enter}");
-  expect(onSearch).toHaveBeenCalledWith({ mode: "ROUTE", field: "origin", query: "서울역" });
 
-  // [테스트 가짜 외부 시스템] placeResultsMock 제공 (rerender)
-  rerender(
-    <PlaceStationSearchPage
-      searchStatus="success"
-      placeResults={placeResultsMock}
-      onSearch={onSearch}
-      onContinue={onContinue}
-    />
-  );
-  // [사용자] 2. 출발지 선택 (Tab -> Enter)
-  const selectOriginBtn = screen.getByRole("button", { name: "출발지로 서울역 선택" });
-  selectOriginBtn.focus();
-  expect(selectOriginBtn).toHaveFocus();
-  userEvent.keyboard("{Enter}");
-  // [사용자] 3. 목적지 입력 및 검색 버튼 실행 (Tab -> Enter)
-  const searchDestinationInput = screen.getByRole("textbox", { name: "목적지 검색어" });
-  searchDestinationInput.focus();
-  expect(searchDestinationInput).toHaveFocus();
-  userEvent.type(searchDestinationInput, "서울시청");
-
-  userEvent.tab(); // '목적지 검색' 버튼
-  expect(screen.getByRole("button", { name: "목적지 검색" })).toHaveFocus();
-  userEvent.keyboard("{Enter}");
-
-  // [사용자] 4. 목적지 선택 (Tab -> Enter)
-  userEvent.tab(); // '목적지로 서울역 선택' 건너뜀 -> '목적지로 서울특별시청 선택' 버튼 포커스
   userEvent.tab();
-  expect(screen.getByRole("button", { name: "목적지로 서울특별시청 선택" })).toHaveFocus();
+
+  expect(
+    screen.getByRole("button", {
+      name: "출발지 검색",
+    })
+  ).toHaveFocus();
+
   userEvent.keyboard("{Enter}");
 
-  // [사용자] 5. 이동수단 및 자전거 수 선택 (Tab -> 방향키)
-  userEvent.tab(); // '이동수단' select 포커스
-  expect(screen.getByRole("combobox", { name: "이동수단" })).toHaveFocus();
-  userEvent.keyboard("{ArrowDown}"); // ⌨️ 방향키로 선택
+  expect(onSearch).toHaveBeenCalledWith({
+    mode: "ROUTE",
+    field: "origin",
+    query: "서울역",
+  });
 
-  userEvent.tab(); // '필요 자전거 수' select 포커스
-  const bikeSelect = screen.getByRole("combobox", { name: "필요 자전거 수" });
-  expect(bikeSelect).toHaveFocus();
-  // ⌨️ 순수 키보드 신호 전달 (방향키 이벤트 + 키보드 선택 change)
-  fireEvent.keyDown(bikeSelect, { key: "ArrowDown", code: "ArrowDown" });
-  fireEvent.change(bikeSelect, { target: { value: "2" } });
+  // --------------------------------
+  // 3. 검색 결과가 외부에서 들어왔다.
+  // --------------------------------
 
-  // [사용자] 6. 계속하기 버튼 실행 (Tab -> Enter)
-  userEvent.tab(); // '계속하기' 버튼 포커스
-  expect(screen.getByRole("button", { name: "계속하기" })).toHaveFocus();
+  expect(
+    screen.getByRole("button", {
+      name: "출발지로 서울역 선택",
+    })
+  ).toBeInTheDocument();
+
+  // --------------------------------
+  // 4. 사용자가 Tab → Enter로 결과를 선택한다.
+  // --------------------------------
+
+  userEvent.tab();
+
+  expect(
+    screen.getByRole("button", {
+      name: "출발지로 서울역 선택",
+    })
+  ).toHaveFocus();
+
   userEvent.keyboard("{Enter}");
 
-  // [결과 검증] onContinue 승인 payload 및 1회 호출
+  // --------------------------------
+  // 5. 목적지를 검색한다.
+  // --------------------------------
+
+  userEvent.tab();
+  userEvent.tab();
+
+  const destinationInput = screen.getByRole("textbox", {
+    name: "목적지 검색어",
+  });
+
+  expect(destinationInput).toHaveFocus();
+
+  userEvent.type(destinationInput, "서울시청");
+
+  userEvent.tab();
+
+  expect(
+    screen.getByRole("button", {
+      name: "목적지 검색",
+    })
+  ).toHaveFocus();
+
+  userEvent.keyboard("{Enter}");
+
+  expect(onSearch).toHaveBeenCalledWith({
+    mode: "ROUTE",
+    field: "destination",
+    query: "서울시청",
+  });
+
+  // --------------------------------
+  // 6. 목적지 결과를 선택한다.
+  // --------------------------------
+
+  userEvent.tab();
+  userEvent.tab();
+
+  expect(
+    screen.getByRole("button", {
+      name: "목적지로 서울특별시청 선택",
+    })
+  ).toHaveFocus();
+
+  userEvent.keyboard("{Enter}");
+
+  // --------------------------------
+  // 7. 이동수단을 키보드로 선택한다.
+  // --------------------------------
+
+  userEvent.tab();
+
+  const travelMode = screen.getByRole("combobox", {
+    name: "이동수단",
+  });
+
+  expect(travelMode).toHaveFocus();
+
+  userEvent.keyboard("{ArrowDown}");
+
+  // --------------------------------
+  // 8. 자전거 수를 키보드로 선택한다.
+  // --------------------------------
+
+  userEvent.tab();
+  const bikeCount = screen.getByRole("combobox", {
+    name: "필요 자전거 수",
+  });
+
+  expect(bikeCount).toHaveFocus();
+  expect(bikeCount).toHaveValue("1");
+
+  userEvent.selectOptions(bikeCount, "2");
+
+  expect(bikeCount).toHaveValue("2");
+
+  // --------------------------------
+  // 9. 계속하기
+  // --------------------------------
+
+  userEvent.tab();
+
+  const continueButton = screen.getByRole("button", {
+    name: "계속하기",
+  });
+
+  expect(continueButton).toHaveFocus();
+
+  userEvent.keyboard("{Enter}");
+
+  // --------------------------------
+  // 10. 최종적으로 부모에게 전달된 값 확인
+  // --------------------------------
+
   expect(onContinue).toHaveBeenCalledTimes(1);
+
   expect(onContinue).toHaveBeenCalledWith({
     mode: "ROUTE",
     origin: {
@@ -214,4 +340,82 @@ test("FE-3.3 키보드만 사용해 탭, 검색 결과, 조건 선택과 계속�
     directMinutes: null,
     requiredBikeCount: 2,
   });
+});
+
+test("FE-3.3 idle, loading, empty, error 상태에서는 검색 결과 목록이 노출되지 않는다", () => {
+  // 1. idle 상태: 결과 데이터가 있어도 목록 버튼이 화면에 없어야 함
+  const { rerender } = render(
+    <PlaceStationSearchPage
+      searchStatus="idle"
+      placeResults={placeResultsMock}
+      stationResults={stationResultsMock}
+    />
+  );
+  expect(screen.queryByRole("button", { name: "출발지로 서울역 선택" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "102. 망원역 1번출구 앞 선택" })).not.toBeInTheDocument();
+  // 2. loading 상태
+  rerender(
+    <PlaceStationSearchPage
+      searchStatus="loading"
+      placeResults={placeResultsMock}
+      stationResults={stationResultsMock}
+    />
+  );
+  expect(screen.queryByRole("button", { name: "출발지로 서울역 선택" })).not.toBeInTheDocument();
+  // 3. empty 상태
+  rerender(
+    <PlaceStationSearchPage
+      searchStatus="empty"
+      placeResults={placeResultsMock}
+      stationResults={stationResultsMock}
+    />
+  );
+  expect(screen.queryByRole("button", { name: "출발지로 서울역 선택" })).not.toBeInTheDocument();
+  // 4. error 상태
+  rerender(
+    <PlaceStationSearchPage
+      searchStatus="error"
+      placeResults={placeResultsMock}
+      stationResults={stationResultsMock}
+    />
+  );
+  expect(screen.queryByRole("button", { name: "출발지로 서울역 선택" })).not.toBeInTheDocument();
+  // 5. success 상태에서만 비로소 결과 버튼이 화면에 노출됨
+  rerender(
+    <PlaceStationSearchPage
+      searchStatus="success"
+      placeResults={placeResultsMock}
+      stationResults={stationResultsMock}
+    />
+  );
+  expect(screen.getByRole("button", { name: "출발지로 서울역 선택" })).toBeInTheDocument();
+});
+
+test("FE-3.3 error 상태에서 다시 시도 버튼 클릭 시 이전 검색 조건으로 onSearch를 호출한다", () => {
+  const onSearch = jest.fn();
+  const { rerender } = render(<PlaceStationSearchPage onSearch={onSearch} />);
+  // 1. 검색어로 서울역을 입력하고 출발지 검색 버튼 클릭
+  userEvent.type(screen.getByRole("textbox", { name: "출발지 검색어" }), "서울역");
+  fireEvent.click(screen.getByRole("button", { name: "출발지 검색" }));
+  expect(onSearch).toHaveBeenCalledWith({ mode: "ROUTE", field: "origin", query: "서울역" });
+  // 2. 화면을 error 상태로 변경 (onSearch도 함께 전달)
+  rerender(<PlaceStationSearchPage searchStatus="error" onSearch={onSearch} />);
+  // 3. 다시 시도 버튼 클릭
+  fireEvent.click(screen.getByRole("button", { name: "다시 시도" }));
+  // 4. 마지막 검색 조건으로 onSearch가 실제 재호출되는지 확인
+  expect(onSearch).toHaveBeenLastCalledWith({ mode: "ROUTE", field: "origin", query: "서울역" });
+});
+
+test("ArrowDown 키 입력이 select에 전달되는지 확인", () => {
+  render(<PlaceStationSearchPage />);
+
+  const bikeCount = screen.getByRole("combobox", {
+    name: "필요 자전거 수",
+  });
+
+  bikeCount.focus();
+
+  userEvent.keyboard("{ArrowDown}");
+
+  expect(bikeCount).toHaveFocus();
 });

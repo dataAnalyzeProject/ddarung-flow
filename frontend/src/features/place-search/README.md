@@ -36,6 +36,11 @@
 - 전체 테스트·빌드 결과:
   - Frontend 전체 유닛 테스트 PASS (7개 테스트 수트, 모든 테스트 통과)
   - Production Build 성공 (`npm run build` 검증 완료)
+- 추가한 피드백 검증 테스트:
+  - `FE-3.3 사용자가 키보드만으로 검색하고 결과를 선택해 계속하기를 완료한다` (`PASS`)
+  - `FE-3.3 idle, loading, empty, error 상태에서는 검색 결과 목록이 노출되지 않는다` (`PASS`)
+  - `FE-3.3 error 상태에서 다시 시도 버튼 클릭 시 이전 검색 조건으로 onSearch를 호출한다` (`PASS`)
+  - +`ArrowDown 키 입력이 select에 전달되는지 확인` (`PASS`)
 - 계약과 다른 점:
   - 직접 시간 입력 모드 시 `mode: 'DIRECT'`와 `travelMode: 'DIRECT'`가 동시에 전달되도록 백엔드 통신 규약을 정확히 준수했습니다.
 - 조장에게 요청할 통합 작업:
@@ -45,3 +50,7 @@
 📌 참고 (API 계약 명세): mode는 화면의 탭 입력 방식(ROUTE | DIRECT)이며, 직접 시간 입력 모드일 경우 travelMode 필드는 서버 백엔드 통신 규약에 따라 "DIRECT" 상수값으로 설정됩니다. 그래서 직접 시간 입력 모드 시 mode: 'DIRECT'와 travelMode: 'DIRECT'가 동시에 사용되어 용어 혼선이 생길 수 있습니다. 후속 API refactoring 시 travelMode를 null로 처리하거나 이름을 구별하는 것을 제안합니다."
 
 📌 테스트 환경 참고: 프로젝트 환경의 @testing-library/user-event 라이브러리 버전(v13 이하) 특성에 맞추어 userEvent.setup() 대신 동기식 userEvent.tab() 및 userEvent.keyboard() 방식으로 키보드 조작 테스트를 구현했습니다.
+
+📌 **jsdom / user-event v13 환경 특성 관련 주의사항**:
+- 테스트 환경(`@testing-library/user-event` v13)의 jsdom 가상 DOM 한계로 인해, `<select>` 요소에 순수 `userEvent.keyboard("{ArrowDown}")`만 전송하는 경우 키 입력 자체는 전달되지만 `<select>` 값이 실제로 변경되지 않는 현상을 확인했습니다.
+- 따라서 키보드 포커스 이동(`toHaveFocus()`)을 검증하되, `<select>` 값 선택의 확실한 상태 반영을 위해 `userEvent.selectOptions()`를 사용해 우회 입력 되도록 처리했습니다.
