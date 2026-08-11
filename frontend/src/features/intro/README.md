@@ -1,4 +1,4 @@
-# AUTH-FE-5.2 첫 방문 인트로
+# AUTH-FE-3.3 첫 방문 인트로
 
 브라우저 첫 방문자에게 서비스 설명을 5초 동안 보여주는 독립 화면입니다.
 
@@ -11,7 +11,7 @@
 
 ## 조장 통합 지점
 
-`App.jsx`에서 `hasSeenIntro(window.localStorage)`로 최초 방문 여부를 판단하고, 인트로가 필요할 때 `IntroPage`를 렌더링합니다. `onComplete`에서는 메인 화면으로 전환합니다. 이 연결 작업은 `INT-5.1` 범위입니다.
+`App.jsx`에서 `hasSeenIntro(window.localStorage)`로 최초 방문 여부를 판단하고, 인트로가 필요할 때 `IntroPage`를 렌더링합니다. 실제 최초 방문 표시와 완료 후 메인 진입 연결은 조장의 `INT-3.3` 범위입니다.
 
 ## 제외 범위
 
