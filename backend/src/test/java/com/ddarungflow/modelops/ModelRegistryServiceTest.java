@@ -194,6 +194,80 @@ class ModelRegistryServiceTest {
             .hasMessageContaining("trainerUserId must not be null");
     }
 
+    @Test
+    @DisplayName("validatesBrierScoreAndCalibrationErrorRange: brierScore 및 calibrationError 범위(0..1) 검증 - 0과 1은 허용, 1.01은 거부")
+    void validatesBrierScoreAndCalibrationErrorRange() {
+        Long modelId = 1L;
+
+        // 0 and 1 succeed for brierScore
+        ModelEvaluation valid0 = new ModelEvaluation(
+            modelId, 60, 1, 1000L,
+            new BigDecimal("0"), new BigDecimal("0.5"),
+            new BigDecimal("0.5"), new BigDecimal("0.5"), 0
+        );
+        assertThat(valid0.getBrierScore()).isEqualTo(new BigDecimal("0"));
+
+        ModelEvaluation valid1 = new ModelEvaluation(
+            modelId, 60, 1, 1000L,
+            new BigDecimal("1"), new BigDecimal("0.5"),
+            new BigDecimal("0.5"), new BigDecimal("0.5"), 0
+        );
+        assertThat(valid1.getBrierScore()).isEqualTo(new BigDecimal("1"));
+
+        // 1.01 fails for brierScore
+        assertThatThrownBy(() -> new ModelEvaluation(
+            modelId, 60, 1, 1000L,
+            new BigDecimal("1.01"), new BigDecimal("0.5"),
+            new BigDecimal("0.5"), new BigDecimal("0.5"), 0
+        )).isInstanceOf(IllegalArgumentException.class);
+
+        // 0 and 1 succeed for calibrationError
+        ModelEvaluation validCal0 = new ModelEvaluation(
+            modelId, 60, 1, 1000L,
+            new BigDecimal("0.5"), new BigDecimal("0.5"),
+            new BigDecimal("0"), new BigDecimal("0.5"), 0
+        );
+        assertThat(validCal0.getCalibrationError()).isEqualTo(new BigDecimal("0"));
+
+        ModelEvaluation validCal1 = new ModelEvaluation(
+            modelId, 60, 1, 1000L,
+            new BigDecimal("0.5"), new BigDecimal("0.5"),
+            new BigDecimal("1"), new BigDecimal("0.5"), 0
+        );
+        assertThat(validCal1.getCalibrationError()).isEqualTo(new BigDecimal("1"));
+
+        // 1.01 fails for calibrationError
+        assertThatThrownBy(() -> new ModelEvaluation(
+            modelId, 60, 1, 1000L,
+            new BigDecimal("0.5"), new BigDecimal("0.5"),
+            new BigDecimal("1.01"), new BigDecimal("0.5"), 0
+        )).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("rejectsTransitionToValidatedWhenEvaluationsContainDuplicates: 20행이지만 중복 조합이 있는 경우 DRAFT 유지 및 거부")
+    void rejectsTransitionToValidatedWhenEvaluationsContainDuplicates() {
+        Long modelId = 1L;
+        OffsetDateTime now = OffsetDateTime.now();
+
+        ModelArtifact draftArtifact = new ModelArtifact(
+            "v1.0.0", 1L, "key", SHA256_1, "commit", SHA256_2, SHA256_3,
+            "v1", ModelArtifactState.DRAFT, now
+        );
+
+        List<ModelEvaluation> dupEvaluations = create20ValidEvaluations(modelId);
+        dupEvaluations.set(1, dupEvaluations.get(0)); // 20 rows, but duplicate combination
+
+        given(artifactRepository.findById(modelId)).willReturn(Optional.of(draftArtifact));
+        given(evaluationRepository.findAllByModelId(modelId)).willReturn(dupEvaluations);
+
+        assertThatThrownBy(() -> registryService.transition(modelId, ModelArtifactState.VALIDATED))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("unique combinations");
+
+        assertThat(draftArtifact.getState()).isEqualTo(ModelArtifactState.DRAFT);
+    }
+
     private List<ModelEvaluation> create20ValidEvaluations(Long modelId) {
         List<ModelEvaluation> list = new ArrayList<>();
         int[] horizons = {60, 120, 180, 240};

@@ -100,14 +100,14 @@ public class ModelRegistryService {
             if (row.getSampleCount() == null || row.getSampleCount() < 0) {
                 throw new IllegalArgumentException("sampleCount must be non-null and non-negative");
             }
-            if (row.getBrierScore() == null || row.getBrierScore().compareTo(BigDecimal.ZERO) < 0) {
-                throw new IllegalArgumentException("brierScore must be non-null and non-negative");
+            if (row.getBrierScore() == null || row.getBrierScore().compareTo(BigDecimal.ZERO) < 0 || row.getBrierScore().compareTo(BigDecimal.ONE) > 0) {
+                throw new IllegalArgumentException("brierScore must be between 0.0 and 1.0");
             }
             if (row.getShortageRecall() == null || row.getShortageRecall().compareTo(BigDecimal.ZERO) < 0 || row.getShortageRecall().compareTo(BigDecimal.ONE) > 0) {
                 throw new IllegalArgumentException("shortageRecall must be between 0.0 and 1.0");
             }
-            if (row.getCalibrationError() == null || row.getCalibrationError().compareTo(BigDecimal.ZERO) < 0) {
-                throw new IllegalArgumentException("calibrationError must be non-null and non-negative");
+            if (row.getCalibrationError() == null || row.getCalibrationError().compareTo(BigDecimal.ZERO) < 0 || row.getCalibrationError().compareTo(BigDecimal.ONE) > 0) {
+                throw new IllegalArgumentException("calibrationError must be between 0.0 and 1.0");
             }
             if (row.getCoverage() == null || row.getCoverage().compareTo(BigDecimal.ZERO) < 0 || row.getCoverage().compareTo(BigDecimal.ONE) > 0) {
                 throw new IllegalArgumentException("coverage must be between 0.0 and 1.0");
@@ -145,6 +145,15 @@ public class ModelRegistryService {
             List<ModelEvaluation> evaluations = evaluationRepository.findAllByModelId(modelId);
             if (evaluations.size() != 20) {
                 throw new IllegalStateException("Cannot transition DRAFT model to VALIDATED without exactly 20 evaluations (found " + evaluations.size() + ")");
+            }
+            Set<String> combinations = new HashSet<>();
+            for (ModelEvaluation row : evaluations) {
+                if (row != null && ALLOWED_HORIZONS.contains(row.getHorizonMinutes()) && ALLOWED_BIKE_COUNTS.contains(row.getRequiredBikeCount())) {
+                    combinations.add(row.getHorizonMinutes() + ":" + row.getRequiredBikeCount());
+                }
+            }
+            if (combinations.size() != 20) {
+                throw new IllegalStateException("Cannot transition DRAFT model to VALIDATED: evaluations must cover all 20 unique combinations");
             }
         } else if (current == ModelArtifactState.VALIDATED) {
             if (target != ModelArtifactState.APPROVED && target != ModelArtifactState.REJECTED) {

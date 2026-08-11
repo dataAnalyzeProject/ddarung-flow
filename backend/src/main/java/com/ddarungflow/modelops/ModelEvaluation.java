@@ -79,14 +79,14 @@ public class ModelEvaluation {
         if (sampleCount == null || sampleCount < 0) {
             throw new IllegalArgumentException("sampleCount must be non-null and non-negative");
         }
-        if (brierScore == null || brierScore.compareTo(BigDecimal.ZERO) < 0) {
-            throw new IllegalArgumentException("brierScore must be non-null and non-negative");
+        if (brierScore == null || brierScore.compareTo(BigDecimal.ZERO) < 0 || brierScore.compareTo(BigDecimal.ONE) > 0) {
+            throw new IllegalArgumentException("brierScore must be between 0.0 and 1.0");
         }
         if (shortageRecall == null || shortageRecall.compareTo(BigDecimal.ZERO) < 0 || shortageRecall.compareTo(BigDecimal.ONE) > 0) {
             throw new IllegalArgumentException("shortageRecall must be between 0.0 and 1.0");
         }
-        if (calibrationError == null || calibrationError.compareTo(BigDecimal.ZERO) < 0) {
-            throw new IllegalArgumentException("calibrationError must be non-null and non-negative");
+        if (calibrationError == null || calibrationError.compareTo(BigDecimal.ZERO) < 0 || calibrationError.compareTo(BigDecimal.ONE) > 0) {
+            throw new IllegalArgumentException("calibrationError must be between 0.0 and 1.0");
         }
         if (coverage == null || coverage.compareTo(BigDecimal.ZERO) < 0 || coverage.compareTo(BigDecimal.ONE) > 0) {
             throw new IllegalArgumentException("coverage must be between 0.0 and 1.0");

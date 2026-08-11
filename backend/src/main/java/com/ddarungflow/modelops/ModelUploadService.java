@@ -70,8 +70,8 @@ public class ModelUploadService {
     }
 
     public ModelUpload fail(UUID uploadId, OffsetDateTime now) {
-        if (uploadId == null) {
-            throw new IllegalArgumentException("uploadId must not be null");
+        if (uploadId == null || now == null) {
+            throw new IllegalArgumentException("uploadId and now must not be null");
         }
         ModelUpload upload = uploadRepository.findById(uploadId)
             .orElseThrow(() -> new IllegalArgumentException("ModelUpload not found: " + uploadId));
@@ -85,14 +85,17 @@ public class ModelUploadService {
     }
 
     public ModelUpload expire(UUID uploadId, OffsetDateTime now) {
-        if (uploadId == null) {
-            throw new IllegalArgumentException("uploadId must not be null");
+        if (uploadId == null || now == null) {
+            throw new IllegalArgumentException("uploadId and now must not be null");
         }
         ModelUpload upload = uploadRepository.findById(uploadId)
             .orElseThrow(() -> new IllegalArgumentException("ModelUpload not found: " + uploadId));
 
         if (upload.getStatus() != ModelUploadStatus.CREATED) {
             throw new IllegalStateException("Cannot expire upload session in terminal state: " + upload.getStatus());
+        }
+        if (now.isBefore(upload.getExpiresAt())) {
+            throw new IllegalStateException("Upload session has not expired yet");
         }
 
         upload.markExpired();

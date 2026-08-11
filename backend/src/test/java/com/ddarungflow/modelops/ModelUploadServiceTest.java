@@ -93,7 +93,7 @@ class ModelUploadServiceTest {
         );
         given(uploadRepository.findById(id)).willReturn(Optional.of(createdUpload3));
 
-        ModelUpload expired = uploadService.expire(id, now);
+        ModelUpload expired = uploadService.expire(id, expiresAt);
         assertThat(expired.getStatus()).isEqualTo(ModelUploadStatus.EXPIRED);
     }
 
@@ -122,7 +122,7 @@ class ModelUploadServiceTest {
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("terminal state");
 
-        assertThatThrownBy(() -> uploadService.expire(id, now))
+        assertThatThrownBy(() -> uploadService.expire(id, expiresAt))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("terminal state");
     }
@@ -147,6 +147,65 @@ class ModelUploadServiceTest {
         assertThatThrownBy(() -> uploadService.complete(id, now))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("expired");
+    }
+
+    @Test
+    @DisplayName("rejectsExpireBeforeExpirationTime: 만료 전 expire 호출 거부")
+    void rejectsExpireBeforeExpirationTime() {
+        // given
+        UUID id = UUID.randomUUID();
+        OffsetDateTime createdAt = OffsetDateTime.now();
+        OffsetDateTime expiresAt = createdAt.plusHours(1);
+        OffsetDateTime nowBefore = createdAt.plusMinutes(10);
+
+        ModelUpload createdUpload = new ModelUpload(
+            id, 1L, "models/v1/model.onnx", VALID_SHA256, 1024L,
+            ModelUploadStatus.CREATED, expiresAt, null, createdAt
+        );
+
+        given(uploadRepository.findById(id)).willReturn(Optional.of(createdUpload));
+
+        // then
+        assertThatThrownBy(() -> uploadService.expire(id, nowBefore))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("not expired yet");
+    }
+
+    @Test
+    @DisplayName("allowsExpireAtExactExpirationTime: 정확한 만료 시각에 expire 허용")
+    void allowsExpireAtExactExpirationTime() {
+        // given
+        UUID id = UUID.randomUUID();
+        OffsetDateTime createdAt = OffsetDateTime.now();
+        OffsetDateTime expiresAt = createdAt.plusHours(1);
+
+        ModelUpload createdUpload = new ModelUpload(
+            id, 1L, "models/v1/model.onnx", VALID_SHA256, 1024L,
+            ModelUploadStatus.CREATED, expiresAt, null, createdAt
+        );
+
+        given(uploadRepository.findById(id)).willReturn(Optional.of(createdUpload));
+        given(uploadRepository.save(any(ModelUpload.class))).willAnswer(inv -> inv.getArgument(0));
+
+        // when
+        ModelUpload expired = uploadService.expire(id, expiresAt);
+
+        // then
+        assertThat(expired.getStatus()).isEqualTo(ModelUploadStatus.EXPIRED);
+    }
+
+    @Test
+    @DisplayName("rejectsNullNowInputForFailAndExpire: fail() 및 expire()의 now=null 입력 거부")
+    void rejectsNullNowInputForFailAndExpire() {
+        UUID id = UUID.randomUUID();
+
+        assertThatThrownBy(() -> uploadService.fail(id, null))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("now must not be null");
+
+        assertThatThrownBy(() -> uploadService.expire(id, null))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("now must not be null");
     }
 
     @Test
