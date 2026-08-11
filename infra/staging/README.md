@@ -65,12 +65,29 @@ docker compose --env-file infra/staging/.env.example -f infra/staging/docker-com
 - backend 직접 요청과 frontend `/api/` proxy 요청이 각각 HTTP 응답을 반환합니다.
 - backend 로그에서 PostgreSQL 연결과 애플리케이션 시작을 확인합니다.
 
-PowerShell에서 HTTP 연결을 확인합니다.
+Windows PowerShell 5.1에서도 동작하는 `curl.exe`로 HTTP 연결을 확인합니다. backend가 준비될 때까지 1초 간격으로 최대 30회 기다린 뒤 proxy를 확인합니다.
 
 ```powershell
-Invoke-WebRequest -UseBasicParsing http://localhost:3000
-Invoke-WebRequest -UseBasicParsing -SkipHttpErrorCheck http://localhost:8080/api/v1/auth/me
-Invoke-WebRequest -UseBasicParsing -SkipHttpErrorCheck http://localhost:3000/api/v1/auth/me
+$frontendStatus = [int](curl.exe -s -o NUL -w "%{http_code}" http://localhost:3000)
+if ($frontendStatus -ne 200) { throw "frontend HTTP check failed: $frontendStatus" }
+
+$backendStatus = 0
+for ($attempt = 1; $attempt -le 30; $attempt++) {
+    $backendStatus = [int](curl.exe -s -o NUL -w "%{http_code}" http://localhost:8080/api/v1/auth/me)
+    if ($backendStatus -in @(200, 401, 403)) { break }
+    Start-Sleep -Seconds 1
+}
+
+if ($backendStatus -notin @(200, 401, 403)) {
+    docker compose --env-file infra/staging/.env.example -f infra/staging/docker-compose.yaml ps
+    docker compose --env-file infra/staging/.env.example -f infra/staging/docker-compose.yaml logs --no-color --tail 100
+    throw "backend was not ready within 30 seconds: $backendStatus"
+}
+
+$proxyStatus = [int](curl.exe -s -o NUL -w "%{http_code}" http://localhost:3000/api/v1/auth/me)
+if ($proxyStatus -ne $backendStatus) { throw "backend/proxy status mismatch: $backendStatus/$proxyStatus" }
+
+"frontend=$frontendStatus backend=$backendStatus proxy=$proxyStatus"
 ```
 
 인증되지 않은 `/api/v1/auth/me` 요청은 `401` 또는 `403`일 수 있습니다. 직접 요청과 proxy 요청이 동일한 인증 계열 상태를 반환하면 연결 경로가 동작한 것입니다.
@@ -85,7 +102,7 @@ docker compose --env-file infra/staging/.env.example -f infra/staging/docker-com
 docker compose --env-file infra/staging/.env.example -f infra/staging/docker-compose.yaml ps
 ```
 
-재기동 후에도 최초 기동과 동일한 화면, HTTP 응답, DB 연결 조건을 확인합니다. 검증이 끝나면 volume을 보존한 채 종료합니다.
+재기동 후에도 위의 HTTP 확인 명령을 다시 실행해 backend 준비를 기다린 뒤, 최초 기동과 동일한 화면, HTTP 응답, DB 연결 조건을 확인합니다. 검증이 끝나면 volume을 보존한 채 종료합니다.
 
 ```powershell
 docker compose --env-file infra/staging/.env.example -f infra/staging/docker-compose.yaml down
