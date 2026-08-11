@@ -72,13 +72,13 @@ class WeatherForecastSelectorTest {
     }
 
     @Test
-    @DisplayName("PTY 0~4 강수형태에 따른 isRainy 검증 (0: 없음(false), 1: 비(true), 2: 비/눈(true), 3: 눈(false/PTY rule), 4: 소나기(true))")
+    @DisplayName("PTY 0~4 강수형태에 따른 isRainy 검증 (0: 없음(false), 1: 비(true), 2: 비/눈(true), 3: 눈(true), 4: 소나기(true))")
     void testPtyRainyConditions() {
         OffsetDateTime arrivalAt = OffsetDateTime.of(2026, 8, 11, 17, 0, 0, 0, KST);
         OffsetDateTime targetAt = OffsetDateTime.of(2026, 8, 11, 17, 0, 0, 0, KST);
 
         int[] ptyValues = {0, 1, 2, 3, 4};
-        boolean[] expectedIsRainy = {false, true, true, false, true};
+        boolean[] expectedIsRainy = {false, true, true, true, true};
 
         for (int i = 0; i < ptyValues.length; i++) {
             WeatherForecastSelector.ForecastPoint point =

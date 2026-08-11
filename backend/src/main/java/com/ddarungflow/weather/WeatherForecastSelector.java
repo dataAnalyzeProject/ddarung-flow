@@ -91,7 +91,7 @@ public final class WeatherForecastSelector {
 
     private boolean checkIsRainy(Integer pop, Integer pty) {
         boolean highPop = pop != null && pop >= 50;
-        boolean rainyPty = pty != null && (pty == 1 || pty == 2 || pty == 4); // 1: 비, 2: 비/눈, 4: 소나기
+        boolean rainyPty = pty != null && (pty == 1 || pty == 2 || pty == 3 || pty == 4); // 1: 비, 2: 비/눈, 3: 눈, 4: 소나기
         return highPop || rainyPty;
     }
 
