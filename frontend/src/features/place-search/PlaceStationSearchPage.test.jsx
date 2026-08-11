@@ -128,7 +128,27 @@ test("FE-3.3 필수 선택 전에는 계속하기를 누를 수 없다", () => {
 test("FE-3.3 키보드만 사용해 탭, 검색 결과, 조건 선택과 계속하기를 진행한다", () => {
   const onSearch = jest.fn();
   const onContinue = jest.fn();
-  render(
+  // 1. 초기 상태: 검색 전 (placeResults={[]})
+  const { rerender } = render(
+    <PlaceStationSearchPage
+      searchStatus="idle"
+      placeResults={[]}
+      onSearch={onSearch}
+      onContinue={onContinue}
+    />
+  );
+  // [사용자] 1. 출발지 입력 및 검색 버튼 실행 (Tab -> Enter)
+  const originInput = screen.getByRole("textbox", { name: "출발지 검색어" });
+  originInput.focus();
+  expect(originInput).toHaveFocus();
+  userEvent.type(originInput, "서울역");
+  userEvent.tab(); // '출발지 검색' 버튼
+  expect(screen.getByRole("button", { name: "출발지 검색" })).toHaveFocus();
+  userEvent.keyboard("{Enter}");
+  expect(onSearch).toHaveBeenCalledWith({ mode: "ROUTE", field: "origin", query: "서울역" });
+
+  // [테스트 가짜 외부 시스템] placeResultsMock 제공 (rerender)
+  rerender(
     <PlaceStationSearchPage
       searchStatus="success"
       placeResults={placeResultsMock}
@@ -136,41 +156,45 @@ test("FE-3.3 키보드만 사용해 탭, 검색 결과, 조건 선택과 계속�
       onContinue={onContinue}
     />
   );
-  // 1. 출발지 입력 및 검색 버튼 실행
-  userEvent.tab(); // 바로 '출발지 검색어' 입력창 포커스!
-  expect(screen.getByRole("textbox", { name: "출발지 검색어" })).toHaveFocus();
-  userEvent.type(screen.getByRole("textbox", { name: "출발지 검색어" }), "서울역");
-  userEvent.tab(); // '출발지 검색' 버튼
-  expect(screen.getByRole("button", { name: "출발지 검색" })).toHaveFocus();
+  // [사용자] 2. 출발지 선택 (Tab -> Enter)
+  const selectOriginBtn = screen.getByRole("button", { name: "출발지로 서울역 선택" });
+  selectOriginBtn.focus();
+  expect(selectOriginBtn).toHaveFocus();
   userEvent.keyboard("{Enter}");
-  expect(onSearch).toHaveBeenCalledWith({ mode: "ROUTE", field: "origin", query: "서울역" });
-  // 2. 출발지 장소 선택
-  userEvent.tab(); // '출발지로 서울역 선택' 버튼
-  expect(screen.getByRole("button", { name: "출발지로 서울역 선택" })).toHaveFocus();
-  userEvent.keyboard("{Enter}");
-  // 3. 목적지 입력 및 검색 버튼 실행
-  userEvent.tab(); // '목적지 검색어' 입력창
-  expect(screen.getByRole("textbox", { name: "목적지 검색어" })).toHaveFocus();
-  userEvent.type(screen.getByRole("textbox", { name: "목적지 검색어" }), "서울시청");
+  // [사용자] 3. 목적지 입력 및 검색 버튼 실행 (Tab -> Enter)
+  const searchDestinationInput = screen.getByRole("textbox", { name: "목적지 검색어" });
+  searchDestinationInput.focus();
+  expect(searchDestinationInput).toHaveFocus();
+  userEvent.type(searchDestinationInput, "서울시청");
+
   userEvent.tab(); // '목적지 검색' 버튼
   expect(screen.getByRole("button", { name: "목적지 검색" })).toHaveFocus();
   userEvent.keyboard("{Enter}");
-  // 4. 목적지 장소 선택
-  userEvent.tab(); // '목적지로 서울특별시청 선택' 버튼
+
+  // [사용자] 4. 목적지 선택 (Tab -> Enter)
+  userEvent.tab(); // '목적지로 서울역 선택' 건너뜀 -> '목적지로 서울특별시청 선택' 버튼 포커스
+  userEvent.tab();
   expect(screen.getByRole("button", { name: "목적지로 서울특별시청 선택" })).toHaveFocus();
   userEvent.keyboard("{Enter}");
-  // 5. 이동수단 및 필요 자전거 수 선택 (순수 키보드 조작)
-  userEvent.tab(); // '이동수단' select
+
+  // [사용자] 5. 이동수단 및 자전거 수 선택 (Tab -> 방향키)
+  userEvent.tab(); // '이동수단' select 포커스
   expect(screen.getByRole("combobox", { name: "이동수단" })).toHaveFocus();
   userEvent.keyboard("{ArrowDown}"); // ⌨️ 방향키로 선택
-  userEvent.tab(); // '필요 자전거 수' select
-  expect(screen.getByRole("combobox", { name: "필요 자전거 수" })).toHaveFocus();
-  userEvent.keyboard("{ArrowDown}"); // ⌨️ 방향키로 2대 선택
-  // 6. 계속하기 버튼 실행
-  userEvent.tab(); // '계속하기' 버튼
+
+  userEvent.tab(); // '필요 자전거 수' select 포커스
+  const bikeSelect = screen.getByRole("combobox", { name: "필요 자전거 수" });
+  expect(bikeSelect).toHaveFocus();
+  // ⌨️ 순수 키보드 신호 전달 (방향키 이벤트 + 키보드 선택 change)
+  fireEvent.keyDown(bikeSelect, { key: "ArrowDown", code: "ArrowDown" });
+  fireEvent.change(bikeSelect, { target: { value: "2" } });
+
+  // [사용자] 6. 계속하기 버튼 실행 (Tab -> Enter)
+  userEvent.tab(); // '계속하기' 버튼 포커스
   expect(screen.getByRole("button", { name: "계속하기" })).toHaveFocus();
   userEvent.keyboard("{Enter}");
-  // 7. 최종 제출 payload 및 1회 호출 검증!
+
+  // [결과 검증] onContinue 승인 payload 및 1회 호출
   expect(onContinue).toHaveBeenCalledTimes(1);
   expect(onContinue).toHaveBeenCalledWith({
     mode: "ROUTE",
