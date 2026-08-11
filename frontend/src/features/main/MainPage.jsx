@@ -22,6 +22,7 @@ export default function MainPage() {
   const [locationChecked, setLocationChecked] = useState(false);
   const [timeConfirmed, setTimeConfirmed] = useState(false);
   const [loginPromptOpen, setLoginPromptOpen] = useState(false);
+  const predictionVisible = view === "result";
 
   useEffect(() => {
     const loginResult = new URLSearchParams(window.location.search).get("login");
@@ -122,16 +123,16 @@ export default function MainPage() {
       {authNotice && <section className="draft6-feedback error"><b>로그인 안내</b><p>{authNotice}</p><button type="button" onClick={() => setAuthNotice("")}>닫기</button></section>}
       {view === "restored" && <section className="draft6-feedback restored"><b>입력값을 불러왔습니다</b><p>이전 입력값을 확인한 뒤 직접 다시 예측해 주세요.</p><button type="button" onClick={handlePredict}>{serviceData.retryButton}</button></section>}
 
-      {view === "result" && <section className="draft6-results">
-        <div className="draft6-title"><div><p>예측 완료</p><h2>{serviceData.resultTitle}</h2></div><span>화면 확인용 예시 결과 · 대여소 3곳</span></div>
+      <section className="draft6-results">
+        <div className="draft6-title"><div><p>{predictionVisible ? "예측 완료" : "주변 대여소"}</p><h2>{serviceData.resultTitle}</h2></div><span>{predictionVisible ? "화면 확인용 예시 결과 · 대여소 3곳" : "화면 확인용 기본 UI · 예측은 로그인 후 확인"}</span></div>
         <div className="draft6-card-grid">
           {stations.map((station, index) => {
             const selected = selectedStation === station.id;
             return <button className={`draft6-card card-${index + 1} ${selected ? "selected" : ""}`} key={station.id} type="button" onClick={() => setSelectedStation(selected ? null : station.id)} aria-pressed={selected}>
-              <header><span>{station.role}</span><strong>{station.probability}</strong></header>
+              <header><span>{predictionVisible ? station.role : "주변 대여소"}</span><strong>{predictionVisible ? station.probability : "--"}</strong></header>
               <h3>{station.name}</h3><p>{station.distance}</p>
               <div className="draft6-bike"><b>{station.bikes}</b><span>현재 자전거<br />대</span></div>
-              <dl><div><dt>예상 도착시간</dt><dd>{station.arrivalTime}</dd></div><div><dt>대여 가능성</dt><dd>{station.availability}</dd></div></dl>
+              <dl><div><dt>예상 도착시간</dt><dd>{predictionVisible ? station.arrivalTime : "--"}</dd></div><div><dt>대여 가능성</dt><dd>{predictionVisible ? station.availability : "로그인 후 확인"}</dd></div></dl>
               <em>{selected ? "상세정보 닫기 ↑" : "상세정보 펼치기 ↓"}</em>
             </button>;
           })}
@@ -142,9 +143,9 @@ export default function MainPage() {
             {locationChecked && <span className="draft6-my-location">내 위치</span>}
           </div>
         </div>
-        {selectedStation && <aside className="draft6-detail"><div><span>선택한 대여소</span><strong>{stations.find((station) => station.id === selectedStation)?.name}</strong></div><p>예상 도착시간과 현재 자전거 수를 확인한 뒤 대여소를 선택할 수 있습니다.</p><button type="button" onClick={() => setSelectedStation(null)}>상세정보 닫기</button></aside>}
+        {selectedStation && <aside className="draft6-detail"><div><span>선택한 대여소</span><strong>{stations.find((station) => station.id === selectedStation)?.name}</strong></div><p>{predictionVisible ? "예상 도착시간과 현재 자전거 수를 확인한 뒤 대여소를 선택할 수 있습니다." : "현재 자전거 수와 위치를 확인할 수 있습니다. 대여 가능성 예측은 로그인 후 제공됩니다."}</p><button type="button" onClick={() => setSelectedStation(null)}>상세정보 닫기</button></aside>}
         {locationChecked && <p className="draft6-location-notice">현재 위치를 확인했습니다. 지도에서 주변 대여소와의 거리를 비교할 수 있습니다. · 화면 확인용 예시 상태</p>}
-      </section>}
+      </section>
 
       {mapExpanded && <section className="draft6-map-modal" role="dialog" aria-modal="true" aria-label="확대된 예측 지도"><header><div><span>확대 지도</span><h2>내 위치와 목적지 주변 대여소</h2></div><button type="button" onClick={() => setMapExpanded(false)}>지도 닫기 ×</button></header><div className="draft6-large-map"><div className="draft6-map-grid" />{mapRoads.map((road) => <span key={road.id} className={road.className} />)}{stations.map((station, index) => <span className={`draft6-dot dot-${index + 1}`} key={station.id}>{index + 1}</span>)}{locationChecked && <span className="draft6-my-location">내 위치</span>}</div><footer><p>실제 위치·지도 API를 연결하지 않은 화면 확인용 예시입니다.</p><button type="button" onClick={() => setLocationChecked(true)}>내 위치 확인</button></footer></section>}
 
