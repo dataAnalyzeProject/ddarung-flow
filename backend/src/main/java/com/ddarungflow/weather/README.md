@@ -7,7 +7,32 @@
 
 ---
 
-## 2. 상태 구분 규칙 (`WeatherStatus`)
+## 2. 입력 및 메서드 시그니처
+
+```java
+public WeatherForecastResult select(
+    String stationId,
+    OffsetDateTime arrivalAt,
+    int nx,
+    int ny,
+    OffsetDateTime collectedAt,
+    List<ForecastPoint> latest,
+    List<ForecastPoint> previous,
+    boolean latestFetchFailed
+)
+```
+
+`ForecastPoint` record 구조:
+- `issuedAt` (발표시각)
+- `forecastAt` (예측시각)
+- `temperatureC` (기온 °C)
+- `precipitationProbabilityPercent` (강수확률 %)
+- `ptyCode` (강수형태 코드)
+- `skyCode` (하늘상태 코드)
+
+---
+
+## 3. 상태 구분 규칙 (`WeatherStatus`)
 
 | 상태 | 설명 |
 | :--- | :--- |
@@ -18,7 +43,7 @@
 
 ---
 
-## 3. 도착시각 보정 및 우천 상태 판정 규칙
+## 4. 도착시각 보정 및 우천 상태 판정 규칙
 
 1. **시간 보정 (`forecastAt`)**:
    - `arrivalAt.plusMinutes(30).truncatedTo(ChronoUnit.HOURS)` 기준 적용.
@@ -27,30 +52,8 @@
    - 예: `23:30:00` -> 다음 날 `00:00:00`
 
 2. **우천 안내 여부 (`isRainy`)**:
-   - 강수확률(`pop`) $\ge$ 50% **또는** 강수형태(`pty`)가 우천(1: 비, 2: 비/눈, 4: 소나기)인 경우 `true`.
+   - 강수확률 $\ge$ 50% **또는** 강수형태(`ptyCode`)가 우천(1: 비, 2: 비/눈, 4: 소나기)인 경우 `true`.
    - 그 외(PTY 0: 없음, PTY 3: 눈 등)는 `false`.
-
----
-
-## 4. 입력 Fixture 예시 및 재현 방법
-
-```java
-// 도착 예정을 17:15분으로 설정 시 목표 정시 17:00 예보 항목 탐색
-OffsetDateTime arrivalAt = OffsetDateTime.of(2026, 8, 11, 17, 15, 0, 0, ZoneOffset.ofHours(9));
-OffsetDateTime targetAt = OffsetDateTime.of(2026, 8, 11, 17, 0, 0, 0, ZoneOffset.ofHours(9));
-
-// 배치 데이터 구조 생성
-WeatherForecastSelector.RawForecastData.HourlyItem item =
-    new WeatherForecastSelector.RawForecastData.HourlyItem(targetAt, 26.5, 50, 1, "구름많음");
-
-WeatherForecastSelector.RawForecastData batch =
-    new WeatherForecastSelector.RawForecastData("ST-01", announcedAt, fetchedAt, false, List.of(item));
-
-WeatherForecastSelector selector = new WeatherForecastSelector();
-WeatherForecastResult result = selector.select("ST-01", arrivalAt, List.of(batch));
-
-// 결과 확인: result.status() == WeatherStatus.NORMAL, result.isRainy() == true
-```
 
 ---
 
@@ -61,9 +64,3 @@ WeatherForecastResult result = selector.select("ST-01", arrivalAt, List.of(batch
 ```bash
 ./gradlew test --tests "com.ddarungflow.weather.*"
 ```
-
----
-
-## 6. 실제 API 미연결 범위 및 유의사항
-- 기상청 공공데이터 포털 API (KMA Short Term Forecast API) 실제 HTTP 호출 로직은 포함되어 있지 않으며, 데이터 수집 파이프라인/배치 단계에서 수집된 `RawForecastData` 객체를 받아 처리합니다.
-- Spring 어노테이션이나 DB/캐시 연동 코드가 포함되지 않은 순수 자바 객체(POJO/Record)로 구현되었습니다.
