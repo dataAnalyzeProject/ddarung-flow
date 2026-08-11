@@ -17,8 +17,87 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  build-images:
+    name: build-and-push-${{ matrix.component }}
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    environment: oci-staging
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - component: frontend
+            context: ./frontend
+            dockerfile: ./frontend/Dockerfile
+          - component: backend
+            context: ./backend
+            dockerfile: ./backend/Dockerfile
+    env:
+      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+      OCI_REGISTRY: ${{ vars.OCI_REGISTRY }}
+      OCI_NAMESPACE: ${{ vars.OCI_NAMESPACE }}
+      OCI_REPOSITORY: ${{ vars.OCI_REPOSITORY }}
+      STAGING_PUBLIC_URL: ${{ vars.STAGING_PUBLIC_URL }}
+
+    steps:
+      - name: Check required image configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in OCI_REGISTRY OCI_NAMESPACE OCI_REPOSITORY STAGING_PUBLIC_URL; do
+            if [ -z "${!name:-}" ]; then
+              echo "Required staging configuration is missing: $name" >&2
+              exit 1
+            fi
+          done
+          [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$OCI_REGISTRY" =~ ^[A-Za-z0-9.-]+$ ]]
+          [[ "$OCI_NAMESPACE" =~ ^[A-Za-z0-9_-]+$ ]]
+          [[ "$OCI_REPOSITORY" =~ ^[A-Za-z0-9._/-]+$ ]]
+          [[ "$STAGING_PUBLIC_URL" =~ ^https://[A-Za-z0-9.:-]+$ ]]
+
+      - name: Check out the successful main commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+          fetch-depth: 0
+
+      - name: Verify commit belongs to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
+          git merge-base --is-ancestor "$DEPLOY_SHA" origin/main
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to OCIR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.OCI_REGISTRY }}
+          username: ${{ secrets.OCIR_USERNAME }}
+          password: ${{ secrets.OCIR_AUTH_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/arm64
+          push: true
+          tags: ${{ env.OCI_REGISTRY }}/${{ env.OCI_NAMESPACE }}/${{ env.OCI_REPOSITORY }}/${{ matrix.component }}:${{ env.DEPLOY_SHA }}
+          build-args: ${{ matrix.component == 'frontend' && format('REACT_APP_API_BASE_URL={0}', env.STAGING_PUBLIC_URL) || '' }}
+          cache-from: type=gha,scope=staging-${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=staging-${{ matrix.component }}
+
   deploy:
     name: deploy-oci-staging
+    needs: build-images
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
@@ -36,7 +115,7 @@ jobs:
       SSH_USER: ${{ secrets.STAGING_SSH_USER }}
 
     steps:
-      - name: Check required configuration
+      - name: Check required deployment configuration
         shell: bash
         run: |
           set -euo pipefail
@@ -68,36 +147,6 @@ jobs:
           git fetch --no-tags origin main
           test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
           git merge-base --is-ancestor "$DEPLOY_SHA" origin/main
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to OCIR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.OCI_REGISTRY }}
-          username: ${{ secrets.OCIR_USERNAME }}
-          password: ${{ secrets.OCIR_AUTH_TOKEN }}
-
-      - name: Build and push frontend image
-        uses: docker/build-push-action@v6
-        with:
-          context: ./frontend
-          file: ./frontend/Dockerfile
-          platforms: linux/arm64
-          push: true
-          tags: ${{ env.OCI_REGISTRY }}/${{ env.OCI_NAMESPACE }}/${{ env.OCI_REPOSITORY }}/frontend:${{ env.DEPLOY_SHA }}
-          build-args: |
-            REACT_APP_API_BASE_URL=${{ env.STAGING_PUBLIC_URL }}
-
-      - name: Build and push backend image
-        uses: docker/build-push-action@v6
-        with:
-          context: ./backend
-          file: ./backend/Dockerfile
-          platforms: linux/arm64
-          push: true
-          tags: ${{ env.OCI_REGISTRY }}/${{ env.OCI_NAMESPACE }}/${{ env.OCI_REPOSITORY }}/backend:${{ env.DEPLOY_SHA }}
 
       - name: Configure verified SSH access
         shell: bash
@@ -203,6 +252,7 @@ jobs:
           docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml pull frontend backend postgres
           docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml up -d --no-build
 
+          staging_healthy=false
           for attempt in $(seq 1 18); do
             postgres_status=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' ddarung-flow-staging-postgres-1 2>/dev/null || true)
             frontend_code=$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:3100/ || true)
@@ -210,36 +260,25 @@ jobs:
             public_frontend_code=$(curl -sS -o /dev/null -w '%{http_code}' "$STAGING_PUBLIC_URL/" || true)
             public_proxy_code=$(curl -sS -o /dev/null -w '%{http_code}' "$STAGING_PUBLIC_URL/api/v1/auth/me" || true)
             if [ "$postgres_status" = healthy ] && [ "$frontend_code" = 200 ] && [[ "$proxy_code" =~ ^(200|401|403)$ ]] && [ "$public_frontend_code" = 200 ] && [[ "$public_proxy_code" =~ ^(200|401|403)$ ]]; then
-              trap - ERR
-              docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml ps
-              exit 0
+              staging_healthy=true
+              break
             fi
             sleep 5
           done
-          echo "Staging health checks did not pass before timeout." >&2
-          exit 1
-          REMOTE
+          if [ "$staging_healthy" != true ]; then
+            echo "Staging health checks did not pass before timeout." >&2
+            false
+          fi
 
-      - name: Verify public route
-        shell: bash
-        run: |
-          set -euo pipefail
-          frontend_code=$(curl --fail-with-body --retry 5 --retry-delay 3 -sS -o /dev/null -w '%{http_code}' "$STAGING_PUBLIC_URL/")
-          proxy_code=$(curl --retry 5 --retry-delay 3 -sS -o /dev/null -w '%{http_code}' "$STAGING_PUBLIC_URL/api/v1/auth/me")
-          test "$frontend_code" = 200
-          [[ "$proxy_code" =~ ^(200|401|403)$ ]]
-          echo "Public staging smoke passed: frontend=$frontend_code proxy=$proxy_code"
-
-      - name: Verify OAuth HTTPS callbacks
-        shell: bash
-        run: |
-          set -euo pipefail
           for provider in google kakao naver; do
             authorization_url=$(curl -sS -o /dev/null -w '%{redirect_url}' "$STAGING_PUBLIC_URL/oauth2/authorization/$provider")
-            expected_callback=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$STAGING_PUBLIC_URL/login/oauth2/code/$provider")
-            if [[ "$authorization_url" != *"redirect_uri=$expected_callback"* ]]; then
+            if ! AUTHORIZATION_URL="$authorization_url" EXPECTED_CALLBACK="$STAGING_PUBLIC_URL/login/oauth2/code/$provider" python3 -c 'import os, sys, urllib.parse; query = urllib.parse.parse_qs(urllib.parse.urlsplit(os.environ["AUTHORIZATION_URL"]).query); sys.exit(0 if query.get("redirect_uri") == [os.environ["EXPECTED_CALLBACK"]] else 1)'; then
               echo "OAuth HTTPS callback verification failed: $provider" >&2
-              exit 1
+              false
             fi
           done
-          echo "OAuth HTTPS callback verification passed for google, kakao, and naver."
+
+          trap - ERR
+          docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml ps
+          echo "Public staging and OAuth HTTPS callback verification passed."
+          REMOTE
