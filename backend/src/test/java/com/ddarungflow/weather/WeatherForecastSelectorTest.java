@@ -107,6 +107,22 @@ class WeatherForecastSelectorTest {
     }
 
     @Test
+    @DisplayName("latestFetchFailed가 false이지만 latest가 비어있고 previous가 완전한 예보일 때 DELAYED가 아닌 MISSING 반환")
+    void testLatestFetchSuccessWithEmptyLatestReturnsMissing() {
+        OffsetDateTime arrivalAt = OffsetDateTime.of(2026, 8, 11, 17, 0, 0, 0, KST);
+        OffsetDateTime targetAt = OffsetDateTime.of(2026, 8, 11, 17, 0, 0, 0, KST);
+
+        WeatherForecastSelector.ForecastPoint prevPoint =
+            new WeatherForecastSelector.ForecastPoint(arrivalAt.minusHours(4), targetAt, 22.0, 20, 0, "1");
+
+        // latestFetchFailed=false, latest=[], previous=[prevPoint]
+        WeatherForecastResult result = selector.select("ST-01", arrivalAt, 60, 127, arrivalAt.minusMinutes(30), List.of(), List.of(prevPoint), false);
+
+        assertNotEquals(WeatherStatus.DELAYED, result.status());
+        assertEquals(WeatherStatus.MISSING, result.status());
+    }
+
+    @Test
     @DisplayName("필수 필드(기온/강수확률/강수형태/하늘상태) 누락 시 MISSING 상태 반환")
     void testMissingStatusWhenFieldIsNull() {
         OffsetDateTime arrivalAt = OffsetDateTime.of(2026, 8, 11, 17, 0, 0, 0, KST);

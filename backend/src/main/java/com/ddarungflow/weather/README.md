@@ -76,7 +76,7 @@ public WeatherForecastResult select(
 
 | 항목 | 직접 실행 데이터 및 결과 |
 | :--- | :--- |
-| **실행 명령** | `javac -encoding UTF-8 -d bin -cp "backend/src/main/java" MainFixtureRunner.java && java -cp "bin;backend/src/main/java" com.ddarungflow.weather.MainFixtureRunner` |
+| **실행 명령** | `./gradlew test --tests "com.ddarungflow.weather.WeatherForecastSelectorTest"` |
 | **도착 예정시각** | `2026-08-11T17:15:00+09:00` |
 | **nx / ny** | `60` / `127` |
 | **수집시각** | `2026-08-11T14:05:00+09:00` |
@@ -93,31 +93,32 @@ public WeatherForecastResult select(
 ## 7. Notion 제출용 최종 정제 및 증거 요약
 
 > **⚠️ 확인 환경 명시:**
-> 본 보고서의 모든 결과는 **Fixture 기반 인메모리 테스트 및 순수 Java 직접 실행 환경**에서 수집되었습니다.
-> `Controller`, `prediction API`, `MockMvc` 및 로컬 Postman 실제 HTTP 통신을 통한 200 OK 실행 결과는 포함되어 있지 않으며, 조장 후속 작업을 통해 연동될 예정입니다.
+> 본 보고서의 모든 결과는 **Fixture 기반 인메모리 테스트 및 순수 Java 단위 테스트 실행 환경**에서 수집되었습니다.
+> `Controller`, `prediction API`, `MockMvc` 및 로컬 Postman 실제 HTTP 통신을 통한 200 OK 실행 결과는 포함되어 있지 않으며, 조장 후속 작업을 통해 연동될 예정입니다. (Postman / HTTP 200 OK 결과: `NOT_RUN — 조장 후속 통합 범위`)
 
 ### 파일별 구현 내용
 - `WeatherStatus.java`: 예보 신뢰성 상태 Enum (`NORMAL`, `DELAYED`, `MISSING`, `UNAVAILABLE`).
 - `WeatherForecastResult.java`: 선택된 단기 예보 항목과 우천 여부(`isRainy`) 및 시간별 목록을 담는 Record DTO.
 - `WeatherForecastSelector.java`: 30분 정시 보정, 완결성 검사(TMP, POP, PTY, SKY), PTY 1~4 및 POP $\ge 50\%$ 우천 판정, arrivalAt 날짜 필터링 및 오름차순 정렬 도메인 Selector logic.
 - `WeatherForecastSelectorTest.java`: 시각 반올림, POP 49/50 경계, PTY 0~4, SKY 누락(`MISSING`), UTC offset 예외 차단, 도착일 필터링 JUnit5 단위 테스트.
-- `README.md`: 도메인 규칙 및 스탠드얼론 Fixture 직접 실행 결과 가이드 문서.
+- `README.md`: 도메인 규칙 및 Fixture 직접 실행 결과 가이드 문서.
 
 ### 담당자가 추가한 테스트
 - `testArrivalAtRounding()`: 16:29 $\rightarrow$ 16:00, 16:30 $\rightarrow$ 17:00, 23:30 $\rightarrow$ 다음날 00:00 시각 반올림 검증.
 - `testNormalStatus()`: 완결된 최신 예보 존재 시 `NORMAL` 상태 검증.
 - `testPopRainyBoundary()`: POP 49% (false) vs POP 50% (true) 우천 경계값 검증.
-- `testPtyRainyConditions()`: PTY 0(false), PTY 1~4(true: 비, 비/눈, 눈, 소나기) 강수형태 검증.
+- `testPtyRainyConditions()`: PTY 0(false), PTY 1~4(true: 비, 비/눈, 눈, 소나기) 강수형태 검증 (PTY 3 눈 포함).
 - `testDelayedStatusWhenLatestFetchFailed()`: 최신 실패 시 직전 완전값 사용 및 `DELAYED` 반환 검증.
+- `testLatestFetchSuccessWithEmptyLatestReturnsMissing()`: latestFetchFailed=false이고 latest가 비어있을 때 DELAYED가 아닌 MISSING 반환 검증.
 - `testMissingStatusWhenFieldIsNull()`: TMP, POP, PTY, SKY 필드 누락 시 `MISSING` 반환 검증.
 - `testUnavailableStatusWhenNoDataAvailable()`: 대체 예보 미존재 시 `UNAVAILABLE` 반환 검증.
 - `testHourlyForecastsFilteredByArrivalDate()`: 전날/다음날 예보 제외 및 도착일 예보만 오름차순 정렬 포함 검증.
 - `testInvalidInputs()`: arrivalAt null, stationId 누락/공백, UTC offset mismatch 시 `IllegalArgumentException` 차단 검증.
 
 ### 테스트·컴파일·직접 실행 결과
-- **단위 테스트**: `./gradlew test --tests "com.ddarungflow.weather.*"` $\rightarrow$ **`BUILD SUCCESSFUL` (총 9개 테스트 통과)**
-- **스탠드얼론 Fixture 직접 실행**:
-  - 실행 명령: `javac -encoding UTF-8 -d bin -cp "backend/src/main/java" MainFixtureRunner.java && java -cp "bin;backend/src/main/java" com.ddarungflow.weather.MainFixtureRunner`
+- **단위 테스트**: `./gradlew test --tests "com.ddarungflow.weather.*"` $\rightarrow$ **`BUILD SUCCESSFUL` (총 10개 테스트 통과)**
+- **Fixture 단위 테스트 직접 실행**:
+  - 실행 명령: `./gradlew test --tests "com.ddarungflow.weather.WeatherForecastSelectorTest"`
   - 도착 예정시각: `2026-08-11T17:15:00+09:00`
   - nx / ny: `60` / `127`
   - 수집시각: `2026-08-11T14:05:00+09:00`
@@ -126,9 +127,10 @@ public WeatherForecastResult select(
   - latestFetchFailed: `false`
   - 선택된 forecastAt: `2026-08-11T17:00:00+09:00`
   - 상태: `NORMAL`
-  - 우천 안내 결과: `true`
+  - 우천 안내 결과: `true` (PTY 3 눈의 경우에도 `isRainy = true`)
   - hourlyForecasts: 2건 (`17:00`, `19:00`)
   - **확인 환경**: `fixture` (실제 기상청 API 미호출)
+  - **Postman / HTTP 200 OK 결과**: `NOT_RUN — 조장 후속 통합 범위`
 
 ### 계약과 다른 점
 - **이탈 내역 없음**: 작업서 지정 `WeatherForecastSelector` 시그니처 및 `ForecastPoint` record 필드명과 정확히 일치.

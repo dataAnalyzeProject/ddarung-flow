@@ -61,21 +61,26 @@ public final class WeatherForecastSelector {
         OffsetDateTime roundedTargetAt = arrivalAt.plusMinutes(30).truncatedTo(ChronoUnit.HOURS);
 
         // 1. 최신 예보 호출 성공 시 검사
-        if (!latestFetchFailed && latest != null && !latest.isEmpty()) {
-            Optional<ForecastPoint> targetPointOpt = findTargetPoint(latest, roundedTargetAt);
-            if (targetPointOpt.isPresent()) {
-                ForecastPoint point = targetPointOpt.get();
-                if (isComplete(point)) {
-                    return createResult(stationId, arrivalAt, roundedTargetAt, collectedAt, point, latest, WeatherStatus.NORMAL);
+        if (!latestFetchFailed) {
+            if (latest != null && !latest.isEmpty()) {
+                Optional<ForecastPoint> targetPointOpt = findTargetPoint(latest, roundedTargetAt);
+                if (targetPointOpt.isPresent()) {
+                    ForecastPoint point = targetPointOpt.get();
+                    if (isComplete(point)) {
+                        return createResult(stationId, arrivalAt, roundedTargetAt, collectedAt, point, latest, WeatherStatus.NORMAL);
+                    } else {
+                        return createMissingResult(stationId, arrivalAt, roundedTargetAt, collectedAt, point, latest);
+                    }
                 } else {
-                    return createMissingResult(stationId, arrivalAt, roundedTargetAt, collectedAt, point, latest);
+                    return createMissingResult(stationId, arrivalAt, roundedTargetAt, collectedAt, null, latest);
                 }
             } else {
+                // 최신 호출은 성공했으나 latest가 비어있는 경우 MISSING
                 return createMissingResult(stationId, arrivalAt, roundedTargetAt, collectedAt, null, latest);
             }
         }
 
-        // 2. 최신 호출 실패 시: 직전 완전값 사용
+        // 2. 최신 호출 실제로 실패 시 (latestFetchFailed == true): 직전 완전값 사용시 DELAYED
         if (previous != null && !previous.isEmpty()) {
             Optional<ForecastPoint> fallbackPointOpt = findTargetPoint(previous, roundedTargetAt);
             if (fallbackPointOpt.isPresent() && isComplete(fallbackPointOpt.get())) {
