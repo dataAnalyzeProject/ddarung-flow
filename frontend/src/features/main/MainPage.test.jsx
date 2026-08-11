@@ -22,6 +22,11 @@ describe("시안 6 메인 로그인 통합", () => {
     render(<MainPage />);
     await screen.findByRole("link", { name: "로그인" });
 
+    expect(screen.getByLabelText("예측 지도")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "성수역 3번 출구" })).toBeInTheDocument();
+    expect(screen.getAllByText("로그인 후 확인")).toHaveLength(3);
+    expect(screen.queryByText("87%")).not.toBeInTheDocument();
+
     fireEvent.change(screen.getByPlaceholderText("출발지를 입력하세요"), { target: { value: "서울숲" } });
     fireEvent.change(screen.getByPlaceholderText("목적지를 입력하세요"), { target: { value: "성수역" } });
     fireEvent.change(screen.getByRole("spinbutton", { name: "예상시간" }), { target: { value: "25" } });
@@ -29,6 +34,7 @@ describe("시안 6 메인 로그인 통합", () => {
     fireEvent.click(screen.getByRole("button", { name: "대여 가능성 예측" }));
 
     expect(screen.getByRole("dialog", { name: "로그인 필요 안내" })).toBeInTheDocument();
+    expect(screen.queryByText("87%")).not.toBeInTheDocument();
     expect(loadPendingPrediction()).toEqual({
       origin: "서울숲",
       destination: "성수역",
@@ -75,6 +81,7 @@ describe("시안 6 메인 로그인 통합", () => {
 
     expect(screen.getByText("목적지 주변 대여소")).toBeInTheDocument();
     expect(screen.getByText("화면 확인용 예시 결과 · 대여소 3곳")).toBeInTheDocument();
+    expect(screen.getByText("87%")).toBeInTheDocument();
   });
 
   test("로그아웃하면 메인 화면의 비로그인 상태로 돌아간다", async () => {
