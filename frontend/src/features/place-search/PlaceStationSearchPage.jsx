@@ -158,7 +158,7 @@ export default function PlaceStationSearchPage({
           </button>
         </div>
       )}
-      {/* 출발지 검색 결과 목록 */}
+      {/* 5. success 상태일 때만 출발지/목적지/대여소 결과 목록 표시 */}
       {searchStatus === "success" && placeResults.length > 0 && placeResults.length > 0 && (
         <ul className="place-search-page__results">
           {placeResults.map((place) => (
