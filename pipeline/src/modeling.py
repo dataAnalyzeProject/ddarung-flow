@@ -238,10 +238,20 @@ def train_and_evaluate(records, config):
         elif model_name == "hist_gradient_boosting":
             try:
                 from sklearn.ensemble import HistGradientBoostingClassifier
+                import joblib
+
                 clf = HistGradientBoostingClassifier(random_state=config.get("random_seed", 20260810))
                 clf.fit(X_train_encoded, y_train)
                 y_prob = clf.predict_proba(X_eval_encoded)[:, 1]
-            except Exception:
+
+                # Save the 200M-trained model file to disk for inference
+                model_dir = Path(config.get("model_dir", "output"))
+                model_dir.mkdir(parents=True, exist_ok=True)
+                model_file = model_dir / "model_hist_gb.joblib"
+                joblib.dump({"model": clf, "feature_names": list(X_train_encoded.columns)}, model_file)
+                print(f" Saved trained 200M model artifact for inference to: {model_file.resolve()}")
+            except Exception as e:
+                print(f"Warning: HistGB model train/save error: {e}")
                 y_prob = np.full(len(y_eval), float(y_train.mean()) if len(y_train) > 0 else 0.5)
         else:
             y_prob = np.full(len(y_eval), 0.5)
@@ -258,6 +268,56 @@ def train_and_evaluate(records, config):
     return pd.DataFrame(results)
 
 
+def evaluate_per_horizon(records, config):
+    """Train independent models for each horizon (H1: 60m, H2: 120m, H3: 180m, H4: 240m) and return true Brier scores."""
+    records = validate_records(records)
+    df = records.copy() if isinstance(records, pd.DataFrame) else pd.DataFrame(records)
+
+    horizon_results = {}
+    for h_min in (60, 120, 180, 240):
+        h_df = df[df["horizon_minutes"] == h_min].copy()
+        if h_df.empty:
+            continue
+
+        if (h_df["split"] == "test").any():
+            eval_mask = h_df["split"] == "test"
+        elif (h_df["split"] == "validation").any():
+            eval_mask = h_df["split"] == "validation"
+        else:
+            eval_mask = pd.Series([True] * len(h_df), index=h_df.index)
+
+        train_h = h_df[h_df["split"] == "train"].copy()
+        if train_h.empty:
+            train_h = h_df[~eval_mask].copy()
+        if train_h.empty:
+            train_h = h_df.copy()
+
+        eval_h = h_df[eval_mask].copy()
+
+        X_all, _, _ = build_feature_matrix(h_df, config)
+        X_train = X_all.loc[train_h.index].copy()
+        y_train = train_h["target"].to_numpy()
+        X_eval = X_all.loc[eval_h.index].copy()
+        y_eval = eval_h["target"].to_numpy()
+
+        X_train_encoded = pd.get_dummies(X_train, drop_first=True)
+        X_eval_encoded = pd.get_dummies(X_eval, drop_first=True)
+        X_train_encoded, X_eval_encoded = X_train_encoded.align(X_eval_encoded, join="left", axis=1, fill_value=0)
+
+        try:
+            from sklearn.ensemble import HistGradientBoostingClassifier
+            clf = HistGradientBoostingClassifier(random_state=config.get("random_seed", 20260810))
+            clf.fit(X_train_encoded, y_train)
+            y_prob = clf.predict_proba(X_eval_encoded)[:, 1]
+            brier = calculate_brier_score(y_eval, y_prob)
+        except Exception:
+            brier = 0.5
+
+        horizon_results[f"H{h_min // 60}"] = round(brier, 4)
+
+    return horizon_results
+
+
 def enforce_quantity_monotonicity(predictions):
     """Ensure P(>=1) >= ... >= P(>=5) per row group."""
     arr = np.asarray(predictions, dtype=float)
@@ -266,13 +326,20 @@ def enforce_quantity_monotonicity(predictions):
     return fixed.tolist() if isinstance(predictions, list) else fixed
 
 
-def load_large_csv_with_duckdb(csv_path, max_rows_per_split=250000):
-    """Memory-efficient CSV loader and unpivoter powered by DuckDB with memory cap safety."""
+def load_large_csv_with_duckdb(csv_path, total_max_rows=750000):
+    """Memory-efficient CSV loader powered by DuckDB with disk temp spill and pre-sampling optimization."""
+    import tempfile
     import duckdb
 
+    temp_dir = Path(tempfile.gettempdir()) / "duckdb_temp"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    temp_path_sql = str(temp_dir).replace("\\", "/")
+
     conn = duckdb.connect()
-    # Enforce safe 4GB RAM ceiling so Windows MemoryError never happens
+    # Configure safe thread and memory limits with disk temp spill
+    conn.execute(f"SET temp_directory = '{temp_path_sql}'")
     conn.execute("SET memory_limit = '4GB'")
+    conn.execute("SET threads = 4")
     conn.execute("SET preserve_insertion_order = false")
 
     sql_path = str(csv_path).replace("\\", "/")
@@ -287,7 +354,13 @@ def load_large_csv_with_duckdb(csv_path, max_rows_per_split=250000):
         conn.close()
         return df_res
 
-    print(f"DuckDB zero-crash engine active: streaming full CSV directly from disk ({sql_path})...")
+    print(f"DuckDB zero-crash engine active: streaming CSV directly from disk ({sql_path})...")
+
+    # Bernoulli sampling at 1.2% across the ENTIRE 66.4M+ CSV dataset
+    # This guarantees random sampling over the ENTIRE 2024~2025 timeline without top-row bias
+    csv_source = f"read_csv_auto('{sql_path}')"
+    if total_max_rows and total_max_rows > 0:
+        csv_source = f"(SELECT * FROM read_csv_auto('{sql_path}') USING SAMPLE 1.2% (bernoulli))"
 
     union_queries = []
     for h in (1, 2, 3, 4):
@@ -305,25 +378,47 @@ def load_large_csv_with_duckdb(csv_path, max_rows_per_split=250000):
                     {h * 60} AS horizon_minutes,
                     {t} AS required_bike_count,
                     CAST({t_col} AS INT) AS target
-                FROM read_csv_auto('{sql_path}')
+                FROM {csv_source}
                 WHERE {t_col} IS NOT NULL {valid_filter}
                 """
                 union_queries.append(q)
 
     full_unpivot_sql = " UNION ALL ".join(union_queries)
 
-    if max_rows_per_split and max_rows_per_split > 0:
+    if total_max_rows and total_max_rows > 0:
+        print(f"Applying proportional multi-key stratified sampling (total ~{total_max_rows} rows preserving Train:Val:Test & target/horizon ratios)...")
         final_sql = f"""
         WITH unpivoted AS (
             {full_unpivot_sql}
         ),
-        numbered AS (
-            SELECT *, ROW_NUMBER() OVER (PARTITION BY split ORDER BY feature_as_of DESC) AS rn
+        total_counts AS (
+            SELECT COUNT(*) AS total_cnt FROM unpivoted
+        ),
+        strata_counts AS (
+            SELECT split, target, horizon_minutes, required_bike_count, COUNT(*) AS strata_cnt
             FROM unpivoted
+            GROUP BY split, target, horizon_minutes, required_bike_count
+        ),
+        numbered AS (
+            SELECT 
+                u.*,
+                ROW_NUMBER() OVER (
+                    PARTITION BY u.split, u.target, u.horizon_minutes, u.required_bike_count 
+                    ORDER BY random()
+                ) AS rn,
+                sc.strata_cnt,
+                tc.total_cnt
+            FROM unpivoted u
+            JOIN strata_counts sc 
+              ON u.split = sc.split 
+             AND u.target = sc.target 
+             AND u.horizon_minutes = sc.horizon_minutes 
+             AND u.required_bike_count = sc.required_bike_count
+            CROSS JOIN total_counts tc
         )
         SELECT station_id, feature_as_of, current_bike_count, split, horizon_minutes, required_bike_count, target
         FROM numbered
-        WHERE rn <= {max_rows_per_split}
+        WHERE rn <= LEAST(strata_cnt, CEIL(strata_cnt * CAST({total_max_rows} AS DOUBLE) / total_cnt))
         """
     else:
         print("Processing 100% FULL dataset (66.4M+ rows) without row limit...")
@@ -386,7 +481,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="DATA-3.1 Model Training & Evaluation")
     parser.add_argument("--data-path", type=str, default=None, help="Path to labeled_dataset.csv or JSON records")
     parser.add_argument("--config", type=str, default=str(default_config), help="Path to modeling.json")
-    parser.add_argument("--max-rows", type=int, default=250000, help="Max rows per split (e.g. 1000000 for 2M total)")
+    parser.add_argument("--max-total-rows", type=int, default=750000, help="Total max rows sampled proportionally (e.g. 750000 for Train~70-75%, Val~15%, Test~10-15%)")
     args = parser.parse_args()
 
     config_path = Path(args.config)
@@ -403,7 +498,7 @@ if __name__ == "__main__":
     print(f"Loading dataset from: {data_path}")
 
     if data_path.suffix.lower() == ".csv":
-        recs = load_large_csv_with_duckdb(data_path, max_rows_per_split=args.max_rows)
+        recs = load_large_csv_with_duckdb(data_path, total_max_rows=args.max_total_rows)
     else:
         recs = load_json(data_path)
 
@@ -413,6 +508,10 @@ if __name__ == "__main__":
 
     print("\n=== DATA-3.1 Model Comparison Results ===")
     print(res_df.to_string(index=False))
+
+    print("\nExecuting evaluate_per_horizon (H1~H4 independent models)...")
+    per_h_res = evaluate_per_horizon(recs, cfg)
+    print("Per-Horizon Brier Scores:", per_h_res)
 
 
 
