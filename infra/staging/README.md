@@ -1,6 +1,6 @@
 # Local Docker staging
 
-OPS-3.3은 frontend, backend, PostgreSQL을 하나의 Docker Compose network에서 실행하는 비운영 로컬 기준선입니다. OCI, 실제 OAuth, 외부 API key, 운영 데이터와 자동 배포는 포함하지 않습니다.
+OPS-3.3은 frontend, backend, PostgreSQL을 하나의 Docker Compose network에서 실행하는 비운영 로컬 기준선입니다. OCI 실행은 OPS-3.4의 [OCI-STAGING-RUNBOOK.md](./OCI-STAGING-RUNBOOK.md)를 따릅니다. 실제 OAuth, 외부 API key, 운영 데이터와 자동 배포는 포함하지 않습니다.
 
 ## 실행 구조
 
@@ -147,3 +147,17 @@ git diff --name-only origin/main...HEAD
 - `infra/staging/README.md`
 
 `.env`, `.local-harness/`, `AGENTS.md`, `.claude/`와 실제 credential은 stage, commit, log 또는 화면 캡처에 포함하지 않습니다. PR은 조장 검토 요청이며 직접 병합 권한을 의미하지 않습니다.
+
+## OPS-3.4 OCI 비운영 staging
+
+OPS-3.4는 승인된 main SHA image를 OCIR에 push하고 기존 ARM64 `crawling_server`에서 별도 `ddarung-flow-staging` Compose 프로젝트로 pull하여 실행합니다. staging frontend 3100과 loopback backend 8180을 사용하며 두 port는 loopback에만 bind합니다. host nginx의 기존 인증서와 domain은 따릉이를 계속 가리킵니다. 성공한 main CI 뒤 `.github/workflows/staging-deploy.yml`이 동일 SHA의 ARM64 image를 자동 배포·smoke하고, 실패하면 직전 정상 release로 자동 복귀합니다.
+
+- 설정 예시: `infra/staging/oci.env.example`
+- 최초 bootstrap·장애 복구: `infra/staging/deploy-staging.ps1`
+- 지속형 자동 CD: `.github/workflows/staging-deploy.yml`
+- 직전 image 복귀: `infra/staging/rollback-staging.ps1`
+- OCI 설정·비용·secret·증거 절차: `infra/staging/OCI-STAGING-RUNBOOK.md`
+
+실제 서버 애플리케이션 설정은 OCI 서버의 `/home/ubuntu/ddarung-flow-staging/.env`에만 보관합니다. Actions CD의 SSH key·OCIR token은 GitHub `oci-staging` Environment Secrets에만 저장하며 Git·PR·로그에 출력하지 않습니다.
+
+OPS-3.4 허용 변경은 신규 파일 5개(`staging-deploy.yml` 포함)와 `docker-compose.yaml`, 이 README까지 7개입니다. 기존 application source, test, Dockerfile, `ci.yml`과 `application-oci.yml`은 읽기 전용입니다.
