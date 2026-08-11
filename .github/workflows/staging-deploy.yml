@@ -1,6 +1,12 @@
 name: Staging CD
 
 on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type ROLLBACK_TEST to verify automatic rollback on OCI staging
+        required: true
+        type: string
   workflow_run:
     workflows:
       - CI
@@ -281,4 +287,126 @@ jobs:
           trap - ERR
           docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml ps
           echo "Public staging and OAuth HTTPS callback verification passed."
+          REMOTE
+
+  verify-automatic-rollback:
+    name: verify-automatic-rollback
+    if: github.event_name == 'workflow_dispatch' && inputs.confirmation == 'ROLLBACK_TEST'
+    runs-on: ubuntu-latest
+    environment: oci-staging
+    env:
+      STAGING_PUBLIC_URL: ${{ vars.STAGING_PUBLIC_URL }}
+      REMOTE_APP_DIR: ${{ vars.REMOTE_APP_DIR }}
+      SSH_HOST: ${{ secrets.STAGING_SSH_HOST }}
+      SSH_USER: ${{ secrets.STAGING_SSH_USER }}
+
+    steps:
+      - name: Check rollback test configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ inputs.confirmation }}" = ROLLBACK_TEST
+          for name in STAGING_PUBLIC_URL REMOTE_APP_DIR SSH_HOST SSH_USER; do
+            if [ -z "${!name:-}" ]; then
+              echo "Required staging configuration is missing: $name" >&2
+              exit 1
+            fi
+          done
+          [[ "$STAGING_PUBLIC_URL" =~ ^https://[A-Za-z0-9.:-]+$ ]]
+          [[ "$REMOTE_APP_DIR" =~ ^/[A-Za-z0-9._/-]+$ ]]
+          [[ "$SSH_HOST" =~ ^[A-Za-z0-9.-]+$ ]]
+          [[ "$SSH_USER" =~ ^[A-Za-z0-9._-]+$ ]]
+
+      - name: Configure verified SSH access
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.STAGING_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_staging"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_staging" "$HOME/.ssh/known_hosts"
+          ssh-keygen -y -f "$HOME/.ssh/id_staging" >/dev/null
+          ssh-keygen -F "$SSH_HOST" -f "$HOME/.ssh/known_hosts" >/dev/null
+
+      - name: Inject failure and invoke automatic rollback
+        id: inject
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="$SSH_USER@$SSH_HOST"
+          ssh -i "$HOME/.ssh/id_staging" -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" \
+            "REMOTE_APP_DIR='$REMOTE_APP_DIR' bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd "$REMOTE_APP_DIR"
+          for file in .env release.env oauth.env docker-compose.yaml release.previous.env oauth.previous.env docker-compose.previous.yaml; do
+            test -f "$file"
+          done
+
+          current_sha=$(sed -n 's/^DEPLOYED_COMMIT=//p' release.env)
+          previous_sha=$(sed -n 's/^DEPLOYED_COMMIT=//p' release.previous.env)
+          [[ "$current_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$previous_sha" =~ ^[0-9a-f]{40}$ ]]
+          test "$current_sha" != "$previous_sha"
+          printf 'EXPECTED_ROLLBACK_SHA=%s\n' "$previous_sha" > rollback-test.expected.env
+          chmod 600 rollback-test.expected.env
+
+          rollback() {
+            echo "ROLLBACK_TEST_INJECTED: restoring previous release $previous_sha" >&2
+            cp release.previous.env release.env
+            cp oauth.previous.env oauth.env
+            cp docker-compose.previous.yaml docker-compose.yaml
+            chmod 600 release.env oauth.env
+            docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml pull frontend backend
+            docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml up -d --no-build
+          }
+          trap rollback ERR
+
+          echo "ROLLBACK_TEST_TRIGGER: intentional failure after preserving current=$current_sha previous=$previous_sha"
+          false
+          REMOTE
+
+      - name: Verify restored release and smoke
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ steps.inject.outcome }}" = failure
+          target="$SSH_USER@$SSH_HOST"
+          ssh -i "$HOME/.ssh/id_staging" -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" \
+            "REMOTE_APP_DIR='$REMOTE_APP_DIR' STAGING_PUBLIC_URL='$STAGING_PUBLIC_URL' bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd "$REMOTE_APP_DIR"
+          test -f rollback-test.expected.env
+          expected_sha=$(sed -n 's/^EXPECTED_ROLLBACK_SHA=//p' rollback-test.expected.env)
+          deployed_sha=$(sed -n 's/^DEPLOYED_COMMIT=//p' release.env)
+          [[ "$expected_sha" =~ ^[0-9a-f]{40}$ ]]
+          test "$deployed_sha" = "$expected_sha"
+          docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml config --quiet
+
+          restored_healthy=false
+          for attempt in $(seq 1 18); do
+            postgres_status=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' ddarung-flow-staging-postgres-1 2>/dev/null || true)
+            frontend_code=$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:3100/ || true)
+            proxy_code=$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:3100/api/v1/auth/me || true)
+            public_frontend_code=$(curl -sS -o /dev/null -w '%{http_code}' "$STAGING_PUBLIC_URL/" || true)
+            public_proxy_code=$(curl -sS -o /dev/null -w '%{http_code}' "$STAGING_PUBLIC_URL/api/v1/auth/me" || true)
+            if [ "$postgres_status" = healthy ] && [ "$frontend_code" = 200 ] && [[ "$proxy_code" =~ ^(200|401|403)$ ]] && [ "$public_frontend_code" = 200 ] && [[ "$public_proxy_code" =~ ^(200|401|403)$ ]]; then
+              restored_healthy=true
+              break
+            fi
+            sleep 5
+          done
+          test "$restored_healthy" = true
+
+          for provider in google kakao naver; do
+            authorization_url=$(curl -sS -o /dev/null -w '%{redirect_url}' "$STAGING_PUBLIC_URL/oauth2/authorization/$provider")
+            AUTHORIZATION_URL="$authorization_url" EXPECTED_CALLBACK="$STAGING_PUBLIC_URL/login/oauth2/code/$provider" python3 -c 'import os, sys, urllib.parse; query = urllib.parse.parse_qs(urllib.parse.urlsplit(os.environ["AUTHORIZATION_URL"]).query); sys.exit(0 if query.get("redirect_uri") == [os.environ["EXPECTED_CALLBACK"]] else 1)'
+          done
+
+          rm -f rollback-test.expected.env
+          echo "ROLLBACK_VERIFICATION_PASSED: restored=$deployed_sha frontend=$frontend_code proxy=$proxy_code postgres=$postgres_status"
           REMOTE
