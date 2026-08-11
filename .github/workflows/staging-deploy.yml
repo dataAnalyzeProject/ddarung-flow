@@ -115,8 +115,27 @@ jobs:
 
       - name: Prepare immutable release files
         shell: bash
+        env:
+          GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          KAKAO_CLIENT_ID: ${{ vars.KAKAO_CLIENT_ID }}
+          KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
+          NAVER_CLIENT_ID: ${{ vars.NAVER_CLIENT_ID }}
+          NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
         run: |
           set -euo pipefail
+          for name in GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET KAKAO_CLIENT_ID KAKAO_CLIENT_SECRET NAVER_CLIENT_ID NAVER_CLIENT_SECRET; do
+            value="${!name:-}"
+            if [ -z "$value" ]; then
+              echo "Required OAuth configuration is missing: $name" >&2
+              exit 1
+            fi
+            if [[ ! "$value" =~ ^[A-Za-z0-9._~+/-]+$ ]]; then
+              echo "OAuth configuration contains unsupported characters: $name" >&2
+              exit 1
+            fi
+          done
+
           image_base="$OCI_REGISTRY/$OCI_NAMESPACE/$OCI_REPOSITORY"
           {
             printf 'FRONTEND_IMAGE=%s/frontend:%s\n' "$image_base" "$DEPLOY_SHA"
@@ -124,6 +143,16 @@ jobs:
             printf 'REACT_APP_API_BASE_URL=%s\n' "$STAGING_PUBLIC_URL"
             printf 'DEPLOYED_COMMIT=%s\n' "$DEPLOY_SHA"
           } > release.candidate.env
+          umask 077
+          {
+            printf 'GOOGLE_CLIENT_ID=%s\n' "$GOOGLE_CLIENT_ID"
+            printf 'GOOGLE_CLIENT_SECRET=%s\n' "$GOOGLE_CLIENT_SECRET"
+            printf 'KAKAO_CLIENT_ID=%s\n' "$KAKAO_CLIENT_ID"
+            printf 'KAKAO_CLIENT_SECRET=%s\n' "$KAKAO_CLIENT_SECRET"
+            printf 'NAVER_CLIENT_ID=%s\n' "$NAVER_CLIENT_ID"
+            printf 'NAVER_CLIENT_SECRET=%s\n' "$NAVER_CLIENT_SECRET"
+          } > oauth.candidate.env
+          chmod 600 oauth.candidate.env
 
       - name: Upload candidate release
         shell: bash
@@ -133,6 +162,7 @@ jobs:
           ssh -i "$HOME/.ssh/id_staging" -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "mkdir -p '$REMOTE_APP_DIR'"
           scp -i "$HOME/.ssh/id_staging" -o BatchMode=yes -o StrictHostKeyChecking=yes infra/staging/docker-compose.yaml "$target:$REMOTE_APP_DIR/docker-compose.yaml.candidate"
           scp -i "$HOME/.ssh/id_staging" -o BatchMode=yes -o StrictHostKeyChecking=yes release.candidate.env "$target:$REMOTE_APP_DIR/release.candidate.env"
+          scp -i "$HOME/.ssh/id_staging" -o BatchMode=yes -o StrictHostKeyChecking=yes oauth.candidate.env "$target:$REMOTE_APP_DIR/oauth.candidate.env"
 
       - name: Deploy and automatically roll back on failed smoke
         shell: bash
@@ -144,16 +174,17 @@ jobs:
           set -euo pipefail
           cd "$REMOTE_APP_DIR"
           test -f .env
-          chmod 600 .env release.candidate.env
+          chmod 600 .env release.candidate.env oauth.candidate.env
 
           rollback() {
             echo "Staging deployment failed; restoring the previous release." >&2
-            if [ -f release.previous.env ] && [ -f docker-compose.previous.yaml ]; then
+            if [ -f release.previous.env ] && [ -f oauth.previous.env ] && [ -f docker-compose.previous.yaml ]; then
               cp release.previous.env release.env
+              cp oauth.previous.env oauth.env
               cp docker-compose.previous.yaml docker-compose.yaml
-              chmod 600 release.env
-              docker compose --env-file .env --env-file release.env -f docker-compose.yaml pull frontend backend
-              docker compose --env-file .env --env-file release.env -f docker-compose.yaml up -d --no-build
+              chmod 600 release.env oauth.env
+              docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml pull frontend backend
+              docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml up -d --no-build
             else
               echo "No previous release exists for automatic rollback." >&2
             fi
@@ -161,14 +192,16 @@ jobs:
           trap rollback ERR
 
           if [ -f release.env ]; then cp release.env release.previous.env; fi
+          if [ -f oauth.env ]; then cp oauth.env oauth.previous.env; else cp oauth.candidate.env oauth.previous.env; fi
           if [ -f docker-compose.yaml ]; then cp docker-compose.yaml docker-compose.previous.yaml; fi
           mv release.candidate.env release.env
+          mv oauth.candidate.env oauth.env
           mv docker-compose.yaml.candidate docker-compose.yaml
-          chmod 600 release.env
+          chmod 600 release.env oauth.env
 
-          docker compose --env-file .env --env-file release.env -f docker-compose.yaml config --quiet
-          docker compose --env-file .env --env-file release.env -f docker-compose.yaml pull frontend backend postgres
-          docker compose --env-file .env --env-file release.env -f docker-compose.yaml up -d --no-build
+          docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml config --quiet
+          docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml pull frontend backend postgres
+          docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml up -d --no-build
 
           for attempt in $(seq 1 18); do
             postgres_status=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' ddarung-flow-staging-postgres-1 2>/dev/null || true)
@@ -178,7 +211,7 @@ jobs:
             public_proxy_code=$(curl -sS -o /dev/null -w '%{http_code}' "$STAGING_PUBLIC_URL/api/v1/auth/me" || true)
             if [ "$postgres_status" = healthy ] && [ "$frontend_code" = 200 ] && [[ "$proxy_code" =~ ^(200|401|403)$ ]] && [ "$public_frontend_code" = 200 ] && [[ "$public_proxy_code" =~ ^(200|401|403)$ ]]; then
               trap - ERR
-              docker compose --env-file .env --env-file release.env -f docker-compose.yaml ps
+              docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml ps
               exit 0
             fi
             sleep 5
@@ -196,3 +229,17 @@ jobs:
           test "$frontend_code" = 200
           [[ "$proxy_code" =~ ^(200|401|403)$ ]]
           echo "Public staging smoke passed: frontend=$frontend_code proxy=$proxy_code"
+
+      - name: Verify OAuth HTTPS callbacks
+        shell: bash
+        run: |
+          set -euo pipefail
+          for provider in google kakao naver; do
+            authorization_url=$(curl -sS -o /dev/null -w '%{redirect_url}' "$STAGING_PUBLIC_URL/oauth2/authorization/$provider")
+            expected_callback=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$STAGING_PUBLIC_URL/login/oauth2/code/$provider")
+            if [[ "$authorization_url" != *"redirect_uri=$expected_callback"* ]]; then
+              echo "OAuth HTTPS callback verification failed: $provider" >&2
+              exit 1
+            fi
+          done
+          echo "OAuth HTTPS callback verification passed for google, kakao, and naver."

@@ -158,6 +158,10 @@ OPS-3.4는 승인된 main SHA image를 OCIR에 push하고 기존 ARM64 `crawling
 - 직전 image 복귀: `infra/staging/rollback-staging.ps1`
 - OCI 설정·비용·secret·증거 절차: `infra/staging/OCI-STAGING-RUNBOOK.md`
 
-실제 서버 애플리케이션 설정은 OCI 서버의 `/home/ubuntu/ddarung-flow-staging/.env`에만 보관합니다. Actions CD의 SSH key·OCIR token은 GitHub `oci-staging` Environment Secrets에만 저장하며 Git·PR·로그에 출력하지 않습니다.
+DB 설정은 OCI 서버의 `/home/ubuntu/ddarung-flow-staging/.env`에 보관합니다. AUTH-OPS-3.1 OAuth ID·Secret은 GitHub `oci-staging` Environment에서만 관리하며, CD가 권한 `600`인 서버 전용 `oauth.env`로 전달합니다. Actions CD의 SSH key·OCIR token과 OAuth Secret은 Git·PR·로그에 출력하지 않습니다.
+
+`oci-staging`은 `main` branch만 배포할 수 있습니다. 로컬 Compose는 OAuth 환경변수가 없으면 기존 `local-disabled` 기본값을 사용하므로 실제 OAuth와 분리된 smoke를 계속 실행할 수 있습니다.
 
 OPS-3.4 허용 변경은 신규 파일 5개(`staging-deploy.yml` 포함)와 `docker-compose.yaml`, 이 README까지 7개입니다. 기존 application source, test, Dockerfile, `ci.yml`과 `application-oci.yml`은 읽기 전용입니다.
+
+AUTH-OPS-3.1은 위 OPS-3.4 기준선 위에서 workflow, Compose, 수동 배포·rollback 스크립트와 runbook만 변경하며 application source·Security·API 계약은 변경하지 않습니다.

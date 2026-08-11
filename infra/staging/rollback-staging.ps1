@@ -67,7 +67,7 @@ try {
     ) | Set-Content -LiteralPath $releaseFile -Encoding Ascii
 
     Invoke-External "scp" @("-i", $sshKey, $releaseFile, "${target}:${remoteDir}/release.env")
-    $remoteCommand = "cd '$remoteDir' && test -f .env && chmod 600 .env release.env && docker compose --env-file .env --env-file release.env -f docker-compose.yaml config --quiet && docker compose --env-file .env --env-file release.env -f docker-compose.yaml pull frontend backend && docker compose --env-file .env --env-file release.env -f docker-compose.yaml up -d --no-build && docker compose --env-file .env --env-file release.env -f docker-compose.yaml ps && docker compose --env-file .env --env-file release.env -f docker-compose.yaml exec -T postgres sh -c 'pg_isready -U `"`$POSTGRES_USER`" -d `"`$POSTGRES_DB`"'"
+    $remoteCommand = "cd '$remoteDir' && test -f .env && test -f oauth.env && chmod 600 .env oauth.env release.env && docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml config --quiet && docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml pull frontend backend && docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml up -d --no-build && docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml ps && docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml exec -T postgres sh -c 'pg_isready -U `"`$POSTGRES_USER`" -d `"`$POSTGRES_DB`"'"
     Invoke-External "ssh" @("-i", $sshKey, $target, $remoteCommand)
 }
 finally {
