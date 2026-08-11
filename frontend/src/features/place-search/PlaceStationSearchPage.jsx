@@ -270,7 +270,7 @@ export default function PlaceStationSearchPage({
             </button>
           </div>
           {/* 대여소 검색 결과 목록 */}
-          {stationResults.length > 0 && (
+          {searchStatus === "success" && stationResults.length > 0 && (
             <ul className="place-search-page__results">
               {stationResults.map((station) => (
                 <li key={station.stationId}>

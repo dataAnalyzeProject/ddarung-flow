@@ -184,7 +184,7 @@ test("FE-3.3 사용자가 키보드만으로 검색하고 결과를 선택해 �
   originInput.focus();
   expect(originInput).toHaveFocus();
 
-  userEvent.type(originInput, "서울역");
+  userEvent.keyboard("서울역");
 
   userEvent.tab();
 
@@ -239,7 +239,7 @@ test("FE-3.3 사용자가 키보드만으로 검색하고 결과를 선택해 �
 
   expect(destinationInput).toHaveFocus();
 
-  userEvent.type(destinationInput, "서울시청");
+  userEvent.keyboard("서울시청");
 
   userEvent.tab();
 
@@ -299,7 +299,10 @@ test("FE-3.3 사용자가 키보드만으로 검색하고 결과를 선택해 �
   expect(bikeCount).toHaveValue("1");
 
   userEvent.selectOptions(bikeCount, "2");
-
+  // NOTE:
+  // @testing-library/user-event@13.5.0 환경에서는
+  // keyboard("{ArrowDown}")이 select의 실제 선택값을 변경하지 않음
+  // 키 이벤트 전달 여부만 검증하고, 값 변경 자체는 별도 방식으로 확인
   expect(bikeCount).toHaveValue("2");
 
   // --------------------------------
@@ -406,6 +409,7 @@ test("FE-3.3 error 상태에서 다시 시도 버튼 클릭 시 이전 검색 �
   expect(onSearch).toHaveBeenLastCalledWith({ mode: "ROUTE", field: "origin", query: "서울역" });
 });
 
+// 키 이벤트 전달 여부만 검증
 test("ArrowDown 키 입력이 select에 전달되는지 확인", () => {
   render(<PlaceStationSearchPage />);
 

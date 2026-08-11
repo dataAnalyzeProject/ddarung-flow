@@ -53,4 +53,4 @@
 
 📌 **jsdom / user-event v13 환경 특성 관련 주의사항**:
 - 테스트 환경(`@testing-library/user-event` v13)의 jsdom 가상 DOM 한계로 인해, `<select>` 요소에 순수 `userEvent.keyboard("{ArrowDown}")`만 전송하는 경우 키 입력 자체는 전달되지만 `<select>` 값이 실제로 변경되지 않는 현상을 확인했습니다.
-- 따라서 키보드 포커스 이동(`toHaveFocus()`)을 검증하되, `<select>` 값 선택의 확실한 상태 반영을 위해 `userEvent.selectOptions()`를 사용해 우회 입력 되도록 처리했습니다.
+- 따라서 키보드 포커스 이동(`toHaveFocus()`)을 검증하되, `<select>` 값 선택의 확실한 상태 반영을 위해 `userEvent.selectOptions()`를 사용해 값 변경을 별도 선택 함수로 확인했습니다.
