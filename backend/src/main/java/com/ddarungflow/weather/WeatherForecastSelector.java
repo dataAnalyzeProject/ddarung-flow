@@ -96,11 +96,12 @@ public final class WeatherForecastSelector {
         return highPop || rainyPty;
     }
 
-    private List<WeatherForecastResult.HourlyForecast> mapHourlyList(List<ForecastPoint> points) {
-        if (points == null) {
+    private List<WeatherForecastResult.HourlyForecast> mapHourlyList(List<ForecastPoint> points, OffsetDateTime arrivalAt) {
+        if (points == null || arrivalAt == null) {
             return Collections.emptyList();
         }
         return points.stream()
+            .filter(p -> p.forecastAt() != null && p.forecastAt().toLocalDate().equals(arrivalAt.toLocalDate()))
             .sorted(Comparator.comparing(ForecastPoint::forecastAt, Comparator.nullsLast(Comparator.naturalOrder())))
             .map(p -> new WeatherForecastResult.HourlyForecast(
                 p.forecastAt(),
@@ -133,7 +134,7 @@ public final class WeatherForecastSelector {
             point.ptyCode(),
             point.skyCode(),
             isRainy,
-            mapHourlyList(list),
+            mapHourlyList(list, arrivalAt),
             status
         );
     }
@@ -157,7 +158,7 @@ public final class WeatherForecastSelector {
             point != null ? point.ptyCode() : null,
             point != null ? point.skyCode() : null,
             false,
-            mapHourlyList(list),
+            mapHourlyList(list, arrivalAt),
             WeatherStatus.MISSING
         );
     }

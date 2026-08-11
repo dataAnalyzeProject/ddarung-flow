@@ -143,6 +143,47 @@ class WeatherForecastSelectorTest {
     }
 
     @Test
+    @DisplayName("도착일 기준 시간별 예보 필터링 및 오름차순 정렬 검증 (전날/다음날 제외, 도착일만 시간순 포함)")
+    void testHourlyForecastsFilteredByArrivalDate() {
+        OffsetDateTime arrivalAt = OffsetDateTime.of(2026, 8, 11, 17, 15, 0, 0, KST); // arrival date: 2026-08-11
+        OffsetDateTime targetAt = OffsetDateTime.of(2026, 8, 11, 17, 0, 0, 0, KST);
+        OffsetDateTime issuedAt = OffsetDateTime.of(2026, 8, 11, 14, 0, 0, 0, KST);
+        OffsetDateTime collectedAt = OffsetDateTime.of(2026, 8, 11, 14, 5, 0, 0, KST);
+
+        // 전날 예보 (2026-08-10 23:00)
+        WeatherForecastSelector.ForecastPoint prevDayPoint =
+            new WeatherForecastSelector.ForecastPoint(issuedAt, OffsetDateTime.of(2026, 8, 10, 23, 0, 0, 0, KST), 22.0, 10, 0, "1");
+
+        // 도착일 19:00 예보 (순서 섞어서 추가)
+        WeatherForecastSelector.ForecastPoint arrivalDay19 =
+            new WeatherForecastSelector.ForecastPoint(issuedAt, OffsetDateTime.of(2026, 8, 11, 19, 0, 0, 0, KST), 24.0, 20, 0, "1");
+
+        // 도착일 17:00 예보 (목표 항목)
+        WeatherForecastSelector.ForecastPoint arrivalDay17 =
+            new WeatherForecastSelector.ForecastPoint(issuedAt, targetAt, 26.5, 30, 0, "1");
+
+        // 다음날 예보 (2026-08-12 01:00)
+        WeatherForecastSelector.ForecastPoint nextDayPoint =
+            new WeatherForecastSelector.ForecastPoint(issuedAt, OffsetDateTime.of(2026, 8, 12, 1, 0, 0, 0, KST), 20.0, 10, 0, "1");
+
+        List<WeatherForecastSelector.ForecastPoint> points = List.of(prevDayPoint, arrivalDay19, arrivalDay17, nextDayPoint);
+
+        WeatherForecastResult result = selector.select("ST-01", arrivalAt, 60, 127, collectedAt, points, List.of(), false);
+
+        List<WeatherForecastResult.HourlyForecast> hourlyList = result.hourlyForecasts();
+
+        // 1. 전날/다음날 제외되고 도착일 예보 2건만 포함되는지 확인
+        assertEquals(2, hourlyList.size());
+
+        // 2. 도착일 예보만 포함되었는지 확인
+        assertTrue(hourlyList.stream().allMatch(h -> h.forecastAt().toLocalDate().equals(arrivalAt.toLocalDate())));
+
+        // 3. 도착일 내에서 시간순 오름차순 정렬되었는지 확인 (17:00 -> 19:00)
+        assertEquals(OffsetDateTime.of(2026, 8, 11, 17, 0, 0, 0, KST), hourlyList.get(0).forecastAt());
+        assertEquals(OffsetDateTime.of(2026, 8, 11, 19, 0, 0, 0, KST), hourlyList.get(1).forecastAt());
+    }
+
+    @Test
     @DisplayName("잘못된 입력 예외 처리 (arrivalAt null 시 IllegalArgumentException 예외 발생)")
     void testInvalidInputs() {
         assertThrows(IllegalArgumentException.class, () -> {
