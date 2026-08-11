@@ -67,3 +67,23 @@ public WeatherForecastResult select(
 ```bash
 ./gradlew test --tests "com.ddarungflow.weather.*"
 ```
+
+---
+
+## 6. 테스트 밖 대표 Fixture 직접 실행 결과 기록
+
+> **확인 환경:** `fixture` (실제 기상청 API 미연결 인메모리 실행 환경)
+
+| 항목 | 직접 실행 데이터 및 결과 |
+| :--- | :--- |
+| **실행 명령** | `javac -encoding UTF-8 -d bin -cp "backend/src/main/java" MainFixtureRunner.java && java -cp "bin;backend/src/main/java" com.ddarungflow.weather.MainFixtureRunner` |
+| **도착 예정시각** | `2026-08-11T17:15:00+09:00` |
+| **nx / ny** | `60` / `127` |
+| **수집시각** | `2026-08-11T14:05:00+09:00` |
+| **latest 입력** | `[ForecastPoint(issuedAt=14:00, forecastAt=17:00, temp=26.5, pop=50, pty=1, sky="3"), ForecastPoint(issuedAt=14:00, forecastAt=19:00, temp=24.0, pop=20, pty=0, sky="1")]` |
+| **previous 입력** | `[]` (빈 리스트) |
+| **latestFetchFailed** | `false` |
+| **선택된 forecastAt** | `2026-08-11T17:00:00+09:00` |
+| **상태** | `NORMAL` |
+| **우천 안내 결과** | `true` |
+| **hourlyForecasts** | `[17:00 (26.5°C, POP 50%, PTY 1, SKY "3"), 19:00 (24.0°C, POP 20%, PTY 0, SKY "1")]` |
