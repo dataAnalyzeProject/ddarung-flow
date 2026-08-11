@@ -137,9 +137,7 @@ test("FE-3.3 키보드만 사용해 탭, 검색 결과, 조건 선택과 계속�
     />
   );
   // 1. 출발지 입력 및 검색 버튼 실행
-  userEvent.tab(); // '경로로 찾기' 탭
-  userEvent.tab(); // '직접 시간 입력' 탭
-  userEvent.tab(); // '출발지 검색어' 입력창
+  userEvent.tab(); // 바로 '출발지 검색어' 입력창 포커스!
   expect(screen.getByRole("textbox", { name: "출발지 검색어" })).toHaveFocus();
   userEvent.type(screen.getByRole("textbox", { name: "출발지 검색어" }), "서울역");
   userEvent.tab(); // '출발지 검색' 버튼
