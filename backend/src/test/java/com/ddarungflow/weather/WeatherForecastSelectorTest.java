@@ -158,4 +158,13 @@ class WeatherForecastSelectorTest {
         assertFalse(result.isRainy());
         assertTrue(result.hourlyForecasts().isEmpty());
     }
+
+    @Test
+    @DisplayName("잘못된 입력 예외 처리 (arrivalAt null 시 IllegalArgumentException 예외 발생)")
+    void testInvalidInputs() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            selector.select("ST-01", null, List.of());
+        });
+    }
 }
+
