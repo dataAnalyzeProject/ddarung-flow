@@ -92,8 +92,8 @@ public WeatherForecastResult select(
 
 ## 7. Notion 제출용 최종 정제 및 증거 요약
 
-> **⚠️ 확인 환경 명시:**  
-> 본 보고서의 모든 결과는 **Fixture 기반 인메모리 테스트 및 순수 Java 직접 실행 환경**에서 수집되었습니다.  
+> **⚠️ 확인 환경 명시:**
+> 본 보고서의 모든 결과는 **Fixture 기반 인메모리 테스트 및 순수 Java 직접 실행 환경**에서 수집되었습니다.
 > `Controller`, `prediction API`, `MockMvc` 및 로컬 Postman 실제 HTTP 통신을 통한 200 OK 실행 결과는 포함되어 있지 않으며, 조장 후속 작업을 통해 연동될 예정입니다.
 
 ### 파일별 구현 내용
