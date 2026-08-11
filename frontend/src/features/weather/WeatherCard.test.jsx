@@ -14,7 +14,17 @@ test("정상 카드에 도착시간, 기온, 강수확률과 날씨를 표시한
   expect(screen.getByText("18:20")).toBeInTheDocument();
   expect(screen.getByText("27°C")).toBeInTheDocument();
   expect(screen.getByText("30%")).toBeInTheDocument();
-  expect(screen.getByText("강수 없음")).toBeInTheDocument();
+  expect(screen.getByText("구름 많음")).toBeInTheDocument();
+});
+
+test("승인 계약의 격자 위치 객체를 안전한 문구로 표시한다", () => {
+  render(<WeatherCard weather={{ ...normalWeather, location: { nx: 60, ny: 127 } }} />);
+  expect(screen.getByText("격자 좌표 X 60 · Y 127")).toBeInTheDocument();
+});
+
+test("MOSTLY_CLOUDY를 구름 많음으로 표시한다", () => {
+  render(<WeatherCard weather={{ ...normalWeather, precipitationType: "NONE", skyStatus: "MOSTLY_CLOUDY" }} />);
+  expect(screen.getByText("구름 많음")).toBeInTheDocument();
 });
 
 test("버튼으로 시간대별 예보를 펼치고 접는다", async () => {

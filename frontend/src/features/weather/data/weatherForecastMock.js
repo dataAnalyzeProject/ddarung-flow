@@ -1,5 +1,5 @@
 const baseHourly = [
-  { forecastAt: "2026-08-11T18:00:00+09:00", temperatureC: 27, precipitationProbabilityPercent: 30, precipitationType: "NONE", skyStatus: "CLOUDY" },
+  { forecastAt: "2026-08-11T18:00:00+09:00", temperatureC: 27, precipitationProbabilityPercent: 30, precipitationType: "NONE", skyStatus: "MOSTLY_CLOUDY" },
   { forecastAt: "2026-08-11T19:00:00+09:00", temperatureC: 26, precipitationProbabilityPercent: 50, precipitationType: "RAIN", skyStatus: "OVERCAST" },
   { forecastAt: "2026-08-11T20:00:00+09:00", temperatureC: 25, precipitationProbabilityPercent: 60, precipitationType: "RAIN", skyStatus: "OVERCAST" },
 ];
@@ -9,14 +9,14 @@ export const normalWeather = {
   arrivalAt: "2026-08-11T18:20:00+09:00",
   forecastAt: "2026-08-11T18:00:00+09:00",
   source: "APPROVED_MOCK",
-  location: "성수역 3번 출구",
+  location: { nx: 60, ny: 127 },
   issuedAt: "2026-08-11T14:00:00+09:00",
   collectedAt: "2026-08-11T14:05:00+09:00",
   status: "NORMAL",
   temperatureC: 27,
   precipitationProbabilityPercent: 30,
   precipitationType: "NONE",
-  skyStatus: "CLOUDY",
+  skyStatus: "MOSTLY_CLOUDY",
   rainGuidance: false,
   message: "",
   hourlyForecasts: baseHourly,
@@ -59,4 +59,3 @@ export const weatherForecastMock = {
   missing: missingWeather,
   unavailable: unavailableWeather,
 };
-
