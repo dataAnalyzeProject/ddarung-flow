@@ -27,12 +27,13 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/${DB_NAME}
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
-      NAVER_CLIENT_ID: local-disabled
-      NAVER_CLIENT_SECRET: local-disabled
-      GOOGLE_CLIENT_ID: local-disabled
-      GOOGLE_CLIENT_SECRET: local-disabled
-      KAKAO_CLIENT_ID: local-disabled
-      KAKAO_CLIENT_SECRET: local-disabled
+      NAVER_CLIENT_ID: ${NAVER_CLIENT_ID:-local-disabled}
+      NAVER_CLIENT_SECRET: ${NAVER_CLIENT_SECRET:-local-disabled}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-local-disabled}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-local-disabled}
+      KAKAO_CLIENT_ID: ${KAKAO_CLIENT_ID:-local-disabled}
+      KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET:-local-disabled}
+      SERVER_FORWARD_HEADERS_STRATEGY: framework
     ports:
       - "${BACKEND_BIND_ADDRESS:-127.0.0.1}:${BACKEND_PORT}:8080"
     depends_on:

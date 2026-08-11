@@ -1,6 +1,6 @@
 # OCI non-production staging runbook
 
-OPS-3.4는 승인된 `main`의 frontend, backend, PostgreSQL을 기존 OCI 비운영 `crawling_server`에서 별도 Compose 프로젝트로 실행하고 최초 기동, 버전 갱신, 직전 image rollback을 검증합니다. 이 문서는 기존 크롤링 서비스 변경, 운영 공개, 실제 OAuth, 운영 데이터, 모델 runtime과 OPS-5.1 Go/No-Go를 승인하지 않습니다.
+OPS-3.4는 승인된 `main`의 frontend, backend, PostgreSQL을 기존 OCI 비운영 `crawling_server`에서 별도 Compose 프로젝트로 실행하고 최초 기동, 버전 갱신, 직전 image rollback을 검증합니다. AUTH-OPS-3.1은 이 비운영 staging의 실제 OAuth 전달과 HTTPS callback 검증만 추가합니다. 기존 크롤링 서비스 변경, 운영 승인, 운영 데이터, 모델 runtime과 OPS-5.1 Go/No-Go는 승인하지 않습니다.
 
 ## 고정 안전선
 
@@ -90,7 +90,7 @@ DB_USERNAME=ddarung
 DB_PASSWORD=<server-only-random-value>
 ```
 
-OAuth 변수는 이번 범위에서 실제 값을 사용하지 않습니다. Compose가 제공하는 `local-disabled` 자리표시자를 유지합니다.
+AUTH-OPS-3.1부터 실제 OAuth 값은 GitHub `oci-staging` Environment에서만 관리합니다. Client ID는 Environment Variables, Client Secret은 Environment Secrets에 저장하며 환경은 `main` branch만 배포할 수 있어야 합니다. CD는 값을 출력하지 않고 서버의 `oauth.env`로 전달하며 파일 권한을 `600`으로 고정합니다. 로컬 Compose는 변수가 없을 때 `local-disabled` 자리표시자를 유지합니다.
 
 로컬 PC와 OCI 서버 양쪽에서 OCIR에 대화형으로 로그인합니다.
 
@@ -147,7 +147,7 @@ git rev-parse HEAD
 2. frontend/backend를 선택 architecture로 build하고 SHA tag로 OCIR push
 3. registry digest 확인
 4. 서버에 `docker-compose.yaml`과 비밀이 없는 `release.env` 전송
-5. 서버의 기존 `.env` 존재와 권한 확인
+5. 서버의 기존 `.env`, GitHub CD가 전달한 `oauth.env` 존재와 권한 확인
 6. pull, `up -d --no-build`, Compose 상태와 PostgreSQL health 확인
 7. server-local frontend와 `/api/` proxy smoke; 이 시점에는 아직 public domain 전환 완료로 판정하지 않음
 
@@ -157,8 +157,8 @@ git rev-parse HEAD
 
 ```bash
 cd /home/ubuntu/ddarung-flow-staging
-docker compose --env-file .env --env-file release.env -f docker-compose.yaml ps
-docker compose --env-file .env --env-file release.env -f docker-compose.yaml logs --no-color --tail 100 frontend backend postgres
+docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml ps
+docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml logs --no-color --tail 100 frontend backend postgres
 curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8180/api/v1/auth/me
 curl -s -o /dev/null -w '%{http_code}\n' http://localhost:3100/
 curl -s -o /dev/null -w '%{http_code}\n' http://localhost:3100/api/v1/auth/me
@@ -233,7 +233,7 @@ sudo systemctl reload nginx
 curl -s -o /dev/null -w '%{http_code}\n' https://shdomain.kro.kr/
 docker compose -p app -f /home/ubuntu/app/docker-compose.yml ps
 cd /home/ubuntu/ddarung-flow-staging
-docker compose --env-file .env --env-file release.env -f docker-compose.yaml stop
+docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml stop
 ```
 
 명시적 전환·중지 뒤 다음을 기록합니다.
@@ -266,6 +266,7 @@ docker compose --env-file .env --env-file release.env -f docker-compose.yaml sto
 - 새 승인 버전 갱신 전후 결과
 - 직전 정상 image rollback 결과
 - 비용 0원과 secret scan 결과
+- Google·Kakao·Naver authorization redirect의 HTTPS callback 확인과 실제 로그인 결과
 - 미완성 기능과 OPS-5.1 잔여 범위
 
 `배포 가능`은 위 작업을 시작해도 된다는 뜻이며, 모든 증거가 확보되기 전에는 `완료`가 아닙니다.
