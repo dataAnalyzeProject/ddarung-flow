@@ -86,7 +86,8 @@ public final class WeatherForecastSelector {
         return point != null
             && point.temperatureC() != null
             && point.precipitationProbabilityPercent() != null
-            && point.ptyCode() != null;
+            && point.ptyCode() != null
+            && point.skyCode() != null;
     }
 
     private boolean checkIsRainy(Integer pop, Integer pty) {

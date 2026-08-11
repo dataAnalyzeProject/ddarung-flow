@@ -107,19 +107,24 @@ class WeatherForecastSelectorTest {
     }
 
     @Test
-    @DisplayName("필수 필드(기온/강수확률/강수형태) 누락 시 MISSING 상태 반환")
+    @DisplayName("필수 필드(기온/강수확률/강수형태/하늘상태) 누락 시 MISSING 상태 반환")
     void testMissingStatusWhenFieldIsNull() {
         OffsetDateTime arrivalAt = OffsetDateTime.of(2026, 8, 11, 17, 0, 0, 0, KST);
         OffsetDateTime targetAt = OffsetDateTime.of(2026, 8, 11, 17, 0, 0, 0, KST);
 
         // 기온 null
-        WeatherForecastSelector.ForecastPoint point =
+        WeatherForecastSelector.ForecastPoint pointTmpNull =
             new WeatherForecastSelector.ForecastPoint(arrivalAt.minusHours(2), targetAt, null, 20, 0, "1");
+        WeatherForecastResult resTmpNull = selector.select("ST-01", arrivalAt, 60, 127, arrivalAt.minusHours(1), List.of(pointTmpNull), List.of(), false);
+        assertEquals(WeatherStatus.MISSING, resTmpNull.status());
+        assertNull(resTmpNull.temperature());
 
-        WeatherForecastResult result = selector.select("ST-01", arrivalAt, 60, 127, arrivalAt.minusHours(1), List.of(point), List.of(), false);
-
-        assertEquals(WeatherStatus.MISSING, result.status());
-        assertNull(result.temperature());
+        // 하늘상태(skyCode) null
+        WeatherForecastSelector.ForecastPoint pointSkyNull =
+            new WeatherForecastSelector.ForecastPoint(arrivalAt.minusHours(2), targetAt, 25.0, 20, 0, null);
+        WeatherForecastResult resSkyNull = selector.select("ST-01", arrivalAt, 60, 127, arrivalAt.minusHours(1), List.of(pointSkyNull), List.of(), false);
+        assertEquals(WeatherStatus.MISSING, resSkyNull.status());
+        assertNull(resSkyNull.skyStatus());
     }
 
     @Test
