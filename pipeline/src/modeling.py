@@ -157,16 +157,73 @@ def calculate_accuracy(y_true, y_prob, threshold_prob=0.5):
     return float(np.mean(y_true == (y_prob >= threshold_prob).astype(int)))
 
 
-def train_and_evaluate(records, config):
-    """Compare all required models on identical evaluation rows."""
+def audit_and_enforce_monotonicity(eval_df, y_prob):
+    """Audit and enforce quantity monotonicity P(>=1) >= ... >= P(>=5) per (station_id, feature_as_of, horizon_minutes) group."""
+    temp_df = eval_df[["station_id", "feature_as_of", "horizon_minutes", "required_bike_count"]].copy()
+    temp_df["raw_prob"] = y_prob
+    temp_df["orig_idx"] = np.arange(len(temp_df))
+
+    total_groups = 0
+    complete_groups = 0
+    violations_before = 0
+    violations_after = 0
+    missing_quantities_count = 0
+
+    calibrated_prob = np.zeros(len(y_prob), dtype=float)
+
+    group_cols = ["station_id", "feature_as_of", "horizon_minutes"]
+    for _, group in temp_df.groupby(group_cols, sort=False):
+        total_groups += 1
+        req_counts = group["required_bike_count"].values
+        present_set = set(req_counts)
+
+        if present_set == {1, 2, 3, 4, 5}:
+            complete_groups += 1
+        else:
+            missing_quantities_count += (5 - len(present_set))
+
+        # Sort group by required_bike_count
+        sorted_group = group.sort_values("required_bike_count")
+        probs = sorted_group["raw_prob"].to_numpy()
+
+        # Audit violations before calibration: P(>=i) < P(>=i+1)
+        for i in range(len(probs) - 1):
+            if probs[i] < probs[i + 1]:
+                violations_before += 1
+                break
+
+        # Apply monotonicity enforcement: non-increasing accumulative min
+        calibrated = enforce_quantity_monotonicity(probs)
+
+        # Audit violations after calibration
+        for i in range(len(calibrated) - 1):
+            if calibrated[i] < calibrated[i + 1]:
+                violations_after += 1
+                break
+
+        # Map calibrated probabilities back to original row indices
+        calibrated_prob[sorted_group["orig_idx"].to_numpy()] = calibrated
+
+    audit_summary = {
+        "total_groups": total_groups,
+        "complete_groups": complete_groups,
+        "violations_before": violations_before,
+        "violations_after": violations_after,
+        "missing_quantities_count": missing_quantities_count,
+    }
+
+    return calibrated_prob, audit_summary
+
+
+def train_and_evaluate(records, config, target_split="validation"):
+    """Evaluate models on the designated target split ('validation' for selection, 'test' for final test)."""
     records = validate_records(records)
     df = records.copy() if isinstance(records, pd.DataFrame) else pd.DataFrame(records)
 
-    # Determine evaluation split (prefer 'test', fallback to 'validation' or all)
-    if (df["split"] == "test").any():
+    if (df["split"] == target_split).any():
+        eval_mask = df["split"] == target_split
+    elif target_split == "validation" and (df["split"] == "test").any():
         eval_mask = df["split"] == "test"
-    elif (df["split"] == "validation").any():
-        eval_mask = df["split"] == "validation"
     else:
         eval_mask = pd.Series([True] * len(df))
 
@@ -229,47 +286,80 @@ def train_and_evaluate(records, config):
         elif model_name == "logistic_regression":
             try:
                 from sklearn.linear_model import LogisticRegression
+            except ImportError as e:
+                raise RuntimeError(f"[Model Execution Failed] Stage: IMPORT | Model: {model_name} | Error: {e}") from e
+
+            try:
                 clf = LogisticRegression(random_state=config.get("random_seed", 20260810), max_iter=500)
                 clf.fit(X_train_encoded, y_train)
+            except Exception as e:
+                raise RuntimeError(f"[Model Execution Failed] Stage: FIT | Model: {model_name} | Error: {e}") from e
+
+            try:
                 y_prob = clf.predict_proba(X_eval_encoded)[:, 1]
-            except Exception:
-                y_prob = np.full(len(y_eval), float(y_train.mean()) if len(y_train) > 0 else 0.5)
+            except Exception as e:
+                raise RuntimeError(f"[Model Execution Failed] Stage: PREDICT | Model: {model_name} | Error: {e}") from e
+
+            try:
+                import joblib
+                model_dir = Path(config.get("model_dir", "output"))
+                model_dir.mkdir(parents=True, exist_ok=True)
+                model_file = model_dir / "model_logistic_regression.joblib"
+                joblib.dump({"model": clf, "feature_names": list(X_train_encoded.columns)}, model_file)
+            except Exception as e:
+                raise RuntimeError(f"[Model Execution Failed] Stage: ARTIFACT_SAVE | Model: {model_name} | Error: {e}") from e
 
         elif model_name == "hist_gradient_boosting":
             try:
                 from sklearn.ensemble import HistGradientBoostingClassifier
                 import joblib
+            except ImportError as e:
+                raise RuntimeError(f"[Model Execution Failed] Stage: IMPORT | Model: {model_name} | Error: {e}") from e
 
+            try:
                 clf = HistGradientBoostingClassifier(random_state=config.get("random_seed", 20260810))
                 clf.fit(X_train_encoded, y_train)
-                y_prob = clf.predict_proba(X_eval_encoded)[:, 1]
+            except Exception as e:
+                raise RuntimeError(f"[Model Execution Failed] Stage: FIT | Model: {model_name} | Error: {e}") from e
 
-                # Save the 200M-trained model file to disk for inference
+            try:
+                y_prob = clf.predict_proba(X_eval_encoded)[:, 1]
+            except Exception as e:
+                raise RuntimeError(f"[Model Execution Failed] Stage: PREDICT | Model: {model_name} | Error: {e}") from e
+
+            try:
+                # Save trained model artifact for inference
                 model_dir = Path(config.get("model_dir", "output"))
                 model_dir.mkdir(parents=True, exist_ok=True)
                 model_file = model_dir / "model_hist_gb.joblib"
                 joblib.dump({"model": clf, "feature_names": list(X_train_encoded.columns)}, model_file)
-                print(f" Saved trained 200M model artifact for inference to: {model_file.resolve()}")
             except Exception as e:
-                print(f"Warning: HistGB model train/save error: {e}")
-                y_prob = np.full(len(y_eval), float(y_train.mean()) if len(y_train) > 0 else 0.5)
+                raise RuntimeError(f"[Model Execution Failed] Stage: ARTIFACT_SAVE | Model: {model_name} | Error: {e}") from e
         else:
-            y_prob = np.full(len(y_eval), 0.5)
+            raise ValueError(f"[Model Execution Failed] Stage: CONFIG | Unsupported model_name: {model_name}")
+
+        # Apply monotonicity audit and enforcement per (station_id, feature_as_of, horizon_minutes) group
+        calibrated_y_prob, audit = audit_and_enforce_monotonicity(eval_df, y_prob)
 
         results.append({
             "model": model_name,
             "evaluation_row_hash": eval_hash,
-            "brier_score": calculate_brier_score(y_eval, y_prob),
-            "deficit_recall": calculate_deficit_recall(y_eval, y_prob),
-            "accuracy": calculate_accuracy(y_eval, y_prob),
-            "calibration_error": calculate_calibration_error(y_eval, y_prob),
+            "brier_score": calculate_brier_score(y_eval, calibrated_y_prob),
+            "deficit_recall": calculate_deficit_recall(y_eval, calibrated_y_prob),
+            "accuracy": calculate_accuracy(y_eval, calibrated_y_prob),
+            "calibration_error": calculate_calibration_error(y_eval, calibrated_y_prob),
+            "total_groups": audit["total_groups"],
+            "complete_groups": audit["complete_groups"],
+            "violations_before": audit["violations_before"],
+            "violations_after": audit["violations_after"],
+            "missing_quantities_count": audit["missing_quantities_count"],
         })
 
     return pd.DataFrame(results)
 
 
-def evaluate_per_horizon(records, config):
-    """Train independent models for each horizon (H1: 60m, H2: 120m, H3: 180m, H4: 240m) and return true Brier scores."""
+def evaluate_per_horizon(records, config, target_split="validation"):
+    """Train independent models for each horizon on designated target_split ('validation' or 'test')."""
     records = validate_records(records)
     df = records.copy() if isinstance(records, pd.DataFrame) else pd.DataFrame(records)
 
@@ -279,10 +369,8 @@ def evaluate_per_horizon(records, config):
         if h_df.empty:
             continue
 
-        if (h_df["split"] == "test").any():
-            eval_mask = h_df["split"] == "test"
-        elif (h_df["split"] == "validation").any():
-            eval_mask = h_df["split"] == "validation"
+        if (h_df["split"] == target_split).any():
+            eval_mask = h_df["split"] == target_split
         else:
             eval_mask = pd.Series([True] * len(h_df), index=h_df.index)
 
@@ -306,16 +394,150 @@ def evaluate_per_horizon(records, config):
 
         try:
             from sklearn.ensemble import HistGradientBoostingClassifier
+        except ImportError as e:
+            raise RuntimeError(f"[Per-Horizon Failed] Stage: IMPORT | Horizon: H{h_min//60} | Error: {e}") from e
+
+        try:
             clf = HistGradientBoostingClassifier(random_state=config.get("random_seed", 20260810))
             clf.fit(X_train_encoded, y_train)
-            y_prob = clf.predict_proba(X_eval_encoded)[:, 1]
-            brier = calculate_brier_score(y_eval, y_prob)
-        except Exception:
-            brier = 0.5
+        except Exception as e:
+            raise RuntimeError(f"[Per-Horizon Failed] Stage: FIT | Horizon: H{h_min//60} | Error: {e}") from e
 
+        try:
+            y_prob = clf.predict_proba(X_eval_encoded)[:, 1]
+        except Exception as e:
+            raise RuntimeError(f"[Per-Horizon Failed] Stage: PREDICT | Horizon: H{h_min//60} | Error: {e}") from e
+
+        brier = calculate_brier_score(y_eval, y_prob)
         horizon_results[f"H{h_min // 60}"] = round(brier, 4)
 
     return horizon_results
+
+
+def evaluate_per_combination(records, config, target_split="validation", model_name=None):
+    """Evaluate 20 combinations (H1-H4 × qty 1-5) with sample count, positive/deficit count,
+    Brier, deficit_recall, accuracy, calibration_error, and monotonicity violations.
+    Returns NOT_EVALUABLE with reason if a combination cannot be evaluated."""
+    records = validate_records(records)
+    df = records.copy() if isinstance(records, pd.DataFrame) else pd.DataFrame(records)
+
+    if (df["split"] == target_split).any():
+        eval_df = df[df["split"] == target_split].copy()
+    else:
+        eval_df = df.copy()
+
+    train_df = df[df["split"] == "train"].copy()
+    if train_df.empty:
+        train_df = df[df["split"] != target_split].copy()
+    if train_df.empty:
+        train_df = df.copy()
+
+    # Determine which model to use for predictions
+    if model_name is None:
+        model_name = "logistic_regression"
+
+    # Build feature matrix and train model
+    X_all, _, _ = build_feature_matrix(df, config)
+    X_train = X_all.loc[train_df.index].copy()
+    y_train = train_df["target"].to_numpy()
+    X_eval = X_all.loc[eval_df.index].copy()
+
+    X_train_encoded = pd.get_dummies(X_train, drop_first=True)
+    X_eval_encoded = pd.get_dummies(X_eval, drop_first=True)
+    X_train_encoded, X_eval_encoded = X_train_encoded.align(X_eval_encoded, join="left", axis=1, fill_value=0)
+
+    if model_name == "logistic_regression":
+        from sklearn.linear_model import LogisticRegression
+        clf = LogisticRegression(random_state=config.get("random_seed", 20260810), max_iter=500)
+    elif model_name == "hist_gradient_boosting":
+        from sklearn.ensemble import HistGradientBoostingClassifier
+        clf = HistGradientBoostingClassifier(random_state=config.get("random_seed", 20260810))
+    else:
+        raise ValueError(f"Unsupported model_name for per-combination evaluation: {model_name}")
+
+    clf.fit(X_train_encoded, y_train)
+    y_prob_all = clf.predict_proba(X_eval_encoded)[:, 1]
+
+    # Apply monotonicity calibration over entire eval set
+    calibrated_all, _ = audit_and_enforce_monotonicity(eval_df, y_prob_all)
+
+    eval_df = eval_df.copy()
+    eval_df["_y_prob_cal"] = calibrated_all
+
+    rows = []
+    for h_min in (60, 120, 180, 240):
+        for qty in (1, 2, 3, 4, 5):
+            combo_df = eval_df[
+                (eval_df["horizon_minutes"] == h_min) &
+                (eval_df["required_bike_count"] == qty)
+            ].copy()
+
+            label = f"H{h_min // 60}_T{qty}"
+            n_samples = len(combo_df)
+
+            if n_samples == 0:
+                rows.append({"combination": label, "n_samples": 0, "n_positive": "FAIL",
+                              "n_deficit": "FAIL", "brier_score": "NOT_EVALUABLE",
+                              "deficit_recall": "NOT_EVALUABLE", "accuracy": "NOT_EVALUABLE",
+                              "calibration_error": "NOT_EVALUABLE", "violations_before": "NOT_EVALUABLE",
+                              "reason": "No samples found for this combination"})
+                continue
+
+            y_true = combo_df["target"].to_numpy()
+            y_prob = combo_df["_y_prob_cal"].to_numpy()
+
+            n_positive = int(y_true.sum())
+            n_deficit = int((y_true == 0).sum())
+
+            if n_positive == 0:
+                rows.append({"combination": label, "n_samples": n_samples, "n_positive": n_positive,
+                              "n_deficit": n_deficit, "brier_score": "NOT_EVALUABLE",
+                              "deficit_recall": "NOT_EVALUABLE", "accuracy": round(float((y_prob < 0.5).mean()), 4),
+                              "calibration_error": "NOT_EVALUABLE", "violations_before": 0,
+                              "reason": "No positive (available) samples — Recall undefined"})
+                continue
+
+            if n_deficit == 0:
+                rows.append({"combination": label, "n_samples": n_samples, "n_positive": n_positive,
+                              "n_deficit": n_deficit, "brier_score": round(calculate_brier_score(y_true, y_prob), 4),
+                              "deficit_recall": "NOT_EVALUABLE", "accuracy": round(calculate_accuracy(y_true, y_prob), 4),
+                              "calibration_error": round(calculate_calibration_error(y_true, y_prob), 4),
+                              "violations_before": 0,
+                              "reason": "No deficit (unavailable) samples — Deficit Recall undefined"})
+                continue
+
+            # Compute monotonicity violations for this combination
+            # (violations across qty dimension are computed globally, here we just flag cross-qty)
+            violations_before = 0
+            if qty < 5:
+                next_qty_df = eval_df[
+                    (eval_df["horizon_minutes"] == h_min) &
+                    (eval_df["required_bike_count"] == qty + 1)
+                ].copy()
+                if not next_qty_df.empty:
+                    # Compare matched station+time pairs
+                    merged = combo_df[["station_id", "feature_as_of", "_y_prob_cal"]].merge(
+                        next_qty_df[["station_id", "feature_as_of", "_y_prob_cal"]].rename(
+                            columns={"_y_prob_cal": "_y_prob_next"}
+                        ),
+                        on=["station_id", "feature_as_of"], how="inner"
+                    )
+                    violations_before = int((merged["_y_prob_cal"] < merged["_y_prob_next"]).sum())
+
+            rows.append({
+                "combination": label,
+                "n_samples": n_samples,
+                "n_positive": n_positive,
+                "n_deficit": n_deficit,
+                "brier_score": round(calculate_brier_score(y_true, y_prob), 4),
+                "deficit_recall": round(calculate_deficit_recall(y_true, y_prob), 4),
+                "accuracy": round(calculate_accuracy(y_true, y_prob), 4),
+                "calibration_error": round(calculate_calibration_error(y_true, y_prob), 4),
+                "violations_before": violations_before,
+                "reason": "OK",
+            })
+
+    return pd.DataFrame(rows)
 
 
 def enforce_quantity_monotonicity(predictions):
@@ -338,6 +560,7 @@ def load_large_csv_with_duckdb(csv_path, total_max_rows=750000):
     conn = duckdb.connect()
     # Configure safe thread and memory limits with disk temp spill
     conn.execute(f"SET temp_directory = '{temp_path_sql}'")
+    conn.execute("SET max_temp_directory_size = '100GB'")
     conn.execute("SET memory_limit = '4GB'")
     conn.execute("SET threads = 4")
     conn.execute("SET preserve_insertion_order = false")
@@ -356,11 +579,11 @@ def load_large_csv_with_duckdb(csv_path, total_max_rows=750000):
 
     print(f"DuckDB zero-crash engine active: streaming CSV directly from disk ({sql_path})...")
 
-    # Bernoulli sampling at 1.2% across the ENTIRE 66.4M+ CSV dataset
-    # This guarantees random sampling over the ENTIRE 2024~2025 timeline without top-row bias
+    # 100% Deterministic Seed Hash Modulo Pre-Filter across the ENTIRE 66.4M+ CSV dataset
+    # Guarantees exact 100% identical row selection and identical SHA-256 evaluation hash on re-runs
     csv_source = f"read_csv_auto('{sql_path}')"
     if total_max_rows and total_max_rows > 0:
-        csv_source = f"(SELECT * FROM read_csv_auto('{sql_path}') USING SAMPLE 1.2% (bernoulli))"
+        csv_source = f"(SELECT * FROM read_csv_auto('{sql_path}') WHERE abs(hash(concat(CAST(station_id AS VARCHAR), CAST(feature_as_of AS VARCHAR), '20260810'))) % 10000 < 500)"
 
     union_queries = []
     for h in (1, 2, 3, 4):
@@ -370,7 +593,7 @@ def load_large_csv_with_duckdb(csv_path, total_max_rows=750000):
             t_col = f"label_h{h}_t{t}"
             if t_col in header_df.columns:
                 q = f"""
-                SELECT 
+                SELECT
                     station_id,
                     feature_as_of,
                     current_bike_count,
@@ -400,25 +623,26 @@ def load_large_csv_with_duckdb(csv_path, total_max_rows=750000):
             GROUP BY split, target, horizon_minutes, required_bike_count
         ),
         numbered AS (
-            SELECT 
+            SELECT
                 u.*,
                 ROW_NUMBER() OVER (
-                    PARTITION BY u.split, u.target, u.horizon_minutes, u.required_bike_count 
-                    ORDER BY random()
+                    PARTITION BY u.split, u.target, u.horizon_minutes, u.required_bike_count
+                    ORDER BY u.station_id, u.feature_as_of
                 ) AS rn,
                 sc.strata_cnt,
                 tc.total_cnt
             FROM unpivoted u
-            JOIN strata_counts sc 
-              ON u.split = sc.split 
-             AND u.target = sc.target 
-             AND u.horizon_minutes = sc.horizon_minutes 
+            JOIN strata_counts sc
+              ON u.split = sc.split
+             AND u.target = sc.target
+             AND u.horizon_minutes = sc.horizon_minutes
              AND u.required_bike_count = sc.required_bike_count
             CROSS JOIN total_counts tc
         )
         SELECT station_id, feature_as_of, current_bike_count, split, horizon_minutes, required_bike_count, target
         FROM numbered
         WHERE rn <= LEAST(strata_cnt, CEIL(strata_cnt * CAST({total_max_rows} AS DOUBLE) / total_cnt))
+        ORDER BY station_id, feature_as_of, horizon_minutes, required_bike_count
         """
     else:
         print("Processing 100% FULL dataset (66.4M+ rows) without row limit...")
@@ -503,18 +727,57 @@ if __name__ == "__main__":
         recs = load_json(data_path)
 
     print(f"Total input records: {len(recs)}")
-    print("Executing train_and_evaluate across all models...")
-    res_df = train_and_evaluate(recs, cfg)
+    print("\n=======================================================")
+    print("STEP 1. Validation Split Model & Structure Selection")
+    print("=======================================================")
+    val_results = train_and_evaluate(recs, cfg, target_split="validation")
+    print("\n--- [Validation Selection Table: 4 Models (post-monotonicity calibration)] ---")
+    print(val_results.to_string(index=False))
 
-    print("\n=== DATA-3.1 Model Comparison Results ===")
-    print(res_df.to_string(index=False))
+    # Auto-select winner by lowest post-calibration Brier score on Validation
+    best_row = val_results.loc[val_results["brier_score"].idxmin()]
+    best_model_name = best_row["model"]
+    print(f"\n>>> Validation Winner (lowest Brier after monotonicity calibration): {best_model_name}")
+    print(f"    Brier={best_row['brier_score']:.4f}  Recall={best_row['deficit_recall']:.4f}  Accuracy={best_row['accuracy']:.4f}  CalError={best_row['calibration_error']:.4f}")
 
-    print("\nExecuting evaluate_per_horizon (H1~H4 independent models)...")
-    per_h_res = evaluate_per_horizon(recs, cfg)
-    print("Per-Horizon Brier Scores:", per_h_res)
+    val_h_res = evaluate_per_horizon(recs, cfg, target_split="validation")
+    val_global_brier = val_results[val_results["model"] == best_model_name]["brier_score"].values[0]
+    print(f"\n--- [Validation Selection Table: Global vs Per-Horizon] ---")
+    print(f"Global Model Brier (Val): {val_global_brier:.4f}")
+    print(f"Per-Horizon Brier (Val) : {val_h_res} (Avg: {np.mean(list(val_h_res.values())):.4f})")
 
+    print("\n=======================================================")
+    print(f"STEP 2. Final Test Split Unseen Evaluation (Locked Winner: {best_model_name})")
+    print("=======================================================")
+    test_results = train_and_evaluate(recs, cfg, target_split="test")
+    test_winner = test_results[test_results["model"] == best_model_name]
+    print(f"\n--- [Final Test Results Table: Locked Model ({best_model_name})] ---")
+    print(test_winner.to_string(index=False))
 
+    test_h_res = evaluate_per_horizon(recs, cfg, target_split="test")
+    print(f"\n--- [Final Test Results Table: Per-Horizon (Reference)] ---")
+    print(f"Final Test Per-Horizon Brier: {test_h_res} (Avg: {np.mean(list(test_h_res.values())):.4f})")
 
+    print("\n=======================================================")
+    print(f"STEP 3. H1~H4 x Qty 1~5 20-Combination Breakdown (Locked Winner: {best_model_name})")
+    print("=======================================================")
+    combo_results = evaluate_per_combination(recs, cfg, target_split="test", model_name=best_model_name)
+    print("\n--- [20-Combination Table: H1-H4 x Qty 1-5 per Test Split] ---")
+    print(combo_results.to_string(index=False))
 
-
-
+    # Save the Validation winner as the canonical model_winner.joblib
+    print("\n=======================================================")
+    print(f"STEP 4. Saving Validation Winner Artifact: {best_model_name}")
+    print("=======================================================")
+    import joblib
+    winner_src = Path(cfg.get("model_dir", "output")) / f"model_{best_model_name}.joblib"
+    winner_dst = Path(cfg.get("model_dir", "output")) / "model_winner.joblib"
+    if winner_src.exists():
+        try:
+            art = joblib.load(winner_src)
+            joblib.dump(art, winner_dst)
+            print(f"Winner artifact saved: {winner_dst}")
+        except Exception as e:
+            raise RuntimeError(f"[Winner Artifact Save Failed] {e}") from e
+    else:
+        raise RuntimeError(f"[Winner Artifact Not Found] Expected {winner_src} — run pipeline first")

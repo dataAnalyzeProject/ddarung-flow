@@ -76,3 +76,78 @@ def test_quantity_probabilities_are_monotonic():
     fixed = enforce_quantity_monotonicity(predictions)
     assert all(left >= right for left, right in zip(fixed, fixed[1:]))
     assert all(0.0 <= value <= 1.0 for value in fixed)
+
+
+def test_model_import_failure_raises_runtime_error(monkeypatch):
+    records = load_json(FIXTURE_PATH)
+    config = load_json(CONFIG_PATH)
+
+    import builtins
+    real_import = builtins.__import__
+
+    def mock_import(name, *args, **kwargs):
+        if "sklearn" in name:
+            raise ImportError("No module named 'sklearn'")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", mock_import)
+
+    with pytest.raises(RuntimeError, match=r"\[Model Execution Failed\] Stage: IMPORT"):
+        train_and_evaluate(records, config)
+
+
+def test_model_fit_failure_raises_runtime_error(monkeypatch):
+    records = load_json(FIXTURE_PATH)
+    config = load_json(CONFIG_PATH)
+
+    from sklearn.ensemble import HistGradientBoostingClassifier
+
+    def mock_fit(self, X, y):
+        raise ValueError("Simulated fit failure")
+
+    monkeypatch.setattr(HistGradientBoostingClassifier, "fit", mock_fit)
+
+    with pytest.raises(RuntimeError, match=r"\[Model Execution Failed\] Stage: FIT"):
+        train_and_evaluate(records, config)
+
+
+def test_model_predict_failure_raises_runtime_error(monkeypatch):
+    records = load_json(FIXTURE_PATH)
+    config = load_json(CONFIG_PATH)
+
+    from sklearn.ensemble import HistGradientBoostingClassifier
+
+    def mock_predict_proba(self, X):
+        raise RuntimeError("Simulated predict failure")
+
+    monkeypatch.setattr(HistGradientBoostingClassifier, "predict_proba", mock_predict_proba)
+
+    with pytest.raises(RuntimeError, match=r"\[Model Execution Failed\] Stage: PREDICT"):
+        train_and_evaluate(records, config)
+
+
+def test_artifact_save_failure_raises_runtime_error(monkeypatch):
+    records = load_json(FIXTURE_PATH)
+    config = load_json(CONFIG_PATH)
+
+    import joblib
+
+    def mock_dump(*args, **kwargs):
+        raise OSError("Permission denied for artifact saving")
+
+    monkeypatch.setattr(joblib, "dump", mock_dump)
+
+    with pytest.raises(RuntimeError, match=r"\[Model Execution Failed\] Stage: ARTIFACT_SAVE"):
+        train_and_evaluate(records, config)
+
+
+def test_real_prediction_monotonicity_audit_and_enforcement():
+    records = load_json(FIXTURE_PATH)
+    config = load_json(CONFIG_PATH)
+
+    results = train_and_evaluate(records, config, target_split="validation")
+    assert "total_groups" in results.columns
+    assert "violations_before" in results.columns
+    assert "violations_after" in results.columns
+    assert (results["violations_after"] == 0).all()
+    assert (results["total_groups"] > 0).all()
