@@ -11,7 +11,7 @@ browser -> localhost:3000 -> frontend nginx -> backend:8080 -> postgres:5432
 
 - 브라우저 화면: `http://localhost:3000`
 - backend 직접 진단: `http://localhost:8080`
-- PostgreSQL은 호스트에 포트를 공개하지 않습니다.
+- PostgreSQL은 SSH 터널 접속을 위해 호스트 loopback `127.0.0.1:5432`에만 바인딩하며 외부 인터페이스에는 공개하지 않습니다.
 - `.env.example` 값은 로컬 실행 예시이며 실제 credential이 아닙니다.
 - OAuth 기능은 `local-disabled` 자리표시자로 비활성 상태입니다.
 
