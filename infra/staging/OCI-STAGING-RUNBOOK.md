@@ -32,7 +32,7 @@ browser
 - 기존 `https://shdomain.kro.kr/` 인증서와 TCP 80/443을 유지하고 host nginx proxy target을 따릉이로 유지합니다.
 - frontend host port 3100과 backend host port 8180은 모두 `127.0.0.1`에만 bind합니다.
 - 신규 OCI ingress는 만들지 않으며 3100과 8180을 공개하지 않습니다.
-- PostgreSQL 5432는 Compose 내부 network에만 존재하며 host와 OCI ingress에 공개하지 않습니다.
+- PostgreSQL 5432는 Compose 내부 network와 OCI host loopback `127.0.0.1:5432`에만 존재하며 외부 인터페이스와 OCI ingress에는 공개하지 않습니다. 로컬 DB 도구는 SSH 터널을 통해서만 접속합니다.
 - 새 domain·인증서·DNS는 추가하지 않으며 영구적인 domain 소유권과 사용자 공개는 OPS-5.1 범위입니다.
 
 ## 체크포인트 A — 기존 crawling_server 공존 확인
