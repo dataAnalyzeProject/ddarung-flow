@@ -41,6 +41,9 @@ jobs:
           - component: backend
             context: ./backend
             dockerfile: ./backend/Dockerfile
+          - component: inference
+            context: ./infra/inference
+            dockerfile: ./infra/inference/Dockerfile
     env:
       DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
       OCI_REGISTRY: ${{ vars.OCI_REGISTRY }}
@@ -195,8 +198,13 @@ jobs:
           {
             printf 'FRONTEND_IMAGE=%s/frontend:%s\n' "$image_base" "$DEPLOY_SHA"
             printf 'BACKEND_IMAGE=%s/backend:%s\n' "$image_base" "$DEPLOY_SHA"
+            printf 'INFERENCE_IMAGE=%s/inference:%s\n' "$image_base" "$DEPLOY_SHA"
             printf 'REACT_APP_API_BASE_URL=%s\n' "$STAGING_PUBLIC_URL"
             printf 'DEPLOYED_COMMIT=%s\n' "$DEPLOY_SHA"
+            printf 'OCI_OBJECT_NAMESPACE=nrzeviuvbcrd\n'
+            printf 'MODEL_BUCKET=ddarung-flow-bucket\n'
+            printf 'MODEL_OBJECT_KEY=models/data-3.1/2f2ece729fd4b03954212d2fcc2ece4cd07110c947fae1dfc0c7ba29cde34db9/model_winner.joblib\n'
+            printf 'MODEL_SHA256=2f2ece729fd4b03954212d2fcc2ece4cd07110c947fae1dfc0c7ba29cde34db9\n'
           } > release.candidate.env
           umask 077
           {
@@ -238,8 +246,8 @@ jobs:
               cp oauth.previous.env oauth.env
               cp docker-compose.previous.yaml docker-compose.yaml
               chmod 600 release.env oauth.env
-              docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml pull frontend backend
-              docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml up -d --no-build
+              docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml pull
+              docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml up -d --no-build --remove-orphans
             else
               echo "No previous release exists for automatic rollback." >&2
             fi
@@ -255,17 +263,18 @@ jobs:
           chmod 600 release.env oauth.env
 
           docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml config --quiet
-          docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml pull frontend backend postgres
-          docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml up -d --no-build
+          docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml pull frontend backend postgres inference
+          docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml up -d --no-build --remove-orphans
 
           staging_healthy=false
           for attempt in $(seq 1 18); do
             postgres_status=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' ddarung-flow-staging-postgres-1 2>/dev/null || true)
+            inference_status=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' ddarung-flow-staging-inference-1 2>/dev/null || true)
             frontend_code=$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:3100/ || true)
             proxy_code=$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:3100/api/v1/auth/me || true)
             public_frontend_code=$(curl -sS -o /dev/null -w '%{http_code}' "$STAGING_PUBLIC_URL/" || true)
             public_proxy_code=$(curl -sS -o /dev/null -w '%{http_code}' "$STAGING_PUBLIC_URL/api/v1/auth/me" || true)
-            if [ "$postgres_status" = healthy ] && [ "$frontend_code" = 200 ] && [[ "$proxy_code" =~ ^(200|401|403)$ ]] && [ "$public_frontend_code" = 200 ] && [[ "$public_proxy_code" =~ ^(200|401|403)$ ]]; then
+            if [ "$postgres_status" = healthy ] && [ "$inference_status" = healthy ] && [ "$frontend_code" = 200 ] && [[ "$proxy_code" =~ ^(200|401|403)$ ]] && [ "$public_frontend_code" = 200 ] && [[ "$public_proxy_code" =~ ^(200|401|403)$ ]]; then
               staging_healthy=true
               break
             fi
@@ -360,8 +369,8 @@ jobs:
             cp oauth.previous.env oauth.env
             cp docker-compose.previous.yaml docker-compose.yaml
             chmod 600 release.env oauth.env
-            docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml pull frontend backend
-            docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml up -d --no-build
+            docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml pull
+            docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml up -d --no-build --remove-orphans
           }
           trap rollback ERR
 
