@@ -1,0 +1,2 @@
+oci==2.182.1
+scikit-learn==1.9.0
