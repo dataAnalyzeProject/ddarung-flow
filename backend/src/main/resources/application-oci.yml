@@ -27,3 +27,10 @@ server:
     session:
       cookie:
         secure: true
+
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:false}
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:false}
+  packages-to-scan: com.ddarungflow.controller

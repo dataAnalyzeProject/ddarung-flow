@@ -57,7 +57,17 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/", "/auth/**", "/api/v1/auth/**", "/login/oauth2/**", "/oauth2/**").permitAll()
+                        .requestMatchers(
+                                "/",
+                                "/auth/**",
+                                "/api/v1/auth/**",
+                                "/login/oauth2/**",
+                                "/oauth2/**",
+                                "/swagger-ui.html",
+                                "/swagger-ui/**",
+                                "/v3/api-docs",
+                                "/v3/api-docs/**"
+                        ).permitAll()
                         .anyRequest().authenticated()
                 )
                 .oauth2Login(oauth2 -> oauth2
