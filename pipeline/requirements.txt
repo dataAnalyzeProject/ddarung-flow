@@ -10,3 +10,5 @@ numpy>=1.24.0
 openpyxl>=3.1.0
 # Reproducible, disk-backed aggregation for the DATA-2.0 official-source audit
 duckdb==1.5.5
+# Reproducible classical models for DATA-3.1
+scikit-learn==1.9.0
