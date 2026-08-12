@@ -3,6 +3,12 @@ package com.ddarungflow.controller;
 import com.ddarungflow.dto.PrincipalDetails;
 import com.ddarungflow.entity.Users;
 import com.ddarungflow.repository.UsersRepository;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -22,6 +28,7 @@ import java.util.Set;
 
 @Controller
 @RequiredArgsConstructor
+@Tag(name = "Authentication", description = "OAuth login, session user, and CSRF token APIs")
 public class LoginController {
 
     private static final Set<String> SUPPORTED_PROVIDERS = Set.of("google", "kakao", "naver");
@@ -29,6 +36,21 @@ public class LoginController {
     private final UsersRepository usersRepository;
 
     @GetMapping("/api/v1/auth/oauth2/{provider}/start")
+    @Operation(summary = "Start OAuth login", description = "Redirects to a supported OAuth provider authorization endpoint.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "302", description = "Redirect to the OAuth provider"),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "Unsupported OAuth provider",
+                    content = @Content(examples = @ExampleObject(value = """
+                            {
+                              "code": "AUTH_PROVIDER_NOT_SUPPORTED",
+                              "message": "Unsupported login provider.",
+                              "timestamp": "2026-08-12T11:00:00+09:00"
+                            }
+                            """))
+            )
+    })
     public ResponseEntity<?> startOAuth(@PathVariable String provider) {
         String normalizedProvider = provider.toLowerCase();
         if (!SUPPORTED_PROVIDERS.contains(normalizedProvider)) {
@@ -46,6 +68,17 @@ public class LoginController {
 
     @GetMapping("/api/v1/auth/me")
     @ResponseBody
+    @Operation(summary = "Get current session user", description = "Returns authenticated=false when no login session exists.")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Current authentication state",
+            content = @Content(examples = @ExampleObject(name = "anonymous", value = """
+                    {
+                      "authenticated": false,
+                      "user": null
+                    }
+                    """))
+    )
     public ResponseEntity<?> getCurrentUser(@AuthenticationPrincipal Object principal) {
         if (principal == null || "anonymousUser".equals(principal)) {
             Map<String, Object> response = new HashMap<>();
@@ -95,6 +128,17 @@ public class LoginController {
 
     @GetMapping("/api/v1/auth/csrf")
     @ResponseBody
+    @Operation(summary = "Get CSRF token", description = "Returns the token value and request header name for state-changing requests.")
+    @ApiResponse(
+            responseCode = "200",
+            description = "CSRF token information",
+            content = @Content(examples = @ExampleObject(value = """
+                    {
+                      "token": "masked-example-token",
+                      "headerName": "X-CSRF-TOKEN"
+                    }
+                    """))
+    )
     public Map<String, String> getCsrfToken(CsrfToken csrfToken) {
         return Map.of(
                 "token", csrfToken.getToken(),

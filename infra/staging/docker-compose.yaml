@@ -22,6 +22,7 @@ services:
       dockerfile: Dockerfile
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-false}
       PORT: 8080
       FRONTEND_URL: ${REACT_APP_API_BASE_URL}
       DB_URL: jdbc:postgresql://postgres:5432/${DB_NAME}
