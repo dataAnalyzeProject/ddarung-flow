@@ -24,7 +24,6 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .venv/
-project/
 pipeline/logs/
 
 # Local infrastructure

@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import platform
 from pathlib import Path
 
 import numpy as np
@@ -228,7 +229,7 @@ def ensure_split_integrity(records):
     return df
 
 
-def train_and_evaluate(records, config, target_split="validation"):
+def train_and_evaluate(records, config, target_split="validation", model_names=None, artifact_path=None):
     """Evaluate models strictly on designated target_split ('validation' for selection, 'test' for final test).
     Fails immediately if target_split is missing — NO silent fallback allowed."""
     records = validate_records(records)
@@ -276,9 +277,14 @@ def train_and_evaluate(records, config, target_split="validation"):
     X_eval_encoded = pd.get_dummies(X_eval, drop_first=True)
     X_train_encoded, X_eval_encoded = X_train_encoded.align(X_eval_encoded, join="left", axis=1, fill_value=0)
 
+    models = list(config["models"] if model_names is None else model_names)
+    if not models:
+        raise ValueError("at least one model must be selected")
     results = []
+    predictions = {}
 
-    for model_name in config["models"]:
+    for model_name in models:
+        clf = None
         if model_name == "persistence_baseline":
             y_prob = (eval_df["current_bike_count"] >= eval_df["required_bike_count"]).astype(float).to_numpy()
         elif model_name == "statistical_baseline":
@@ -315,15 +321,6 @@ def train_and_evaluate(records, config, target_split="validation"):
             except Exception as e:
                 raise RuntimeError(f"[Model Execution Failed] Stage: PREDICT | Model: {model_name} | Error: {e}") from e
 
-            try:
-                import joblib
-                model_dir = Path(config.get("model_dir", "output"))
-                model_dir.mkdir(parents=True, exist_ok=True)
-                model_file = model_dir / "model_logistic_regression.joblib"
-                joblib.dump({"model": clf, "feature_names": list(X_train_encoded.columns)}, model_file)
-            except Exception as e:
-                raise RuntimeError(f"[Model Execution Failed] Stage: ARTIFACT_SAVE | Model: {model_name} | Error: {e}") from e
-
         elif model_name == "hist_gradient_boosting":
             try:
                 from sklearn.ensemble import HistGradientBoostingClassifier
@@ -342,19 +339,27 @@ def train_and_evaluate(records, config, target_split="validation"):
             except Exception as e:
                 raise RuntimeError(f"[Model Execution Failed] Stage: PREDICT | Model: {model_name} | Error: {e}") from e
 
-            try:
-                # Save trained model artifact for inference
-                model_dir = Path(config.get("model_dir", "output"))
-                model_dir.mkdir(parents=True, exist_ok=True)
-                model_file = model_dir / "model_hist_gb.joblib"
-                joblib.dump({"model": clf, "feature_names": list(X_train_encoded.columns)}, model_file)
-            except Exception as e:
-                raise RuntimeError(f"[Model Execution Failed] Stage: ARTIFACT_SAVE | Model: {model_name} | Error: {e}") from e
         else:
             raise ValueError(f"[Model Execution Failed] Stage: CONFIG | Unsupported model_name: {model_name}")
 
         # Apply monotonicity audit and enforcement per (station_id, feature_as_of, horizon_minutes) group
         calibrated_y_prob, audit = audit_and_enforce_monotonicity(eval_df, y_prob)
+        predictions[model_name] = calibrated_y_prob
+
+        if artifact_path is not None:
+            if len(models) != 1 or clf is None:
+                raise ValueError("artifact output requires exactly one trainable selected model")
+            try:
+                import joblib
+                artifact_path = Path(artifact_path)
+                artifact_path.parent.mkdir(parents=True, exist_ok=True)
+                joblib.dump({
+                    "model": clf,
+                    "model_name": model_name,
+                    "feature_names": list(X_train_encoded.columns),
+                }, artifact_path)
+            except Exception as e:
+                raise RuntimeError(f"[Model Execution Failed] Stage: ARTIFACT_SAVE | Model: {model_name} | Error: {e}") from e
 
         results.append({
             "model": model_name,
@@ -370,7 +375,10 @@ def train_and_evaluate(records, config, target_split="validation"):
             "missing_quantities_count": audit["missing_quantities_count"],
         })
 
-    return pd.DataFrame(results)
+    result_df = pd.DataFrame(results)
+    result_df.attrs["eval_df"] = eval_df.reset_index(drop=True)
+    result_df.attrs["predictions"] = predictions
+    return result_df
 
 
 def evaluate_per_horizon(records, config, target_split="validation"):
@@ -433,6 +441,99 @@ def evaluate_per_horizon(records, config, target_split="validation"):
     return horizon_results
 
 
+def evaluate_predictions(eval_df, calibrated_y_prob):
+    """Reuse one prediction vector for all sealed-test breakdowns."""
+    if len(eval_df) != len(calibrated_y_prob):
+        raise ValueError("prediction count does not match evaluation rows")
+    scored = eval_df.reset_index(drop=True).copy()
+    scored["_y_prob_cal"] = np.asarray(calibrated_y_prob, dtype=float)
+    horizon_rows = []
+    combination_rows = []
+    for h_min in HORIZON_MINUTES:
+        horizon_df = scored[scored["horizon_minutes"] == h_min]
+        if horizon_df.empty:
+            raise RuntimeError(f"H{h_min // 60} has no sealed-test rows")
+        horizon_rows.append(_metric_row(horizon_df, f"H{h_min // 60}"))
+        for qty in REQUIRED_BIKE_COUNTS:
+            combo_df = horizon_df[horizon_df["required_bike_count"] == qty]
+            if combo_df.empty:
+                raise RuntimeError(f"H{h_min // 60}_T{qty} has no sealed-test rows")
+            combination_rows.append(_metric_row(combo_df, f"H{h_min // 60}_T{qty}"))
+    combinations = pd.DataFrame(combination_rows).rename(columns={"segment": "combination"})
+    expected = {f"H{h // 60}_T{qty}" for h in HORIZON_MINUTES for qty in REQUIRED_BIKE_COUNTS}
+    if len(combinations) != 20 or set(combinations["combination"]) != expected:
+        raise RuntimeError("sealed-test output must contain exactly 20 unique combinations")
+    return pd.DataFrame(horizon_rows), combinations
+
+
+def _metric_row(scored_df, segment):
+    y_true = scored_df["target"].to_numpy()
+    y_prob = scored_df["_y_prob_cal"].to_numpy()
+    return {
+        "segment": segment,
+        "n_samples": int(len(scored_df)),
+        "n_positive": int(y_true.sum()),
+        "n_deficit": int((y_true == 0).sum()),
+        "brier_score": calculate_brier_score(y_true, y_prob),
+        "deficit_recall": calculate_deficit_recall(y_true, y_prob),
+        "accuracy": calculate_accuracy(y_true, y_prob),
+        "calibration_error": calculate_calibration_error(y_true, y_prob),
+    }
+
+
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as file:
+        for chunk in iter(lambda: file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def write_model_manifest(path, artifact_path, config, code_sha, input_manifest_sha, results, horizons, combinations):
+    import sklearn
+    artifact_path = Path(artifact_path)
+    winner = results.iloc[0].to_dict()
+    manifest = {
+        "schema_version": 1,
+        "task_id": "DATA-3.1",
+        "code_sha": code_sha,
+        "model_name": config["approved_model"],
+        "model_class": "sklearn.ensemble.HistGradientBoostingClassifier",
+        "artifact_format": config["artifact_format"],
+        "artifact_file": artifact_path.name,
+        "artifact_sha256": sha256_file(artifact_path),
+        "input_manifest_sha256": input_manifest_sha,
+        "random_seed": config["random_seed"],
+        "time_zone": config["time_zone"],
+        "package_versions": {
+            "python": platform.python_version(),
+            "scikit_learn": sklearn.__version__,
+            "pandas": pd.__version__,
+            "numpy": np.__version__,
+        },
+        "features": list(config["allowed_features"]),
+        "horizon_minutes": list(config["horizon_minutes"]),
+        "required_bike_counts": list(config["required_bike_counts"]),
+        "evaluation_row_hash": winner["evaluation_row_hash"],
+        "overall_metrics": winner,
+        "horizon_metrics": horizons.to_dict(orient="records"),
+        "combination_metrics": combinations.to_dict(orient="records"),
+    }
+    Path(path).write_text(
+        json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return manifest
+
+
+def load_trusted_artifact(artifact_path, expected_sha256):
+    """Verify the approved checksum before joblib deserialization."""
+    if sha256_file(artifact_path).lower() != expected_sha256.lower():
+        raise RuntimeError("artifact SHA-256 does not match the approved manifest")
+    import joblib
+    return joblib.load(artifact_path)
+
+
 def evaluate_per_combination(records, config, target_split="validation", model_name=None):
     """Evaluate 20 combinations (H1-H4 × qty 1-5) strictly on target_split.
     Fails immediately if target_split is missing — NO silent fallback allowed."""
@@ -473,7 +574,6 @@ def evaluate_per_combination(records, config, target_split="validation", model_n
     elif model_name == "hist_gradient_boosting":
         from sklearn.ensemble import HistGradientBoostingClassifier
         clf = HistGradientBoostingClassifier(random_state=config.get("random_seed", 20260810))
-    else:
         raise ValueError(f"Unsupported model_name for per-combination evaluation: {model_name}")
 
     clf.fit(X_train_encoded, y_train)
@@ -774,36 +874,38 @@ if __name__ == "__main__":
     print("\n=======================================================")
     print(f"STEP 2. Final Test Split Unseen Evaluation (Locked Winner: {best_model_name})")
     print("=======================================================")
-    test_results = train_and_evaluate(recs, cfg, target_split="test")
-    test_winner = test_results[test_results["model"] == best_model_name]
+    if best_model_name != cfg["approved_model"]:
+        raise RuntimeError(f"approved model must be {cfg['approved_model']}, got {best_model_name}")
+    model_dir = Path(cfg.get("model_dir", "output"))
+    winner_path = model_dir / "model_winner.joblib"
+    test_results = train_and_evaluate(
+        recs, cfg, target_split="test", model_names=[best_model_name], artifact_path=winner_path
+    )
     print(f"\n--- [Final Test Results Table: Locked Model ({best_model_name})] ---")
-    print(test_winner.to_string(index=False))
+    print(test_results.to_string(index=False))
 
-    test_h_res = evaluate_per_horizon(recs, cfg, target_split="test")
+    sealed_eval_df = test_results.attrs["eval_df"]
+    sealed_predictions = test_results.attrs["predictions"][best_model_name]
+    test_h_table, combo_results = evaluate_predictions(sealed_eval_df, sealed_predictions)
     print(f"\n--- [Final Test Results Table: Per-Horizon (Reference)] ---")
-    print(f"Final Test Per-Horizon Brier: {test_h_res} (Avg: {np.mean(list(test_h_res.values())):.4f})")
+    print(test_h_table.to_string(index=False))
 
     print("\n=======================================================")
     print(f"STEP 3. H1~H4 x Qty 1~5 20-Combination Breakdown (Locked Winner: {best_model_name})")
     print("=======================================================")
-    combo_results = evaluate_per_combination(recs, cfg, target_split="test", model_name=best_model_name)
     print("\n--- [20-Combination Table: H1-H4 x Qty 1-5 per Test Split] ---")
     print(combo_results.to_string(index=False))
 
     # Save the Validation winner as the canonical model_winner.joblib
     print("\n=======================================================")
-    print(f"STEP 4. Saving Validation Winner Artifact: {best_model_name}")
+    print(f"STEP 4. Writing Approved Artifact Manifest: {best_model_name}")
     print("=======================================================")
-    import joblib
-    file_key = "hist_gb" if best_model_name == "hist_gradient_boosting" else best_model_name
-    winner_src = Path(cfg.get("model_dir", "output")) / f"model_{file_key}.joblib"
-    winner_dst = Path(cfg.get("model_dir", "output")) / "model_winner.joblib"
-    if winner_src.exists():
-        try:
-            art = joblib.load(winner_src)
-            joblib.dump(art, winner_dst)
-            print(f"Winner artifact saved: {winner_dst}")
-        except Exception as e:
-            raise RuntimeError(f"[Winner Artifact Save Failed] {e}") from e
-    else:
-        raise RuntimeError(f"[Winner Artifact Not Found] Expected {winner_src} — run pipeline first")
+    manifest_path = model_dir / "model_winner_metadata.json"
+    manifest = write_model_manifest(
+        manifest_path, winner_path, cfg, sha256_file(Path(__file__)),
+        "9075B4EFA89D7370DAB8006BB44579F5F9B215511F16A64AE0B007955FADA9C7",
+        test_results, test_h_table, combo_results,
+    )
+    print(f"Winner artifact saved: {winner_path}")
+    print(f"Winner manifest saved: {manifest_path}")
+    print(f"Winner artifact SHA-256: {manifest['artifact_sha256']}")

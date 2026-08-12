@@ -6,10 +6,14 @@ import pytest
 
 from pipeline.src.modeling import (
     build_feature_matrix,
+    evaluate_predictions,
     enforce_quantity_monotonicity,
+    load_trusted_artifact,
     load_json,
+    sha256_file,
     train_and_evaluate,
     validate_records,
+    write_model_manifest,
 )
 
 
@@ -18,12 +22,29 @@ CONFIG_PATH = ROOT / "pipeline" / "config" / "modeling.json"
 FIXTURE_PATH = ROOT / "pipeline" / "tests" / "fixtures" / "modeling_sample.json"
 
 
+def records_with_complete_test_grid():
+    records = load_json(FIXTURE_PATH)
+    template = next(row for row in records if row["split"] == "test")
+    records = [row for row in records if row["split"] != "test"]
+    for horizon in (60, 120, 180, 240):
+        for quantity in (1, 2, 3, 4, 5):
+            row = copy.deepcopy(template)
+            row["station_id"] = f"GRID-{horizon}"
+            row["horizon_minutes"] = horizon
+            row["required_bike_count"] = quantity
+            row["target"] = int(quantity <= 3)
+            records.append(row)
+    return records
+
+
 def test_fixed_config_matches_approved_contract():
     config = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
     assert config["random_seed"] == 20260810
     assert config["horizon_minutes"] == [60, 120, 180, 240]
     assert config["required_bike_counts"] == [1, 2, 3, 4, 5]
     assert config["primary_metric"] == "brier_score"
+    assert config["approved_model"] == "hist_gradient_boosting"
+    assert config["artifact_format"] == "joblib"
     assert config["validation_policy"]["test_holdout_must_not_be_read_during_selection"]
 
 
@@ -138,7 +159,13 @@ def test_artifact_save_failure_raises_runtime_error(monkeypatch):
     monkeypatch.setattr(joblib, "dump", mock_dump)
 
     with pytest.raises(RuntimeError, match=r"\[Model Execution Failed\] Stage: ARTIFACT_SAVE"):
-        train_and_evaluate(records, config)
+        train_and_evaluate(
+            records,
+            config,
+            target_split="test",
+            model_names=["hist_gradient_boosting"],
+            artifact_path="output/model_winner.joblib",
+        )
 
 
 def test_real_prediction_monotonicity_audit_and_enforcement():
@@ -151,3 +178,67 @@ def test_real_prediction_monotonicity_audit_and_enforcement():
     assert "violations_after" in results.columns
     assert (results["violations_after"] == 0).all()
     assert (results["total_groups"] > 0).all()
+
+
+def test_sealed_test_runs_only_selected_hist_model(tmp_path):
+    records = records_with_complete_test_grid()
+    config = load_json(CONFIG_PATH)
+    artifact_path = tmp_path / "model_winner.joblib"
+    results = train_and_evaluate(
+        records,
+        config,
+        target_split="test",
+        model_names=["hist_gradient_boosting"],
+        artifact_path=artifact_path,
+    )
+    assert results["model"].tolist() == ["hist_gradient_boosting"]
+    assert artifact_path.exists()
+
+
+def test_sealed_predictions_produce_unique_20_combination_table():
+    records = records_with_complete_test_grid()
+    config = load_json(CONFIG_PATH)
+    results = train_and_evaluate(
+        records, config, target_split="test", model_names=["hist_gradient_boosting"]
+    )
+    horizons, combinations = evaluate_predictions(
+        results.attrs["eval_df"], results.attrs["predictions"]["hist_gradient_boosting"]
+    )
+    assert horizons["segment"].tolist() == ["H1", "H2", "H3", "H4"]
+    assert len(combinations) == 20
+    assert combinations["combination"].nunique() == 20
+
+
+def test_unknown_selected_model_fails():
+    records = load_json(FIXTURE_PATH)
+    config = load_json(CONFIG_PATH)
+    with pytest.raises(ValueError, match="Unsupported model_name"):
+        train_and_evaluate(records, config, target_split="test", model_names=["unknown"])
+
+
+def test_manifest_matches_hist_artifact_and_checksum(tmp_path):
+    records = records_with_complete_test_grid()
+    config = load_json(CONFIG_PATH)
+    artifact_path = tmp_path / "model_winner.joblib"
+    manifest_path = tmp_path / "model_winner_metadata.json"
+    results = train_and_evaluate(
+        records,
+        config,
+        target_split="test",
+        model_names=["hist_gradient_boosting"],
+        artifact_path=artifact_path,
+    )
+    horizons, combinations = evaluate_predictions(
+        results.attrs["eval_df"], results.attrs["predictions"]["hist_gradient_boosting"]
+    )
+    manifest = write_model_manifest(
+        manifest_path, artifact_path, config, "test-sha", "a" * 64,
+        results, horizons, combinations,
+    )
+    assert manifest["model_class"] == "sklearn.ensemble.HistGradientBoostingClassifier"
+    assert manifest["artifact_sha256"] == sha256_file(artifact_path)
+    assert len(manifest["combination_metrics"]) == 20
+    loaded = load_trusted_artifact(artifact_path, manifest["artifact_sha256"])
+    assert loaded["model_name"] == "hist_gradient_boosting"
+    with pytest.raises(RuntimeError, match="SHA-256"):
+        load_trusted_artifact(artifact_path, "0" * 64)

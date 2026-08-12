@@ -16,6 +16,8 @@
     "hist_gradient_boosting"
   ],
   "primary_metric": "brier_score",
+  "approved_model": "hist_gradient_boosting",
+  "artifact_format": "joblib",
   "required_metrics": [
     "brier_score",
     "deficit_recall",
