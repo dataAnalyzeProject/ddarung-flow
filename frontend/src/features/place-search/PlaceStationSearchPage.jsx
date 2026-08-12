@@ -231,6 +231,14 @@ export default function PlaceStationSearchPage({
               aria-label="이동수단"
               value={travelMode}
               onChange={(e) => setTravelMode(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setTravelMode((current) =>
+                    current === "WALK" ? "PUBLIC_TRANSIT" : "WALK"
+                  );
+                }
+              }}
             >
               <option value="">선택 안함</option>
               <option value="WALK">도보</option>
@@ -242,6 +250,16 @@ export default function PlaceStationSearchPage({
               aria-label="필요 자전거 수"
               value={requiredBikeCount}
               onChange={(e) => setRequiredBikeCount(Number(e.target.value))}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  setRequiredBikeCount((current) => Math.min(5, current + 1));
+                }
+                if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setRequiredBikeCount((current) => Math.max(1, current - 1));
+                }
+              }}
             >
               {[1, 2, 3, 4, 5].map((num) => (
                 <option key={num} value={num}>

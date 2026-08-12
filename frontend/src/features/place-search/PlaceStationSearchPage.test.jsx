@@ -181,7 +181,9 @@ test("FE-3.3 사용자가 키보드만으로 검색하고 결과를 선택해 �
     name: "출발지 검색어",
   });
 
-  originInput.focus();
+  userEvent.tab();
+  userEvent.tab();
+  userEvent.tab();
   expect(originInput).toHaveFocus();
 
   userEvent.keyboard("서울역");
@@ -285,6 +287,7 @@ test("FE-3.3 사용자가 키보드만으로 검색하고 결과를 선택해 �
   expect(travelMode).toHaveFocus();
 
   userEvent.keyboard("{ArrowDown}");
+  expect(travelMode).toHaveValue("PUBLIC_TRANSIT");
 
   // --------------------------------
   // 8. 자전거 수를 키보드로 선택한다.
@@ -298,11 +301,7 @@ test("FE-3.3 사용자가 키보드만으로 검색하고 결과를 선택해 �
   expect(bikeCount).toHaveFocus();
   expect(bikeCount).toHaveValue("1");
 
-  userEvent.selectOptions(bikeCount, "2");
-  // NOTE:
-  // @testing-library/user-event@13.5.0 환경에서는
-  // keyboard("{ArrowDown}")이 select의 실제 선택값을 변경하지 않음
-  // 키 이벤트 전달 여부만 검증하고, 값 변경 자체는 별도 방식으로 확인
+  userEvent.keyboard("{ArrowDown}");
   expect(bikeCount).toHaveValue("2");
 
   // --------------------------------
@@ -339,7 +338,7 @@ test("FE-3.3 사용자가 키보드만으로 검색하고 결과를 선택해 �
       latitude: 37.5663,
       longitude: 126.9784,
     },
-    travelMode: "WALK",
+    travelMode: "PUBLIC_TRANSIT",
     directMinutes: null,
     requiredBikeCount: 2,
   });
@@ -409,8 +408,7 @@ test("FE-3.3 error 상태에서 다시 시도 버튼 클릭 시 이전 검색 �
   expect(onSearch).toHaveBeenLastCalledWith({ mode: "ROUTE", field: "origin", query: "서울역" });
 });
 
-// 키 이벤트 전달 여부만 검증
-test("ArrowDown 키 입력이 select에 전달되는지 확인", () => {
+test("FE-3.3 ArrowDown 키로 필요한 자전거 수를 변경한다", () => {
   render(<PlaceStationSearchPage />);
 
   const bikeCount = screen.getByRole("combobox", {
@@ -422,4 +420,5 @@ test("ArrowDown 키 입력이 select에 전달되는지 확인", () => {
   userEvent.keyboard("{ArrowDown}");
 
   expect(bikeCount).toHaveFocus();
+  expect(bikeCount).toHaveValue("2");
 });
