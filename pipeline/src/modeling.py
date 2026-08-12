@@ -215,23 +215,38 @@ def audit_and_enforce_monotonicity(eval_df, y_prob):
     return calibrated_prob, audit_summary
 
 
-def train_and_evaluate(records, config, target_split="validation"):
-    """Evaluate models on the designated target split ('validation' for selection, 'test' for final test)."""
-    records = validate_records(records)
+def ensure_split_integrity(records):
+    """Ensure DataFrame/records have validation split dynamically if only train and test exist."""
     df = records.copy() if isinstance(records, pd.DataFrame) else pd.DataFrame(records)
+    if "split" in df.columns and "feature_as_of" in df.columns:
+        # Only reassign if dataset has NO validation split at all
+        if not (df["split"] == "validation").any() and (df["split"] == "train").any():
+            date_str = df["feature_as_of"].astype(str).str[:10]
+            val_mask = (df["split"] == "train") & (date_str >= "2024-10-15")
+            if val_mask.any():
+                df.loc[val_mask, "split"] = "validation"
+    return df
 
-    if (df["split"] == target_split).any():
-        eval_mask = df["split"] == target_split
-    elif target_split == "validation" and (df["split"] == "test").any():
-        eval_mask = df["split"] == "test"
-    else:
-        eval_mask = pd.Series([True] * len(df))
+
+def train_and_evaluate(records, config, target_split="validation"):
+    """Evaluate models strictly on designated target_split ('validation' for selection, 'test' for final test).
+    Fails immediately if target_split is missing — NO silent fallback allowed."""
+    records = validate_records(records)
+    df = ensure_split_integrity(records)
+
+    eval_mask = df["split"] == target_split
+    if not eval_mask.any():
+        raise RuntimeError(
+            f"[Split Contract Violation] Required target_split='{target_split}' has 0 records. "
+            f"Silent fallback to test/full dataset is strictly forbidden."
+        )
 
     train_df = df[df["split"] == "train"].copy()
     if train_df.empty:
-        train_df = df[~eval_mask].copy()
-    if train_df.empty:
-        train_df = df.copy()
+        raise RuntimeError(
+            "[Split Contract Violation] Training split ('train') has 0 records. "
+            "Cannot train models without training split."
+        )
 
     eval_df = df[eval_mask].copy()
 
@@ -359,9 +374,10 @@ def train_and_evaluate(records, config, target_split="validation"):
 
 
 def evaluate_per_horizon(records, config, target_split="validation"):
-    """Train independent models for each horizon on designated target_split ('validation' or 'test')."""
+    """Train independent models for each horizon strictly on target_split ('validation' or 'test').
+    Fails immediately if target_split is missing — NO silent fallback allowed."""
     records = validate_records(records)
-    df = records.copy() if isinstance(records, pd.DataFrame) else pd.DataFrame(records)
+    df = ensure_split_integrity(records)
 
     horizon_results = {}
     for h_min in (60, 120, 180, 240):
@@ -369,16 +385,19 @@ def evaluate_per_horizon(records, config, target_split="validation"):
         if h_df.empty:
             continue
 
-        if (h_df["split"] == target_split).any():
-            eval_mask = h_df["split"] == target_split
-        else:
-            eval_mask = pd.Series([True] * len(h_df), index=h_df.index)
+        eval_mask = h_df["split"] == target_split
+        if not eval_mask.any():
+            raise RuntimeError(
+                f"[Split Contract Violation] Horizon H{h_min//60} missing target_split='{target_split}'. "
+                f"Silent fallback forbidden."
+            )
 
         train_h = h_df[h_df["split"] == "train"].copy()
         if train_h.empty:
-            train_h = h_df[~eval_mask].copy()
-        if train_h.empty:
-            train_h = h_df.copy()
+            raise RuntimeError(
+                f"[Split Contract Violation] Horizon H{h_min//60} missing training records ('train'). "
+                f"Cannot train without training split."
+            )
 
         eval_h = h_df[eval_mask].copy()
 
@@ -415,22 +434,24 @@ def evaluate_per_horizon(records, config, target_split="validation"):
 
 
 def evaluate_per_combination(records, config, target_split="validation", model_name=None):
-    """Evaluate 20 combinations (H1-H4 × qty 1-5) with sample count, positive/deficit count,
-    Brier, deficit_recall, accuracy, calibration_error, and monotonicity violations.
-    Returns NOT_EVALUABLE with reason if a combination cannot be evaluated."""
+    """Evaluate 20 combinations (H1-H4 × qty 1-5) strictly on target_split.
+    Fails immediately if target_split is missing — NO silent fallback allowed."""
     records = validate_records(records)
-    df = records.copy() if isinstance(records, pd.DataFrame) else pd.DataFrame(records)
+    df = ensure_split_integrity(records)
 
-    if (df["split"] == target_split).any():
-        eval_df = df[df["split"] == target_split].copy()
-    else:
-        eval_df = df.copy()
+    eval_df = df[df["split"] == target_split].copy()
+    if eval_df.empty:
+        raise RuntimeError(
+            f"[Split Contract Violation] Required target_split='{target_split}' missing in per-combination eval. "
+            f"Silent fallback forbidden."
+        )
 
     train_df = df[df["split"] == "train"].copy()
     if train_df.empty:
-        train_df = df[df["split"] != target_split].copy()
-    if train_df.empty:
-        train_df = df.copy()
+        raise RuntimeError(
+            "[Split Contract Violation] Training split ('train') missing in per-combination eval. "
+            "Cannot train without training split."
+        )
 
     # Determine which model to use for predictions
     if model_name is None:
@@ -597,7 +618,11 @@ def load_large_csv_with_duckdb(csv_path, total_max_rows=750000):
                     station_id,
                     feature_as_of,
                     current_bike_count,
-                    CASE WHEN split = 'test_holdout' THEN 'test' ELSE split END AS split,
+                    CASE
+                        WHEN split = 'test_holdout' THEN 'test'
+                        WHEN TRY_CAST(feature_as_of AS TIMESTAMP) >= TIMESTAMP '2024-10-15 00:00:00' AND split != 'test_holdout' THEN 'validation'
+                        ELSE 'train'
+                    END AS split,
                     {h * 60} AS horizon_minutes,
                     {t} AS required_bike_count,
                     CAST({t_col} AS INT) AS target
@@ -650,7 +675,7 @@ def load_large_csv_with_duckdb(csv_path, total_max_rows=750000):
 
     df_res = conn.execute(final_sql).df()
     conn.close()
-    return df_res
+    return ensure_split_integrity(df_res)
 
 
 
@@ -770,7 +795,8 @@ if __name__ == "__main__":
     print(f"STEP 4. Saving Validation Winner Artifact: {best_model_name}")
     print("=======================================================")
     import joblib
-    winner_src = Path(cfg.get("model_dir", "output")) / f"model_{best_model_name}.joblib"
+    file_key = "hist_gb" if best_model_name == "hist_gradient_boosting" else best_model_name
+    winner_src = Path(cfg.get("model_dir", "output")) / f"model_{file_key}.joblib"
     winner_dst = Path(cfg.get("model_dir", "output")) / "model_winner.joblib"
     if winner_src.exists():
         try:

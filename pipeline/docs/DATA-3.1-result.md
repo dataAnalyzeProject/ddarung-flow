@@ -43,35 +43,36 @@
 
 ---
 
-## 3. STEP 1: Validation 모델 & 구조 선택 (Validation Selection Table)
-
 ### 3-1. Validation 세트 4대 알고리즘 대조 표 (단조성 보정 후 지표)
+
+- **Validation 평가 지문 (SHA-256)**: `9a693669481ea570a65d3896d3b86c07e90a0041c531f9c16364e81f862c5950`
+
 | 모델 | 평가 분할 | Brier Score ↓ | 부족 Recall ↑ | Accuracy ↑ | Calibration error ↓ | 선택 결과 |
 |---|---|---:|---:|---:|---:|:---:|
-| 통계 기준선 | Validation | 0.1882 | 35.86% | 74.41% | 0.1050 | 탈락 |
-| 지속성 기준선 | Validation | 0.1119 | 78.74% | 88.81% | 0.1119 | 탈락 |
-| **로지스틱 회귀** | Validation | **0.0917 (1위)** | **85.16% (1위)** | 87.21% | **0.0504 (1위)** | **[1등 최종 선택 & 고정]** |
-| 트리 모델 (HistGradientBoosting) | Validation | 0.1444 | 81.07% | **82.48%** | 0.0976 | 탈락 (보정 후 Brier 2위) |
+| 통계 기준선 | Validation | 0.1897 | 40.72% | 71.33% | 0.1193 | 탈락 |
+| 지속성 기준선 | Validation | 0.0799 | 84.80% | 92.01% | 0.0799 | 탈락 |
+| 로지스틱 회귀 | Validation | 0.0697 | **88.21% (1위)** | 91.38% | 0.0408 | 후보 |
+| **트리 모델 (HistGradientBoosting)** | Validation | **0.0574 (1위)** | 86.13% | **92.20% (1위)** | **0.0141 (1위)** | **[1등 최종 선택 & 고정]** |
 
 ### 3-2. Validation 세트 통합 vs Horizon별 구조 대조 표
 | 구조 방식 | H1 (+60m) | H2 (+120m) | H3 (+180m) | H4 (+240m) | 평균 Brier ↓ | 분석 및 구조 결정 |
 |---|---|---|---|---|---|---|
-| **통합 모델 — 로지스틱 (Global Model)** | 0.0917 | 0.0917 | 0.0917 | 0.0917 | **0.0917** | **[최종 구조 고정]** 단일 모델 배포로 운영/배포 편의성 우수 |
-| Horizon별 모델 — HistGB (Per-Horizon) | 0.0622 | 0.0802 | 0.0928 | 0.1006 | **0.0839** | H1~H4 단기 정밀도 우수하나 4개 모델 관리 부담 |
+| **통합 모델 (Global Model)** | 0.0574 | 0.0574 | 0.0574 | 0.0574 | **0.0574** | **[최종 구조 고정]** 단일 모델 배포로 운영/배포 편의성 우수 |
+| Horizon별 모델 (Per-Horizon) | 0.0406 | 0.0527 | 0.0636 | 0.0833 | **0.0600** | H1 단기 오차 우수하나 4개 모델 관리 대비 평균 오차 열세 |
 
 ---
 
 ## 4. STEP 2: Final Test 최종 단독 평가 (Final Test Evaluation Table)
 
-Validation 단계에서 **1등으로 선택 및 고정된 최종 모델 (Logistic Regression Global)**을 한번도 보지 않은 `test` Holdout 세트에서 단 1회 평가한 최종 결과입니다 (단조성 보정 후 확률 기준):
+Validation 단계에서 **1등으로 선택 및 고정된 최종 모델 (HistGradientBoosting Global)**을 한번도 보지 않은 `test` Holdout 세트에서 단 1회 평가한 최종 결과입니다 (단조성 보정 후 확률 기준):
 
 - **평가 지문 (SHA-256)**: `26e62a7f089ff5ce1f50fd00750e5553248afcc0a48469ae6c81e336aa6f299d`
 
 | 최종 고정 모델 | 평가 분할 | Brier Score ↓ | 부족 Recall ↑ | Accuracy ↑ | Calibration error ↓ |
 |---|---|---:|---:|---:|---:|
-| 🏆 **로지스틱 회귀 통합 모델 (Logistic Regression Global)** | **Final Test (Holdout)** | **0.0917** | **85.16%** | **87.21%** | **0.0504** |
+| 🏆 **트리 기반 통합 모델 (HistGradientBoosting Global)** | **Final Test (Holdout)** | **0.0912** | **81.22%** | **87.41%** | **0.0523** |
 
-*참고 Test 레퍼런스*: Test 세트 기준 Per-Horizon Brier 평균은 H1(`0.1040`), H2(`0.1311`), H3(`0.1528`), H4(`0.1597`), 평균 `0.1369`입니다.
+*참고 Test 레퍼런스*: Test 세트 기준 Per-Horizon Brier 평균은 H1(`0.0776`), H2(`0.0940`), H3(`0.1024`), H4(`0.0942`), 평균 `0.0921`입니다.
 
 ---
 
@@ -132,8 +133,8 @@ Validation 단계에서 **1등으로 선택 및 고정된 최종 모델 (Logisti
 | 항목 | 값 |
 |---|---|
 | 승인 우승 파일 (추론용) | `output/model_winner.joblib` |
-| **SHA-256 (model_winner)** | `e5e69d406c4581db05cfcb4f4463543e0f2da2809d36a00bd8453de75402ead6` |
-| 파일 크기 | 1,407 bytes |
+| **SHA-256 (model_winner)** | `8f42ac36b340891a0aac3d53b13b1fb02ddd5b217436ef1cf93b9d07e766f50e` |
+| 파일 크기 | 367,800 bytes |
 | Git 커밋 금지 | `output/`는 `.gitignore` 등록 — 대용량 및 생성 joblib Git 업로드 불가 |
 | 보관 위치 | 로컬 `output/model_winner.joblib` (프로젝트 루트 기준) |
 | 메타데이터 파일 | `output/model_winner_metadata.json` |
@@ -185,4 +186,4 @@ print(f'P(available >= 3대, 60분 후) = {prob:.4f}')
 
 - 동일 입력 2회 연속 실행: evaluation_row_hash 및 4대 지표 100% 동일 (**Idempotent PASS**)
 - DuckDB 해시 모듈로 필터 (`abs(hash(...)) % 10000 < 500`) — 고정 시드로 100% 결정론적 표본 추출 보장
-- Validation 선택 및 Final Test 2단계 평가 완료 → 최종 모델(Logistic Regression Global) PR 승인 요청
+- Validation 선택 및 Final Test 2단계 평가 완료 → 최종 모델(HistGradientBoosting Global) PR 승인 요청
