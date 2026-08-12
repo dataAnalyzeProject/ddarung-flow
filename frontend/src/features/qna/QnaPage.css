@@ -1,1 +1,456 @@
-.qna-page { max-width: 1120px; margin: 0 auto; padding: 32px; }
+/* 시안 이미지 1~4번과 100% 동일한 깔끔한 모던 CSS */
+.qna-page {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 32px 20px;
+    background-color: #ffffff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #1a1a1a;
+}
+
+/* 헤더 영역 */
+.qna-page__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 24px;
+}
+
+.qna-page__header h2 {
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0 0 6px 0;
+    color: #111827;
+}
+
+.qna-page__header p {
+    font-size: 14px;
+    color: #6b7280;
+    margin: 0;
+}
+
+.qna-page__header button,
+.qna-page__status-card button,
+.qna-page__form-actions button[type="submit"] {
+    background-color: #026aa7;
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.qna-page__header button:hover,
+.qna-page__status-card button:hover,
+.qna-page__form-actions button[type="submit"]:hover {
+    background-color: #014c78;
+}
+
+/* 검색 및 분류 필터 영역 */
+.qna-page__search-bar {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 24px;
+}
+
+.qna-page__search-bar label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+}
+
+.qna-page__search-bar input[type="text"] {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 14px;
+    outline: none;
+}
+
+.qna-page__search-bar input[type="text"]:focus {
+    border-color: #026aa7;
+}
+
+.qna-page__search-bar select {
+    padding: 10px 14px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 14px;
+    background-color: #ffffff;
+    cursor: pointer;
+    outline: none;
+}
+
+.qna-page__search-bar button {
+    padding: 10px 18px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background-color: #ffffff;
+    color: #374151;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.qna-page__search-bar button:hover {
+    background-color: #f3f4f6;
+}
+
+/* 질문 목록 및 카드 아이템 (시안 1번 이미지 둥근 카드) */
+.qna-page__list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.qna-page__item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    background-color: #ffffff;
+    cursor: pointer;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.qna-page__item:hover {
+    border-color: #9ca3af;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.qna-page__item-content h3 {
+    font-size: 16px;
+    font-weight: 700;
+    margin: 0 0 6px 0;
+    color: #111827;
+}
+
+.qna-page__category-badge {
+    color: #111827;
+}
+
+.qna-page__item-meta {
+    font-size: 13px;
+    color: #9ca3af;
+    margin: 0;
+}
+
+/* 시안 1번과 동일한 파스텔 알약 배지 태그 */
+.qna-page__badge {
+    display: inline-block;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.qna-page__badge--answered {
+    background-color: #e8f5e9;
+    color: #2e7d32;
+}
+
+.qna-page__badge--open {
+    background-color: #fff8e1;
+    color: #b78103;
+}
+
+.qna-page__badge--private {
+    background-color: #f3f4f6;
+    color: #6b7280;
+}
+
+/* 점선 안내 박스 (시안 3, 4번 이미지 100% 일치) */
+.qna-page__status-card {
+    text-align: center;
+    padding: 64px 20px;
+    border: 1.5px dashed #d1d5db;
+    border-radius: 16px;
+    background-color: #ffffff;
+    margin-top: 16px;
+}
+
+.qna-page__status-card h3 {
+    font-size: 20px;
+    font-weight: 700;
+    margin: 0 0 8px 0;
+    color: #111827;
+}
+
+.qna-page__status-card p {
+    font-size: 14px;
+    color: #6b7280;
+    margin: 0 0 20px 0;
+}
+
+.qna-page__status-card button {
+    background-color: #ffffff;
+    color: #374151;
+    border: 1px solid #d1d5db;
+}
+
+.qna-page__status-card button:hover {
+    background-color: #f9fafb;
+}
+
+/* 시안 2번 이미지 스켈레톤 로딩 카드 3개 */
+.qna-page__skeleton-container {
+    display: flex;
+    gap: 16px;
+    margin-top: 16px;
+}
+
+.qna-page__skeleton-card {
+    flex: 1;
+    height: 120px;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+    background-size: 200% 100%;
+    animation: qna-skeleton-glow 1.5s infinite;
+}
+
+@keyframes qna-skeleton-glow {
+    0% {
+        background-position: 200% 0;
+    }
+
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+/* 폼 디자인 */
+.qna-page__form {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    margin-top: 16px;
+    padding: 24px;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    background-color: #ffffff;
+}
+
+.qna-page__form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.qna-page__form-group label {
+    font-weight: 600;
+    font-size: 14px;
+    color: #374151;
+}
+
+.qna-page__form-group input,
+.qna-page__form-group select,
+.qna-page__form-group textarea {
+    padding: 10px 14px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 14px;
+    outline: none;
+}
+
+.qna-page__form-group textarea {
+    min-height: 160px;
+    resize: vertical;
+}
+
+.qna-page__info-text {
+    font-size: 12px;
+    color: #ef4444;
+    margin: 2px 0 0 0;
+}
+
+.qna-page__validation-error {
+    padding: 10px 14px;
+    border: 1px solid #fca5a5;
+    background-color: #fef2f2;
+    color: #dc2626;
+    border-radius: 8px;
+    font-size: 14px;
+    margin-top: 12px;
+}
+
+.qna-page__form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.qna-page__form-actions button[type="button"] {
+    padding: 10px 18px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background-color: #ffffff;
+    color: #374151;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+/* Q&A 상세 및 작성 화면 - 시안 4장 100% 정밀 맞춤 스타일 */
+/* 상세보기/작성 박스 레이아웃 (시안 1, 2, 3번 둥근 카드) */
+.qna-page__detail {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    margin-top: 16px;
+}
+
+.qna-page__detail-header,
+.qna-page__detail-body-card,
+.qna-page__answer-section {
+    position: relative;
+    padding: 24px 28px;
+    border: 1px solid #dbe3eb;
+    border-radius: 12px;
+    background-color: #ffffff;
+}
+
+/* 시안 1번 우측 '수정' 세로 긴 버튼 */
+.qna-page__detail-header button[aria-label="질문 수정"] {
+    position: absolute;
+    right: 24px;
+    top: 24px;
+    bottom: 24px;
+    width: 64px;
+    background-color: #ffffff;
+    color: #1e293b;
+    border: 1px solid #94a3b8;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.qna-page__detail-header button[aria-label="질문 수정"]:hover {
+    background-color: #f8fafc;
+}
+
+.qna-page__detail-header h2 {
+    font-size: 20px;
+    font-weight: 700;
+    margin: 10px 0 10px 0;
+    color: #0f172a;
+}
+
+.qna-page__detail-meta {
+    font-size: 13px;
+    color: #64748b;
+    display: flex;
+    gap: 8px;
+}
+
+.qna-page__detail-body {
+    font-size: 14px;
+    color: #64748b;
+    line-height: 1.6;
+}
+
+/* 관리자 답변 박스 (시안 1, 3번) */
+.qna-page__answer-section h3 {
+    font-size: 16px;
+    font-weight: 700;
+    margin: 0 0 12px 0;
+    color: #0f172a;
+}
+
+.qna-page__answer-section p {
+    font-size: 14px;
+    color: #64748b;
+    margin: 0;
+}
+
+.qna-page__answer-empty {
+    color: #94a3b8 !important;
+}
+
+/* 질문 작성 / 수정 폼 (시안 2번 100% 동일) */
+.qna-page__form {
+    padding: 28px;
+    border: 1px solid #dbe3eb;
+    border-radius: 12px;
+    background-color: #ffffff;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    margin-top: 16px;
+}
+
+.qna-page__form-group label {
+    font-size: 13px;
+    font-weight: 700;
+    color: #334155;
+    margin-bottom: 6px;
+}
+
+.qna-page__form-group input,
+.qna-page__form-group select,
+.qna-page__form-group textarea {
+    padding: 12px 14px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font-size: 14px;
+    color: #0f172a;
+    outline: none;
+}
+
+.qna-page__form-group textarea {
+    min-height: 140px;
+}
+
+/* 취소 / 등록 하단 버튼 배치 (시안 2번) */
+.qna-page__form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.qna-page__form-actions button[type="button"] {
+    background-color: #ffffff;
+    color: #334155;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 9px 20px;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.qna-page__form-actions button[type="submit"] {
+    background-color: #026aa7;
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    padding: 9px 20px;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+/* 404 질문 미발견 박스 (시안 4번) */
+.qna-page[data-status="notFound"] .qna-page__status-card button,
+.qna-page[data-view="detail"] button[aria-label="목록으로 돌아가기"] {
+    background-color: #026aa7;
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    padding: 9px 20px;
+    font-weight: 600;
+}
