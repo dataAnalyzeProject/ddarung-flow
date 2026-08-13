@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import LoginPage from './LoginPage';
 import { LOGIN_STATUS } from './data/authDemoData';
 import { savePendingPrediction, loadPendingPrediction } from './loginStorage';
@@ -22,6 +23,10 @@ describe('LoginPage 핵심 테스트', () => {
         expect(screen.getByTitle('Kakao 로그인')).toBeInTheDocument();
         expect(screen.getByTitle('Naver 로그인')).toBeInTheDocument();
         expect(screen.getByTitle('Google 로그인')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Google로 계속하기' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: '네이버로 계속하기' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: '카카오로 계속하기' })).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: /로그인 없이 대여 예측하기/ })).toHaveAttribute('href', '/');
     });
 
     test('LOADING 처리 중에는 버튼이 비활성화되어 중복 클릭할 수 없다', () => {
@@ -33,6 +38,25 @@ describe('LoginPage 핵심 테스트', () => {
         render(<LoginPage initialStatus={LOGIN_STATUS.WAITING} />);
         fireEvent.click(screen.getByTitle('Kakao 로그인'));
         expect(startSocialLogin).toHaveBeenCalledWith('Kakao');
+    });
+
+    test.each([
+        ['Google', 'Google로 계속하기', '{enter}'],
+        ['Google', 'Google로 계속하기', ' '],
+        ['Naver', '네이버로 계속하기', '{enter}'],
+        ['Naver', '네이버로 계속하기', ' '],
+        ['Kakao', '카카오로 계속하기', '{enter}'],
+        ['Kakao', '카카오로 계속하기', ' '],
+    ])('%s 로그인 버튼은 %s 키 입력으로 한 번만 실행된다', (provider, accessibleName, key) => {
+        render(<LoginPage initialStatus={LOGIN_STATUS.WAITING} />);
+        const button = screen.getByRole('button', { name: accessibleName });
+        button.focus();
+        expect(button).toHaveFocus();
+
+        userEvent.keyboard(key);
+
+        expect(startSocialLogin).toHaveBeenCalledTimes(1);
+        expect(startSocialLogin).toHaveBeenCalledWith(provider);
     });
 
     test('OAuth 실패 복귀 주소에서 실패 안내를 표시한다', () => {
@@ -69,12 +93,12 @@ describe('LoginPage 핵심 테스트', () => {
         render(<LoginPage initialStatus={LOGIN_STATUS.SUCCESS} mockOutcome="success" />);
 
         await waitFor(() => {
-            expect(screen.getByText(/출발지: 서울역/i)).toBeInTheDocument();
-            expect(screen.getByText(/목적지: 광화문/i)).toBeInTheDocument();
+            expect(screen.getByText('서울역')).toBeInTheDocument();
+            expect(screen.getByText('광화문')).toBeInTheDocument();
         });
-        expect(screen.getByText(/이동수단: WALK/i)).toBeInTheDocument();
+        expect(screen.getByText('WALK')).toBeInTheDocument();
         expect(screen.getByText(/이동수단으로 계산/i)).toBeInTheDocument();
-        expect(screen.getByText(/필요 자전거: 2/i)).toBeInTheDocument();
+        expect(screen.getByText('2대')).toBeInTheDocument();
         expect(screen.getByText(/입력값을 확인한 후 다시 예측해 주세요/i)).toBeInTheDocument();
 
         fireEvent.click(screen.getByText(/로그아웃/i));
@@ -119,5 +143,14 @@ describe('LoginPage 핵심 테스트', () => {
         expect(onRepeatPrediction).toHaveBeenCalledTimes(1);
         expect(onRepeatPrediction).toHaveBeenCalledWith(sampleInput);
         expect(loadPendingPrediction()).toBeNull();
+    });
+
+    test('헤더는 제품명과 주요 메뉴를 시맨틱 내비게이션으로 제공한다', () => {
+        render(<LoginPage initialStatus={LOGIN_STATUS.WAITING} />);
+        const navigation = screen.getByRole('navigation', { name: '주요 메뉴' });
+        expect(navigation).toHaveTextContent('대여 예측');
+        expect(navigation).toHaveTextContent('Q&A');
+        expect(screen.getByRole('heading', { name: '로그인하고 더 편리하게 이용하세요' })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: '로그인하면' })).toBeInTheDocument();
     });
 });
