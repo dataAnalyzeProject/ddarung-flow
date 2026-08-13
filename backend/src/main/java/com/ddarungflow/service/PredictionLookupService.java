@@ -59,7 +59,14 @@ public class PredictionLookupService {
             requiredBikeCount,
             selectedProbability,
             prediction.getBatch().getFeatureAsOf(),
-            prediction.getBatch().getExpiresAt()
+            prediction.getBatch().getExpiresAt(),
+            prediction.getBatch().getModelVersion(),
+            prediction.getBatch().getGeneratedAt(),
+            prediction.getAtLeast1Probability(),
+            prediction.getAtLeast2Probability(),
+            prediction.getAtLeast3Probability(),
+            prediction.getAtLeast4Probability(),
+            prediction.getAtLeast5Probability()
         ));
     }
 
