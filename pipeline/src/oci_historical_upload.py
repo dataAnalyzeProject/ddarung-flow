@@ -25,6 +25,11 @@ from pipeline.src.storage.oci_raw_store import create_object_storage_client
 
 RAW_PREFIX = "raw/bike-inventory/historical"
 CURATED_PREFIX = "curated/bike-inventory/historical"
+CURATED_LINEAGE_FILE = "partition-lineage.json"
+APPROVED_CURATED_SHA256 = (
+    "0E5ED94F13E732FA70799681C58CC74801B231E43C9E2D9EDBD480C0BD80A182"
+)
+APPROVED_CURATED_ROWS = 66_467_477
 
 
 def _file_metadata(path, object_name, year, kind, row_count=None):
@@ -47,6 +52,36 @@ def _csv_row_count(path):
         for block in iter(lambda: source.read(8 * 1024 * 1024), b""):
             newline_count += block.count(b"\n")
     return max(0, newline_count - 1)
+
+
+def _lineage_payload(curated_path, plan, source_row_count):
+    return {
+        "schema_version": 1,
+        "source": {
+            "sha256": calculate_sha256(curated_path),
+            "row_count": int(source_row_count),
+        },
+        "partitions": [
+            {
+                "object_name": item["object_name"],
+                "year": item["year"],
+                "row_count": item["row_count"],
+                "size_bytes": item["size_bytes"],
+                "sha256": item["sha256"],
+            }
+            for item in plan
+        ],
+    }
+
+
+def _verify_approved_curated(curated_path, expected_sha256, expected_rows):
+    actual_sha256 = calculate_sha256(curated_path)
+    if actual_sha256 != expected_sha256:
+        raise ValueError("approved Curated checksum mismatch")
+    actual_rows = _csv_row_count(curated_path)
+    if actual_rows != expected_rows:
+        raise ValueError("approved Curated row count mismatch")
+    return actual_rows
 
 
 def build_raw_plan(manifest, data_root, prefix=RAW_PREFIX):
@@ -77,6 +112,8 @@ def partition_curated(
     output_dir,
     chunk_rows=500_000,
     allowed_years=(2022, 2024, 2025),
+    expected_sha256=None,
+    expected_rows=None,
 ):
     """Write deterministic UTF-8 CSV partitions keyed by Seoul calendar year."""
     output_dir = Path(output_dir)
@@ -85,9 +122,14 @@ def partition_curated(
         raise FileExistsError("partition directory must be empty for a deterministic run")
     counts = {}
     row_counts = {}
+    input_rows = 0
     for chunk in pd.read_csv(curated_path, chunksize=chunk_rows):
+        input_rows += len(chunk)
+        observed_at = pd.to_datetime(chunk["observed_at"], utc=True, errors="coerce")
+        if observed_at.isna().any():
+            raise ValueError("Curated contains invalid or null observed_at")
         years = (
-            pd.to_datetime(chunk["observed_at"], utc=True)
+            observed_at
             .dt.tz_convert("Asia/Seoul")
             .dt.year
         )
@@ -118,11 +160,42 @@ def partition_curated(
                 row_count=row_counts[path],
             )
         )
+    partition_rows = sum(item["row_count"] for item in plan)
+    if partition_rows != input_rows:
+        raise ValueError(
+            f"Curated row preservation mismatch: input={input_rows}, partitions={partition_rows}"
+        )
+    if expected_sha256 is not None or expected_rows is not None:
+        if expected_sha256 is None or expected_rows is None:
+            raise ValueError("expected Curated checksum and row count must be provided together")
+        _verify_approved_curated(curated_path, expected_sha256, expected_rows)
+    lineage = _lineage_payload(curated_path, plan, input_rows)
+    (output_dir / CURATED_LINEAGE_FILE).write_text(
+        json.dumps(lineage, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
     return plan
 
 
-def load_curated_plan(output_dir, allowed_years=(2022, 2024, 2025)):
+def load_curated_plan(
+    curated_path,
+    output_dir,
+    allowed_years=(2022, 2024, 2025),
+    expected_sha256=APPROVED_CURATED_SHA256,
+    expected_rows=APPROVED_CURATED_ROWS,
+):
     output_dir = Path(output_dir)
+    lineage_path = output_dir / CURATED_LINEAGE_FILE
+    if not lineage_path.is_file():
+        raise FileNotFoundError("Curated partition lineage file is required for reuse")
+    lineage = json.loads(lineage_path.read_text(encoding="utf-8"))
+    source_rows = _verify_approved_curated(
+        curated_path, expected_sha256, expected_rows
+    )
+    if lineage.get("source") != {
+        "sha256": expected_sha256,
+        "row_count": expected_rows,
+    }:
+        raise ValueError("Curated partition lineage source mismatch")
     paths = sorted(output_dir.glob("*/part-*.csv"))
     if not paths:
         raise FileNotFoundError("no existing Curated partition files found")
@@ -130,7 +203,7 @@ def load_curated_plan(output_dir, allowed_years=(2022, 2024, 2025)):
     unexpected = sorted(years - set(allowed_years))
     if unexpected:
         raise ValueError(f"Curated contains years outside approved scope: {unexpected}")
-    return [
+    plan = [
         _file_metadata(
             path,
             f"{CURATED_PREFIX}/{int(path.parent.name)}/{path.name}",
@@ -140,6 +213,15 @@ def load_curated_plan(output_dir, allowed_years=(2022, 2024, 2025)):
         )
         for path in paths
     ]
+    actual_partitions = _lineage_payload(curated_path, plan, source_rows)["partitions"]
+    if actual_partitions != lineage.get("partitions"):
+        raise ValueError("Curated partition lineage mismatch")
+    partition_rows = sum(item["row_count"] for item in plan)
+    if partition_rows != expected_rows:
+        raise ValueError(
+            f"Curated row preservation mismatch: source={expected_rows}, partitions={partition_rows}"
+        )
+    return plan
 
 
 def _sha256_base64(sha256_hex):
@@ -292,7 +374,11 @@ def verify_remote_plan(plan, bucket_name, client, namespace=None, workers=1):
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
         list(executor.map(verify_item, plan))
-    return {"verified_objects": len(plan), "status": "PASS"}
+    return {
+        "scope": "head_metadata_sha256_and_size",
+        "verified_objects": len(plan),
+        "status": "PASS",
+    }
 
 
 def _response_sha256(response):
@@ -351,10 +437,20 @@ def verify_read_and_denial(plan, bucket_name, client, namespace=None):
 
 
 def _masked_result(plan, verification=None):
-    objects = [
-        {key: value for key, value in item.items() if key not in {"source", "etag"}}
-        for item in plan
-    ]
+    counters = {}
+    objects = []
+    for item in plan:
+        alias_key = (item["kind"], item["year"])
+        counters[alias_key] = counters.get(alias_key, 0) + 1
+        masked = {
+            key: value
+            for key, value in item.items()
+            if key not in {"source", "etag", "object_name"}
+        }
+        masked["object_alias"] = (
+            f"{item['kind']}:{item['year']}:{counters[alias_key]:03d}"
+        )
+        objects.append(masked)
     return {
         "summary": {
             "status": "PASS",
@@ -397,9 +493,14 @@ def main():
         raise ValueError("approved manifest SHA-256 mismatch")
     plan = build_raw_plan(manifest, args.data_root)
     curated_plan = (
-        load_curated_plan(args.partition_dir)
+        load_curated_plan(args.curated, args.partition_dir)
         if args.reuse_partitions
-        else partition_curated(args.curated, args.partition_dir)
+        else partition_curated(
+            args.curated,
+            args.partition_dir,
+            expected_sha256=APPROVED_CURATED_SHA256,
+            expected_rows=APPROVED_CURATED_ROWS,
+        )
     )
     plan.extend(curated_plan)
     verification = None
