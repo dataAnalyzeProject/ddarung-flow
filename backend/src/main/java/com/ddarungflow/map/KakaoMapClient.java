@@ -184,13 +184,30 @@ public class KakaoMapClient {
             JsonNode routeProperties;
             if (publicTransit) {
                 JsonNode routes = root.path("routes");
-                routeProperties = routes.isArray() && !routes.isEmpty()
-                    ? routes.get(0).path("properties")
-                    : objectMapper.createObjectNode();
+                routeProperties = null;
+                if (routes.isArray()) {
+                    for (JsonNode route : routes) {
+                        JsonNode candidate = route.path("properties");
+                        JsonNode candidateDistance = candidate.get("totalDistance");
+                        JsonNode candidateDuration = candidate.get("totalTime");
+                        if (candidateDistance == null || candidateDistance.isNull()
+                            || candidateDuration == null || candidateDuration.isNull()
+                            || candidateDistance.asInt(-1) < 0 || candidateDuration.asInt(-1) < 0) {
+                            continue;
+                        }
+                        if (routeProperties == null
+                            || candidateDuration.asInt() < routeProperties.path("totalTime").asInt()) {
+                            routeProperties = candidate;
+                        }
+                    }
+                }
             } else {
                 routeProperties = root.path("route").path("properties");
             }
 
+            if (routeProperties == null) {
+                return java.util.Optional.empty();
+            }
             JsonNode distNode = routeProperties.get("totalDistance");
             JsonNode durNode = routeProperties.get("totalTime");
 

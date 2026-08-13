@@ -189,6 +189,12 @@ class KakaoMapClientTest {
                     "totalDistance": 4200,
                     "totalTime": 1080
                   }
+                },
+                {
+                  "properties": {
+                    "totalDistance": 5200,
+                    "totalTime": 900
+                  }
                 }
               ]
             }
@@ -211,8 +217,8 @@ class KakaoMapClientTest {
         );
 
         assertThat(routeOpt).isPresent();
-        assertThat(routeOpt.get().distanceMeters()).isEqualTo(4200);
-        assertThat(routeOpt.get().durationSeconds()).isEqualTo(1080);
+        assertThat(routeOpt.get().distanceMeters()).isEqualTo(5200);
+        assertThat(routeOpt.get().durationSeconds()).isEqualTo(900);
         assertThat(routeOpt.get().travelMode()).isEqualTo("PUBLIC_TRANSIT");
         assertThat(requestReference.get().uri().toString())
             .contains("/v2/routing/publictraffic?start_x=126.9000&start_y=37.5500&end_x=126.9106&end_y=37.5556");
