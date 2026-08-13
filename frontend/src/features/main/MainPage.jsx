@@ -32,7 +32,6 @@ export default function MainPage() {
   const [locationChecked, setLocationChecked] = useState(false);
   const [timeConfirmed, setTimeConfirmed] = useState(false);
   const [loginPromptOpen, setLoginPromptOpen] = useState(false);
-  const [activeMenu, setActiveMenu] = useState("대여 예측");
   const [mapZoom, setMapZoom] = useState(1);
   const [mapType, setMapType] = useState("지도");
   const [guideStation, setGuideStation] = useState(null);
@@ -119,17 +118,11 @@ export default function MainPage() {
           <span aria-hidden="true" />
           <strong>{serviceData.serviceName}</strong>
         </div>
-        <nav className="main-menu" aria-label="주요 메뉴">
-          {["대여 예측", "Q&A", "보관함", "알림"].map((menu) => (
-            <button
-              className={activeMenu === menu ? "active" : ""}
-              key={menu}
-              type="button"
-              onClick={() => setActiveMenu(menu)}
-            >
-              {menu}
-            </button>
-          ))}
+        <nav aria-label="주요 메뉴" className="main-menu">
+          <span aria-current="page">대여 예측</span>
+          <span>Q&amp;A</span>
+          <span>보관함</span>
+          <span>알림</span>
         </nav>
         <div className="main-auth">
           {authState === "authenticated" || authState === "logging-out" ? (
