@@ -23,6 +23,22 @@ import static org.assertj.core.api.Assertions.assertThat;
 @ActiveProfiles("test")
 class MapPredictionServiceTest {
 
+    @Test
+    @DisplayName("승인된 공통 임계값으로 20개 조합의 확률 등급을 일관되게 매핑한다")
+    void mapsApprovedAvailabilityBoundaries() {
+        assertThat(MapPredictionService.toAvailabilityLevel(new BigDecimal("0.2399")))
+            .isEqualTo(PredictionApiDtos.AvailabilityLevel.LOW);
+        assertThat(MapPredictionService.toAvailabilityLevel(new BigDecimal("0.24")))
+            .isEqualTo(PredictionApiDtos.AvailabilityLevel.MEDIUM);
+        assertThat(MapPredictionService.toAvailabilityLevel(new BigDecimal("0.3599")))
+            .isEqualTo(PredictionApiDtos.AvailabilityLevel.MEDIUM);
+        assertThat(MapPredictionService.toAvailabilityLevel(new BigDecimal("0.36")))
+            .isEqualTo(PredictionApiDtos.AvailabilityLevel.HIGH);
+        assertThat(MapPredictionService.toAvailabilityLevel(BigDecimal.ZERO))
+            .isEqualTo(PredictionApiDtos.AvailabilityLevel.LOW);
+        assertThat(MapPredictionService.toAvailabilityLevel(null)).isNull();
+    }
+
     @Autowired
     private StationRepository stationRepository;
 
@@ -62,6 +78,8 @@ class MapPredictionServiceTest {
         assertThat(dto.inventoryStatus()).isEqualTo(InventoryStatus.NORMAL);
         assertThat(dto.distanceMeters()).isGreaterThanOrEqualTo(0);
         assertThat(dto.durationSeconds()).isGreaterThanOrEqualTo(0);
+        assertThat(dto.predictionStatus()).isEqualTo(PredictionApiDtos.PredictionStatus.MISSING);
+        assertThat(dto.availabilityLevel()).isNull();
     }
 
     @Test
@@ -101,6 +119,7 @@ class MapPredictionServiceTest {
 
         assertThat(st4.inventoryStatus()).isEqualTo(InventoryStatus.NORMAL);
         assertThat(st5.predictionProbability()).isNull(); // ST-5는 예측 실패로 probability null
+        assertThat(st5.predictionStatus()).isEqualTo(PredictionApiDtos.PredictionStatus.UNAVAILABLE);
     }
 
     @Test

@@ -32,7 +32,9 @@ class OpenApiDocumentationTest {
                 .andExpect(jsonPath("$.paths['/api/v1/auth/me']").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/auth/csrf']").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/predictions/route']").exists())
-                .andExpect(jsonPath("$.paths['/api/v1/predictions/direct']").exists());
+                .andExpect(jsonPath("$.paths['/api/v1/predictions/direct']").exists())
+                .andExpect(jsonPath("$.components.schemas.CandidatePredictionResponseDto.properties.availabilityLevel").exists())
+                .andExpect(jsonPath("$.components.schemas.CandidatePredictionResponseDto.properties.predictionStatus").exists());
     }
 
     @Test

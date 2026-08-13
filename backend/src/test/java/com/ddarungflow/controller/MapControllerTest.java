@@ -169,6 +169,15 @@ class MapControllerTest {
     }
 
     @Test
+    @DisplayName("비로그인 보호 예측 요청은 인증을 요구한다")
+    void protectedPredictionRejectsAnonymous() throws Exception {
+        mockMvc.perform(post("/api/v1/predictions/route").with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"originLatitude\":37.55,\"originLongitude\":126.9,\"destinationLatitude\":37.56,\"destinationLongitude\":126.91}"))
+                .andExpect(status().is3xxRedirection());
+    }
+
+    @Test
     @DisplayName("searchStationsHonorsLimitTwenty: limit=20 지정 시 최대 20개 결과를 정확히 반환한다")
     @WithMockUser
     void searchStationsHonorsLimitTwenty() throws Exception {
@@ -424,7 +433,9 @@ class MapControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(jsonPayload))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1));
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].predictionStatus").value("MISSING"))
+                .andExpect(jsonPath("$[0].availabilityLevel").doesNotExist());
     }
 
     @Test
