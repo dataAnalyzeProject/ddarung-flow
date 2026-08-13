@@ -45,6 +45,7 @@ export default function MainPage() {
   const [stationSort, setStationSort] = useState("arrival");
   const [sortTouched, setSortTouched] = useState(false);
   const [moreStationsOpen, setMoreStationsOpen] = useState(false);
+  const [sortedBookmarks, setSortedBookmarks] = useState([]);
   const sortedRecommendations = [...recommendationPool].sort((a, b) => {
     if (stationSort === "success") return b.rate - a.rate;
     if (stationSort === "bikes") return b.bikes - a.bikes;
@@ -117,7 +118,7 @@ export default function MainPage() {
           <option value="bikes">현재 자전거 수 기준</option>
         </select>
         <span className="hot-station-sort-label" aria-hidden="true">{{ arrival: "예상 도착시간 기준", distance: "가까운 거리 기준", success: "대여 성공률 기준", bikes: "현재 자전거 수 기준" }[stationSort]}</span>
-        {sortTouched && <div className="hot-sorted-stations">{sortedRecommendations.map((station, index) => <article key={station.name}><b>{index + 1}</b><div className="sorted-name"><strong>{station.name}</strong><small>목적지에서 {station.distance}</small></div><div><small>현재 자전거</small><strong>{station.bikes}<i>대</i></strong></div><div><small>예상 도착 시</small><strong>{station.range}</strong></div><div className="sorted-rate"><small>대여 성공률</small><strong>{station.rate}%</strong><em>{station.level}</em></div><button onClick={() => setNotice(true)}>상세보기</button></article>)}</div>}
+        {sortTouched && <div className="hot-sorted-stations">{sortedRecommendations.map((station, index) => <article key={station.name}><b>{index + 1}</b><div className="sorted-name"><strong>{station.name}</strong><small>목적지에서 {station.distance}</small></div><button className={`sorted-bookmark ${sortedBookmarks.includes(station.name) ? "saved" : ""}`} aria-label={`${station.name} 즐겨찾기`} aria-pressed={sortedBookmarks.includes(station.name)} onClick={() => setSortedBookmarks(current => current.includes(station.name) ? current.filter(name => name !== station.name) : [...current, station.name])} /><div><small>현재 자전거</small><strong>{station.bikes}<i>대</i></strong></div><div><small>예상 도착 시</small><strong>{station.range}</strong></div><div className="sorted-rate"><small>대여 성공률</small><strong>{station.rate}%</strong><em>{station.level}</em></div><button className="sorted-detail" onClick={() => setDetails(station)}>상세보기</button></article>)}</div>}
         {stations.map((station, index) => <button key={`detail-${station.id}`} className={`hot-detail hot-detail-${index + 1}`} aria-label={`Station ${index + 1} details`} onClick={() => setDetails(station)} />)}
         {stations.map((station, index) => <button key={`bookmark-${station.id}`} className={`hot-bookmark hot-bookmark-${index + 1}`} type="button" aria-label={`Bookmark station ${index + 1}`} aria-pressed={bookmarks.includes(station.id)} onClick={() => setBookmarks(current => current.includes(station.id) ? current.filter(id => id !== station.id) : [...current, station.id])} />)}
         <button className="hot-map-tab" type="button" aria-label="지도" aria-pressed={mapMode === "map"} onClick={() => setMapMode("map")} />
