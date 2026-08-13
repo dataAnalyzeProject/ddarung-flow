@@ -16,12 +16,9 @@ public class PlaceController {
 
     private final KakaoMapClient kakaoMapClient;
 
-    public PlaceController() {
-        this(new KakaoMapClient("https://dapi.kakao.com", "fake-key"));
-    }
-
+    @org.springframework.beans.factory.annotation.Autowired
     public PlaceController(KakaoMapClient kakaoMapClient) {
-        this.kakaoMapClient = kakaoMapClient != null ? kakaoMapClient : new KakaoMapClient("https://dapi.kakao.com", "fake-key");
+        this.kakaoMapClient = kakaoMapClient;
     }
 
     @GetMapping("/search")
