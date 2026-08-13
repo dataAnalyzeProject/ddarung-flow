@@ -112,15 +112,25 @@
 }
 
 .qna-page__item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 20px 24px;
     border: 1px solid #e5e7eb;
     border-radius: 12px;
     background-color: #ffffff;
-    cursor: pointer;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.qna-page__item-button {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    padding: 20px 24px;
+    background: none;
+    border: none;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    border-radius: 12px;
 }
 
 .qna-page__item:hover {

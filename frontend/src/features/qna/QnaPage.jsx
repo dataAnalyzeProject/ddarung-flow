@@ -23,6 +23,8 @@ export default function QnaPage({
   // 검색 및 분류 필터 상태
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("ALL");
+  const [selectedAnswerStatus, setSelectedAnswerStatus] = useState("ALL");
+  const [page, setPage] = useState(1);
   const [validationError, setValidationError] = useState("");
 
   // ACCOUNT, LOCATION 선택 시 PRIVATE 강제
@@ -37,7 +39,7 @@ export default function QnaPage({
   const handleSearchSubmit = (e) => {
     e.preventDefault();
     if (onSearch) {
-      onSearch({ query: searchQuery.trim(), category: selectedCategory });
+      onSearch({ query: searchQuery.trim(), category: selectedCategory, answerStatus: selectedAnswerStatus, page: page });
     }
   };
   // 작성 / 수정 제출
@@ -192,6 +194,21 @@ export default function QnaPage({
   }
   // 3. view === "create" || view === "edit" (작성 및 수정)
   if (view === "create" || view === "edit") {
+    // view="edit" 보안 방어: 타인 질문이거나 이미 답변 완료된 질문이면 직접 진입 차단!
+    if (view === "edit") {
+      const isOwner = currentUser?.id === selectedQuestion?.authorId;
+      const isUnanswered = selectedQuestion?.status === "OPEN";
+      if (!isOwner || !isUnanswered) {
+        return (
+          <main className="qna-page" data-status="forbidden">
+            <div className="qna-page__status-card">
+              <h3>접근 권한이 없거나 수정할 수 없는 질문입니다</h3>
+            </div>
+          </main>
+        );
+      }
+    }
+
     const isAccountOrLocation = category === "ACCOUNT" || category === "LOCATION";
     return (
       <main className="qna-page" data-view={view}>
@@ -257,6 +274,11 @@ export default function QnaPage({
     );
   }
   // 4. view === "list" (기본 질문 목록)
+  const visibleQuestions = questions.filter((item) => {
+    if (item.visibility === "PUBLIC") return true;
+    return item.visibility === "PRIVATE" && item.authorId === currentUser?.id;
+  });
+
   return (
     <main className="qna-page" data-view="list">
       <header className="qna-page__header">
@@ -290,38 +312,84 @@ export default function QnaPage({
           <option value="ACCOUNT">계정 문의</option>
           <option value="LOCATION">위치 문의</option>
         </select>
+
+        <label htmlFor="qna-filter-status">답변 상태</label>
+        <select
+          id="qna-filter-status"
+          aria-label="답변 상태 필터"
+          value={selectedAnswerStatus}
+          onChange={(e) => setSelectedAnswerStatus(e.target.value)}
+        >
+          <option value="ALL">전체</option>
+          <option value="OPEN">답변 대기</option>
+          <option value="ANSWERED">답변 완료</option>
+        </select>
         <button type="submit" aria-label="검색">
           검색
         </button>
       </form>
       {/* 질문 카드 목록 */}
       <ul className="qna-page__list">
-        {questions.map((item) => (
+        {visibleQuestions.map((item) => (
           <li
             key={item.id}
             className={`qna-page__item ${item.visibility === "PRIVATE" ? "qna-page__item--private" : ""}`}
-            onClick={() => onSelect && onSelect({ view: "detail", question: item })}
           >
-            <div className="qna-page__item-content">
-              <h3>
-                <span className="qna-page__category-badge">[{item.category}]</span> {item.title}
-              </h3>
-              <p className="qna-page__item-meta">
-                {item.visibility === "PRIVATE" ? "비공개 · 작성자만 열람" : "공개"} · {item.status === "ANSWERED" ? "답변 완료" : "답변 대기"} · {item.createdAt}
-              </p>
-            </div>
-            <div className="qna-page__item-status">
-              {item.visibility === "PRIVATE" ? (
-                <span className="qna-page__badge qna-page__badge--private">비공개</span>
-              ) : item.status === "ANSWERED" ? (
-                <span className="qna-page__badge qna-page__badge--answered">답변 완료</span>
-              ) : (
-                <span className="qna-page__badge qna-page__badge--open">답변 대기</span>
-              )}
-            </div>
+            <button
+              type="button"
+              className="qna-page__item-button"
+              aria-label={`질문 상세: ${item.title}`}
+              onClick={() => onSelect && onSelect({ view: "detail", question: item })}
+            >
+
+              <div className="qna-page__item-content">
+                <h3>
+                  <span className="qna-page__category-badge">[{item.category}]</span> {item.title}
+                </h3>
+                <p className="qna-page__item-meta">
+                  {item.visibility === "PRIVATE" ? "비공개 · 작성자만 열람" : "공개"} · {item.status === "ANSWERED" ? "답변 완료" : "답변 대기"} · {item.createdAt}
+                </p>
+              </div>
+              <div className="qna-page__item-status">
+                {item.visibility === "PRIVATE" ? (
+                  <span className="qna-page__badge qna-page__badge--private">비공개</span>
+                ) : item.status === "ANSWERED" ? (
+                  <span className="qna-page__badge qna-page__badge--answered">답변 완료</span>
+                ) : (
+                  <span className="qna-page__badge qna-page__badge--open">답변 대기</span>
+                )}
+              </div>
+            </button>
           </li>
         ))}
       </ul>
+      {/* 페이지네이션 조작 컨트롤러 */}
+      <div className="qna-page__pagination">
+        <button
+          type="button"
+          aria-label="이전 페이지"
+          disabled={page === 1}
+          onClick={() => {
+            const nextP = Math.max(1, page - 1);
+            setPage(nextP);
+            if (onSearch) onSearch({ query: searchQuery.trim(), category: selectedCategory, answerStatus: selectedAnswerStatus, page: nextP });
+          }}
+        >
+          이전
+        </button>
+        <span>페이지 {page}</span>
+        <button
+          type="button"
+          aria-label="다음 페이지"
+          onClick={() => {
+            const nextP = page + 1;
+            setPage(nextP);
+            if (onSearch) onSearch({ query: searchQuery.trim(), category: selectedCategory, answerStatus: selectedAnswerStatus, page: nextP });
+          }}
+        >
+          다음
+        </button>
+      </div>
     </main>
   );
 }
