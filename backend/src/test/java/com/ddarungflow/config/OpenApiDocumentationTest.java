@@ -31,8 +31,8 @@ class OpenApiDocumentationTest {
                 .andExpect(jsonPath("$.paths['/api/v1/auth/oauth2/{provider}/start']").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/auth/me']").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/auth/csrf']").exists())
-                .andExpect(jsonPath("$.paths['/api/v1/predictions/route']").doesNotExist())
-                .andExpect(jsonPath("$.paths['/api/v1/predictions/direct']").doesNotExist());
+                .andExpect(jsonPath("$.paths['/api/v1/predictions/route']").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/predictions/direct']").exists());
     }
 
     @Test

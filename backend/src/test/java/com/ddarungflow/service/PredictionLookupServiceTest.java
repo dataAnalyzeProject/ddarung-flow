@@ -46,7 +46,12 @@ class PredictionLookupServiceTest {
 
         // then
         assertThat(result).isPresent();
-        assertThat(result.get().batchId()).isEqualTo(UUID.fromString("10000000-0000-0000-0000-000000000005"));
+        PredictionLookupResult res = result.get();
+        assertThat(res.batchId()).isEqualTo(UUID.fromString("10000000-0000-0000-0000-000000000005"));
+        assertThat(res.modelVersion()).isEqualTo("baseline-v1");
+        assertThat(res.generatedAt()).isEqualTo(OffsetDateTime.parse("2026-08-10T10:20:00+09:00"));
+        assertThat(res.atLeast1Probability()).isEqualByComparingTo("0.92");
+        assertThat(res.atLeast5Probability()).isEqualByComparingTo("0.15");
     }
 
     @Test
