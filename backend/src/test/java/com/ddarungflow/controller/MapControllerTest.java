@@ -135,21 +135,32 @@ class MapControllerTest {
                 .andExpect(jsonPath("$.length()").value(0));
     }
 
+    private void prepareTwentyFiveMangwonStations() {
+        for (int i = 1; i <= 25; i++) {
+            String id = String.format("ST-MW-%02d", i);
+            String num = String.format("99%02d", i);
+            String name = String.format("망원대여소 %02d호", i);
+            stationRepository.save(new Station(id, num, name, new BigDecimal("37.5550"), new BigDecimal("126.9100"), true));
+        }
+    }
+
     // 2. GET /api/v1/stations/search
     @Test
     @DisplayName("searchStationsUsesDefaultLimitTen: limit 미지정 시 기본 10개 제한으로 정상 조회된다")
     @WithMockUser
     void searchStationsUsesDefaultLimitTen() throws Exception {
+        prepareTwentyFiveMangwonStations();
         mockMvc.perform(get("/api/v1/stations/search")
                 .param("query", "망원"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(2));
+                .andExpect(jsonPath("$.length()").value(10));
     }
 
     @Test
     @DisplayName("searchStationsHonorsLimitOne: limit=1 지정 시 정확히 1개 결과만 반환한다")
     @WithMockUser
     void searchStationsHonorsLimitOne() throws Exception {
+        prepareTwentyFiveMangwonStations();
         mockMvc.perform(get("/api/v1/stations/search")
                 .param("query", "망원")
                 .param("limit", "1"))
@@ -158,14 +169,39 @@ class MapControllerTest {
     }
 
     @Test
-    @DisplayName("searchStationsHonorsLimitTwenty: limit=20 지정 시 최대 20개 결과 범위 내에서 정상 반환한다")
+    @DisplayName("searchStationsHonorsLimitTwenty: limit=20 지정 시 최대 20개 결과를 정확히 반환한다")
     @WithMockUser
     void searchStationsHonorsLimitTwenty() throws Exception {
+        prepareTwentyFiveMangwonStations();
         mockMvc.perform(get("/api/v1/stations/search")
                 .param("query", "망원")
                 .param("limit", "20"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(2));
+                .andExpect(jsonPath("$.length()").value(20));
+    }
+
+    @Test
+    @DisplayName("searchStationsRejectsLimitBelowOne: limit 1 미만(0) 입력 시 기본 10개 제한으로 보정 처리한다")
+    @WithMockUser
+    void searchStationsRejectsLimitBelowOne() throws Exception {
+        prepareTwentyFiveMangwonStations();
+        mockMvc.perform(get("/api/v1/stations/search")
+                .param("query", "망원")
+                .param("limit", "0"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(10));
+    }
+
+    @Test
+    @DisplayName("searchStationsRejectsLimitAboveTwenty: limit 20 초과(30) 입력 시 최대 20개로 제한하여 반환한다")
+    @WithMockUser
+    void searchStationsRejectsLimitAboveTwenty() throws Exception {
+        prepareTwentyFiveMangwonStations();
+        mockMvc.perform(get("/api/v1/stations/search")
+                .param("query", "망원")
+                .param("limit", "30"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(20));
     }
 
     @Test
@@ -200,9 +236,9 @@ class MapControllerTest {
     }
 
     @Test
-    @DisplayName("searchStationsTruncatesQueryLongerThanFifty: 50자 초과 검색어 입력 시 앞 50자로 자른 후 정상 처리한다")
+    @DisplayName("searchStationsRejectsQueryLongerThanFifty: 50자 초과 검색어 입력 시 50자로 자른 후 정상 처리한다")
     @WithMockUser
-    void searchStationsTruncatesQueryLongerThanFifty() throws Exception {
+    void searchStationsRejectsQueryLongerThanFifty() throws Exception {
         String overFiftyQuery = "망원".repeat(30); // 60자
         mockMvc.perform(get("/api/v1/stations/search")
                 .param("query", overFiftyQuery))
