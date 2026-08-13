@@ -172,8 +172,40 @@ class SeoulBikeClientTest {
     }
 
     @Test
-    @DisplayName("returnsMissingWhenRequestedStationIsAbsent / doesNotUseFirstRowForDifferentStation: 요청한 ST-4가 응답에 없고 ST-OTHER(17대)만 존재할 때 첫 행을 사용하지 않고 null과 MISSING을 반환한다")
+    @DisplayName("returnsMissingWhenRequestedStationIsAbsent: 요청한 ST-4가 응답에 없고 ST-OTHER만 존재할 때 count=null, MISSING을 반환한다")
     void returnsMissingWhenRequestedStationIsAbsent() {
+        String jsonBody = """
+            {
+              "rentBikeStatus": {
+                "RESULT": { "CODE": "INFO-000" },
+                "row": [
+                  {
+                    "stationId": "ST-OTHER",
+                    "parkingBikeTotCnt": "17"
+                  }
+                ]
+              }
+            }
+            """;
+
+        @SuppressWarnings("unchecked")
+        HttpResponse<String> mockResponse = mock(HttpResponse.class);
+        when(mockResponse.statusCode()).thenReturn(200);
+        when(mockResponse.body()).thenReturn(jsonBody);
+
+        SeoulBikeClient client = new SeoulBikeClient("http://openapi.seoul.go.kr:8088", "test-key", new InventoryMapper(), req -> mockResponse);
+        Optional<InventoryResult> resultOpt = client.fetchInventory("ST-4");
+
+        assertThat(resultOpt).isPresent();
+        InventoryResult res = resultOpt.get();
+        assertThat(res.stationId()).isEqualTo("ST-4");
+        assertThat(res.availableBikeCount()).isNull();
+        assertThat(res.status()).isEqualTo(InventoryStatus.MISSING);
+    }
+
+    @Test
+    @DisplayName("doesNotUseFirstRowForDifferentStation: 요청한 stationId와 일치하지 않는 첫 번째 행(ST-OTHER, 17대)의 자전거 수를 ST-4 결과로 사용하지 않는다")
+    void doesNotUseFirstRowForDifferentStation() {
         String jsonBody = """
             {
               "rentBikeStatus": {
