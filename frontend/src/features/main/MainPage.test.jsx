@@ -171,4 +171,22 @@ describe("시안 6 메인 로그인 통합", () => {
     expect(screen.getByDisplayValue("천호동")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "서울숲 남문 대여소 선택" })).toHaveAttribute("aria-pressed", "true");
   });
+
+  test("추천 기준 변경, 즐겨찾기, 더 많은 대여소와 상세보기가 실제로 동작한다", async () => {
+    render(<MainPage />);
+    await screen.findByRole("link", { name: "로그인" });
+
+    fireEvent.change(screen.getByRole("combobox", { name: "대여소 정렬" }), { target: { value: "bikes" } });
+    expect(screen.getAllByRole("heading", { level: 3 })[0]).toHaveTextContent("뚝섬역 1번 출구");
+
+    const favorite = screen.getByRole("button", { name: "뚝섬역 1번 출구 즐겨찾기" });
+    fireEvent.click(favorite);
+    expect(favorite).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(screen.getByRole("button", { name: /더 많은 대여소 보기/ }));
+    const dialog = screen.getByRole("dialog", { name: "더 많은 대여소" });
+    expect(dialog).toBeInTheDocument();
+    fireEvent.click(dialog.querySelector("article button"));
+    expect(screen.getByRole("heading", { name: "뚝섬역 1번 출구 라이딩 가이드" })).toBeInTheDocument();
+  });
 });

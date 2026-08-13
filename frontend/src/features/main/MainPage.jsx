@@ -16,9 +16,16 @@ const EMPTY_INPUT = {
 };
 
 const stationMeta = [
-  { arrival: "11:05", range: "5~9대", rate: "87%", level: "매우 높음" },
-  { arrival: "11:07", range: "2~5대", rate: "72%", level: "높음" },
-  { arrival: "11:09", range: "0~2대", rate: "45%", level: "보통" },
+  { arrival: "11:05", arrivalMinutes: 5, distanceMeters: 120, range: "5~9대", rate: "87%", rateValue: 87, level: "매우 높음" },
+  { arrival: "11:07", arrivalMinutes: 7, distanceMeters: 310, range: "2~5대", rate: "72%", rateValue: 72, level: "높음" },
+  { arrival: "11:09", arrivalMinutes: 9, distanceMeters: 480, range: "0~2대", rate: "45%", rateValue: 45, level: "보통" },
+];
+
+const extraStations = [
+  { id: "station-4", name: "뚝섬역 1번 출구", distance: "도착지에서 620m", distanceMeters: 620, bikes: 11, arrival: "11:11", arrivalMinutes: 11, range: "7~12대", rate: "91%", rateValue: 91, level: "매우 높음" },
+  { id: "station-5", name: "서울숲역 4번 출구", distance: "도착지에서 710m", distanceMeters: 710, bikes: 7, arrival: "11:12", arrivalMinutes: 12, range: "4~8대", rate: "81%", rateValue: 81, level: "높음" },
+  { id: "station-6", name: "성수동 주민센터", distance: "도착지에서 840m", distanceMeters: 840, bikes: 10, arrival: "11:14", arrivalMinutes: 14, range: "6~11대", rate: "68%", rateValue: 68, level: "보통" },
+  { id: "station-7", name: "서울숲 동문", distance: "도착지에서 960m", distanceMeters: 960, bikes: 3, arrival: "11:16", arrivalMinutes: 16, range: "1~4대", rate: "57%", rateValue: 57, level: "보통" },
 ];
 
 export default function MainPage({ onNavigate }) {
@@ -35,7 +42,17 @@ export default function MainPage({ onNavigate }) {
   const [mapZoom, setMapZoom] = useState(1);
   const [mapType, setMapType] = useState("지도");
   const [guideStation, setGuideStation] = useState(null);
+  const [stationSort, setStationSort] = useState("arrival");
+  const [bookmarks, setBookmarks] = useState([]);
+  const [moreStationsOpen, setMoreStationsOpen] = useState(false);
   const predictionVisible = true;
+
+  const recommendations = useMemo(() => [...stations.map((station, index) => ({ station, meta: stationMeta[index] })), ...extraStations.map((station) => ({ station, meta: station }))].sort((left, right) => {
+    if (stationSort === "distance") return left.meta.distanceMeters - right.meta.distanceMeters;
+    if (stationSort === "success") return right.meta.rateValue - left.meta.rateValue;
+    if (stationSort === "bikes") return right.station.bikes - left.station.bikes;
+    return left.meta.arrivalMinutes - right.meta.arrivalMinutes;
+  }).slice(0, 3), [stationSort]);
 
   useEffect(() => {
     const loginResult = new URLSearchParams(window.location.search).get("login");
@@ -67,7 +84,7 @@ export default function MainPage({ onNavigate }) {
   }, []);
 
   const selectedStationName = useMemo(
-    () => stations.find((station) => station.id === selectedStation)?.name,
+    () => [...stations, ...extraStations].find((station) => station.id === selectedStation)?.name,
     [selectedStation]
   );
 
@@ -178,11 +195,10 @@ export default function MainPage({ onNavigate }) {
       <section className="main-dashboard">
         {predictionVisible && <span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}><b>{serviceData.resultTitle}</b><i>화면 확인용 예시 결과 · 대여소 3곳</i></span>}
         <section className="main-station-panel">
-          <header className="main-section-head"><h2>추천 대여소</h2><span>마지막 업데이트 10:32</span><select aria-label="대여소 정렬"><option>예상 도착시간 기준</option></select></header>
+          <header className="main-section-head"><h2>추천 대여소</h2><span>마지막 업데이트 10:32</span><select aria-label="대여소 정렬" value={stationSort} onChange={(event) => setStationSort(event.target.value)}><option value="arrival">예상 도착시간 기준</option><option value="distance">가까운 거리 기준</option><option value="success">대여 성공률 기준</option><option value="bikes">현재 자전거 수 기준</option></select></header>
           <div className="main-station-list">
-            {stations.map((station, index) => {
+            {recommendations.map(({ station, meta }, index) => {
               const selected = selectedStation === station.id;
-              const meta = stationMeta[index];
               return (
                 <div aria-label={`${station.name} 대여소 카드`} className={`main-station ${selected ? "selected" : ""}`} key={station.id} role="group">
                   <button
@@ -193,7 +209,8 @@ export default function MainPage({ onNavigate }) {
                     onClick={() => setSelectedStation(station.id)}
                   />
                   <b className="main-rank">{index + 1}</b>
-                  <span className="main-station-name"><h3 style={{ margin: 0, fontSize: 15 }}>{station.name}</h3>{index === 0 && <em>추천</em>}<small>{station.distance} · 도보 {2 + index * 2}분</small></span>
+                  <span className="main-station-name"><h3 style={{ margin: 0, fontSize: 15 }}>{station.name}</h3>{index === 0 && <em>추천</em>}<small>{station.distance}</small></span>
+                  <button className={`main-bookmark ${bookmarks.includes(station.id) ? "saved" : ""}`} type="button" aria-label={`${station.name} 즐겨찾기`} aria-pressed={bookmarks.includes(station.id)} onClick={() => setBookmarks((current) => current.includes(station.id) ? current.filter((id) => id !== station.id) : [...current, station.id])}>{bookmarks.includes(station.id) ? "✓" : "+"}</button>
                   <span className="main-station-stat"><small>현재 자전거</small><strong>{station.bikes}<i>대</i></strong></span>
                   <span className="main-station-stat"><small>예상 도착 시({meta.arrival})</small><strong>{predictionVisible ? meta.range : "--"}</strong></span>
                   <span className="main-station-rate"><small>예상 대여 성공률</small><b aria-label={`성공률 ${predictionVisible ? meta.rate : "미확인"}`}>{predictionVisible ? `${meta.rate.slice(0, -1)} %` : "--"}</b><em>{predictionVisible ? meta.level : "로그인 후 확인"}</em></span>
@@ -212,7 +229,7 @@ export default function MainPage({ onNavigate }) {
               );
             })}
           </div>
-          <button className="main-more" type="button">더 많은 대여소 보기⌄</button>
+          <button className="main-more" type="button" onClick={() => setMoreStationsOpen(true)}>더 많은 대여소 보기⌄</button>
         </section>
 
         <section className="main-map-panel" aria-label={serviceData.mapLabel}>
@@ -235,6 +252,7 @@ export default function MainPage({ onNavigate }) {
       </section>
 
       {mapExpanded && <section className="main-map-modal" role="dialog" aria-modal="true" aria-label="확대된 예측 지도"><header><h2>경로 및 추천 대여소 지도</h2><button type="button" onClick={() => setMapExpanded(false)}>닫기</button></header><img src={routeMap} alt="확대된 천호동 이동 경로 지도" /></section>}
+      {moreStationsOpen && <section className="main-stations-modal" role="dialog" aria-modal="true" aria-label="더 많은 대여소"><div><header><span><h2>더 많은 대여소</h2><p>목적지 주변 대여소를 더 확인하세요.</p></span><button type="button" aria-label="더 많은 대여소 닫기" onClick={() => setMoreStationsOpen(false)}>×</button></header><div className="main-extra-list">{extraStations.map((station, index) => <article key={station.id}><b>{index + 4}</b><span><strong>{station.name}</strong><small>{station.distance}</small></span><span><small>현재 자전거</small><strong>{station.bikes}대</strong></span><span><small>예상 도착 시({station.arrival})</small><strong>{station.range}</strong></span><span><small>대여 성공률</small><strong>{station.rate}</strong><em>{station.level}</em></span><button type="button" onClick={() => setGuideStation(station)}>상세보기</button></article>)}</div></div></section>}
       {loginPromptOpen && <section className="main-login-modal" role="dialog" aria-modal="true" aria-label="로그인 필요 안내"><span aria-hidden="true">!</span><h2>로그인이 필요합니다</h2><p>{serviceData.loginNotice}</p><div><button type="button" onClick={() => setLoginPromptOpen(false)}>닫기</button><a className="primary" href="/login" onClick={saveInputBeforeLogin}>로그인하기</a></div></section>}
     </main>
   );
