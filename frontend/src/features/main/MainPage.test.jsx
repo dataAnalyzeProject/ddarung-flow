@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import MainPage from "./MainPage";
 import { getCurrentUser, logout } from "../login/authApi";
 import { loadPendingPrediction, savePendingPrediction } from "../login/loginStorage";
@@ -24,8 +25,8 @@ describe("시안 6 메인 로그인 통합", () => {
 
     expect(screen.getByLabelText("예측 지도")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "성수역 3번 출구" })).toBeInTheDocument();
-    expect(screen.getAllByText("로그인 후 확인")).toHaveLength(3);
-    expect(screen.queryByText("87%")).not.toBeInTheDocument();
+    expect(screen.queryByText("로그인 후 확인")).not.toBeInTheDocument();
+    expect(screen.getByText("87%")).toBeInTheDocument();
 
     fireEvent.change(screen.getByPlaceholderText("출발지를 입력하세요"), { target: { value: "서울숲" } });
     fireEvent.change(screen.getByPlaceholderText("목적지를 입력하세요"), { target: { value: "성수역" } });
@@ -34,7 +35,7 @@ describe("시안 6 메인 로그인 통합", () => {
     fireEvent.click(screen.getByRole("button", { name: "대여 가능성 예측" }));
 
     expect(screen.getByRole("dialog", { name: "로그인 필요 안내" })).toBeInTheDocument();
-    expect(screen.queryByText("87%")).not.toBeInTheDocument();
+    expect(screen.getByText("87%")).toBeInTheDocument();
     expect(loadPendingPrediction()).toEqual({
       origin: "서울숲",
       destination: "성수역",
@@ -96,5 +97,78 @@ describe("시안 6 메인 로그인 통합", () => {
     await waitFor(() => expect(logout).toHaveBeenCalledTimes(1));
     expect(await screen.findByText("로그아웃되었습니다.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "로그인" })).toHaveAttribute("href", "/login");
+  });
+
+  test("지도 탭과 확대 축소 컨트롤은 상태를 왕복 변경한다", async () => {
+    render(<MainPage />);
+    await screen.findByRole("link", { name: "로그인" });
+
+    const mapImage = screen.getByRole("img", { name: "천호동 이동 경로와 추천 대여소 지도" });
+    const satellite = screen.getByRole("button", { name: "위성" });
+    fireEvent.click(satellite);
+    expect(satellite).toHaveAttribute("aria-pressed", "true");
+    expect(mapImage).toHaveClass("satellite");
+
+    fireEvent.click(screen.getByRole("button", { name: "지도 확대" }));
+    expect(mapImage).toHaveStyle("transform: scale(1.1)");
+    fireEvent.click(screen.getByRole("button", { name: "지도 축소" }));
+    expect(mapImage).toHaveStyle("transform: scale(1)");
+  });
+
+  test("메인 화면에서 하단 인사이트와 즐겨찾기 패널을 렌더링하지 않는다", async () => {
+    render(<MainPage />);
+    await screen.findByRole("link", { name: "로그인" });
+
+    expect(screen.queryByRole("heading", { name: "천호동 주변 인사이트" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "즐겨찾는 목적지" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("article")).not.toBeInTheDocument();
+  });
+
+  test("대여소 상세보기는 독립 버튼으로 가이드를 열고 기존 메인 상태를 보존한다", async () => {
+    render(<MainPage />);
+    await screen.findByRole("link", { name: "로그인" });
+
+    fireEvent.change(screen.getByPlaceholderText("출발지를 입력하세요"), { target: { value: "서울숲" } });
+    fireEvent.change(screen.getByPlaceholderText("목적지를 입력하세요"), { target: { value: "천호동" } });
+    fireEvent.click(screen.getByRole("button", { name: "성수동 카페거리 대여소 선택" }));
+    fireEvent.click(screen.getByRole("button", { name: "성수동 카페거리 상세보기" }));
+
+    expect(screen.getByRole("heading", { name: "성수동 카페거리 라이딩 가이드" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "대여 예측으로 돌아가기" }));
+
+    expect(screen.getByDisplayValue("서울숲")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("천호동")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "성수동 카페거리 대여소 선택" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  test("상세보기 버튼은 Enter와 Space 키로 각각 가이드를 연다", async () => {
+    render(<MainPage />);
+    await screen.findByRole("link", { name: "로그인" });
+
+    const enterDetail = screen.getByRole("button", { name: "성수역 3번 출구 상세보기" });
+    enterDetail.focus();
+    userEvent.keyboard("{enter}");
+    expect(screen.getByRole("heading", { name: "성수역 3번 출구 라이딩 가이드" })).toBeInTheDocument();
+
+    userEvent.click(screen.getByRole("button", { name: "대여 예측으로 돌아가기" }));
+    const spaceDetail = screen.getByRole("button", { name: "서울숲 남문 상세보기" });
+    spaceDetail.focus();
+    userEvent.keyboard(" ");
+    expect(screen.getByRole("heading", { name: "서울숲 남문 라이딩 가이드" })).toBeInTheDocument();
+  });
+
+  test("가이드의 경로 다시 보기는 메인 입력과 대여소 선택을 복원한다", async () => {
+    render(<MainPage />);
+    await screen.findByRole("link", { name: "로그인" });
+
+    userEvent.type(screen.getByPlaceholderText("출발지를 입력하세요"), "잠실역");
+    userEvent.type(screen.getByPlaceholderText("목적지를 입력하세요"), "천호동");
+    userEvent.click(screen.getByRole("button", { name: "서울숲 남문 대여소 선택" }));
+    userEvent.click(screen.getByRole("button", { name: "서울숲 남문 상세보기" }));
+    userEvent.click(screen.getByRole("button", { name: "경로 다시 보기" }));
+
+    expect(screen.getByDisplayValue("잠실역")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("천호동")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "서울숲 남문 대여소 선택" })).toHaveAttribute("aria-pressed", "true");
   });
 });

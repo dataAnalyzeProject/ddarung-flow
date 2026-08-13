@@ -1,377 +1,117 @@
-/* LoginPage.css */
-/* 브라우저 기본 바깥 여백 제거 */
-html,
-body {
-    margin: 0;
-    padding: 0;
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-    /* 🎯Draft6 글자색 및 폰트 */
-    font-family: "Pretendard", "Segoe UI", system-ui, -apple-system, sans-serif;
-    color: #17212b;
+@media(min-width:1100px){.login-page-container .login-scenic-main{height:calc(100vh - clamp(64px,4.3vw,80px));min-height:0;padding:10px 24px;place-items:center;overflow:hidden}.login-page-container .login-layout{transform:translateX(clamp(15px,calc(15px + (100vw - 1280px)*.077),60px))}.login-page-container .login-card{padding-top:clamp(20px,1.55vw,29px)}.login-page-container .login-mini-mark{height:clamp(47px,3vw,57px);margin-bottom:clamp(8px,.7vw,13px);transform:scale(.9);transform-origin:center bottom}.login-page-container .login-card-description{margin-top:8px;margin-bottom:clamp(12px,1vw,18px);font-size:max(11px,.78vw)}.login-page-container .social-login-area{gap:8px}.login-page-container .provider-login{height:clamp(44px,2.85vw,53px);font-size:max(13px,.92vw)}.login-page-container .login-divider{height:clamp(31px,2vw,37px)}.login-page-container .login-legal{margin:clamp(9px,.7vw,13px) 0 clamp(12px,.9vw,17px);font-size:max(11px,.65vw)}.login-page-container .login-help{min-height:clamp(50px,3.35vw,63px);font-size:max(11px,.76vw)}.login-page-container .login-benefits{padding:clamp(24px,1.6vw,30px) clamp(25px,2vw,37px)}.login-page-container .login-benefits h2{margin-bottom:8px}.login-page-container .login-benefits li{min-height:clamp(76px,5.2vw,97px)}.login-page-container .login-benefits small,.login-page-container .login-state-alert span{font-size:max(11px,.66vw)}}
+.login-page-container,.login-page-container *{box-sizing:border-box}
+@media(min-width:1100px){.login-page-container .login-card{padding-right:clamp(35px,2.25vw,42px);padding-left:clamp(35px,2.25vw,42px)}.login-page-container .login-card h1{font-size:clamp(20px,1.35vw,25px);letter-spacing:-.055em;white-space:nowrap}.login-page-container .login-benefits{padding:clamp(24px,1.4vw,26px) clamp(25px,2vw,37px);transform:translateY(clamp(-54px,calc((1280px - 100vw)*.092),0px))}.login-page-container .login-benefits li{min-height:clamp(76px,4.83vw,90px)}}
+.login-page-container{--navy:#071a3d;--blue:#076bf2;--green:#00ad63;--line:#d5dfe9;width:100%;height:100vh;min-width:0;overflow-x:hidden;overflow-y:auto;background:#f5faff;color:var(--navy);font-family:"Pretendard","Noto Sans KR","Malgun Gothic","Segoe UI",sans-serif}
+.login-page-container button,.login-page-container a{font:inherit}
+.login-navbar{position:relative;z-index:10;height:clamp(64px,4.3vw,80px);padding:0 clamp(22px,1.5vw,29px);display:flex;align-items:center;border-bottom:1px solid #dbe4ed;background:rgba(255,255,255,.98)}
+.login-brand{display:flex;align-items:center;gap:clamp(18px,1.7vw,32px);color:var(--navy);text-decoration:none;white-space:nowrap}
+.login-brand img{width:clamp(156px,10.6vw,198px);height:calc(clamp(64px,4.3vw,80px) - 12px);object-fit:contain}
+.login-brand>span{width:1px;height:clamp(23px,1.5vw,28px);background:#8fa0b5}
+.login-brand strong{font-size:clamp(17px,1.2vw,23px);letter-spacing:-.035em}
+.login-navbar nav{margin-left:auto;display:flex;align-items:center;gap:clamp(38px,3.6vw,67px)}
+.login-navbar nav a{color:var(--navy);font-size:clamp(14px,1vw,19px);font-weight:800;text-decoration:none;white-space:nowrap}
+.login-scenic-main{position:relative;min-height:calc(100vh - clamp(64px,4.3vw,80px));padding:clamp(40px,3.2vw,60px) 24px clamp(74px,6vw,112px);display:grid;place-items:start center;overflow:hidden;background:linear-gradient(#f6faff 0%,#edf6ff 55%,#cbe9ff 100%)}
+.login-sky{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+.login-cloud{position:absolute;width:180px;height:42px;border-radius:60px;background:#fff;filter:blur(.4px);opacity:.78}
+.login-cloud:before,.login-cloud:after{position:absolute;border-radius:50%;background:inherit;content:""}
+.login-cloud:before{left:22px;top:-32px;width:75px;height:75px}
+.login-cloud:after{right:20px;top:-20px;width:58px;height:58px}
+.cloud-one{left:-50px;top:37%}
+.cloud-two{right:-50px;top:43%}
+.cloud-three{left:46%;top:18%;transform:scale(.65);opacity:.45}
+.login-river{position:absolute;right:0;bottom:0;left:0;height:18%;background:repeating-linear-gradient(177deg,#c9ecff 0 4px,#e8f8ff 5px 8px);opacity:.9}
+.login-bridge{position:absolute;z-index:2;right:0;bottom:13%;left:0;height:26px;border-top:5px solid #aed2e9;border-bottom:4px solid #b7d9ed;background:repeating-linear-gradient(90deg,transparent 0 115px,#b7d9ed 116px 124px)}
+.login-bridge:after{position:absolute;right:0;bottom:-34px;left:0;height:35px;background:repeating-radial-gradient(ellipse at center top,transparent 0 42px,#b3d6e8 43px 48px,transparent 49px 118px);content:""}
+.login-city{position:absolute;z-index:1;bottom:15%;height:34%;display:flex;align-items:end;gap:5px;opacity:.72}
+.city-left{left:0;width:29%}
+.city-right{right:0;width:30%}
+.login-city i{position:relative;flex:1;min-width:12px;max-width:36px;height:var(--building-height,45%);background:linear-gradient(90deg,#b6dcfa,#d8edff 55%,#a7d4f6);clip-path:polygon(12% 8%,45% 8%,45% 0,60% 0,60% 8%,88% 8%,100% 100%,0 100%)}
+.login-city i:after{position:absolute;inset:12px 5px 5px;background:repeating-linear-gradient(90deg,#f3fbff 0 2px,transparent 2px 7px),repeating-linear-gradient(#f3fbff 0 2px,transparent 2px 9px);content:""}
+.login-city i:nth-child(2n){--building-height:67%}
+.login-city i:nth-child(3n){--building-height:88%}
+.login-city i:nth-child(5n){--building-height:53%}
+.login-city i:nth-child(7n){--building-height:100%}
+.login-hill{position:absolute;z-index:2;right:-4%;bottom:13%;width:31%;height:26%;border-radius:70% 0 0 0;background:radial-gradient(circle at 40% 30%,#9ed6a1 0 4%,transparent 5%),radial-gradient(circle at 60% 40%,#79bf83 0 5%,transparent 6%),linear-gradient(155deg,#c3e4b4,#63b477)}
+.login-tower{position:absolute;z-index:3;right:8.5%;bottom:35%;width:5px;height:25%;background:linear-gradient(#f05b68 0 10%,#fff 10% 20%,#ef6672 20% 29%,#fff 29% 40%,#c4d7e8 40%)}
+.login-tower:before{position:absolute;left:50%;top:33%;width:27px;height:9px;transform:translateX(-50%);border:2px solid #99b5d0;border-radius:50%;background:#fff;content:""}
+.login-bike{position:absolute;z-index:4;right:8.5%;bottom:1.5%;width:clamp(190px,13vw,245px);height:auto;filter:drop-shadow(0 9px 3px #27557b28)}
+.login-layout{position:relative;z-index:5;width:min(940px,calc(100vw - 48px));display:grid;grid-template-columns:minmax(0,548px) minmax(280px,338px);align-items:center;gap:clamp(34px,3vw,56px)}
+.login-card{min-width:0;padding:clamp(27px,2.1vw,40px) clamp(35px,3vw,56px) 0;border:1px solid #e1e7ee;border-radius:18px;background:rgba(255,255,255,.97);box-shadow:0 12px 32px #14355718;text-align:center;overflow:hidden}
+.login-mini-mark{position:relative;width:70px;height:57px;margin:0 auto 17px}
+.login-mini-mark i{position:absolute;bottom:23px;width:7px;border-radius:4px 4px 0 0}
+.login-mini-mark i:nth-child(1){left:30px;height:18px;background:#ffb000}
+.login-mini-mark i:nth-child(2){left:40px;height:29px;background:#ff3c30}
+.login-mini-mark i:nth-child(3){left:50px;height:39px;background:#87c600}
+.login-mini-mark b{position:absolute;bottom:3px;width:20px;height:20px;border:4px solid #083f8d;border-radius:50%}
+.login-mini-mark b:nth-of-type(1){left:14px}
+.login-mini-mark b:nth-of-type(2){right:4px}
+.login-mini-mark:after{position:absolute;left:27px;bottom:13px;width:30px;height:15px;border:3px solid #083f8d;border-top:0;transform:skew(-18deg);content:""}
+.login-card h1{margin:0;font-size:clamp(20px,1.55vw,29px);letter-spacing:-.04em}
+.login-card-description{margin:11px 0 clamp(18px,1.45vw,27px);color:#65758f;font-size:clamp(11px,.83vw,15px)}
+.social-login-area{display:grid;gap:11px}
+.provider-login{position:relative;width:100%;height:clamp(48px,3.2vw,60px);display:flex;align-items:center;justify-content:center;border:1px solid #c9d5e2;border-radius:8px;background:#fff;color:var(--navy);font-size:clamp(13px,1vw,18px);font-weight:800;cursor:pointer}
+.provider-login:disabled{cursor:wait;opacity:.5}
+.provider-mark{position:absolute;left:18px;width:28px;height:28px;display:grid;place-items:center;font-weight:900}
+.provider-google .provider-mark{background:conic-gradient(from -45deg,#4285f4 0 25%,#34a853 0 50%,#fbbc05 0 75%,#ea4335 0);background-clip:text;color:transparent;font-size:25px}
+.provider-naver{border-color:#03a95b;background:#03ad60;color:#fff}
+.provider-naver .provider-mark{font-size:25px}
+.provider-kakao{border-color:#f2d900;background:#fee500;color:#191600}
+.provider-kakao .provider-mark{width:28px;height:21px;border-radius:50%;background:#201f1a;color:transparent}
+.provider-kakao .provider-mark:after{position:absolute;left:3px;bottom:-4px;border-width:4px 4px 0 0;border-style:solid;border-color:#201f1a transparent transparent transparent;content:""}
+.login-divider{height:42px;display:flex;align-items:center;gap:15px;color:#718098;font-size:12px}
+.login-divider:before,.login-divider:after{height:1px;flex:1;background:#dce4ec;content:""}
+.login-without{display:inline-flex;align-items:center;justify-content:center;gap:4px;color:#066cf3;font-size:clamp(12px,.94vw,17px);font-weight:800;text-decoration:none}
+.login-without svg,.login-help svg{width:18px;height:18px}
+.login-legal{margin:16px 0 clamp(22px,1.6vw,30px);color:#697891;font-size:clamp(9px,.65vw,12px)}
+.login-legal span{color:#075fcf;text-decoration:underline}
+.login-help{margin:0 clamp(-56px,-3vw,-35px);min-height:clamp(60px,4.7vw,88px);padding:0 20px;display:flex;align-items:center;justify-content:center;gap:12px;border-top:1px solid #dce4ec;color:#64748d;font-size:clamp(11px,.8vw,15px)}
+.login-help a{display:inline-flex;align-items:center;color:#066cf3;font-weight:800;text-decoration:none}
+.login-benefits{padding:clamp(28px,2.2vw,41px) clamp(25px,2vw,37px);border:1px solid #d7e0e9;border-radius:16px;background:rgba(255,255,255,.82)}
+.login-benefits h2{margin:0 0 15px;font-size:clamp(18px,1.35vw,25px)}
+.login-benefits ul{margin:0;padding:0;list-style:none}
+.login-benefits li{min-height:clamp(86px,6.4vw,120px);display:flex;align-items:center;gap:18px;border-bottom:1px solid #dce4ec}
+.login-benefits li:last-child{border-bottom:0}
+.login-benefits li>span{width:58px;height:58px;display:grid;place-items:center;border:1px solid #a9c9fa;border-radius:11px;background:#fff;color:#076cf3}
+.login-benefits svg{width:34px;height:34px}
+.login-benefits p{margin:0;display:flex;flex-direction:column;gap:8px}
+.login-benefits strong{font-size:clamp(12px,.92vw,17px)}
+.login-benefits small{color:#64758f;font-size:clamp(9px,.66vw,12px);white-space:nowrap}
+.login-state-alert{margin:0 0 14px;padding:10px 13px;display:flex;flex-direction:column;gap:4px;border:1px solid #b6cde8;border-left:5px solid #1476ed;border-radius:7px;background:#f5faff;text-align:left}
+.login-state-alert strong{font-size:13px}
+.login-state-alert span{color:#61738c;font-size:10px}
+.login-state-alert.failed{border-left-color:#d94040;background:#fff7f7}
+.login-state-alert.cancelled,.login-state-alert.expired{border-left-color:#e69a00;background:#fffaf0}
+.login-state-alert.logged_out{border-left-color:#09a562;background:#f3fff9}
+.login-success-panel{text-align:left}
+.login-welcome{margin:0 0 10px;padding:9px 12px;border-radius:7px;background:#effaf5;color:#176448;font-size:12px}
+.login-success-panel h2{margin:0 0 8px;font-size:15px}
+.login-success-panel dl{margin:0;display:grid;grid-template-columns:1fr 1fr;gap:5px 10px}
+.login-success-panel dl div{padding:6px 8px;display:flex;justify-content:space-between;border:1px solid #dfe6ed;border-radius:5px;font-size:10px}
+.login-success-panel dt{color:#687891}
+.login-success-panel dd{margin:0;font-weight:800}
+.login-confirm-copy{margin:9px 0;color:#075fcf;font-size:11px;font-weight:700}
+.login-result-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.predict-btn,.logout-btn{height:38px;border-radius:6px;font-weight:800;cursor:pointer}
+.predict-btn{border:1px solid #096ff1;background:#096ff1;color:#fff}
+.logout-btn{border:1px solid #9fb0c3;background:#fff;color:var(--navy)}
+.predict-btn:disabled{opacity:.55}
+.login-page-container :focus-visible{outline:3px solid #74b7ff;outline-offset:3px}
+@media(max-width:1099.98px){.login-navbar{padding:0 16px}
+.login-brand img{width:135px}
+.login-brand>span,.login-brand strong{display:none}
+.login-navbar nav{gap:18px}
+.login-navbar nav a{font-size:12px}
+.login-scenic-main{min-height:calc(100vh - 64px);padding:30px 16px 140px;place-items:start center;overflow:visible}
+.login-layout{width:min(548px,100%);grid-template-columns:1fr;gap:18px}
+.login-benefits{order:2}
+.login-card{padding-left:clamp(22px,6vw,42px);padding-right:clamp(22px,6vw,42px)}
+.login-city{height:22%}
+.login-bike{right:-25px;width:220px}
+.login-help{margin-left:clamp(-42px,-6vw,-22px);margin-right:clamp(-42px,-6vw,-22px)}
 }
-
-/* 전체 화면 */
-.login-page-container {
-    position: relative;
-    /* 🎯 팝업 알림창의 화면 기준점 */
-    width: 100vw;
-    height: 100vh;
-    /* min-height 대신 exact 100vh 고정 */
-    overflow: hidden;
-    /* 화면 전체 불필요한 스크롤바 완전히 제거 */
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    /* 🎯 Draft6: 흰색 배경 제거 및 그라데이션 적용 */
-    background-color: #f2f0eb;
-    /* 배경 이미지 대신 깔끔한 그라데이션 */
-    box-sizing: border-box;
-}
-
-.login-page-container::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    display: none;
-}
-
-/* 화면 맨 위에 좌우로 뻗는 흰색 헤더 바 */
-.top-navbar {
-    width: 100%;
-    height: 52px;
-    /* 🎯 고정 높이 48px로 상단 바 두께 딱 잡기! */
-    padding: 0 40px;
-    /* 크림톤 오프화이트 */
-    background-color: #fffdf8;
-    /* 굵고 또렷한 2px 테두리 */
-    border-bottom: 2px solid #17212b;
-    position: absolute;
-    top: 0;
-    left: 0;
-    box-sizing: border-box;
-    display: flex;
-    align-items: center;
-    /* 수직 중앙 정렬 */
-}
-
-/* [수정] 흰색 상단 헤더 안쪽 로고 영역 */
-.top-navbar .top-logo-bar {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-}
-
-
-/* 상단 브랜드 배지 */
-.top-navbar .logo-badge-box {
-    display: inline-block;
-    padding: 6px 10px;
-    background-color: #17212b;
-    color: #ffffff;
-    border-radius: 3px;
-    font-size: 11px;
-    font-weight: 900;
-    letter-spacing: 1px;
-    line-height: 1;
-}
-
-/* [따릉이 도착 대여 예측] 제목 텍스트 */
-.top-navbar .logo-text {
-    font-size: 17px;
-    font-weight: 900;
-    /* 선명한 글자색 */
-    color: #17212b;
-}
-
-/* 로그인 카드 제목 영역 */
-.header-area {
-    width: 100%;
-    text-align: center;
-    margin-bottom: 28px;
-}
-
-.header-area .brand-tag {
-    margin: 0 0 8px;
-    color: #ff6238;
-    font-size: 11px;
-    font-weight: 900;
-    letter-spacing: 1px;
-}
-
-.header-area h1 {
-    margin: 0 0 12px;
-    color: #17212b;
-    font-size: 30px;
-}
-
-.header-area p {
-    color: #68717a;
-}
-
-/* 중앙에 뜨는 네오브루탈리즘 로그인 카드 상자 */
-.login-card {
-    position: relative;
-    z-index: 1;
-    width: 540px;
-    padding: 44px 40px;
-    /* 1440x900 비율에 알맞은 내부 여백 */
-    background-color: #FFFFFF;
-    /* 크림 오프화이트 배경 */
-    border: 2.5px solid #17212b;
-    /* 굵은 2px 검은 테두리 */
-    border-radius: 8px;
-    /* 12px -> 4px로 각진 모서리 적용 */
-    box-shadow: 8px 8px 0 #c7c3bb;
-    /* 또렷하고 단단한 하드 섀도우 */
-    box-sizing: border-box;
-}
-
-/* 로그인 화면 카드 */
-.social-login-area,
-.status-area {
-    width: 100%;
-}
-
-/* 로그인 버튼 영역 */
-.social-login-area {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 10px;
-}
-
-/* 3. 소셜 버튼 체급 확대 (SocialLoginButton.css 에서도 조절 가능) */
-.social-login-area button {
-    height: 56px !important;
-    /* 🎯 버튼 높이 확대 */
-    font-size: 17px !important;
-    /* 🎯 버튼 글자 크기 확대 */
-}
-
-/* 공통 상태 박스 스타일 (Draft6 피드백 박스 톤) */
-.success-box,
-.loading-box,
-.error-box,
-.cancel-box,
-.expired-box,
-.logout-box {
-    background-color: #fffdf8;
-    border: 2px solid #17212b;
-    border-left: 10px solid #ff6238;
-    /* 🎯 왼쪽에 주황색 포인트 바 */
-    border-radius: 4px;
-    padding: 20px;
-    margin-top: 20px;
-    text-align: left;
-    color: #17212b;
-}
-
-/* 실패/에러 상태 시 왼쪽 바 색상 변경 */
-.error-box {
-    border-left-color: #d94040;
-    /* 빨간색 포인트 */
-}
-
-/* 취소/만료 상태 시 왼쪽 바 색상 변경 */
-.cancel-box,
-.expired-box {
-    border-left-color: #e8a629;
-    /* 노란색 포인트 */
-}
-
-/* 성공 요약 박스 (기존 중복 속성 제거 및 왼쪽 바 포인트) */
-.success-box {
-    border-left-color: #ff6238;
-    /* 주황 포인트 바 */
-}
-
-.success-box h3 {
-    font-size: 15px;
-    font-weight: 900;
-    margin-bottom: 12px;
-    color: #17212b;
-}
-
-.success-box p {
-    font-size: 13px;
-    font-weight: 700;
-    margin: 4px 0;
-    padding-bottom: 4px;
-    border-bottom: 1px dashed #d1cdb8;
-    /* 점선 구분선으로 깔끔하게 디테일 추가 */
-    color: #17212b;
-}
-
-/* 안내 문구 */
-.success-box .confirm-text {
-    font-size: 13px;
-    font-weight: 900;
-    color: #ff6238;
-    /* 강조 텍스트 주황색 */
-    margin: 12px 0;
-}
-
-/* 다시 예측 버튼 (주황 메인 버튼) */
-.predict-btn {
-    width: 100%;
-    height: 44px;
-    background-color: #ff6238;
-    color: #ffffff;
-    font-size: 14px;
-    font-weight: 900;
-    border: 2px solid #17212b;
-    border-radius: 4px;
-    cursor: pointer;
-    margin-top: 12px;
-    margin-bottom: 8px;
-    box-shadow: 3px 3px 0 #17212b;
-    /* 입체 그림자 */
-}
-
-/* 마우스 호버 시 살짝 반응 */
-.predict-btn:hover:not(:disabled) {
-    background-color: #e5532b;
-    transform: translate(-1px, -1px);
-    box-shadow: 4px 4px 0 #17212b;
-}
-
-/* 클릭 불가능 상태일 때 */
-.predict-btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-    box-shadow: none;
-}
-
-/* 2. 로그아웃 버튼 (깔끔한 서브 버튼) */
-.logout-btn {
-    width: 100%;
-    height: 44px;
-    background-color: #FFFFFF;
-    color: #1A1A1A;
-    font-size: 14px;
-    font-weight: 700;
-    border: 1.5px solid #1A1A1A;
-    border-radius: 6px;
-    cursor: pointer;
-}
-
-.logout-btn:hover {
-    background-color: #F5F5F5;
-}
-
-/* 로딩 박스 */
-.loading-box {
-    border-left-color: #697078;
-    /* 로딩 시 무채색 회색 포인트 */
-    text-align: center;
-}
-
-.loading-box h2 {
-    font-size: 15px;
-    font-weight: 700;
-    color: #1A1A1A;
-    margin: 0;
-}
-
-/* 2. 실패(에러) 박스 */
-.error-box {
-    border-left-color: #d94040;
-    /* 에러 시 빨간 포인트 */
-    background-color: #fffdf8;
-}
-
-.error-box h2 {
-    font-size: 15px;
-    font-weight: 700;
-    color: #E53E3E;
-    margin-bottom: 4px;
-}
-
-.error-box p {
-    font-size: 13px;
-    color: #68717a;
-    margin: 0;
-}
-
-/* 취소 박스 */
-.cancel-box {
-    border-left-color: #e8a629;
-    /* 취소 시 노란 포인트 */
-    background-color: #fffdf8;
-}
-
-.cancel-box h2 {
-    font-size: 15px;
-    font-weight: 700;
-    color: #e8a629;
-    margin-bottom: 4px;
-}
-
-.cancel-box p {
-    font-size: 13px;
-    color: #68717a;
-    margin: 0;
-}
-
-
-/* 만료 박스 */
-.expired-box {
-    border-left-color: #e8a629;
-    /* 만료 시 경고 포인트 */
-    background-color: #fffdf8;
-}
-
-.expired-box h2 {
-    font-size: 15px;
-    font-weight: 700;
-    color: #DD6B20;
-    margin-bottom: 4px;
-}
-
-.expired-box p {
-    font-size: 13px;
-    color: #666666;
-    margin: 0;
-}
-
-/* 5. 로그아웃 완료 박스 */
-.logout-box {
-    border-left-color: #17212b;
-    /* 진한 검은색 포인트 */
-    background-color: #fffdf8;
-}
-
-.logout-box h2 {
-    font-size: 15px;
-    font-weight: 900;
-    color: #17212b;
-    margin-bottom: 4px;
-}
-
-.logout-box p {
-    font-size: 13px;
-    color: #68717a;
-    margin: 0;
-}
-
-/* 활성 상태가 바뀔 때까지 안내 문구를 유지한다. */
-.error-box,
-.cancel-box,
-.expired-box,
-.logout-box {
-    position: fixed;
-    top: 90px;
-    /* top-navbar 높이 아래 상단 중앙 */
-    left: 50%;
-    transform: translateX(-50%);
-    width: 480px;
-    z-index: 999;
-    margin-top: 0;
-    box-shadow: 4px 4px 0 #17212b;
+@media(max-width:640px){.login-navbar nav a:nth-child(n+2){display:none}
+.login-card h1{font-size:19px}
+.login-benefits small{white-space:normal}
+.login-scenic-main{padding-left:10px;padding-right:10px}
+.login-success-panel dl{grid-template-columns:1fr}
 }

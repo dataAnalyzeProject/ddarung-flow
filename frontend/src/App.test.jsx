@@ -25,7 +25,7 @@ test("shows the selected draft 6 as the main page", async () => {
   render(<App />);
 
   await waitFor(() => {
-    expect(document.querySelector('a[href="/login"]')).toBeInTheDocument();
+    expect(document.querySelector(".main-shell")).toBeInTheDocument();
   });
 });
 
@@ -43,8 +43,8 @@ test("shows the intro before the main page on the first visit", () => {
 
   render(<App />);
 
-  expect(screen.getByRole("button")).toBeInTheDocument();
-  expect(document.querySelector('a[href="/login"]')).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "대여 가능성 예측 시작하기" })).toBeInTheDocument();
+  expect(document.querySelector(".intro-page")).toBeInTheDocument();
 });
 
 test("moves to the main page without reloading after completing the intro", async () => {
@@ -56,7 +56,7 @@ test("moves to the main page without reloading after completing the intro", asyn
 
   expect(window.localStorage.getItem(INTRO_SEEN_KEY)).toBe("true");
   await waitFor(() => {
-    expect(document.querySelector('a[href="/login"]')).toBeInTheDocument();
+    expect(document.querySelector(".main-shell")).toBeInTheDocument();
   });
 });
 
@@ -71,6 +71,6 @@ test("continues to the main page when intro storage is unavailable", async () =>
   fireEvent.click(screen.getByRole("button"));
 
   await waitFor(() => {
-    expect(document.querySelector('a[href="/login"]')).toBeInTheDocument();
+    expect(document.querySelector(".main-shell")).toBeInTheDocument();
   });
 });
