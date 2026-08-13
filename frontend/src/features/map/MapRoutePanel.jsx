@@ -30,6 +30,7 @@ export default function MapRoutePanel({
   const [mapType, setMapType] = useState("지도");
   const [mapLevel, setMapLevel] = useState(5);
   const [current, setCurrent] = useState(null);
+  const [locationState, setLocationState] = useState("idle");
   const [message, setMessage] = useState("");
   const [route, setRoute] = useState(null);
   const [routeState, setRouteState] = useState("idle");
@@ -52,23 +53,35 @@ export default function MapRoutePanel({
     return () => { active = false; };
   }, []);
 
-  useEffect(() => { adapterRef.current?.setPoints(points); }, [points]);
+  useEffect(() => {
+    adapterRef.current?.setPoints(points);
+    if (current) adapterRef.current?.setCenter(current);
+  }, [points, current, sdkStatus]);
   useEffect(() => { adapterRef.current?.setLevel(mapLevel); }, [mapLevel]);
   useEffect(() => { adapterRef.current?.setMapType(mapType === "위성"); }, [mapType]);
 
   // Route estimation is intentionally triggered when both selected places or the travel mode changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const locate = () => {
-    if (!navigator.geolocation) return setMessage("이 브라우저는 현재 위치를 지원하지 않습니다.");
+    if (!navigator.geolocation) {
+      setLocationState("error");
+      setMessage("이 브라우저는 현재 위치를 지원하지 않습니다.");
+      return;
+    }
+    setLocationState("loading");
     setMessage("현재 위치를 확인하고 있습니다.");
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
         const point = { latitude: coords.latitude, longitude: coords.longitude };
         setCurrent(point);
         adapterRef.current?.setCenter(point);
+        setLocationState("success");
         setMessage("현재 위치를 지도에 표시했습니다.");
       },
-      (error) => setMessage(locationErrorMessage(error)),
+      (error) => {
+        setLocationState("error");
+        setMessage(locationErrorMessage(error));
+      },
       { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
     );
   };
@@ -109,7 +122,9 @@ export default function MapRoutePanel({
         {sdkStatus === "missing-key" && <p className="map-route-panel__message" style={{ top: 63, bottom: "auto", left: 14 }}>지도 SDK 키가 없어 예시 지도를 표시합니다.</p>}
         {sdkStatus === "failed" && <p className="map-route-panel__message" style={{ top: 63, bottom: "auto", left: 14 }}>지도 SDK를 불러오지 못해 예시 지도를 표시합니다.</p>}
         <div className="main-map-tabs">{["지도", "위성"].map((type) => <button className={mapType === type ? "active" : ""} type="button" aria-pressed={mapType === type} key={type} onClick={() => setMapType(type)}>{type}</button>)}</div>
-        <button className="main-redraw" type="button" onClick={locate}>현재 위치</button>
+        <button className="main-redraw" type="button" disabled={locationState === "loading"} onClick={locate}>
+          {locationState === "loading" ? "위치 확인 중" : "내 위치 확인"}
+        </button>
         <div className="main-zoom"><button type="button" aria-label="지도 확대" onClick={() => setMapLevel((level) => Math.max(1, level - 1))}>＋</button><button type="button" aria-label="지도 축소" onClick={() => setMapLevel((level) => Math.min(14, level + 1))}>−</button></div>
         <button className="map-route-panel__estimate" type="button" disabled={routeState === "loading"} onClick={requestRoute}>{routeState === "loading" ? "경로 확인 중" : "경로 확인"}</button>
         {message && <p className="map-route-panel__message" role="status">{message}</p>}
