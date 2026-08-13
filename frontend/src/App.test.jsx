@@ -74,3 +74,28 @@ test("continues to the main page when intro storage is unavailable", async () =>
     expect(document.querySelector(".main-shell")).toBeInTheDocument();
   });
 });
+
+test("opens Q&A from the main menu without a full-page reload and reflects the hash", async () => {
+  window.history.replaceState({}, "", "/");
+  window.localStorage.setItem(INTRO_SEEN_KEY, "true");
+  getCurrentUser.mockResolvedValue({ authenticated: false, user: null });
+
+  render(<App />);
+  fireEvent.click(await screen.findByRole("button", { name: "Q&A" }));
+
+  expect(window.location.hash).toBe("#qna");
+  expect(screen.getByRole("heading", { name: "Q&A" })).toBeInTheDocument();
+  expect(document.querySelector(".qna-shell")).toBeInTheDocument();
+});
+
+test("brand button returns from Q&A to the prediction main page", async () => {
+  window.history.replaceState({}, "", "/#qna");
+  window.localStorage.setItem(INTRO_SEEN_KEY, "true");
+  getCurrentUser.mockResolvedValue({ authenticated: false, user: null });
+
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "대여 예측 메인으로 이동" }));
+
+  expect(window.location.hash).toBe("");
+  await waitFor(() => expect(document.querySelector(".main-shell")).toBeInTheDocument());
+});

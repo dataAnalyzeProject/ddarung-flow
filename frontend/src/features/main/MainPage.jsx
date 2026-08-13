@@ -21,7 +21,7 @@ const stationMeta = [
   { arrival: "11:09", range: "0~2대", rate: "45%", level: "보통" },
 ];
 
-export default function MainPage() {
+export default function MainPage({ onNavigate }) {
   const [authState, setAuthState] = useState("anonymous");
   const [user, setUser] = useState(null);
   const [input, setInput] = useState(EMPTY_INPUT);
@@ -119,10 +119,10 @@ export default function MainPage() {
           <strong>{serviceData.serviceName}</strong>
         </div>
         <nav aria-label="주요 메뉴" className="main-menu">
-          <span aria-current="page">대여 예측</span>
-          <span>Q&amp;A</span>
-          <span>보관함</span>
-          <span>알림</span>
+          <button className="active" aria-current="page" type="button">대여 예측</button>
+          <button type="button" onClick={() => onNavigate?.("qna")}>Q&amp;A</button>
+          <button type="button">보관함</button>
+          <button type="button">알림</button>
         </nav>
         <div className="main-auth">
           {authState === "authenticated" || authState === "logging-out" ? (
