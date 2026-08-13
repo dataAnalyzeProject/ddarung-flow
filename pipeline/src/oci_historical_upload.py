@@ -3,6 +3,7 @@
 import argparse
 import base64
 import hashlib
+import io
 import json
 import os
 from concurrent.futures import ThreadPoolExecutor
@@ -319,28 +320,54 @@ def upload_plan(plan, bucket_name, client, namespace=None, workers=1):
     large_items = [item for item in pending if item["size_bytes"] >= multipart_threshold]
     small_items = [item for item in pending if item["size_bytes"] < multipart_threshold]
 
-    if large_items:
-        upload_manager = oci.object_storage.UploadManager(
-            client,
-            allow_multipart_uploads=True,
-            allow_parallel_uploads=True,
-            parallel_process_count=workers,
-        )
     for item in large_items:
+        upload_id = None
         try:
-            response = upload_manager.upload_file(
-                namespace,
-                bucket_name,
-                item["object_name"],
-                item["source"],
-                part_size=multipart_threshold,
+            create_details = oci.object_storage.models.CreateMultipartUploadDetails(
+                object=item["object_name"],
                 content_type="text/csv",
-                if_none_match="*",
-                opc_checksum_algorithm="SHA256",
                 metadata={
                     "sha256": item["sha256"],
                     "row-count": str(item.get("row_count", "")),
                 },
+            )
+            created = client.create_multipart_upload(
+                namespace,
+                bucket_name,
+                create_details,
+                if_none_match="*",
+            )
+            upload_id = created.data.upload_id
+            parts = []
+            with open(item["source"], "rb") as source:
+                for part_number in range(1, (item["size_bytes"] // multipart_threshold) + 2):
+                    body = source.read(multipart_threshold)
+                    if not body:
+                        break
+                    uploaded = client.upload_part(
+                        namespace,
+                        bucket_name,
+                        item["object_name"],
+                        upload_id,
+                        part_number,
+                        io.BytesIO(body),
+                        content_length=len(body),
+                    )
+                    parts.append(
+                        oci.object_storage.models.CommitMultipartUploadPartDetails(
+                            part_num=part_number,
+                            etag=uploaded.headers.get("etag"),
+                        )
+                    )
+            response = client.commit_multipart_upload(
+                namespace,
+                bucket_name,
+                item["object_name"],
+                upload_id,
+                oci.object_storage.models.CommitMultipartUploadDetails(
+                    parts_to_commit=parts
+                ),
+                if_none_match="*",
             )
             results_by_name[item["object_name"]] = {
                 **item,
@@ -349,6 +376,13 @@ def upload_plan(plan, bucket_name, client, namespace=None, workers=1):
                 "etag": response.headers.get("etag"),
             }
         except Exception as exc:
+            if upload_id is not None:
+                try:
+                    client.abort_multipart_upload(
+                        namespace, bucket_name, item["object_name"], upload_id
+                    )
+                except Exception:
+                    pass
             if getattr(exc, "status", None) != 412:
                 raise
             etag = _verify_existing_object(client, namespace, bucket_name, item)

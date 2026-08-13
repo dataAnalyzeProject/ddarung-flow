@@ -203,7 +203,7 @@ def test_upload_plan_reuses_only_matching_existing_object(tmp_path):
         upload_plan([item], "test-bucket", mismatching)
 
 
-def test_upload_plan_large_file_uses_immutable_multipart(monkeypatch, tmp_path):
+def test_upload_plan_large_file_uses_immutable_multipart(tmp_path):
     source = tmp_path / "large.csv"
     source.write_bytes(b"x")
     source_size = 32 * 1024 * 1024
@@ -219,25 +219,64 @@ def test_upload_plan_large_file_uses_immutable_multipart(monkeypatch, tmp_path):
         "sha256": "D" * 64,
         "row_count": 1,
     }
-    captured = {}
+    class MultipartClient(FakeUploadClient):
+        def create_multipart_upload(self, namespace, bucket, details, **kwargs):
+            self.create_options = kwargs
+            return SimpleNamespace(data=SimpleNamespace(upload_id="upload-1"))
 
-    class FakeUploadManager:
-        def __init__(self, client, **kwargs):
-            captured["manager"] = kwargs
+        def upload_part(self, *args, **kwargs):
+            return SimpleNamespace(headers={"etag": "part-etag"})
 
-        def upload_file(self, namespace, bucket, object_name, path, **kwargs):
-            captured["upload"] = kwargs
+        def commit_multipart_upload(self, *args, **kwargs):
+            self.commit_options = kwargs
             return SimpleNamespace(headers={"etag": "multipart-etag"})
 
-    monkeypatch.setattr(
-        "pipeline.src.oci_historical_upload.oci.object_storage.UploadManager",
-        FakeUploadManager,
-    )
-    result = upload_plan([item], "test-bucket", FakeUploadClient())
+        def abort_multipart_upload(self, *args, **kwargs):
+            raise AssertionError("successful upload must not abort")
+
+    client = MultipartClient()
+    result = upload_plan([item], "test-bucket", client)
     assert result[0]["created"] is True
-    assert captured["upload"]["if_none_match"] == "*"
-    assert captured["upload"]["opc_checksum_algorithm"] == "SHA256"
-    assert captured["upload"]["metadata"]["sha256"] == "D" * 64
+    assert client.create_options["if_none_match"] == "*"
+    assert client.commit_options["if_none_match"] == "*"
+
+
+def test_multipart_commit_race_preserves_existing_object(tmp_path):
+    source = tmp_path / "large.csv"
+    with source.open("wb") as stream:
+        stream.truncate(32 * 1024 * 1024)
+    item = {
+        "kind": "curated", "year": 2025, "source": str(source),
+        "object_name": "curated/2025/part.csv", "size_bytes": source.stat().st_size,
+        "sha256": "F" * 64, "row_count": 1,
+    }
+
+    class RacingClient(FakeUploadClient):
+        def __init__(self):
+            super().__init__()
+            self.aborted = False
+
+        def create_multipart_upload(self, *args, **kwargs):
+            return SimpleNamespace(data=SimpleNamespace(upload_id="upload-race"))
+
+        def upload_part(self, *args, **kwargs):
+            return SimpleNamespace(headers={"etag": "part-etag"})
+
+        def commit_multipart_upload(self, *args, **kwargs):
+            assert kwargs["if_none_match"] == "*"
+            self.existing_sha = item["sha256"]
+            self.existing_size = item["size_bytes"]
+            raise PreconditionFailure()
+
+        def abort_multipart_upload(self, *args, **kwargs):
+            self.aborted = True
+
+    client = RacingClient()
+    result = upload_plan([item], "test-bucket", client)
+    assert result[0]["created"] is False
+    assert result[0]["sha256"] == item["sha256"]
+    assert result[0]["size_bytes"] == item["size_bytes"]
+    assert client.aborted is True
 
 
 def test_remote_verification_reports_metadata_scope_and_masks_object_keys(tmp_path):

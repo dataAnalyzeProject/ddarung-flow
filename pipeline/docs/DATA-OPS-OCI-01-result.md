@@ -21,7 +21,7 @@
 
 ## 구현 파일
 
-- `pipeline/src/oci_historical_upload.py`: 승인 manifest·Curated lineage 대조, invalid/null 시각 거부, 행 보존, multipart upload, 원격 metadata 검증, 표본 본문 읽기·권한 거부 검증
+- `pipeline/src/oci_historical_upload.py`: 승인 manifest·Curated lineage 대조, invalid/null 시각 거부, 행 보존, 최종 commit 조건부 multipart upload, 원격 metadata 검증, 표본 본문 읽기·권한 거부 검증
 - `pipeline/tests/test_oci_historical_upload.py`: lineage 불일치·partition 변조·invalid/null 시각·행 보존·multipart·원격 검증 범위 테스트
 
 ## 실행 결과
@@ -36,12 +36,14 @@
 | 동일 입력 재실행 | PASS — 신규 0, 재사용 169 |
 | 인증 본문 읽기 | PASS — Raw·Curated 표본 2개 본문 SHA-256 일치 |
 | 비인증 읽기 | PASS — HTTP 404로 거부 |
-| wrapper·기존 OCI 테스트 | PASS — 16 passed |
-| 전체 pipeline 회귀 테스트 | PASS — 76 passed |
+| wrapper·기존 OCI 테스트 | PASS — 17 passed |
+| 전체 pipeline 회귀 테스트 | PASS — 77 passed |
 | secret scan | PASS |
 | `git diff --check` | PASS |
 
-169개 전체의 SHA-256 검증 범위는 OCI `HEAD` 응답의 사용자 metadata와 크기다. 본문 스트림 SHA-256 검증은 Raw·Curated 표본 2개에 수행했다. 마스킹된 169개별 별칭·행 수·SHA-256·크기 증거 ID는 `DATA-OPS-OCI-01/followup-object-evidence`이며 로컬 하네스 증거 디렉터리에 보관한다.
+169개 전체의 SHA-256 검증 범위는 OCI `HEAD` 응답의 사용자 metadata와 크기다. 본문 스트림 SHA-256 검증은 Raw·Curated 표본 2개에 수행했다. 마스킹된 169개별 별칭·행 수·SHA-256·크기 증거는 `.local-harness/evidence/DATA-OPS-OCI-01/followup-object-evidence.json`에 로컬 전용으로 보관한다.
+
+대용량 객체는 multipart 생성과 최종 commit 양쪽에 `if-none-match=*`를 적용한다. 생성 이후 같은 key가 생겨 최종 commit이 412로 실패하면 multipart를 중단하고, 기존 객체의 SHA-256과 크기가 계획과 같을 때만 재사용으로 판정한다.
 
 ## 재현 명령
 
