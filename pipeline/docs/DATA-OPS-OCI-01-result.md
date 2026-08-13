@@ -1,42 +1,49 @@
-# DATA-OPS-OCI-01 OCI 데이터 적재 준비 결과
+# DATA-OPS-OCI-01 OCI 과거 데이터 적재 결과
 
 ## 실행 기준
 
 - 작업 브랜치: `codex/data-ops-oci-01`
 - 시작 commit: `5f6fd15433f862153f8ccea967c164e86885ff61`
 - 승인 manifest SHA-256: `9075B4EFA89D7370DAB8006BB44579F5F9B215511F16A64AE0B007955FADA9C7`
-- 승인 파일 수: 34개
+- 승인 파일: 34개
 - 승인 연도: 2022, 2024, 2025
 
-## 사전 검증 결과
+## 저장 규칙
+
+- Raw: `raw/bike-inventory/historical/{year}/{approved-file-name}`
+- Curated: `curated/bike-inventory/historical/{year}/part-{number}.csv`
+- 재실행: `if-none-match=*`
+- 동일 SHA-256·크기: 기존 object 재사용
+- 다른 SHA-256 또는 크기: 실행 중단, 덮어쓰기 금지
+
+## 구현 파일
+
+- `pipeline/src/oci_historical_upload.py`: 승인 manifest 대조, 서울 시간 기준 연도 파티션, SHA-256·행 수 기록, multipart upload, 기존 object 검증, 읽기·권한 거부 검증
+- `pipeline/tests/test_oci_historical_upload.py`: 승인 연도 분리, 범위 밖 연도 거부, immutable write, checksum 일치 재사용 검증
+
+## 실행 결과
 
 | 항목 | 결과 |
 |---|---|
-| 승인 manifest checksum 재검증 | PASS |
-| 승인 파일·연도 범위 확인 | PASS |
-| Curated 입력 행 수 | 66,467,477 |
-| Quarantine 행 수 | 92,538 |
-| OCI Object Storage fixture 테스트 | PASS — 4 passed |
-| 실제 historical Raw/Curated 업로드 | NOT_RUN |
+| manifest SHA-256·34개 파일 대조 | PASS |
+| Raw 적재 | PASS — 34 objects, 66,560,015 rows |
+| Curated 적재 | PASS — 135 objects, 66,467,477 rows |
+| 전체 원격 SHA-256·크기 대조 | PASS — 169/169 |
+| 동일 입력 재실행 | PASS — 신규 0, 재사용 169 |
+| 인증 읽기 | PASS — Raw·Curated 표본 본문 SHA-256 일치 |
+| 비인증 읽기 | PASS — HTTP 404로 거부 |
+| wrapper·기존 OCI 테스트 | PASS — 9 passed |
+| secret scan | PASS |
+| `git diff --check` | PASS |
 
-## 실제 OCI 업로드가 실행되지 않은 이유
+## 재현 명령
 
-기존 OCI preflight는 test object의 접근과 immutable write 동작을 확인하지만, historical Raw/Curated 대상의 승인된 prefix와 Curated 저장 표현을 정의하지 않는다. 승인되지 않은 prefix를 추정하거나 저장 정책을 새로 만들지 않기 위해 업로드를 실행하지 않았다.
+```powershell
+python -m pytest pipeline/tests/test_oci_historical_upload.py pipeline/tests/test_oci_raw_store.py -q
+python -m pipeline.src.oci_historical_upload --manifest <approved-manifest> --data-root <approved-data-root> --curated <approved-curated> --partition-dir <approved-partition-dir> --reuse-partitions --bucket <approved-private-bucket> --workers 4 --verify-access --result-file <local-evidence-file>
+git diff --check
+```
 
-실행을 시작하려면 조장이 다음 저장 대상 계약을 문서로 승인해야 한다.
+## 제출 판정
 
-- Raw object prefix
-- Curated object prefix
-- Curated 전체 파일의 단일 객체 또는 승인된 partition 방식
-
-## 후속 검증
-
-저장 대상 계약이 승인되면 다음 결과를 추가한다.
-
-1. 업로드 전후 파일 수·행 수·SHA-256 대조
-2. object key와 manifest 연결
-3. 동일 입력 재실행의 중복·덮어쓰기 검증
-4. 정상 읽기와 권한 실패 검증
-5. 마스킹된 secret scan 및 변경 파일 검사
-
-이 문서는 모델 학습·활성화, 예측 게시, 운영 배포를 수행했다는 의미가 아니다.
+승인 manifest 범위의 실제 OCI 적재, 전체 object 대조, 멱등 재실행, 인증 읽기와 비인증 접근 거부, secret scan을 확인했다. 모델 활성화·예측 게시·운영 배포는 수행하지 않았으며 후속 승인 작업으로 유지한다. 이 결과는 조장 검토를 요청할 수 있는 제출 상태다.
