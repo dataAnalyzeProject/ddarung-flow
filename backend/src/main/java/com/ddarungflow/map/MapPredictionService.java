@@ -17,6 +17,9 @@ import java.util.Optional;
 @Service
 public class MapPredictionService {
 
+    private static final BigDecimal LOW_THRESHOLD = new BigDecimal("0.24");
+    private static final BigDecimal HIGH_THRESHOLD = new BigDecimal("0.36");
+
     private final RouteCandidateService routeCandidateService;
     private final StationInventoryCurrentRepository inventoryRepository;
     private final PredictionLookupService predictionLookupService;
@@ -73,6 +76,10 @@ public class MapPredictionService {
             Integer bikeAvailable = null;
             InventoryStatus invStatus = InventoryStatus.MISSING;
             BigDecimal probability = null;
+            PredictionApiDtos.AvailabilityLevel availabilityLevel = null;
+            PredictionApiDtos.PredictionStatus predictionStatus = PredictionApiDtos.PredictionStatus.MISSING;
+            String modelVersion = null;
+            OffsetDateTime generatedAt = null;
 
             // 1. Candidate isolated inventory lookup
             try {
@@ -92,9 +99,18 @@ public class MapPredictionService {
                     bikeCount,
                     requestedAt
                 );
-                probability = predOpt.map(PredictionLookupResult::selectedProbability).orElse(null);
+                Optional<PredictionLookupResult> validPrediction = predOpt;
+                if (validPrediction.isPresent()) {
+                    PredictionLookupResult prediction = validPrediction.get();
+                    probability = prediction.selectedProbability();
+                    modelVersion = prediction.modelVersion();
+                    generatedAt = prediction.generatedAt();
+                    availabilityLevel = toAvailabilityLevel(probability);
+                    predictionStatus = PredictionApiDtos.PredictionStatus.NORMAL;
+                }
             } catch (Exception e) {
                 probability = null;
+                predictionStatus = PredictionApiDtos.PredictionStatus.UNAVAILABLE;
             }
 
             int distMeters = (int) Math.round(cand.distanceMeters());
@@ -110,10 +126,27 @@ public class MapPredictionService {
                 bikeAvailable,
                 invStatus,
                 probability,
-                predictionTargetAt
+                predictionTargetAt,
+                availabilityLevel,
+                predictionStatus,
+                modelVersion,
+                generatedAt
             ));
         }
 
         return resultList;
+    }
+
+    static PredictionApiDtos.AvailabilityLevel toAvailabilityLevel(BigDecimal probability) {
+        if (probability == null || probability.compareTo(BigDecimal.ZERO) < 0 || probability.compareTo(BigDecimal.ONE) > 0) {
+            return null;
+        }
+        if (probability.compareTo(HIGH_THRESHOLD) >= 0) {
+            return PredictionApiDtos.AvailabilityLevel.HIGH;
+        }
+        if (probability.compareTo(LOW_THRESHOLD) >= 0) {
+            return PredictionApiDtos.AvailabilityLevel.MEDIUM;
+        }
+        return PredictionApiDtos.AvailabilityLevel.LOW;
     }
 }

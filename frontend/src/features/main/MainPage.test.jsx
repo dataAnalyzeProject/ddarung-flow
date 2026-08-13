@@ -171,4 +171,13 @@ describe("시안 6 메인 로그인 통합", () => {
     expect(screen.getByDisplayValue("천호동")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "서울숲 남문 대여소 선택" })).toHaveAttribute("aria-pressed", "true");
   });
+
+  test("Q&A 메뉴는 인앱 화면 전환 콜백을 호출한다", async () => {
+    const onNavigate = jest.fn();
+    render(<MainPage onNavigate={onNavigate} />);
+    await screen.findByRole("link", { name: "로그인" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Q&A" }));
+    expect(onNavigate).toHaveBeenCalledWith("qna");
+  });
 });

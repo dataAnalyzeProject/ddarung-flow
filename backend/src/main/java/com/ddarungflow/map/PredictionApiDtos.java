@@ -6,6 +6,18 @@ import java.time.OffsetDateTime;
 
 public class PredictionApiDtos {
 
+    public enum AvailabilityLevel {
+        HIGH,
+        MEDIUM,
+        LOW
+    }
+
+    public enum PredictionStatus {
+        NORMAL,
+        MISSING,
+        UNAVAILABLE
+    }
+
     public record PredictionDirectRequestDto(
         String stationId,
         BigDecimal originLatitude,
@@ -25,6 +37,10 @@ public class PredictionApiDtos {
         Integer availableBikeCount,
         InventoryStatus inventoryStatus,
         BigDecimal predictionProbability,
-        OffsetDateTime predictionTargetAt
+        OffsetDateTime predictionTargetAt,
+        AvailabilityLevel availabilityLevel,
+        PredictionStatus predictionStatus,
+        String modelVersion,
+        OffsetDateTime generatedAt
     ) {}
 }
