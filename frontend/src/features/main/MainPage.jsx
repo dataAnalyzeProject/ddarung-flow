@@ -21,7 +21,7 @@ const stationMeta = [
   { arrival: "11:09", range: "0~2대", rate: "45%", level: "보통" },
 ];
 
-export default function MainPage() {
+export default function MainPage({ onNavigate }) {
   const [authState, setAuthState] = useState("anonymous");
   const [user, setUser] = useState(null);
   const [input, setInput] = useState(EMPTY_INPUT);
@@ -32,7 +32,6 @@ export default function MainPage() {
   const [locationChecked, setLocationChecked] = useState(false);
   const [timeConfirmed, setTimeConfirmed] = useState(false);
   const [loginPromptOpen, setLoginPromptOpen] = useState(false);
-  const [activeMenu, setActiveMenu] = useState("대여 예측");
   const [mapZoom, setMapZoom] = useState(1);
   const [mapType, setMapType] = useState("지도");
   const [guideStation, setGuideStation] = useState(null);
@@ -119,17 +118,11 @@ export default function MainPage() {
           <span aria-hidden="true" />
           <strong>{serviceData.serviceName}</strong>
         </div>
-        <nav className="main-menu" aria-label="주요 메뉴">
-          {["대여 예측", "Q&A", "보관함", "알림"].map((menu) => (
-            <button
-              className={activeMenu === menu ? "active" : ""}
-              key={menu}
-              type="button"
-              onClick={() => setActiveMenu(menu)}
-            >
-              {menu}
-            </button>
-          ))}
+        <nav aria-label="주요 메뉴" className="main-menu">
+          <button className="active" aria-current="page" type="button">대여 예측</button>
+          <button type="button" onClick={() => onNavigate?.("qna")}>Q&amp;A</button>
+          <button type="button">보관함</button>
+          <button type="button">알림</button>
         </nav>
         <div className="main-auth">
           {authState === "authenticated" || authState === "logging-out" ? (

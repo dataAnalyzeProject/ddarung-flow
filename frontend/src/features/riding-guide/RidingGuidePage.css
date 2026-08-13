@@ -1121,3 +1121,30 @@
     grid-column: 1 / -1;
   }
 }
+/* Riding guide side column overlap fix */
+@media (min-width:780px) and (max-height:760px){
+  .guide-side-column{
+    grid-template-rows:minmax(0,40fr) minmax(0,29fr) minmax(138px,31fr);
+    align-content:start;
+  }
+  .guide-summary{
+    row-gap:5px;
+  }
+  .guide-summary-body{
+    padding-top:0;
+    padding-bottom:0;
+  }
+  .guide-transit{
+    grid-template-rows:auto auto auto;
+    align-content:start;
+    row-gap:6px;
+  }
+  .guide-transit-copy{
+    min-height:43px;
+  }
+  .guide-transit button{
+    width:100%;
+    min-height:35px;
+    margin:2px 0 0;
+  }
+}
