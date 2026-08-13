@@ -60,8 +60,10 @@ class MapControllerTest {
                 java.net.http.HttpResponse<String> res = org.mockito.Mockito.mock(java.net.http.HttpResponse.class);
                 org.mockito.Mockito.when(res.statusCode()).thenReturn(200);
                 String uriStr = req.uri().toString();
-                if (uriStr.contains("/v1/directions/")) {
-                    org.mockito.Mockito.when(res.body()).thenReturn("{ \"routes\": [{ \"summary\": { \"distance\": 1784, \"duration\": 1759 } }] }");
+                if (uriStr.contains("/v2/routing/walk")) {
+                    org.mockito.Mockito.when(res.body()).thenReturn("{ \"status\": \"OK\", \"route\": { \"properties\": { \"totalDistance\": 1784, \"totalTime\": 1759 } } }");
+                } else if (uriStr.contains("/v2/routing/publictraffic")) {
+                    org.mockito.Mockito.when(res.body()).thenReturn("{ \"status\": \"OK\", \"routes\": [{ \"properties\": { \"totalDistance\": 4200, \"totalTime\": 1080 } }] }");
                 } else if (uriStr.contains("123") || uriStr.contains("%EC%A1%B4%EC%9E%AC")) {
                     org.mockito.Mockito.when(res.body()).thenReturn("{ \"meta\": { \"is_end\": true }, \"documents\": [] }");
                 } else {
@@ -354,6 +356,21 @@ class MapControllerTest {
             .andExpect(jsonPath("$.distanceMeters").value(1784))
             .andExpect(jsonPath("$.durationSeconds").value(1759))
             .andExpect(jsonPath("$.travelMode").value("WALK"));
+    }
+
+    @Test
+    void estimateRouteReturnsPublicTransitRouteWithoutLogin() throws Exception {
+        String payload = """
+            {"originLatitude":37.5547,"originLongitude":126.9707,
+             "destinationLatitude":37.5663,"destinationLongitude":126.9784,
+             "travelMode":"PUBLIC_TRANSIT"}
+            """;
+        mockMvc.perform(post("/api/v1/routes/estimate").with(csrf())
+                .contentType(MediaType.APPLICATION_JSON).content(payload))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.distanceMeters").value(4200))
+            .andExpect(jsonPath("$.durationSeconds").value(1080))
+            .andExpect(jsonPath("$.travelMode").value("PUBLIC_TRANSIT"));
     }
 
     @Test

@@ -4,8 +4,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -141,14 +143,13 @@ class KakaoMapClientTest {
     void convertsWalkingRouteDistanceAndDuration() {
         String jsonBody = """
             {
-              "routes": [
-                {
-                  "summary": {
-                    "distance": 820,
-                    "duration": 640
-                  }
+              "status": "OK",
+              "route": {
+                "properties": {
+                  "totalDistance": 820,
+                  "totalTime": 640
                 }
-              ]
+              }
             }
             """;
 
@@ -157,7 +158,11 @@ class KakaoMapClientTest {
         when(mockResponse.statusCode()).thenReturn(200);
         when(mockResponse.body()).thenReturn(jsonBody);
 
-        KakaoMapClient client = new KakaoMapClient("https://dapi.kakao.com", "test-key", req -> mockResponse);
+        AtomicReference<HttpRequest> requestReference = new AtomicReference<>();
+        KakaoMapClient client = new KakaoMapClient("https://dapi.kakao.com", "test-key", req -> {
+            requestReference.set(req);
+            return mockResponse;
+        });
         java.util.Optional<MapApiDtos.RouteResultDto> routeOpt = client.fetchRoute(
             new BigDecimal("37.5500"), new BigDecimal("126.9000"),
             new BigDecimal("37.5556"), new BigDecimal("126.9106"),
@@ -168,6 +173,8 @@ class KakaoMapClientTest {
         assertThat(routeOpt.get().distanceMeters()).isEqualTo(820);
         assertThat(routeOpt.get().durationSeconds()).isEqualTo(640);
         assertThat(routeOpt.get().travelMode()).isEqualTo("WALK");
+        assertThat(requestReference.get().uri().toString())
+            .contains("/v2/routing/walk?start_x=126.9000&start_y=37.5500&end_x=126.9106&end_y=37.5556");
     }
 
     @Test
@@ -175,11 +182,12 @@ class KakaoMapClientTest {
     void convertsTransitRouteDistanceAndDuration() {
         String jsonBody = """
             {
+              "status": "OK",
               "routes": [
                 {
-                  "summary": {
-                    "distance": 4200,
-                    "duration": 1080
+                  "properties": {
+                    "totalDistance": 4200,
+                    "totalTime": 1080
                   }
                 }
               ]
@@ -191,17 +199,23 @@ class KakaoMapClientTest {
         when(mockResponse.statusCode()).thenReturn(200);
         when(mockResponse.body()).thenReturn(jsonBody);
 
-        KakaoMapClient client = new KakaoMapClient("https://dapi.kakao.com", "test-key", req -> mockResponse);
+        AtomicReference<HttpRequest> requestReference = new AtomicReference<>();
+        KakaoMapClient client = new KakaoMapClient("https://dapi.kakao.com", "test-key", req -> {
+            requestReference.set(req);
+            return mockResponse;
+        });
         java.util.Optional<MapApiDtos.RouteResultDto> routeOpt = client.fetchRoute(
             new BigDecimal("37.5500"), new BigDecimal("126.9000"),
             new BigDecimal("37.5556"), new BigDecimal("126.9106"),
-            "TRANSIT"
+            "PUBLIC_TRANSIT"
         );
 
         assertThat(routeOpt).isPresent();
         assertThat(routeOpt.get().distanceMeters()).isEqualTo(4200);
         assertThat(routeOpt.get().durationSeconds()).isEqualTo(1080);
-        assertThat(routeOpt.get().travelMode()).isEqualTo("TRANSIT");
+        assertThat(routeOpt.get().travelMode()).isEqualTo("PUBLIC_TRANSIT");
+        assertThat(requestReference.get().uri().toString())
+            .contains("/v2/routing/publictraffic?start_x=126.9000&start_y=37.5500&end_x=126.9106&end_y=37.5556");
     }
 
     @Test
@@ -209,14 +223,13 @@ class KakaoMapClientTest {
     void doesNotTreatMissingDistanceOrDurationAsSuccess() {
         String jsonBody = """
             {
-              "routes": [
-                {
-                  "summary": {
-                    "distance": null,
-                    "duration": 640
-                  }
+              "status": "OK",
+              "route": {
+                "properties": {
+                  "totalDistance": null,
+                  "totalTime": 640
                 }
-              ]
+              }
             }
             """;
 

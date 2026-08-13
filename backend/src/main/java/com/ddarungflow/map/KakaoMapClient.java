@@ -138,10 +138,10 @@ public class KakaoMapClient {
 
         String mode = (travelMode != null && !travelMode.isBlank()) ? travelMode.toUpperCase() : "WALK";
         try {
-            String modePath = (mode.equalsIgnoreCase("TRANSIT") || mode.equalsIgnoreCase("PUBLIC_TRANSIT"))
-                ? "transit" : "walk";
+            boolean publicTransit = mode.equalsIgnoreCase("TRANSIT") || mode.equalsIgnoreCase("PUBLIC_TRANSIT");
+            String modePath = publicTransit ? "publictraffic" : "walk";
             String url = String.format(
-                "%s/v1/directions/%s?origin=%s,%s&destination=%s,%s",
+                "%s/v2/routing/%s?start_x=%s&start_y=%s&end_x=%s&end_y=%s",
                 baseUrl, modePath, originLng, originLat, destLng, destLat
             );
 
@@ -175,12 +175,24 @@ public class KakaoMapClient {
 
         try {
             JsonNode root = objectMapper.readTree(jsonResponse);
-            JsonNode routes = root.path("routes");
-            JsonNode targetRoute = routes.isArray() && !routes.isEmpty() ? routes.get(0) : root;
+            if (root.hasNonNull("status") && !"OK".equals(root.path("status").asText())) {
+                return java.util.Optional.empty();
+            }
 
-            JsonNode summary = targetRoute.path("summary");
-            JsonNode distNode = summary.has("distance") ? summary.get("distance") : targetRoute.get("distance");
-            JsonNode durNode = summary.has("duration") ? summary.get("duration") : targetRoute.get("duration");
+            boolean publicTransit = "TRANSIT".equalsIgnoreCase(travelMode)
+                || "PUBLIC_TRANSIT".equalsIgnoreCase(travelMode);
+            JsonNode routeProperties;
+            if (publicTransit) {
+                JsonNode routes = root.path("routes");
+                routeProperties = routes.isArray() && !routes.isEmpty()
+                    ? routes.get(0).path("properties")
+                    : objectMapper.createObjectNode();
+            } else {
+                routeProperties = root.path("route").path("properties");
+            }
+
+            JsonNode distNode = routeProperties.get("totalDistance");
+            JsonNode durNode = routeProperties.get("totalTime");
 
             if (distNode == null || distNode.isNull() || durNode == null || durNode.isNull()) {
                 return java.util.Optional.empty();
