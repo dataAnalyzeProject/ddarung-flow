@@ -127,7 +127,7 @@ test("FE-3.3 필수 선택 전에는 계속하기를 누를 수 없다", () => {
   expect(screen.getByRole("button", { name: "계속하기" })).toBeDisabled();
 });
 
-test("FE-3.3 사용자가 키보드만으로 검색하고 결과를 선택해 계속하기를 완료한다", () => {
+test("FE-3.3 사용자가 키보드만으로 검색하고 결과를 선택해 계속하기를 완료한다", async () => {
   const onSearch = jest.fn();
   const onContinue = jest.fn();
 
@@ -181,14 +181,14 @@ test("FE-3.3 사용자가 키보드만으로 검색하고 결과를 선택해 �
     name: "출발지 검색어",
   });
 
-  userEvent.tab();
-  userEvent.tab();
-  userEvent.tab();
+  await userEvent.tab();
+  await userEvent.tab();
+  await userEvent.tab();
   expect(originInput).toHaveFocus();
 
-  userEvent.keyboard("서울역");
+  await userEvent.keyboard("서울역");
 
-  userEvent.tab();
+  await userEvent.tab();
 
   expect(
     screen.getByRole("button", {
@@ -196,7 +196,7 @@ test("FE-3.3 사용자가 키보드만으로 검색하고 결과를 선택해 �
     })
   ).toHaveFocus();
 
-  userEvent.keyboard("{Enter}");
+  await userEvent.keyboard("{Enter}");
 
   expect(onSearch).toHaveBeenCalledWith({
     mode: "ROUTE",
@@ -218,7 +218,7 @@ test("FE-3.3 사용자가 키보드만으로 검색하고 결과를 선택해 �
   // 4. 사용자가 Tab → Enter로 결과를 선택한다.
   // --------------------------------
 
-  userEvent.tab();
+  await userEvent.tab();
 
   expect(
     screen.getByRole("button", {
@@ -226,14 +226,14 @@ test("FE-3.3 사용자가 키보드만으로 검색하고 결과를 선택해 �
     })
   ).toHaveFocus();
 
-  userEvent.keyboard("{Enter}");
+  await userEvent.keyboard("{Enter}");
 
   // --------------------------------
   // 5. 목적지를 검색한다.
   // --------------------------------
 
-  userEvent.tab();
-  userEvent.tab();
+  await userEvent.tab();
+  await userEvent.tab();
 
   const destinationInput = screen.getByRole("textbox", {
     name: "목적지 검색어",
@@ -241,9 +241,9 @@ test("FE-3.3 사용자가 키보드만으로 검색하고 결과를 선택해 �
 
   expect(destinationInput).toHaveFocus();
 
-  userEvent.keyboard("서울시청");
+  await userEvent.keyboard("서울시청");
 
-  userEvent.tab();
+  await userEvent.tab();
 
   expect(
     screen.getByRole("button", {
@@ -251,7 +251,7 @@ test("FE-3.3 사용자가 키보드만으로 검색하고 결과를 선택해 �
     })
   ).toHaveFocus();
 
-  userEvent.keyboard("{Enter}");
+  await userEvent.keyboard("{Enter}");
 
   expect(onSearch).toHaveBeenCalledWith({
     mode: "ROUTE",
@@ -263,8 +263,8 @@ test("FE-3.3 사용자가 키보드만으로 검색하고 결과를 선택해 �
   // 6. 목적지 결과를 선택한다.
   // --------------------------------
 
-  userEvent.tab();
-  userEvent.tab();
+  await userEvent.tab();
+  await userEvent.tab();
 
   expect(
     screen.getByRole("button", {
@@ -272,13 +272,13 @@ test("FE-3.3 사용자가 키보드만으로 검색하고 결과를 선택해 �
     })
   ).toHaveFocus();
 
-  userEvent.keyboard("{Enter}");
+  await userEvent.keyboard("{Enter}");
 
   // --------------------------------
   // 7. 이동수단을 키보드로 선택한다.
   // --------------------------------
 
-  userEvent.tab();
+  await userEvent.tab();
 
   const travelMode = screen.getByRole("combobox", {
     name: "이동수단",
@@ -286,14 +286,14 @@ test("FE-3.3 사용자가 키보드만으로 검색하고 결과를 선택해 �
 
   expect(travelMode).toHaveFocus();
 
-  userEvent.keyboard("{ArrowDown}");
+  await userEvent.keyboard("{ArrowDown}");
   expect(travelMode).toHaveValue("PUBLIC_TRANSIT");
 
   // --------------------------------
   // 8. 자전거 수를 키보드로 선택한다.
   // --------------------------------
 
-  userEvent.tab();
+  await userEvent.tab();
   const bikeCount = screen.getByRole("combobox", {
     name: "필요 자전거 수",
   });
@@ -301,14 +301,14 @@ test("FE-3.3 사용자가 키보드만으로 검색하고 결과를 선택해 �
   expect(bikeCount).toHaveFocus();
   expect(bikeCount).toHaveValue("1");
 
-  userEvent.keyboard("{ArrowDown}");
+  await userEvent.keyboard("{ArrowDown}");
   expect(bikeCount).toHaveValue("2");
 
   // --------------------------------
   // 9. 계속하기
   // --------------------------------
 
-  userEvent.tab();
+  await userEvent.tab();
 
   const continueButton = screen.getByRole("button", {
     name: "계속하기",
@@ -408,7 +408,7 @@ test("FE-3.3 error 상태에서 다시 시도 버튼 클릭 시 이전 검색 �
   expect(onSearch).toHaveBeenLastCalledWith({ mode: "ROUTE", field: "origin", query: "서울역" });
 });
 
-test("FE-3.3 ArrowDown 키로 필요한 자전거 수를 변경한다", () => {
+test("FE-3.3 ArrowDown 키로 필요한 자전거 수를 변경한다", async () => {
   render(<PlaceStationSearchPage />);
 
   const bikeCount = screen.getByRole("combobox", {
@@ -417,7 +417,7 @@ test("FE-3.3 ArrowDown 키로 필요한 자전거 수를 변경한다", () => {
 
   bikeCount.focus();
 
-  userEvent.keyboard("{ArrowDown}");
+  await userEvent.keyboard("{ArrowDown}");
 
   expect(bikeCount).toHaveFocus();
   expect(bikeCount).toHaveValue("2");

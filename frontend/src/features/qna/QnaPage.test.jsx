@@ -36,11 +36,11 @@ test("search, filters, tabs, and pagination update the fixture list", () => {
   expect(screen.getByRole("button", { name: "이전 페이지" })).toBeEnabled();
 });
 
-test("question cards open from the keyboard and return to the list", () => {
+test("question cards open from the keyboard and return to the list", async () => {
   render(<QnaPage />);
   const firstQuestion = screen.getByRole("button", { name: "목적지 검색이 안 됩니다 질문 보기" });
   firstQuestion.focus();
-  userEvent.keyboard("{Enter}");
+  await userEvent.keyboard("{Enter}");
 
   expect(screen.getByRole("heading", { name: "목적지 검색이 안 됩니다" })).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "목록으로" }));

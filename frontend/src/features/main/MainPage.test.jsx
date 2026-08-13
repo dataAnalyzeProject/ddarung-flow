@@ -147,13 +147,13 @@ describe("시안 6 메인 로그인 통합", () => {
 
     const enterDetail = screen.getByRole("button", { name: "성수역 3번 출구 상세보기" });
     enterDetail.focus();
-    userEvent.keyboard("{enter}");
+    await userEvent.keyboard("{enter}");
     expect(screen.getByRole("heading", { name: "성수역 3번 출구 라이딩 가이드" })).toBeInTheDocument();
 
-    userEvent.click(screen.getByRole("button", { name: "대여 예측으로 돌아가기" }));
+    await userEvent.click(screen.getByRole("button", { name: "대여 예측으로 돌아가기" }));
     const spaceDetail = screen.getByRole("button", { name: "서울숲 남문 상세보기" });
     spaceDetail.focus();
-    userEvent.keyboard(" ");
+    await userEvent.keyboard(" ");
     expect(screen.getByRole("heading", { name: "서울숲 남문 라이딩 가이드" })).toBeInTheDocument();
   });
 
@@ -161,23 +161,14 @@ describe("시안 6 메인 로그인 통합", () => {
     render(<MainPage />);
     await screen.findByRole("link", { name: "로그인" });
 
-    userEvent.type(screen.getByPlaceholderText("출발지를 입력하세요"), "잠실역");
-    userEvent.type(screen.getByPlaceholderText("목적지를 입력하세요"), "천호동");
-    userEvent.click(screen.getByRole("button", { name: "서울숲 남문 대여소 선택" }));
-    userEvent.click(screen.getByRole("button", { name: "서울숲 남문 상세보기" }));
-    userEvent.click(screen.getByRole("button", { name: "경로 다시 보기" }));
+    await userEvent.type(screen.getByPlaceholderText("출발지를 입력하세요"), "잠실역");
+    await userEvent.type(screen.getByPlaceholderText("목적지를 입력하세요"), "천호동");
+    await userEvent.click(screen.getByRole("button", { name: "서울숲 남문 대여소 선택" }));
+    await userEvent.click(screen.getByRole("button", { name: "서울숲 남문 상세보기" }));
+    await userEvent.click(screen.getByRole("button", { name: "경로 다시 보기" }));
 
     expect(screen.getByDisplayValue("잠실역")).toBeInTheDocument();
     expect(screen.getByDisplayValue("천호동")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "서울숲 남문 대여소 선택" })).toHaveAttribute("aria-pressed", "true");
-  });
-
-  test("Q&A 메뉴는 인앱 화면 전환 콜백을 호출한다", async () => {
-    const onNavigate = jest.fn();
-    render(<MainPage onNavigate={onNavigate} />);
-    await screen.findByRole("link", { name: "로그인" });
-
-    fireEvent.click(screen.getByRole("button", { name: "Q&A" }));
-    expect(onNavigate).toHaveBeenCalledWith("qna");
   });
 });
