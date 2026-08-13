@@ -13,9 +13,20 @@ const stations = [
 const extraStations = [
   { name: "뚝섬역 1번 출구", distance: "620m · 도보 8분", bikes: 11, range: "7~12대", rate: 91, level: "매우 높음" },
   { name: "서울숲역 4번 출구", distance: "710m · 도보 9분", bikes: 7, range: "4~8대", rate: 81, level: "높음" },
-  { name: "성수동 주민센터", distance: "840m · 도보 11분", bikes: 4, range: "2~5대", rate: 68, level: "보통" },
+  { name: "성수동 주민센터", distance: "840m · 도보 11분", bikes: 10, range: "6~11대", rate: 68, level: "보통" },
   { name: "서울숲 동문", distance: "960m · 도보 13분", bikes: 3, range: "1~4대", rate: 57, level: "보통" },
   { name: "성수대교 북단", distance: "1.1km · 도보 15분", bikes: 1, range: "0~2대", rate: 38, level: "낮음" },
+];
+
+const recommendationPool = [
+  { name: "성수역 3번 출구", distance: "120m · 도보 2분", distanceM: 120, arrival: 5, bikes: 8, range: "5~9대", rate: 87, level: "매우 높음" },
+  { name: "성수동 카페거리", distance: "310m · 도보 4분", distanceM: 310, arrival: 7, bikes: 5, range: "2~5대", rate: 72, level: "높음" },
+  { name: "서울숲 남문", distance: "480m · 도보 6분", distanceM: 480, arrival: 9, bikes: 2, range: "0~2대", rate: 45, level: "보통" },
+  { name: "뚝섬역 1번 출구", distance: "620m · 도보 8분", distanceM: 620, arrival: 11, bikes: 11, range: "7~12대", rate: 91, level: "매우 높음" },
+  { name: "서울숲역 4번 출구", distance: "710m · 도보 9분", distanceM: 710, arrival: 12, bikes: 7, range: "4~8대", rate: 81, level: "높음" },
+  { name: "성수동 주민센터", distance: "840m · 도보 11분", distanceM: 840, arrival: 14, bikes: 10, range: "6~11대", rate: 68, level: "보통" },
+  { name: "서울숲 동문", distance: "960m · 도보 13분", distanceM: 960, arrival: 16, bikes: 3, range: "1~4대", rate: 57, level: "보통" },
+  { name: "성수대교 북단", distance: "1.1km · 도보 15분", distanceM: 1100, arrival: 18, bikes: 1, range: "0~2대", rate: 38, level: "낮음" },
 ];
 
 export default function MainPage() {
@@ -32,7 +43,14 @@ export default function MainPage() {
   const [mapZoom, setMapZoom] = useState(1);
   const [routeRedrawn, setRouteRedrawn] = useState(false);
   const [stationSort, setStationSort] = useState("arrival");
+  const [sortTouched, setSortTouched] = useState(false);
   const [moreStationsOpen, setMoreStationsOpen] = useState(false);
+  const sortedRecommendations = [...recommendationPool].sort((a, b) => {
+    if (stationSort === "success") return b.rate - a.rate;
+    if (stationSort === "bikes") return b.bikes - a.bikes;
+    if (stationSort === "distance") return a.distanceM - b.distanceM;
+    return a.arrival - b.arrival;
+  }).slice(0, 3);
   if (details) {
     return <RidingGuidePage stationName={details.name} onBack={() => setDetails(null)} />;
   }
@@ -92,13 +110,14 @@ export default function MainPage() {
         <button className="hot-transit" aria-label="대중교통" aria-pressed={mode === "대중교통"} onClick={() => setMode("대중교통")} />
         <button className="hot-predict" aria-label="대여 가능성 예측" onClick={() => setNotice(true)} />
         <a className="hot-login" aria-label="로그인" href="/login" />
-        <select className="hot-station-sort" aria-label="추천 대여소 정렬 기준" value={stationSort} onChange={e => setStationSort(e.target.value)}>
+        <select className="hot-station-sort" aria-label="추천 대여소 정렬 기준" value={stationSort} onChange={e => { setStationSort(e.target.value); setSortTouched(true); }}>
           <option value="arrival">예상 도착시간 기준</option>
           <option value="distance">가까운 거리 기준</option>
           <option value="success">대여 성공률 기준</option>
           <option value="bikes">현재 자전거 수 기준</option>
         </select>
         <span className="hot-station-sort-label" aria-hidden="true">{{ arrival: "예상 도착시간 기준", distance: "가까운 거리 기준", success: "대여 성공률 기준", bikes: "현재 자전거 수 기준" }[stationSort]}</span>
+        {sortTouched && <div className="hot-sorted-stations">{sortedRecommendations.map((station, index) => <article key={station.name}><b>{index + 1}</b><div className="sorted-name"><strong>{station.name}</strong><small>목적지에서 {station.distance}</small></div><div><small>현재 자전거</small><strong>{station.bikes}<i>대</i></strong></div><div><small>예상 도착 시</small><strong>{station.range}</strong></div><div className="sorted-rate"><small>대여 성공률</small><strong>{station.rate}%</strong><em>{station.level}</em></div><button onClick={() => setNotice(true)}>상세보기</button></article>)}</div>}
         {stations.map((station, index) => <button key={`detail-${station.id}`} className={`hot-detail hot-detail-${index + 1}`} aria-label={`Station ${index + 1} details`} onClick={() => setDetails(station)} />)}
         {stations.map((station, index) => <button key={`bookmark-${station.id}`} className={`hot-bookmark hot-bookmark-${index + 1}`} type="button" aria-label={`Bookmark station ${index + 1}`} aria-pressed={bookmarks.includes(station.id)} onClick={() => setBookmarks(current => current.includes(station.id) ? current.filter(id => id !== station.id) : [...current, station.id])} />)}
         <button className="hot-map-tab" type="button" aria-label="지도" aria-pressed={mapMode === "map"} onClick={() => setMapMode("map")} />
