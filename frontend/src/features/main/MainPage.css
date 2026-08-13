@@ -574,6 +574,11 @@ html,body,#root{width:100%;height:100%;margin:0;overflow:hidden!important;backgr
 .sorted-rate small{font-size:11px!important;font-weight:700!important;color:#63778e!important}
 .sorted-rate strong{width:42px!important;height:42px!important;font-size:11px!important}
 .sorted-rate em{display:block!important;margin:3px 0 0!important;font-size:10.5px!important;font-weight:900!important;white-space:nowrap!important}
+.hot-sorted-stations article{grid-template-columns:1fr 1fr 1.05fr!important;padding-right:70px!important}
+.hot-sorted-stations .sorted-bookmark{position:absolute!important;right:9px!important;top:8px!important;width:18px!important;height:20px!important;padding:0!important;border:0!important;background:transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 18'%3E%3Cpath d='M2 1.5h10v14L7 12.5 2 15.5z' fill='white' stroke='%23788ca4' stroke-width='1.8' stroke-linejoin='round'/%3E%3C/svg%3E") center/12px 16px no-repeat!important;box-shadow:none!important;cursor:pointer!important}
+.hot-sorted-stations .sorted-bookmark.saved{background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Ccircle cx='10' cy='10' r='8' fill='%230874ed'/%3E%3Cpath d='M6.2 10.2l2.5 2.5 5.2-5.4' fill='none' stroke='white' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/18px 18px no-repeat!important}
+.hot-sorted-stations .sorted-bookmark:focus,.hot-sorted-stations .sorted-bookmark:focus-visible{outline:2px solid rgba(8,116,237,.35)!important;outline-offset:1px!important}
+.hot-sorted-stations .sorted-detail{position:absolute!important;right:8px!important;top:50%!important;width:58px!important;height:34px!important;transform:translateY(-50%)!important;margin:0!important}
 
 /* Bookmark selection: blue outline only */
 .ref-hotspots .hot-bookmark:before,
