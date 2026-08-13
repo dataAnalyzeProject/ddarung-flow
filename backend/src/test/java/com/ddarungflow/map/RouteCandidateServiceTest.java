@@ -107,10 +107,10 @@ class RouteCandidateServiceTest {
     @DisplayName("usesDifferentProviderResultForTravelMode: travelMode(WALK vs TRANSIT)에 따라 다르게 주입된 provider 경로 결과를 사용한다")
     void usesDifferentProviderResultForTravelMode() {
         String walkJson = """
-            { "routes": [{ "summary": { "distance": 820, "duration": 640 } }] }
+            { "status": "OK", "route": { "properties": { "totalDistance": 820, "totalTime": 640 } } }
             """;
         String transitJson = """
-            { "routes": [{ "summary": { "distance": 4200, "duration": 1080 } }] }
+            { "status": "OK", "routes": [{ "properties": { "totalDistance": 4200, "totalTime": 1080 } }] }
             """;
 
         @SuppressWarnings("unchecked")

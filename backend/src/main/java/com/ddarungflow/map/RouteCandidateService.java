@@ -17,14 +17,14 @@ public class RouteCandidateService {
     private final StationRepository stationRepository;
     private final KakaoMapClient kakaoMapClient;
 
-    @org.springframework.beans.factory.annotation.Autowired
     public RouteCandidateService(StationRepository stationRepository) {
-        this(stationRepository, new KakaoMapClient("https://dapi.kakao.com", "fake-key"));
+        this(stationRepository, new KakaoMapClient("https://dapi.kakao.com", ""));
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
     public RouteCandidateService(StationRepository stationRepository, KakaoMapClient kakaoMapClient) {
         this.stationRepository = stationRepository;
-        this.kakaoMapClient = kakaoMapClient != null ? kakaoMapClient : new KakaoMapClient("https://dapi.kakao.com", "fake-key");
+        this.kakaoMapClient = kakaoMapClient != null ? kakaoMapClient : new KakaoMapClient("https://dapi.kakao.com", "");
     }
 
     public List<StationDistance> findCandidates(BigDecimal destLat, BigDecimal destLng) {
