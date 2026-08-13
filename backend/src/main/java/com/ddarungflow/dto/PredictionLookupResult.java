@@ -12,5 +12,12 @@ public record PredictionLookupResult(
     int requiredBikeCount,
     BigDecimal selectedProbability,
     OffsetDateTime featureAsOf,
-    OffsetDateTime expiresAt
+    OffsetDateTime expiresAt,
+    String modelVersion,
+    OffsetDateTime generatedAt,
+    BigDecimal atLeast1Probability,
+    BigDecimal atLeast2Probability,
+    BigDecimal atLeast3Probability,
+    BigDecimal atLeast4Probability,
+    BigDecimal atLeast5Probability
 ) {}
