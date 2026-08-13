@@ -571,6 +571,9 @@ html,body,#root{width:100%;height:100%;margin:0;overflow:hidden!important;backgr
 .sorted-rate strong{width:38px!important;height:38px!important;font-size:10px!important}
 .sorted-rate em{font-size:9px!important}
 .hot-sorted-stations article>button{height:34px!important;font-size:11px!important;font-weight:700!important}
+.sorted-rate small{font-size:11px!important;font-weight:700!important;color:#63778e!important}
+.sorted-rate strong{width:42px!important;height:42px!important;font-size:11px!important}
+.sorted-rate em{display:block!important;margin:3px 0 0!important;font-size:10.5px!important;font-weight:900!important;white-space:nowrap!important}
 
 /* Bookmark selection: blue outline only */
 .ref-hotspots .hot-bookmark:before,
