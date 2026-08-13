@@ -67,7 +67,7 @@ class KakaoMapClientTest {
     }
 
     @Test
-    @DisplayName("HTTP 500 오류 발생 시 searchPlaces()가 예외를 던지지 않고 빈 목록을 반환한다")
+    @DisplayName("HTTP 500 오류 발생 시 안정된 장소 provider 오류를 던진다")
     void searchPlacesHttp500ServerError() {
         @SuppressWarnings("unchecked")
         HttpResponse<String> mockResponse = mock(HttpResponse.class);
@@ -75,20 +75,20 @@ class KakaoMapClientTest {
         when(mockResponse.body()).thenReturn("Internal Server Error");
 
         KakaoMapClient client = new KakaoMapClient("https://dapi.kakao.com", "test-key", req -> mockResponse);
-        List<MapApiDtos.PlaceSearchResponseDto> results = client.searchPlaces("서울역");
-
-        assertThat(results).isEmpty();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> client.searchPlaces("서울역"))
+            .isInstanceOf(KakaoMapClient.ProviderException.class)
+            .hasMessage("PLACE_PROVIDER_ERROR");
     }
 
     @Test
-    @DisplayName("네트워크 예외 발생 시 searchPlaces()가 예외를 포획하여 빈 목록을 반환한다")
+    @DisplayName("네트워크 예외 발생 시 안정된 장소 provider 오류를 던진다")
     void searchPlacesNetworkException() {
         KakaoMapClient client = new KakaoMapClient("https://dapi.kakao.com", "test-key", req -> {
             throw new RuntimeException("Network Connection Failed");
         });
-        List<MapApiDtos.PlaceSearchResponseDto> results = client.searchPlaces("서울역");
-
-        assertThat(results).isEmpty();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> client.searchPlaces("서울역"))
+            .isInstanceOf(KakaoMapClient.ProviderException.class)
+            .hasMessage("PLACE_PROVIDER_ERROR");
     }
 
     @Test
@@ -205,7 +205,7 @@ class KakaoMapClientTest {
     }
 
     @Test
-    @DisplayName("doesNotTreatMissingDistanceOrDurationAsSuccess: HTTP 200이지만 거리 또는 시간이 누락된 경우 빈 결과를 반환한다")
+    @DisplayName("doesNotTreatMissingDistanceOrDurationAsSuccess: HTTP 200이지만 거리 또는 시간이 누락되면 provider 오류를 던진다")
     void doesNotTreatMissingDistanceOrDurationAsSuccess() {
         String jsonBody = """
             {
@@ -226,12 +226,51 @@ class KakaoMapClientTest {
         when(mockResponse.body()).thenReturn(jsonBody);
 
         KakaoMapClient client = new KakaoMapClient("https://dapi.kakao.com", "test-key", req -> mockResponse);
-        java.util.Optional<MapApiDtos.RouteResultDto> routeOpt = client.fetchRoute(
-            new BigDecimal("37.5500"), new BigDecimal("126.9000"),
-            new BigDecimal("37.5556"), new BigDecimal("126.9106"),
-            "WALK"
-        );
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> client.fetchRoute(
+                new BigDecimal("37.5500"), new BigDecimal("126.9000"),
+                new BigDecimal("37.5556"), new BigDecimal("126.9106"), "WALK"))
+            .isInstanceOf(KakaoMapClient.ProviderException.class)
+            .hasMessage("ROUTE_PROVIDER_ERROR");
+    }
+    @Test
+    void placeProviderFailureUsesStableErrorCode() {
+        @SuppressWarnings("unchecked")
+        HttpResponse<String> response = mock(HttpResponse.class);
+        when(response.statusCode()).thenReturn(500);
+        KakaoMapClient client = new KakaoMapClient("https://dapi.kakao.com", "test-key", request -> response);
 
-        assertThat(routeOpt).isEmpty();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> client.searchPlaces("Seoul", 1, 10))
+            .isInstanceOf(KakaoMapClient.ProviderException.class)
+            .hasMessage("PLACE_PROVIDER_ERROR");
+    }
+
+    @Test
+    void routeProviderInvalidBodyUsesStableErrorCode() {
+        @SuppressWarnings("unchecked")
+        HttpResponse<String> response = mock(HttpResponse.class);
+        when(response.statusCode()).thenReturn(200);
+        when(response.body()).thenReturn("{\"routes\":[]}");
+        KakaoMapClient client = new KakaoMapClient("https://dapi.kakao.com", "test-key", request -> response);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> client.fetchRoute(
+                new BigDecimal("37.5"), new BigDecimal("126.9"),
+                new BigDecimal("37.6"), new BigDecimal("127.0"), "WALK"))
+            .isInstanceOf(KakaoMapClient.ProviderException.class)
+            .hasMessage("ROUTE_PROVIDER_ERROR");
+    }
+
+    @Test
+    void pagedPlaceResponseMapsMetaIsEnd() {
+        String body = "{\"meta\":{\"is_end\":false},\"documents\":[]}";
+        @SuppressWarnings("unchecked")
+        HttpResponse<String> response = mock(HttpResponse.class);
+        when(response.statusCode()).thenReturn(200);
+        when(response.body()).thenReturn(body);
+        KakaoMapClient client = new KakaoMapClient("https://dapi.kakao.com", "test-key", request -> response);
+
+        MapApiDtos.PlaceSearchPageResponseDto result = client.searchPlaces("Seoul", 2, 10);
+        assertThat(result.page()).isEqualTo(2);
+        assertThat(result.hasNext()).isTrue();
+        assertThat(result.places()).isEmpty();
     }
 }

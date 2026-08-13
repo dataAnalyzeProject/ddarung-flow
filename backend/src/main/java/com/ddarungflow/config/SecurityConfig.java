@@ -55,12 +55,15 @@ public class SecurityConfig {
     ) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/v1/routes/estimate"))
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
                                 "/",
                                 "/auth/**",
                                 "/api/v1/auth/**",
+                                "/api/v1/places/**",
+                                "/api/v1/routes/estimate",
                                 "/login/oauth2/**",
                                 "/oauth2/**",
                                 "/swagger-ui.html",

@@ -6,6 +6,7 @@ services:
       dockerfile: Dockerfile
       args:
         REACT_APP_API_BASE_URL: ${REACT_APP_API_BASE_URL}
+        REACT_APP_KAKAO_MAP_APP_KEY: ${REACT_APP_KAKAO_MAP_APP_KEY}
     ports:
       - "${FRONTEND_BIND_ADDRESS:-127.0.0.1}:${FRONTEND_PORT}:3000"
     depends_on:
@@ -34,6 +35,7 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-local-disabled}
       KAKAO_CLIENT_ID: ${KAKAO_CLIENT_ID:-local-disabled}
       KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET:-local-disabled}
+      KAKAO_REST_API_KEY: ${KAKAO_REST_API_KEY}
       SERVER_FORWARD_HEADERS_STRATEGY: framework
     ports:
       - "${BACKEND_BIND_ADDRESS:-127.0.0.1}:${BACKEND_PORT}:8080"
@@ -47,7 +49,7 @@ services:
   postgres:
     image: postgres:17-alpine
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     environment:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USERNAME}

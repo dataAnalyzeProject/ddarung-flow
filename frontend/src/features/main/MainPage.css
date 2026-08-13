@@ -298,3 +298,5 @@
     overflow-wrap:anywhere;
   }
 }
+.main-place-field{position:relative}.main-place-results{position:absolute;z-index:30;top:calc(100% + 4px);left:0;right:0;max-height:240px;overflow:auto;border:1px solid #c5d4e3;border-radius:7px;background:#fff;box-shadow:0 8px 22px #17334d2b}.main-place-results>small{display:block;padding:12px;color:#60748b;font-size:10px}.main-place-results ul{margin:0;padding:0;list-style:none}.main-place-results li+li{border-top:1px solid #e5ebf1}.main-place-results button{width:100%;padding:10px 12px;border:0;background:#fff;color:#17365d;text-align:left;cursor:pointer}.main-place-results button:hover,.main-place-results button:focus{background:#f0f7ff}.main-place-results button small{display:block;margin-top:3px;color:#75879a;font-size:9px}
+.main-search{overflow:visible;z-index:10}.main-dashboard{position:relative;z-index:1}.main-place-results{z-index:100}

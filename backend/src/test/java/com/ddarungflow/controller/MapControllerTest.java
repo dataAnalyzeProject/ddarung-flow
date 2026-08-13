@@ -43,6 +43,7 @@ class MapControllerTest {
         public com.ddarungflow.map.KakaoMapClient kakaoMapClient() {
             String fakeKakaoJson = """
                 {
+                  "meta": { "is_end": true },
                   "documents": [
                     {
                       "id": "12345",
@@ -54,13 +55,15 @@ class MapControllerTest {
                   ]
                 }
                 """;
-            return new com.ddarungflow.map.KakaoMapClient("https://dapi.kakao.com", "fake-key", req -> {
+            return new com.ddarungflow.map.KakaoMapClient("https://dapi.kakao.com", "test-key", req -> {
                 @SuppressWarnings("unchecked")
                 java.net.http.HttpResponse<String> res = org.mockito.Mockito.mock(java.net.http.HttpResponse.class);
                 org.mockito.Mockito.when(res.statusCode()).thenReturn(200);
                 String uriStr = req.uri().toString();
-                if (uriStr.contains("123") || uriStr.contains("%EC%A1%B4%EC%9E%AC")) {
-                    org.mockito.Mockito.when(res.body()).thenReturn("{ \"documents\": [] }");
+                if (uriStr.contains("/v1/directions/")) {
+                    org.mockito.Mockito.when(res.body()).thenReturn("{ \"routes\": [{ \"summary\": { \"distance\": 1784, \"duration\": 1759 } }] }");
+                } else if (uriStr.contains("123") || uriStr.contains("%EC%A1%B4%EC%9E%AC")) {
+                    org.mockito.Mockito.when(res.body()).thenReturn("{ \"meta\": { \"is_end\": true }, \"documents\": [] }");
                 } else {
                     org.mockito.Mockito.when(res.body()).thenReturn(fakeKakaoJson);
                 }
@@ -292,12 +295,12 @@ class MapControllerTest {
         mockMvc.perform(get("/api/v1/places/search")
                 .param("query", "서울역"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].placeId").value("12345"))
-                .andExpect(jsonPath("$[0].name").value("서울역"))
-                .andExpect(jsonPath("$[0].address").value("서울 용산구 한강대로 405"))
-                .andExpect(jsonPath("$[0].latitude").value(37.5547))
-                .andExpect(jsonPath("$[0].longitude").value(126.9707));
+                .andExpect(jsonPath("$.places.length()").value(1))
+                .andExpect(jsonPath("$.places[0].placeId").value("12345"))
+                .andExpect(jsonPath("$.places[0].name").value("서울역"))
+                .andExpect(jsonPath("$.places[0].address").value("서울 용산구 한강대로 405"))
+                .andExpect(jsonPath("$.places[0].latitude").value(37.5547))
+                .andExpect(jsonPath("$.places[0].longitude").value(126.9707));
     }
 
     @Test
@@ -306,8 +309,7 @@ class MapControllerTest {
     void searchPlacesUnderTwoCharsReturnsEmpty() throws Exception {
         mockMvc.perform(get("/api/v1/places/search")
                 .param("query", "서"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(0));
+                .andExpect(status().isBadRequest());
     }
 
     @Test
@@ -317,7 +319,49 @@ class MapControllerTest {
         mockMvc.perform(get("/api/v1/places/search")
                 .param("query", "존재하지않는장소검색어123"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(0));
+                .andExpect(jsonPath("$.places.length()").value(0));
+    }
+
+    @Test
+    void placeSearchUsesPagedContract() throws Exception {
+        mockMvc.perform(get("/api/v1/places/search")
+                .param("query", "Seoul")
+                .param("page", "1")
+                .param("size", "10"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.places.length()").value(1))
+            .andExpect(jsonPath("$.places[0].placeId").value("12345"))
+            .andExpect(jsonPath("$.page").value(1))
+            .andExpect(jsonPath("$.hasNext").value(false));
+    }
+
+    @Test
+    void placeSearchRejectsShortQueryWithoutLogin() throws Exception {
+        mockMvc.perform(get("/api/v1/places/search").param("query", "a"))
+            .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void estimateRouteReturnsDistanceDurationAndModeWithoutLogin() throws Exception {
+        String payload = """
+            {"originLatitude":37.5547,"originLongitude":126.9707,
+             "destinationLatitude":37.5663,"destinationLongitude":126.9784,
+             "travelMode":"WALK"}
+            """;
+        mockMvc.perform(post("/api/v1/routes/estimate").with(csrf())
+                .contentType(MediaType.APPLICATION_JSON).content(payload))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.distanceMeters").value(1784))
+            .andExpect(jsonPath("$.durationSeconds").value(1759))
+            .andExpect(jsonPath("$.travelMode").value("WALK"));
+    }
+
+    @Test
+    void estimateRouteRejectsInvalidCoordinatesAndDirectMode() throws Exception {
+        mockMvc.perform(post("/api/v1/routes/estimate").with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"originLatitude\":91,\"originLongitude\":126,\"destinationLatitude\":37,\"destinationLongitude\":127,\"travelMode\":\"DIRECT\"}"))
+            .andExpect(status().isBadRequest());
     }
 
     // 5. POST /api/v1/routes/candidates

@@ -40,4 +40,5 @@ out/
 .env
 *.env
 .env.*
+!.env.example
 
