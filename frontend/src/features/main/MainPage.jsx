@@ -119,6 +119,7 @@ export default function MainPage({ onNavigate }) {
       <RidingGuidePage
         stationName={guideStation.name}
         onBack={() => setGuideStation(null)}
+        onNavigate={onNavigate}
       />
     );
   }

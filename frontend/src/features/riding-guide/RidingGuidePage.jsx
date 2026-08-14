@@ -53,12 +53,12 @@ function GuideIcon({ name, className = "", title }) {
   );
 }
 
-export default function RidingGuidePage({ stationName = "성수역 3번 출구", onBack }) {
+export default function RidingGuidePage({ stationName = "성수역 3번 출구", onBack, onNavigate }) {
   const returnToPrediction = () => onBack?.();
 
   return (
     <main className="riding-guide-shell">
-      <AppHeader />
+      <AppHeader onNavigate={onNavigate} />
 
       <div className="guide-page">
         <button className="guide-back" type="button" onClick={returnToPrediction}>

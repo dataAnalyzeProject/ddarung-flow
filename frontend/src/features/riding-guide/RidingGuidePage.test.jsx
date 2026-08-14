@@ -24,4 +24,13 @@ describe("라이딩 가이드 화면", () => {
 
     expect(onBack).toHaveBeenCalledTimes(2);
   });
+
+  test("Q&A menu calls the supplied navigation callback", () => {
+    const onNavigate = jest.fn();
+    render(<RidingGuidePage onBack={jest.fn()} onNavigate={onNavigate} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Q&A" }));
+
+    expect(onNavigate).toHaveBeenCalledWith("qna");
+  });
 });
