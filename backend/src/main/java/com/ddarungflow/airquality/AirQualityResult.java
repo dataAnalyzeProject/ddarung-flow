@@ -5,13 +5,17 @@ import java.util.List;
 
 public record AirQualityResult(
     String stationName,
-    OffsetDateTime measuredAt,
+    OffsetDateTime dataTime,
     Integer pm10Value,
     Integer pm25Value,
     Double o3Value,
-    String pm10Grade,
-    String pm25Grade,
-    String khaiGrade,
+    Integer khaiValue,
+    String pm10GradeCode,
+    String pm25GradeCode,
+    String khaiGradeCode,
+    AirQualityGrade pm10Grade,
+    AirQualityGrade pm25Grade,
+    AirQualityGrade khaiGrade,
     AirQualityStatus status,
     List<AirKoreaMeasurementPoint> recentMeasurements
 ) {

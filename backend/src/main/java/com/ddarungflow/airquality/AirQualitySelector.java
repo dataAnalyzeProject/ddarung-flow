@@ -3,6 +3,7 @@ package com.ddarungflow.airquality;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -54,30 +55,64 @@ public class AirQualitySelector {
         List<AirKoreaMeasurementPoint> safeLatest = Optional.ofNullable(latest).orElse(Collections.emptyList());
         List<AirKoreaMeasurementPoint> safePrevious = Optional.ofNullable(previous).orElse(Collections.emptyList());
 
+        // 1. 최신 수집 실패 혹은 소스 사용 불가 상태인 경우
         if (latestFetchFailed) {
-            Optional<AirKoreaMeasurementPoint> validPrevPoint = findValidPoint(safePrevious, stationName);
-            if (validPrevPoint.isPresent()) {
-                AirKoreaMeasurementPoint point = validPrevPoint.get();
-                return createResult(stationName, point, AirQualityStatus.DELAYED, safePrevious);
+            return processDelayedOrUnavailable(stationName, targetTime, safePrevious);
+        }
+
+        // 2. 최신 수집 데이터에서 대상 측정소 데이터 검색
+        Optional<AirKoreaMeasurementPoint> latestPointOpt = findPointByStation(safeLatest, stationName);
+
+        if (latestPointOpt.isPresent()) {
+            AirKoreaMeasurementPoint point = latestPointOpt.get();
+
+            // 세 오염물질(pm10Value, pm25Value, o3Value)이 모두 null 이면 MISSING
+            if (isAllPollutantsMissing(point)) {
+                return createResult(stationName, point, AirQualityStatus.MISSING, safeLatest);
             }
-            if (!safeLatest.isEmpty() || !safePrevious.isEmpty()) {
-                return createEmptyResult(stationName, AirQualityStatus.MISSING, safePrevious);
+
+            // dataTime 시간 경계 판정 (2시간 / 6시간)
+            long minutesDiff = calculateAgeInMinutes(targetTime, point.dataTime());
+            if (minutesDiff < 0 || minutesDiff > 360) {
+                // 6시간 초과된 데이터는 UNAVAILABLE
+                return createResult(stationName, point, AirQualityStatus.UNAVAILABLE, safeLatest);
+            } else if (minutesDiff > 120) {
+                // 2시간 초과 6시간 이내는 DELAYED
+                return createResult(stationName, point, AirQualityStatus.DELAYED, safeLatest);
+            } else {
+                // 2시간 이내는 NORMAL
+                return createResult(stationName, point, AirQualityStatus.NORMAL, safeLatest);
             }
-            return createEmptyResult(stationName, AirQualityStatus.UNAVAILABLE, safePrevious);
         }
 
-        Optional<AirKoreaMeasurementPoint> validLatestPoint = findValidPoint(safeLatest, stationName);
-        if (validLatestPoint.isPresent()) {
-            AirKoreaMeasurementPoint point = validLatestPoint.get();
-            return createResult(stationName, point, AirQualityStatus.NORMAL, safeLatest);
+        // 최신 데이터에 없다면 직전 성공 수집 데이터에서 대체 가능한지 확인
+        return processDelayedOrUnavailable(stationName, targetTime, safePrevious);
+    }
+
+    private AirQualityResult processDelayedOrUnavailable(
+            String stationName,
+            OffsetDateTime targetTime,
+            List<AirKoreaMeasurementPoint> previous
+    ) {
+        Optional<AirKoreaMeasurementPoint> prevPointOpt = findPointByStation(previous, stationName);
+        if (prevPointOpt.isPresent()) {
+            AirKoreaMeasurementPoint point = prevPointOpt.get();
+            if (isAllPollutantsMissing(point)) {
+                return createResult(stationName, point, AirQualityStatus.MISSING, previous);
+            }
+
+            long minutesDiff = calculateAgeInMinutes(targetTime, point.dataTime());
+            if (minutesDiff >= 0 && minutesDiff <= 360) {
+                // 직전 데이터가 6시간 이내이면 DELAYED
+                return createResult(stationName, point, AirQualityStatus.DELAYED, previous);
+            }
         }
 
-        if (safeLatest.isEmpty() && safePrevious.isEmpty()) {
-            return createEmptyResult(stationName, AirQualityStatus.UNAVAILABLE, Collections.emptyList());
+        if (previous.isEmpty() && prevPointOpt.isEmpty()) {
+            return createEmptyResult(stationName, AirQualityStatus.UNAVAILABLE, previous);
         }
 
-        // 최신 수집 데이터는 있으나 지정 stationName이 없거나 필수 필드가 비어있는 경우 MISSING
-        return createEmptyResult(stationName, AirQualityStatus.MISSING, safeLatest);
+        return createEmptyResult(stationName, AirQualityStatus.UNAVAILABLE, previous);
     }
 
     public List<AirKoreaMeasurementPoint> parseJsonFixture(String jsonFixture) {
@@ -88,8 +123,17 @@ public class AirQualitySelector {
         List<AirKoreaMeasurementPoint> points = new ArrayList<>();
         try {
             JsonNode rootNode = objectMapper.readTree(jsonFixture);
-            JsonNode itemsNode = null;
 
+            // header resultCode가 00이 아니면 소스 사용 불가능(빈 리스트 반환)
+            if (rootNode.has("response") && rootNode.get("response").has("header")) {
+                JsonNode header = rootNode.get("response").get("header");
+                String resultCode = header.path("resultCode").asText("");
+                if (!"00".equals(resultCode)) {
+                    return Collections.emptyList();
+                }
+            }
+
+            JsonNode itemsNode = null;
             if (rootNode.has("response") && rootNode.get("response").has("body")) {
                 JsonNode body = rootNode.get("response").get("body");
                 if (body.has("items")) {
@@ -107,30 +151,28 @@ public class AirQualitySelector {
                 }
             }
         } catch (Exception e) {
-            // Json 파싱 오류 시 빈 리스트 반환
             return Collections.emptyList();
         }
         return points;
     }
 
     private AirKoreaMeasurementPoint parseItemNode(JsonNode item) {
-        String stationName = item.path("stationName").asText(null);
-        String dataTimeStr = item.path("dataTime").asText(null);
-        OffsetDateTime dataTime = null;
-        if (dataTimeStr != null && !dataTimeStr.isBlank()) {
-            try {
-                LocalDateTime ldt = LocalDateTime.parse(dataTimeStr.trim(), DATE_TIME_FORMATTER);
-                dataTime = ldt.atOffset(KST_OFFSET);
-            } catch (Exception ignored) {
-            }
-        }
+        String stationName = parseString(item.path("stationName"));
+        String dataTimeStr = parseString(item.path("dataTime"));
+        OffsetDateTime dataTime = parseOffsetDateTime(dataTimeStr);
 
         Integer pm10Value = parseInteger(item.path("pm10Value"));
         Integer pm25Value = parseInteger(item.path("pm25Value"));
         Double o3Value = parseDouble(item.path("o3Value"));
-        String pm10Grade = parseString(item.path("pm10Grade"));
-        String pm25Grade = parseString(item.path("pm25Grade"));
-        String khaiGrade = parseString(item.path("khaiGrade"));
+        Integer khaiValue = parseInteger(item.path("khaiValue"));
+
+        String pm10GradeCode = parseString(item.path("pm10Grade"));
+        String pm25GradeCode = parseString(item.path("pm25Grade"));
+        String khaiGradeCode = parseString(item.path("khaiGrade"));
+
+        AirQualityGrade pm10Grade = AirQualityGrade.fromCode(pm10GradeCode);
+        AirQualityGrade pm25Grade = AirQualityGrade.fromCode(pm25GradeCode);
+        AirQualityGrade khaiGrade = AirQualityGrade.fromCode(khaiGradeCode);
 
         return new AirKoreaMeasurementPoint(
                 stationName,
@@ -138,40 +180,14 @@ public class AirQualitySelector {
                 pm10Value,
                 pm25Value,
                 o3Value,
+                khaiValue,
+                pm10GradeCode,
+                pm25GradeCode,
+                khaiGradeCode,
                 pm10Grade,
                 pm25Grade,
                 khaiGrade
         );
-    }
-
-    private Integer parseInteger(JsonNode node) {
-        if (node.isMissingNode() || node.isNull()) {
-            return null;
-        }
-        String text = node.asText();
-        if (text == null || text.isBlank() || "-".equals(text.trim())) {
-            return null;
-        }
-        try {
-            return Integer.parseInt(text.trim());
-        } catch (NumberFormatException e) {
-            return null;
-        }
-    }
-
-    private Double parseDouble(JsonNode node) {
-        if (node.isMissingNode() || node.isNull()) {
-            return null;
-        }
-        String text = node.asText();
-        if (text == null || text.isBlank() || "-".equals(text.trim())) {
-            return null;
-        }
-        try {
-            return Double.parseDouble(text.trim());
-        } catch (NumberFormatException e) {
-            return null;
-        }
     }
 
     private String parseString(JsonNode node) {
@@ -179,21 +195,63 @@ public class AirQualitySelector {
             return null;
         }
         String text = node.asText().trim();
-        return text.isBlank() || "-".equals(text) ? null : text;
+        if (text.isBlank() || "-".equals(text) || "null".equalsIgnoreCase(text)) {
+            return null;
+        }
+        return text;
     }
 
-    private Optional<AirKoreaMeasurementPoint> findValidPoint(List<AirKoreaMeasurementPoint> points, String stationName) {
+    private Integer parseInteger(JsonNode node) {
+        String str = parseString(node);
+        if (str == null) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(str);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private Double parseDouble(JsonNode node) {
+        String str = parseString(node);
+        if (str == null) {
+            return null;
+        }
+        try {
+            return Double.parseDouble(str);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private OffsetDateTime parseOffsetDateTime(String dataTimeStr) {
+        if (dataTimeStr == null || dataTimeStr.isBlank()) {
+            return null;
+        }
+        try {
+            LocalDateTime ldt = LocalDateTime.parse(dataTimeStr.trim(), DATE_TIME_FORMATTER);
+            return ldt.atOffset(KST_OFFSET);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private Optional<AirKoreaMeasurementPoint> findPointByStation(List<AirKoreaMeasurementPoint> points, String stationName) {
         return points.stream()
                 .filter(p -> Objects.equals(p.stationName(), stationName))
-                .filter(this::isValidMeasurementPoint)
                 .findFirst();
     }
 
-    private boolean isValidMeasurementPoint(AirKoreaMeasurementPoint point) {
-        return point.stationName() != null && !point.stationName().isBlank()
-                && point.dataTime() != null
-                && (point.pm10Value() != null || point.pm25Value() != null)
-                && (point.pm10Grade() != null || point.pm25Grade() != null || point.khaiGrade() != null);
+    private boolean isAllPollutantsMissing(AirKoreaMeasurementPoint point) {
+        return point.pm10Value() == null && point.pm25Value() == null && point.o3Value() == null;
+    }
+
+    private long calculateAgeInMinutes(OffsetDateTime targetTime, OffsetDateTime dataTime) {
+        if (dataTime == null || targetTime == null) {
+            return 999999;
+        }
+        return Duration.between(dataTime, targetTime).toMinutes();
     }
 
     private AirQualityResult createResult(
@@ -208,6 +266,10 @@ public class AirQualitySelector {
                 point.pm10Value(),
                 point.pm25Value(),
                 point.o3Value(),
+                point.khaiValue(),
+                point.pm10GradeCode(),
+                point.pm25GradeCode(),
+                point.khaiGradeCode(),
                 point.pm10Grade(),
                 point.pm25Grade(),
                 point.khaiGrade(),
@@ -223,6 +285,10 @@ public class AirQualitySelector {
     ) {
         return new AirQualityResult(
                 stationName,
+                null,
+                null,
+                null,
+                null,
                 null,
                 null,
                 null,
