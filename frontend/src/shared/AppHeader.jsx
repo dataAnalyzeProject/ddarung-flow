@@ -1,7 +1,9 @@
 import logo from "../assets/main/ddaragayo-logo.png";
 import "./AppHeader.css";
 
-export default function AppHeader({ authContent, onNavigate }) {
+export default function AppHeader({ authState = "anonymous", onBeforeLogin, onLogout, onNavigate, user }) {
+  const isAuthenticated = authState === "authenticated" || authState === "logging-out";
+
   return (
     <header className="app-header">
       <div className="app-header-brand">
@@ -16,7 +18,18 @@ export default function AppHeader({ authContent, onNavigate }) {
         <button type="button">알림</button>
       </nav>
       <div className="app-header-auth">
-        {authContent || <a className="app-header-login" aria-label="로그인" href="/login">로그인</a>}
+        {isAuthenticated ? (
+          <>
+            <span className="app-header-user">{user ? `${user.displayName} · ${user.provider}` : ""}</span>
+            <button aria-label="로그아웃" type="button" disabled={authState === "logging-out"} onClick={onLogout}>
+              {authState === "logging-out" ? "로그아웃 중" : `${user?.displayName || "사용자"} · 로그아웃`}
+            </button>
+          </>
+        ) : authState === "loading" ? (
+          <button type="button" disabled>확인 중</button>
+        ) : (
+          <a className="app-header-login" aria-label="로그인" href="/login" onClick={onBeforeLogin}>로그인</a>
+        )}
       </div>
     </header>
   );

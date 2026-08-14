@@ -127,18 +127,11 @@ export default function MainPage({ onNavigate }) {
   return (
     <main className="main-shell">
       <AppHeader
+        authState={authState}
         onNavigate={onNavigate}
-        authContent={<>
-          {authState === "authenticated" || authState === "logging-out" ? (
-            <><span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>{user ? `${user.displayName} · ${user.provider}` : ""}</span><button aria-label="로그아웃" type="button" disabled={authState === "logging-out"} onClick={handleLogout}>
-              {authState === "logging-out" ? "로그아웃 중" : `${user?.displayName || "사용자"} · 로그아웃`}
-            </button></>
-          ) : authState === "loading" ? (
-            <button type="button" disabled>확인 중</button>
-          ) : (
-            <a className="main-login-link" aria-label="로그인" href="/login" onClick={saveInputBeforeLogin}>{serviceData.loginButton}</a>
-          )}
-        </>}
+        onBeforeLogin={saveInputBeforeLogin}
+        onLogout={handleLogout}
+        user={user}
       />
 
       <section className="main-search">

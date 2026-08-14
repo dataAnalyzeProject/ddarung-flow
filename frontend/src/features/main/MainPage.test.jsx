@@ -181,4 +181,15 @@ describe("시안 6 메인 로그인 통합", () => {
     fireEvent.click(screen.getByRole("button", { name: "Q&A" }));
     expect(onNavigate).toHaveBeenCalledWith("qna");
   });
+
+  test("상세 화면의 Q&A 메뉴도 같은 화면 전환 콜백을 호출한다", async () => {
+    const onNavigate = jest.fn();
+    render(<MainPage onNavigate={onNavigate} />);
+    await screen.findByRole("link", { name: "로그인" });
+
+    fireEvent.click(screen.getByRole("button", { name: "성수역 3번 출구 상세보기" }));
+    fireEvent.click(screen.getByRole("button", { name: "Q&A" }));
+
+    expect(onNavigate).toHaveBeenCalledWith("qna");
+  });
 });
