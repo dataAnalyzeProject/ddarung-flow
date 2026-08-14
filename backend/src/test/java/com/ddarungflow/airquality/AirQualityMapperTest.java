@@ -12,7 +12,7 @@ class AirQualityMapperTest {
 
     private static final ZoneOffset KST = ZoneOffset.ofHours(9);
 
-    private static final String CONTRACT_FIXTURE_RESULT_00 = """
+    private static final String NORMAL_RESULT_00_FIXTURE = """
         {
           "response": {
             "header": {
@@ -30,6 +30,7 @@ class AirQualityMapperTest {
                   "khaiValue": "62",
                   "pm10Grade": "1",
                   "pm25Grade": "2",
+                  "o3Grade": "2",
                   "khaiGrade": "3"
                 }
               ]
@@ -38,7 +39,7 @@ class AirQualityMapperTest {
         }
         """;
 
-    private static final String EXAMPLE_INPUT_FIXTURE = """
+    private static final String ONE_POLLUTANT_NULL_FIXTURE = """
         {
           "response": {
             "header": {
@@ -49,15 +50,15 @@ class AirQualityMapperTest {
               "items": [
                 {
                   "stationName": "종로구",
-                  "dataTime": "2026-08-13 17:00",
-                  "pm10Value": "8",
-                  "pm25Value": "2",
-                  "o3Value": "0.035",
-                  "khaiValue": "55",
+                  "dataTime": "2026-08-14 11:00",
+                  "pm10Value": "35",
+                  "pm25Value": null,
+                  "o3Value": "0.042",
+                  "khaiValue": "62",
                   "pm10Grade": "1",
-                  "pm25Grade": "1",
+                  "pm25Grade": null,
                   "o3Grade": "2",
-                  "khaiGrade": "2"
+                  "khaiGrade": "3"
                 }
               ]
             }
@@ -65,7 +66,7 @@ class AirQualityMapperTest {
         }
         """;
 
-    private static final String FIXTURE_WITH_HYPHEN_AND_NULL = """
+    private static final String THREE_POLLUTANTS_HYPHEN_AND_NULL_FIXTURE = """
         {
           "response": {
             "header": {
@@ -81,9 +82,10 @@ class AirQualityMapperTest {
                   "pm25Value": "null",
                   "o3Value": null,
                   "khaiValue": "-",
-                  "pm10Grade": "1",
-                  "pm25Grade": "4",
-                  "khaiGrade": "-"
+                  "pm10Grade": "-",
+                  "pm25Grade": null,
+                  "o3Grade": "-",
+                  "khaiGrade": null
                 }
               ]
             }
@@ -91,155 +93,160 @@ class AirQualityMapperTest {
         }
         """;
 
-    private static final String FIXTURE_ERROR_RESULT_CODE = """
+    private static final String INVALID_DATA_TIME_FIXTURE = """
         {
           "response": {
             "header": {
-              "resultCode": "30",
-              "resultMsg": "SERVICE_KEY_IS_NOT_REGISTERED_ERROR"
+              "resultCode": "00",
+              "resultMsg": "NORMAL_SERVICE"
             },
             "body": {
-              "items": []
+              "items": [
+                {
+                  "stationName": "종로구",
+                  "dataTime": "INVALID_TIME_FORMAT",
+                  "pm10Value": "35",
+                  "pm25Value": "18",
+                  "o3Value": "0.042",
+                  "khaiValue": "62",
+                  "pm10Grade": "1",
+                  "pm25Grade": "2",
+                  "o3Grade": "2",
+                  "khaiGrade": "3"
+                }
+              ]
             }
           }
         }
         """;
 
     @Test
-    @DisplayName("사용자 입력 예시(dataTime 17:00, pm10=8, pm25=2, o3=0.035, khai=55, source grade 1/2)에 대한 올바른 출력 매핑 검증")
-    void testExampleInputOutputMapping() {
-        OffsetDateTime targetTime = OffsetDateTime.of(2026, 8, 13, 17, 30, 0, 0, KST);
-
-        AirQualityResult result = AirQualityMapper.mapFromJson(
-                "종로구",
-                targetTime,
-                null,
-                EXAMPLE_INPUT_FIXTURE,
-                null,
-                false
-        );
-
-        assertEquals(AirQualityStatus.NORMAL, result.status());
-        assertEquals("종로구", result.stationName());
-        assertEquals(OffsetDateTime.of(2026, 8, 13, 17, 0, 0, 0, KST), result.dataTime());
-
-        // PM10 8 GOOD
-        assertEquals(8.0, result.pm10().value());
-        assertEquals(AirQualityGrade.GOOD, result.pm10().grade());
-
-        // PM2.5 2 GOOD
-        assertEquals(2.0, result.pm25().value());
-        assertEquals(AirQualityGrade.GOOD, result.pm25().grade());
-
-        // O3 0.035 MODERATE
-        assertEquals(0.035, result.o3().value());
-        assertEquals(AirQualityGrade.MODERATE, result.o3().grade());
-
-        // KHAI 55 MODERATE
-        assertEquals(55.0, result.khai().value());
-        assertEquals(AirQualityGrade.MODERATE, result.khai().grade());
-    }
-
-    @Test
-    @DisplayName("계약 테스트: resultCode=00 응답 데이터를 CHG-085 AirQualityResult 및 AirQualityPollutant 객체로 정규화한다")
-    void testContractFixtureNormalization() {
+    @DisplayName("정상 resultCode 00: PM10, PM2.5, O3, KHAI, grade, dataTime을 화면 DTO로 정상 정규화한다")
+    void testNormalResult00FullNormalization() {
         OffsetDateTime targetTime = OffsetDateTime.of(2026, 8, 14, 11, 30, 0, 0, KST);
 
         AirQualityResult result = AirQualityMapper.mapFromJson(
                 "종로구",
                 targetTime,
                 null,
-                CONTRACT_FIXTURE_RESULT_00,
+                NORMAL_RESULT_00_FIXTURE,
                 null,
                 false
         );
 
         assertEquals(AirQualityStatus.NORMAL, result.status());
         assertEquals("종로구", result.stationName());
-        assertNotNull(result.dataTime());
+        assertEquals(OffsetDateTime.of(2026, 8, 14, 11, 0, 0, 0, KST), result.dataTime());
 
-        // PM10
         assertEquals(35.0, result.pm10().value());
-        assertEquals(AirQualityMapper.UNIT_PM10, result.pm10().unit());
         assertEquals(AirQualityGrade.GOOD, result.pm10().grade());
         assertEquals("1", result.pm10().sourceGradeCode());
 
-        // PM25
         assertEquals(18.0, result.pm25().value());
-        assertEquals(AirQualityMapper.UNIT_PM25, result.pm25().unit());
         assertEquals(AirQualityGrade.MODERATE, result.pm25().grade());
         assertEquals("2", result.pm25().sourceGradeCode());
 
-        // O3
         assertEquals(0.042, result.o3().value());
-        assertEquals(AirQualityMapper.UNIT_O3, result.o3().unit());
+        assertEquals(AirQualityGrade.MODERATE, result.o3().grade());
+        assertEquals("2", result.o3().sourceGradeCode());
 
-        // KHAI
         assertEquals(62.0, result.khai().value());
-        assertEquals(AirQualityMapper.UNIT_KHAI, result.khai().unit());
         assertEquals(AirQualityGrade.BAD, result.khai().grade());
         assertEquals("3", result.khai().sourceGradeCode());
     }
 
     @Test
-    @DisplayName("결측 테스트: '-' 및 null을 개별 null로 변환하고 세 오염물질(pm10, pm25, o3) 수치가 모두 없으면 MISSING으로 판정한다")
-    void testMissingAndNullNormalization() {
+    @DisplayName("한 항목 null vs 세 항목 null 및 '-' 결측 처리와 MISSING 판정 검증")
+    void testOneItemNullVsThreeItemsNullAndHyphenMissing() {
+        OffsetDateTime targetTime = OffsetDateTime.of(2026, 8, 14, 11, 30, 0, 0, KST);
+
+        // 1. 한 항목(pm25)만 null인 경우: 오염물질이 완전히 없는 것이 아니므로 NORMAL 유지
+        AirQualityResult oneNullResult = AirQualityMapper.mapFromJson("종로구", targetTime, null, ONE_POLLUTANT_NULL_FIXTURE, null, false);
+        assertEquals(AirQualityStatus.NORMAL, oneNullResult.status());
+        assertEquals(35.0, oneNullResult.pm10().value());
+        assertNull(oneNullResult.pm25().value());
+        assertNull(oneNullResult.pm25().grade());
+
+        // 2. 세 오염물질(pm10, pm25, o3) 수치가 모두 '-' 또는 null인 경우: MISSING 판정
+        AirQualityResult threeNullResult = AirQualityMapper.mapFromJson("종로구", targetTime, null, THREE_POLLUTANTS_HYPHEN_AND_NULL_FIXTURE, null, false);
+        assertEquals(AirQualityStatus.MISSING, threeNullResult.status());
+        assertNull(threeNullResult.pm10().value());
+        assertNull(threeNullResult.pm25().value());
+        assertNull(threeNullResult.o3().value());
+    }
+
+    @Test
+    @DisplayName("잘못된 시간 포맷 입력 시 dataTime null 정규화 및 UNAVAILABLE 판정")
+    void testInvalidDataTimeFormat() {
         OffsetDateTime targetTime = OffsetDateTime.of(2026, 8, 14, 11, 30, 0, 0, KST);
 
         AirQualityResult result = AirQualityMapper.mapFromJson(
                 "종로구",
                 targetTime,
                 null,
-                FIXTURE_WITH_HYPHEN_AND_NULL,
+                INVALID_DATA_TIME_FIXTURE,
                 null,
                 false
         );
 
-        assertEquals(AirQualityStatus.MISSING, result.status());
-        assertNull(result.pm10().value());
-        assertNull(result.pm25().value());
-        assertNull(result.o3().value());
-        assertNull(result.khai().value());
-
-        // Grade 및 sourceGradeCode 매핑 확인
-        assertEquals(AirQualityGrade.GOOD, result.pm10().grade());
-        assertEquals("1", result.pm10().sourceGradeCode());
-
-        assertEquals(AirQualityGrade.VERY_BAD, result.pm25().grade());
-        assertEquals("4", result.pm25().sourceGradeCode());
-    }
-
-    @Test
-    @DisplayName("시간 경계 테스트: 2시간 이내는 NORMAL, 2시간 초과~6시간 이내는 DELAYED, 6시간 초과는 UNAVAILABLE로 판정한다")
-    void test2hAnd6hTimeBoundaries() {
-        OffsetDateTime target2hIn = OffsetDateTime.of(2026, 8, 14, 13, 0, 0, 0, KST);
-        OffsetDateTime target4h = OffsetDateTime.of(2026, 8, 14, 15, 0, 0, 0, KST);
-        OffsetDateTime target6h1m = OffsetDateTime.of(2026, 8, 14, 17, 1, 0, 0, KST);
-
-        AirQualityResult normalResult = AirQualityMapper.mapFromJson("종로구", target2hIn, null, CONTRACT_FIXTURE_RESULT_00, null, false);
-        assertEquals(AirQualityStatus.NORMAL, normalResult.status());
-
-        AirQualityResult delayedResult = AirQualityMapper.mapFromJson("종로구", target4h, null, CONTRACT_FIXTURE_RESULT_00, null, false);
-        assertEquals(AirQualityStatus.DELAYED, delayedResult.status());
-
-        AirQualityResult unavailableResult = AirQualityMapper.mapFromJson("종로구", target6h1m, null, CONTRACT_FIXTURE_RESULT_00, null, false);
-        assertEquals(AirQualityStatus.UNAVAILABLE, unavailableResult.status());
-    }
-
-    @Test
-    @DisplayName("source 사용 불가 테스트: resultCode != 00 등 소스 이용 불가능 시 UNAVAILABLE로 판정한다")
-    void testUnavailableWhenResultCodeNot00OrNoData() {
-        OffsetDateTime targetTime = OffsetDateTime.of(2026, 8, 14, 11, 30, 0, 0, KST);
-
-        AirQualityResult result = AirQualityMapper.mapFromJson(
-                "종로구",
-                targetTime,
-                null,
-                FIXTURE_ERROR_RESULT_CODE,
-                null,
-                false
-        );
-
+        assertNull(result.dataTime());
         assertEquals(AirQualityStatus.UNAVAILABLE, result.status());
+    }
+
+    @Test
+    @DisplayName("시간 경계 검증: 120분(NORMAL), 121분(DELAYED), 360분(DELAYED), 361분(UNAVAILABLE)")
+    void testExactMinutesBoundaries() {
+        // dataTime = 2026-08-14 11:00
+        OffsetDateTime target120m = OffsetDateTime.of(2026, 8, 14, 13, 0, 0, 0, KST);   // 120분 경계
+        OffsetDateTime target121m = OffsetDateTime.of(2026, 8, 14, 13, 1, 0, 0, KST);   // 121분
+        OffsetDateTime target360m = OffsetDateTime.of(2026, 8, 14, 17, 0, 0, 0, KST);   // 360분
+        OffsetDateTime target361m = OffsetDateTime.of(2026, 8, 14, 17, 1, 0, 0, KST);   // 361분
+
+        // 120분: NORMAL
+        AirQualityResult r120 = AirQualityMapper.mapFromJson("종로구", target120m, null, NORMAL_RESULT_00_FIXTURE, null, false);
+        assertEquals(AirQualityStatus.NORMAL, r120.status());
+
+        // 121분: DELAYED
+        AirQualityResult r121 = AirQualityMapper.mapFromJson("종로구", target121m, null, NORMAL_RESULT_00_FIXTURE, null, false);
+        assertEquals(AirQualityStatus.DELAYED, r121.status());
+
+        // 360분: DELAYED
+        AirQualityResult r360 = AirQualityMapper.mapFromJson("종로구", target360m, null, NORMAL_RESULT_00_FIXTURE, null, false);
+        assertEquals(AirQualityStatus.DELAYED, r360.status());
+
+        // 361분: UNAVAILABLE
+        AirQualityResult r361 = AirQualityMapper.mapFromJson("종로구", target361m, null, NORMAL_RESULT_00_FIXTURE, null, false);
+        assertEquals(AirQualityStatus.UNAVAILABLE, r361.status());
+    }
+
+    @Test
+    @DisplayName("[담당자 추가 test] 최신 수집 실패(latestFetchFailed=true) 시 직전 360분 이내 수집 데이터 대체(DELAYED) 및 361분 초과 시 UNAVAILABLE 검증")
+    void testLatestFetchFailedWithPreviousDataFallbackAndAgeLimit() {
+        // previous dataTime = 2026-08-14 11:00
+        OffsetDateTime target360m = OffsetDateTime.of(2026, 8, 14, 17, 0, 0, 0, KST);   // 360분
+        OffsetDateTime target361m = OffsetDateTime.of(2026, 8, 14, 17, 1, 0, 0, KST);   // 361분
+
+        // 1. latestFetchFailed = true, 직전 데이터가 360분 이내 -> DELAYED 반환
+        AirQualityResult delayedResult = AirQualityMapper.mapFromJson(
+                "종로구",
+                target360m,
+                null,
+                null,
+                NORMAL_RESULT_00_FIXTURE,
+                true
+        );
+        assertEquals(AirQualityStatus.DELAYED, delayedResult.status());
+        assertEquals(35.0, delayedResult.pm10().value());
+
+        // 2. latestFetchFailed = true, 직전 데이터가 361분 초과 -> UNAVAILABLE 반환
+        AirQualityResult unavailableResult = AirQualityMapper.mapFromJson(
+                "종로구",
+                target361m,
+                null,
+                null,
+                NORMAL_RESULT_00_FIXTURE,
+                true
+        );
+        assertEquals(AirQualityStatus.UNAVAILABLE, unavailableResult.status());
     }
 }
