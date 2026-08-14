@@ -2,9 +2,9 @@
 
 ## 🔗 PR 및 제출 정보
 
-- **PR 링크**: (조장 PR 승인 후 URL 지정)
+- **PR 링크**: https://github.com/dataAnalyzeProject/ddarung-flow/pull/78
 - **작성자 / 담당**: Frontend Developer
-- **작업 브랜치**: `feature/premium-sandbox`
+- **작업 브랜치**: `codex/exp-fe-premium-sandbox-ui`
 
 ---
 
