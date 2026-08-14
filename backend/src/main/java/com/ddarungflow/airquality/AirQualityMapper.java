@@ -28,6 +28,24 @@ public final class AirQualityMapper {
     private AirQualityMapper() {
     }
 
+    private record RawMeasurementPoint(
+            String stationName,
+            OffsetDateTime dataTime,
+            Integer pm10Value,
+            Integer pm25Value,
+            Double o3Value,
+            Integer khaiValue,
+            String pm10GradeCode,
+            String pm25GradeCode,
+            String o3GradeCode,
+            String khaiGradeCode,
+            AirQualityGrade pm10Grade,
+            AirQualityGrade pm25Grade,
+            AirQualityGrade o3Grade,
+            AirQualityGrade khaiGrade
+    ) {
+    }
+
     public static AirQualityResult mapFromJson(
             String stationName,
             OffsetDateTime targetTime,
@@ -36,33 +54,33 @@ public final class AirQualityMapper {
             String previousJsonFixture,
             boolean latestFetchFailed
     ) {
-        List<AirKoreaMeasurementPoint> latestPoints = parseJsonFixture(latestJsonFixture);
-        List<AirKoreaMeasurementPoint> previousPoints = parseJsonFixture(previousJsonFixture);
+        List<RawMeasurementPoint> latestPoints = parseJsonFixtureInternal(latestJsonFixture);
+        List<RawMeasurementPoint> previousPoints = parseJsonFixtureInternal(previousJsonFixture);
 
-        return map(stationName, targetTime, collectedAt, latestPoints, previousPoints, latestFetchFailed);
+        return mapInternal(stationName, targetTime, collectedAt, latestPoints, previousPoints, latestFetchFailed);
     }
 
-    public static AirQualityResult map(
+    private static AirQualityResult mapInternal(
             String stationName,
             OffsetDateTime targetTime,
             OffsetDateTime collectedAt,
-            List<AirKoreaMeasurementPoint> latest,
-            List<AirKoreaMeasurementPoint> previous,
+            List<RawMeasurementPoint> latest,
+            List<RawMeasurementPoint> previous,
             boolean latestFetchFailed
     ) {
         validateInputs(stationName, targetTime, collectedAt);
 
-        List<AirKoreaMeasurementPoint> safeLatest = Optional.ofNullable(latest).orElse(Collections.emptyList());
-        List<AirKoreaMeasurementPoint> safePrevious = Optional.ofNullable(previous).orElse(Collections.emptyList());
+        List<RawMeasurementPoint> safeLatest = Optional.ofNullable(latest).orElse(Collections.emptyList());
+        List<RawMeasurementPoint> safePrevious = Optional.ofNullable(previous).orElse(Collections.emptyList());
 
         if (latestFetchFailed) {
             return processDelayedOrUnavailable(stationName, targetTime, safePrevious);
         }
 
-        Optional<AirKoreaMeasurementPoint> latestPointOpt = findPointByStation(safeLatest, stationName);
+        Optional<RawMeasurementPoint> latestPointOpt = findPointByStation(safeLatest, stationName);
 
         if (latestPointOpt.isPresent()) {
-            AirKoreaMeasurementPoint point = latestPointOpt.get();
+            RawMeasurementPoint point = latestPointOpt.get();
 
             if (isAllPollutantsMissing(point)) {
                 return buildResult(stationName, point, AirQualityStatus.MISSING);
@@ -84,11 +102,11 @@ public final class AirQualityMapper {
     private static AirQualityResult processDelayedOrUnavailable(
             String stationName,
             OffsetDateTime targetTime,
-            List<AirKoreaMeasurementPoint> previous
+            List<RawMeasurementPoint> previous
     ) {
-        Optional<AirKoreaMeasurementPoint> prevPointOpt = findPointByStation(previous, stationName);
+        Optional<RawMeasurementPoint> prevPointOpt = findPointByStation(previous, stationName);
         if (prevPointOpt.isPresent()) {
-            AirKoreaMeasurementPoint point = prevPointOpt.get();
+            RawMeasurementPoint point = prevPointOpt.get();
             if (isAllPollutantsMissing(point)) {
                 return buildResult(stationName, point, AirQualityStatus.MISSING);
             }
@@ -102,12 +120,12 @@ public final class AirQualityMapper {
         return buildEmptyResult(stationName, AirQualityStatus.UNAVAILABLE);
     }
 
-    public static List<AirKoreaMeasurementPoint> parseJsonFixture(String jsonFixture) {
+    private static List<RawMeasurementPoint> parseJsonFixtureInternal(String jsonFixture) {
         if (jsonFixture == null || jsonFixture.isBlank()) {
             return Collections.emptyList();
         }
 
-        List<AirKoreaMeasurementPoint> points = new ArrayList<>();
+        List<RawMeasurementPoint> points = new ArrayList<>();
         try {
             JsonNode rootNode = OBJECT_MAPPER.readTree(jsonFixture);
 
@@ -142,7 +160,7 @@ public final class AirQualityMapper {
         return points;
     }
 
-    private static AirKoreaMeasurementPoint parseItemNode(JsonNode item) {
+    private static RawMeasurementPoint parseItemNode(JsonNode item) {
         String stationName = parseString(item.path("stationName"));
         String dataTimeStr = parseString(item.path("dataTime"));
         OffsetDateTime dataTime = parseOffsetDateTime(dataTimeStr);
@@ -162,7 +180,7 @@ public final class AirQualityMapper {
         AirQualityGrade o3Grade = AirQualityGrade.fromCode(o3GradeCode);
         AirQualityGrade khaiGrade = AirQualityGrade.fromCode(khaiGradeCode);
 
-        return new AirKoreaMeasurementPoint(
+        return new RawMeasurementPoint(
                 stationName,
                 dataTime,
                 pm10Value,
@@ -227,13 +245,13 @@ public final class AirQualityMapper {
         }
     }
 
-    private static Optional<AirKoreaMeasurementPoint> findPointByStation(List<AirKoreaMeasurementPoint> points, String stationName) {
+    private static Optional<RawMeasurementPoint> findPointByStation(List<RawMeasurementPoint> points, String stationName) {
         return points.stream()
                 .filter(p -> Objects.equals(p.stationName(), stationName))
                 .findFirst();
     }
 
-    private static boolean isAllPollutantsMissing(AirKoreaMeasurementPoint point) {
+    private static boolean isAllPollutantsMissing(RawMeasurementPoint point) {
         return point.pm10Value() == null && point.pm25Value() == null && point.o3Value() == null;
     }
 
@@ -244,7 +262,7 @@ public final class AirQualityMapper {
         return Duration.between(dataTime, targetTime).toMinutes();
     }
 
-    private static AirQualityResult buildResult(String stationName, AirKoreaMeasurementPoint point, AirQualityStatus status) {
+    private static AirQualityResult buildResult(String stationName, RawMeasurementPoint point, AirQualityStatus status) {
         AirQualityPollutant pm10 = new AirQualityPollutant(
                 point.pm10Value() != null ? point.pm10Value().doubleValue() : null,
                 UNIT_PM10,
