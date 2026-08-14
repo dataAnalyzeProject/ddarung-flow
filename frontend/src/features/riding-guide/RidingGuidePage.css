@@ -8,6 +8,8 @@
   --guide-blue: #0969e8;
   --guide-green: #079b58;
   --guide-orange: #ff9700;
+  --guide-warn: #d9640a;
+  --guide-red: #d13438;
   --guide-line: #d9e2ec;
   --guide-muted: #60728d;
   --guide-header-height: clamp(52px, 3.45vw, 64px);
@@ -367,6 +369,14 @@
   color: var(--guide-orange) !important;
 }
 
+.warn-text {
+  color: var(--guide-warn) !important;
+}
+
+.danger-text {
+  color: var(--guide-red) !important;
+}
+
 .guide-hourly-timeline {
   position: relative;
   min-height: 0;
@@ -680,6 +690,66 @@
 
 .guide-air-meta dd {
   margin: 0;
+}
+
+.guide-air-loading,
+.guide-air-unavailable {
+  min-height: 0;
+  margin-top: 7px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: clamp(10px, 1.4vw, 18px) 8px;
+  text-align: center;
+  color: var(--guide-muted);
+  font-size: clamp(9px, .7vw, 13px);
+}
+
+.guide-air-skeleton {
+  width: clamp(53px, 4.2vw, 78px);
+  height: clamp(53px, 4.2vw, 78px);
+  border-radius: 50%;
+  background: linear-gradient(90deg, #e7ecf2 25%, #f4f6f9 37%, #e7ecf2 63%);
+  background-size: 200% 100%;
+  animation: guide-air-skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes guide-air-skeleton-pulse {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.guide-air-unavailable .guide-icon {
+  width: 20px;
+  height: 20px;
+  color: var(--guide-warn);
+}
+
+.guide-air-unavailable p,
+.guide-air-loading p {
+  margin: 0;
+}
+
+.guide-air-delayed-note {
+  margin: 7px 0 0;
+  padding-top: 7px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-top: 1px solid #dce3ea;
+  color: var(--guide-warn);
+  font-size: clamp(9px, .65vw, 12px);
+}
+
+.guide-air-delayed-note .guide-icon {
+  width: 14px;
+  height: 14px;
 }
 
 .guide-side-column {
