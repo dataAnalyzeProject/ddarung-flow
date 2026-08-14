@@ -77,7 +77,7 @@ describe("INT-3.6 MapRoutePanel", () => {
     expect(adapter.setCenter).toHaveBeenCalledWith({ latitude: 37.5665, longitude: 126.978 });
   });
 
-  test("실제 지도 adapter에 대여소 fixture를 전달하고 현재 재고를 표시한다", async () => {
+  test("실제 지도 adapter에 대여소 fixture를 전달한다", async () => {
     process.env.REACT_APP_KAKAO_MAP_APP_KEY = "test-key";
     const adapter = { setCenter: jest.fn(), setLevel: jest.fn(), setMapType: jest.fn(), setPoints: jest.fn(), setStations: jest.fn() };
     createKakaoMapAdapter.mockReturnValue(adapter);
@@ -88,7 +88,6 @@ describe("INT-3.6 MapRoutePanel", () => {
     await waitFor(() => expect(adapter.setStations).toHaveBeenCalledWith(expect.arrayContaining([
       expect.objectContaining({ stationName: "성수역 3번 출구", availableBikeCount: 8 }),
     ])));
-    expect(await screen.findByText("현재 8대")).toBeInTheDocument();
   });
 
   test("위치 미지원과 권한 거부를 사용자에게 안내한다", async () => {

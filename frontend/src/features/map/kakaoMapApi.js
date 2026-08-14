@@ -48,6 +48,7 @@ export function createKakaoMapAdapter(container, maps, center = { latitude: 37.5
   const markers = {};
   let stationMarkers = [];
   let stationClusterer = null;
+  let stationOverlay = null;
 
   const createMarkerImage = (src, width, height) => {
     if (!src || !maps.MarkerImage) return undefined;
@@ -65,6 +66,28 @@ export function createKakaoMapAdapter(container, maps, center = { latitude: 37.5
     stationMarkers.forEach((marker) => marker.setMap(null));
     stationMarkers = [];
     stationClusterer = null;
+    stationOverlay?.setMap(null);
+    stationOverlay = null;
+  };
+
+  const createStationOverlay = (station) => {
+    if (!maps.CustomOverlay || typeof document === "undefined") return;
+    const content = document.createElement("section");
+    const count = station.availableBikeCount === null ? "재고 확인 필요" : `현재 ${station.availableBikeCount}대`;
+    const inventoryStatus = station.inventoryStatus || "NORMAL";
+    content.className = `station-map-popup ${inventoryStatus.toLowerCase()}`;
+    content.innerHTML = `<strong></strong><span></span><small></small>`;
+    content.querySelector("strong").textContent = station.stationName;
+    content.querySelector("span").textContent = count;
+    content.querySelector("small").textContent = `${station.collectedAt || "수집 시각 확인 필요"} 기준 · ${inventoryStatus}`;
+    stationOverlay?.setMap(null);
+    stationOverlay = new maps.CustomOverlay({ map, position: toLatLng(station), content, yAnchor: 1.45 });
+  };
+
+  const selectStation = (station) => {
+    map.panTo(toLatLng(station));
+    createStationOverlay(station);
+    markerOptions.onStationSelected?.(station);
   };
 
   return {
@@ -81,7 +104,7 @@ export function createKakaoMapAdapter(container, maps, center = { latitude: 37.5
       const stationImage = createMarkerImage(markerOptions.stationMarkerImage, 30, 44);
       stationMarkers = stations.map((station) => {
         const marker = new maps.Marker({ position: toLatLng(station), image: stationImage });
-        maps.event?.addListener(marker, "click", () => markerOptions.onStationSelected?.(station));
+        maps.event?.addListener(marker, "click", () => selectStation(station));
         return marker;
       });
       if (maps.MarkerClusterer) stationClusterer = new maps.MarkerClusterer({ map, markers: stationMarkers, averageCenter: true, minLevel: 6 });
