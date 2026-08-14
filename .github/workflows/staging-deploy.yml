@@ -50,13 +50,14 @@ jobs:
       OCI_NAMESPACE: ${{ vars.OCI_NAMESPACE }}
       OCI_REPOSITORY: ${{ vars.OCI_REPOSITORY }}
       STAGING_PUBLIC_URL: ${{ vars.STAGING_PUBLIC_URL }}
+      KAKAO_MAP_APP_KEY: ${{ vars.KAKAO_MAP_APP_KEY }}
 
     steps:
       - name: Check required image configuration
         shell: bash
         run: |
           set -euo pipefail
-          for name in OCI_REGISTRY OCI_NAMESPACE OCI_REPOSITORY STAGING_PUBLIC_URL; do
+          for name in OCI_REGISTRY OCI_NAMESPACE OCI_REPOSITORY STAGING_PUBLIC_URL KAKAO_MAP_APP_KEY; do
             if [ -z "${!name:-}" ]; then
               echo "Required staging configuration is missing: $name" >&2
               exit 1
@@ -100,7 +101,9 @@ jobs:
           platforms: linux/arm64
           push: true
           tags: ${{ env.OCI_REGISTRY }}/${{ env.OCI_NAMESPACE }}/${{ env.OCI_REPOSITORY }}/${{ matrix.component }}:${{ env.DEPLOY_SHA }}
-          build-args: ${{ matrix.component == 'frontend' && format('REACT_APP_API_BASE_URL={0}', env.STAGING_PUBLIC_URL) || '' }}
+          build-args: |
+            ${{ matrix.component == 'frontend' && format('REACT_APP_API_BASE_URL={0}', env.STAGING_PUBLIC_URL) || '' }}
+            ${{ matrix.component == 'frontend' && format('REACT_APP_KAKAO_MAP_APP_KEY={0}', env.KAKAO_MAP_APP_KEY) || '' }}
           cache-from: type=gha,scope=staging-${{ matrix.component }}
           cache-to: type=gha,mode=max,scope=staging-${{ matrix.component }}
 
@@ -178,6 +181,7 @@ jobs:
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           KAKAO_CLIENT_ID: ${{ vars.KAKAO_CLIENT_ID }}
           KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
+          KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
           NAVER_CLIENT_ID: ${{ vars.NAVER_CLIENT_ID }}
           NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
           MODEL_POINTER_KEY: ${{ vars.MODEL_POINTER_KEY }}
@@ -195,6 +199,10 @@ jobs:
               exit 1
             fi
           done
+          if [ -z "${KAKAO_REST_API_KEY:-}" ]; then
+            echo "Required Kakao REST configuration is missing: KAKAO_REST_API_KEY" >&2
+            exit 1
+          fi
 
           image_base="$OCI_REGISTRY/$OCI_NAMESPACE/$OCI_REPOSITORY"
           {
@@ -218,6 +226,7 @@ jobs:
             printf 'GOOGLE_CLIENT_SECRET=%s\n' "$GOOGLE_CLIENT_SECRET"
             printf 'KAKAO_CLIENT_ID=%s\n' "$KAKAO_CLIENT_ID"
             printf 'KAKAO_CLIENT_SECRET=%s\n' "$KAKAO_CLIENT_SECRET"
+            printf 'KAKAO_REST_API_KEY=%s\n' "$KAKAO_REST_API_KEY"
             printf 'NAVER_CLIENT_ID=%s\n' "$NAVER_CLIENT_ID"
             printf 'NAVER_CLIENT_SECRET=%s\n' "$NAVER_CLIENT_SECRET"
           } > oauth.candidate.env
