@@ -33,4 +33,13 @@ describe("라이딩 가이드 화면", () => {
 
     expect(onNavigate).toHaveBeenCalledWith("qna");
   });
+
+  test("shared header logo returns through the supplied main callback", () => {
+    const onBack = jest.fn();
+    render(<RidingGuidePage onBack={onBack} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "대여 예측 메인으로 이동" }));
+
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
 });
