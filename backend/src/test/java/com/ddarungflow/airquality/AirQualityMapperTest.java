@@ -8,9 +8,8 @@ import java.time.ZoneOffset;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class AirQualitySelectorTest {
+class AirQualityMapperTest {
 
-    private final AirQualitySelector selector = new AirQualitySelector();
     private static final ZoneOffset KST = ZoneOffset.ofHours(9);
 
     private static final String CONTRACT_FIXTURE_RESULT_00 = """
@@ -80,11 +79,11 @@ class AirQualitySelectorTest {
         """;
 
     @Test
-    @DisplayName("resultCode=00 응답 데이터를 AirQualityResult 및 AirQualityPollutant로 올바르게 정규화한다")
-    void testNormalizeContractFixtureResultCode00() {
+    @DisplayName("계약 테스트: resultCode=00 응답 데이터를 CHG-085 AirQualityResult 및 AirQualityPollutant 객체로 정규화한다")
+    void testContractFixtureNormalization() {
         OffsetDateTime targetTime = OffsetDateTime.of(2026, 8, 14, 11, 30, 0, 0, KST);
 
-        AirQualityResult result = selector.selectFromJson(
+        AirQualityResult result = AirQualityMapper.mapFromJson(
                 "종로구",
                 targetTime,
                 null,
@@ -95,29 +94,37 @@ class AirQualitySelectorTest {
 
         assertEquals(AirQualityStatus.NORMAL, result.status());
         assertEquals("종로구", result.stationName());
+        assertNotNull(result.dataTime());
 
+        // PM10
         assertEquals(35.0, result.pm10().value());
-        assertEquals(18.0, result.pm25().value());
-        assertEquals(0.042, result.o3().value());
-        assertEquals(62.0, result.khai().value());
-
-        // Raw code 보존 확인
-        assertEquals("1", result.pm10().sourceGradeCode());
-        assertEquals("2", result.pm25().sourceGradeCode());
-        assertEquals("3", result.khai().sourceGradeCode());
-
-        // Grade 매핑 확인
+        assertEquals(AirQualityMapper.UNIT_PM10, result.pm10().unit());
         assertEquals(AirQualityGrade.GOOD, result.pm10().grade());
+        assertEquals("1", result.pm10().sourceGradeCode());
+
+        // PM25
+        assertEquals(18.0, result.pm25().value());
+        assertEquals(AirQualityMapper.UNIT_PM25, result.pm25().unit());
         assertEquals(AirQualityGrade.MODERATE, result.pm25().grade());
+        assertEquals("2", result.pm25().sourceGradeCode());
+
+        // O3
+        assertEquals(0.042, result.o3().value());
+        assertEquals(AirQualityMapper.UNIT_O3, result.o3().unit());
+
+        // KHAI
+        assertEquals(62.0, result.khai().value());
+        assertEquals(AirQualityMapper.UNIT_KHAI, result.khai().unit());
         assertEquals(AirQualityGrade.BAD, result.khai().grade());
+        assertEquals("3", result.khai().sourceGradeCode());
     }
 
     @Test
-    @DisplayName("'-' 및 null 문자열을 개별 null로 변환하고 세 오염물질 수치가 모두 없으면 MISSING으로 판정한다")
-    void testHyphenAndNullNormalizedAndAllPollutantsMissing() {
+    @DisplayName("결측 테스트: '-' 및 null을 개별 null로 변환하고 세 오염물질(pm10, pm25, o3) 수치가 모두 없으면 MISSING으로 판정한다")
+    void testMissingAndNullNormalization() {
         OffsetDateTime targetTime = OffsetDateTime.of(2026, 8, 14, 11, 30, 0, 0, KST);
 
-        AirQualityResult result = selector.selectFromJson(
+        AirQualityResult result = AirQualityMapper.mapFromJson(
                 "종로구",
                 targetTime,
                 null,
@@ -131,37 +138,38 @@ class AirQualitySelectorTest {
         assertNull(result.pm25().value());
         assertNull(result.o3().value());
         assertNull(result.khai().value());
-        assertNull(result.khai().grade());
-        assertNull(result.khai().sourceGradeCode());
 
+        // Grade 및 sourceGradeCode 매핑 확인
         assertEquals(AirQualityGrade.GOOD, result.pm10().grade());
+        assertEquals("1", result.pm10().sourceGradeCode());
+
         assertEquals(AirQualityGrade.VERY_BAD, result.pm25().grade());
         assertEquals("4", result.pm25().sourceGradeCode());
     }
 
     @Test
-    @DisplayName("2시간 이내는 NORMAL, 2시간 초과~6시간 이내는 DELAYED, 6시간 초과는 UNAVAILABLE로 판정한다")
-    void testTimeBoundaries2hAnd6h() {
+    @DisplayName("시간 경계 테스트: 2시간 이내는 NORMAL, 2시간 초과~6시간 이내는 DELAYED, 6시간 초과는 UNAVAILABLE로 판정한다")
+    void test2hAnd6hTimeBoundaries() {
         OffsetDateTime target2hIn = OffsetDateTime.of(2026, 8, 14, 13, 0, 0, 0, KST);
         OffsetDateTime target4h = OffsetDateTime.of(2026, 8, 14, 15, 0, 0, 0, KST);
         OffsetDateTime target6h1m = OffsetDateTime.of(2026, 8, 14, 17, 1, 0, 0, KST);
 
-        AirQualityResult normalResult = selector.selectFromJson("종로구", target2hIn, null, CONTRACT_FIXTURE_RESULT_00, null, false);
+        AirQualityResult normalResult = AirQualityMapper.mapFromJson("종로구", target2hIn, null, CONTRACT_FIXTURE_RESULT_00, null, false);
         assertEquals(AirQualityStatus.NORMAL, normalResult.status());
 
-        AirQualityResult delayedResult = selector.selectFromJson("종로구", target4h, null, CONTRACT_FIXTURE_RESULT_00, null, false);
+        AirQualityResult delayedResult = AirQualityMapper.mapFromJson("종로구", target4h, null, CONTRACT_FIXTURE_RESULT_00, null, false);
         assertEquals(AirQualityStatus.DELAYED, delayedResult.status());
 
-        AirQualityResult unavailableResult = selector.selectFromJson("종로구", target6h1m, null, CONTRACT_FIXTURE_RESULT_00, null, false);
+        AirQualityResult unavailableResult = AirQualityMapper.mapFromJson("종로구", target6h1m, null, CONTRACT_FIXTURE_RESULT_00, null, false);
         assertEquals(AirQualityStatus.UNAVAILABLE, unavailableResult.status());
     }
 
     @Test
-    @DisplayName("resultCode != 00 등 source 사용 불가능 시 UNAVAILABLE로 판정한다")
-    void testSourceUnavailableWhenResultCodeNot00() {
+    @DisplayName("source 사용 불가 테스트: resultCode != 00 등 소스 이용 불가능 시 UNAVAILABLE로 판정한다")
+    void testUnavailableWhenResultCodeNot00OrNoData() {
         OffsetDateTime targetTime = OffsetDateTime.of(2026, 8, 14, 11, 30, 0, 0, KST);
 
-        AirQualityResult result = selector.selectFromJson(
+        AirQualityResult result = AirQualityMapper.mapFromJson(
                 "종로구",
                 targetTime,
                 null,
