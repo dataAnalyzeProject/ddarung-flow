@@ -120,4 +120,28 @@ describe("라이딩 가이드 대기질 상태", () => {
 
     expect(screen.getByLabelText("통합대기환경지수 보통")).toBeInTheDocument();
   });
+
+  test("DELAYED 상태에서는 종합 요약의 통합대기환경지수가 airQuality.khai 값(71)로 표시된다", () => {
+    render(<RidingGuidePage airQuality={airQualityDelayedFixture} onBack={jest.fn()} />);
+    const khaiSummary = screen.getByText("통합대기환경지수").closest("div").querySelector("dd");
+
+    expect(khaiSummary).toHaveTextContent("71");
+    expect(khaiSummary).toHaveTextContent("보통");
+  });
+
+  test("MISSING/UNAVAILABLE 상태에서는 종합 요약의 통합대기환경지수에 이전 수치나 긍정 등급이 남지 않는다", () => {
+    const { rerender } = render(<RidingGuidePage airQuality={airQualityMissingFixture} onBack={jest.fn()} />);
+    let khaiSummary = screen.getByText("통합대기환경지수").closest("div").querySelector("dd");
+
+    expect(khaiSummary).not.toHaveTextContent("63");
+    expect(khaiSummary).not.toHaveTextContent("보통");
+    expect(khaiSummary).toHaveTextContent("-");
+
+    rerender(<RidingGuidePage airQuality={airQualityUnavailableFixture} onBack={jest.fn()} />);
+    khaiSummary = screen.getByText("통합대기환경지수").closest("div").querySelector("dd");
+
+    expect(khaiSummary).not.toHaveTextContent("63");
+    expect(khaiSummary).not.toHaveTextContent("보통");
+    expect(khaiSummary).toHaveTextContent("-");
+  });
 });

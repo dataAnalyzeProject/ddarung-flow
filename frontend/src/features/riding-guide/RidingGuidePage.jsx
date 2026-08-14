@@ -17,7 +17,6 @@ const guideMetrics = [
   { icon: "bike", label: "대여 가능성", value: "87%", note: "매우 높음", tone: "safe" },
   { icon: "rain", label: "강수확률", value: "10%", note: "낮음", tone: "blue" },
   { icon: "wind", label: "풍속", value: "2m/s", note: "양호", tone: "blue" },
-  { icon: "air", label: "통합대기환경지수", value: "63", note: "보통", tone: "caution" },
 ];
 
 const iconPaths = {
@@ -73,6 +72,21 @@ function formatAirQualityTime(isoString) {
   return `${hours}:${minutes}`;
 }
 
+function getGuideKhaiMetric(airQuality, isLoading) {
+  const hidden = { icon: "air", label: "통합대기환경지수", value: "-", note: "정보 없음", tone: "" };
+  if (isLoading || !airQuality) return hidden;
+  if (airQuality.status === "MISSING" || airQuality.status === "UNAVAILABLE") return hidden;
+  const hasValue = airQuality.khai && airQuality.khai.value !== null && airQuality.khai.value !== undefined;
+  if (!hasValue) return hidden;
+  return {
+    icon: "air",
+    label: "통합대기환경지수",
+    value: String(airQuality.khai.value),
+    note: AIR_QUALITY_GRADE_LABEL[airQuality.khai.grade] || "-",
+    tone: airQuality.khai.grade === "GOOD" ? "safe" : "caution",
+  };
+}
+
 function AirQualityValue({ label, pollutant, unit }) {
   const hasValue = pollutant && pollutant.value !== null && pollutant.value !== undefined;
   const tone = hasValue ? AIR_QUALITY_GRADE_TONE[pollutant.grade] || "" : "";
@@ -125,6 +139,10 @@ export default function RidingGuidePage({
 }) {
   const returnToPrediction = () => onBack?.();
   const airQualityMeasuredTime = formatAirQualityTime(airQuality?.measuredAt);
+  const guideMetricsWithAirQuality = [
+    ...guideMetrics,
+    getGuideKhaiMetric(airQuality, isAirQualityLoading),
+  ];
 
   return (
     <main className="riding-guide-shell">
@@ -161,7 +179,7 @@ export default function RidingGuidePage({
               <p>지금 출발하면<br />자전거 이용을 <span>추천해요.</span></p>
             </div>
             <dl className="guide-metrics">
-              {guideMetrics.map((metric) => (
+              {guideMetricsWithAirQuality.map((metric) => (
                 <div key={metric.label}>
                   <span className={`guide-metric-icon ${metric.tone}`}><GuideIcon name={metric.icon} /></span>
                   <dt>{metric.label}</dt>
