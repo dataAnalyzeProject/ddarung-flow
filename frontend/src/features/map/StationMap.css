@@ -1,0 +1,3 @@
+.station-map { position: relative; min-height: 360px; padding: 64px 24px 24px; background: #e9f1ec; display: grid; gap: 12px; }
+.station-marker { text-align: left; padding: 12px; border: 1px solid #0a9b60; background: white; border-radius: 10px; }
+.station-marker.delayed { border-color: #e69417; }.station-marker span,.station-marker small { display: block; }.station-map-cluster { position:absolute; top:16px; right:16px; border-radius:99px; padding:8px 12px; background:#06336f; color:white; }
