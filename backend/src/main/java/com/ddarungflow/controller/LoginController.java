@@ -39,17 +39,13 @@ public class LoginController {
     @Operation(summary = "Start OAuth login", description = "Redirects to a supported OAuth provider authorization endpoint.")
     @ApiResponses({
             @ApiResponse(responseCode = "302", description = "Redirect to the OAuth provider"),
-            @ApiResponse(
-                    responseCode = "400",
-                    description = "Unsupported OAuth provider",
-                    content = @Content(examples = @ExampleObject(value = """
-                            {
-                              "code": "AUTH_PROVIDER_NOT_SUPPORTED",
-                              "message": "Unsupported login provider.",
-                              "timestamp": "2026-08-12T11:00:00+09:00"
-                            }
-                            """))
-            )
+            @ApiResponse(responseCode = "400", description = "Unsupported OAuth provider", content = @Content(examples = @ExampleObject(value = """
+                    {
+                      "code": "AUTH_PROVIDER_NOT_SUPPORTED",
+                      "message": "Unsupported login provider.",
+                      "timestamp": "2026-08-12T11:00:00+09:00"
+                    }
+                    """)))
     })
     public ResponseEntity<?> startOAuth(@PathVariable String provider) {
         String normalizedProvider = provider.toLowerCase();
@@ -57,8 +53,7 @@ public class LoginController {
             return ResponseEntity.badRequest().body(Map.of(
                     "code", "AUTH_PROVIDER_NOT_SUPPORTED",
                     "message", "지원하지 않는 로그인 제공자입니다.",
-                    "timestamp", OffsetDateTime.now().toString()
-            ));
+                    "timestamp", OffsetDateTime.now().toString()));
         }
 
         return ResponseEntity.status(302)
@@ -69,16 +64,12 @@ public class LoginController {
     @GetMapping("/api/v1/auth/me")
     @ResponseBody
     @Operation(summary = "Get current session user", description = "Returns authenticated=false when no login session exists.")
-    @ApiResponse(
-            responseCode = "200",
-            description = "Current authentication state",
-            content = @Content(examples = @ExampleObject(name = "anonymous", value = """
-                    {
-                      "authenticated": false,
-                      "user": null
-                    }
-                    """))
-    )
+    @ApiResponse(responseCode = "200", description = "Current authentication state", content = @Content(examples = @ExampleObject(name = "anonymous", value = """
+            {
+              "authenticated": false,
+              "user": null
+            }
+            """)))
     public ResponseEntity<?> getCurrentUser(@AuthenticationPrincipal Object principal) {
         if (principal == null || "anonymousUser".equals(principal)) {
             Map<String, Object> response = new HashMap<>();
@@ -121,28 +112,21 @@ public class LoginController {
                 "user", Map.of(
                         "userId", user.getPublicId().toString(),
                         "displayName", user.getDisplayName(),
-                        "provider", user.getProvider()
-                )
-        ));
+                        "provider", user.getProvider())));
     }
 
     @GetMapping("/api/v1/auth/csrf")
     @ResponseBody
     @Operation(summary = "Get CSRF token", description = "Returns the token value and request header name for state-changing requests.")
-    @ApiResponse(
-            responseCode = "200",
-            description = "CSRF token information",
-            content = @Content(examples = @ExampleObject(value = """
-                    {
-                      "token": "masked-example-token",
-                      "headerName": "X-CSRF-TOKEN"
-                    }
-                    """))
-    )
+    @ApiResponse(responseCode = "200", description = "CSRF token information", content = @Content(examples = @ExampleObject(value = """
+            {
+              "token": "masked-example-token",
+              "headerName": "X-CSRF-TOKEN"
+            }
+            """)))
     public Map<String, String> getCsrfToken(CsrfToken csrfToken) {
         return Map.of(
                 "token", csrfToken.getToken(),
-                "headerName", csrfToken.getHeaderName()
-        );
+                "headerName", csrfToken.getHeaderName());
     }
 }
