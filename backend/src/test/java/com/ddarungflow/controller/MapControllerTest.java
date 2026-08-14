@@ -140,6 +140,23 @@ class MapControllerTest {
                 .andExpect(jsonPath("$.length()").value(0));
     }
 
+    @Test
+    @DisplayName("GET /api/v1/stations/locations - 활성 대여소 위치만 반환한다")
+    @WithMockUser
+    void getStationLocations() throws Exception {
+        stationRepository.save(new Station("ST-INACTIVE", "00104", "비활성 대여소", new BigDecimal("37.5510"), new BigDecimal("126.9000"), false));
+
+        mockMvc.perform(get("/api/v1/stations/locations"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.length()").value(2))
+            .andExpect(jsonPath("$[0].stationId").exists())
+            .andExpect(jsonPath("$[0].name").exists())
+            .andExpect(jsonPath("$[0].latitude").exists())
+            .andExpect(jsonPath("$[0].longitude").exists())
+            .andExpect(jsonPath("$[0].availableBikeCount").doesNotExist())
+            .andExpect(jsonPath("$[0].inventoryStatus").doesNotExist());
+    }
+
     private void prepareTwentyFiveMangwonStations() {
         for (int i = 1; i <= 25; i++) {
             String id = String.format("ST-MW-%02d", i);

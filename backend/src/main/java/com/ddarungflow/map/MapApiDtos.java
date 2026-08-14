@@ -7,6 +7,13 @@ import java.util.List;
 
 public class MapApiDtos {
 
+    public record StationLocationResponseDto(
+        String stationId,
+        String name,
+        BigDecimal latitude,
+        BigDecimal longitude
+    ) {}
+
     public record StationMapResponseDto(
         String stationId,
         String stationNumber,

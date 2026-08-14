@@ -40,6 +40,11 @@ public class StationController {
         return ResponseEntity.ok(stations);
     }
 
+    @GetMapping("/locations")
+    public ResponseEntity<List<MapApiDtos.StationLocationResponseDto>> getStationLocations() {
+        return ResponseEntity.ok(stationQueryService.findAllActiveLocations());
+    }
+
     @GetMapping("/search")
     public ResponseEntity<List<MapApiDtos.StationMapResponseDto>> searchStations(
         @RequestParam(name = "query", required = false, defaultValue = "") String query,

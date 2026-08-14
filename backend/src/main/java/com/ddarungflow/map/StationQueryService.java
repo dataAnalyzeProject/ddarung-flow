@@ -33,6 +33,14 @@ public class StationQueryService {
         return stations.stream().limit(20).map(this::toStationMapResponseDto).toList();
     }
 
+    public List<MapApiDtos.StationLocationResponseDto> findAllActiveLocations() {
+        return stationRepository.findByActiveTrue().stream()
+            .map(station -> new MapApiDtos.StationLocationResponseDto(
+                station.getStationId(), station.getName(), station.getLatitude(), station.getLongitude()
+            ))
+            .toList();
+    }
+
     public List<MapApiDtos.StationMapResponseDto> searchByNameOrNumber(String query) {
         return searchByNameOrNumber(query, 10);
     }

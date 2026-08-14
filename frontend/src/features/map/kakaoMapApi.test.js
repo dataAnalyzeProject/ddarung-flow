@@ -1,6 +1,6 @@
 import { createKakaoMapAdapter } from "./kakaoMapApi";
 
-const station = { stationId: "station-1", stationName: "성수역 3번 출구", latitude: 37.544, longitude: 127.056, availableBikeCount: 8 };
+const station = { stationId: "station-1", name: "성수역 3번 출구", latitude: 37.544, longitude: 127.056, availableBikeCount: 8 };
 
 function createMapsMock() {
   const map = { setCenter: jest.fn(), panTo: jest.fn(), setLevel: jest.fn(), setMapTypeId: jest.fn() };
@@ -36,5 +36,7 @@ test("대여소는 커스텀 이미지 marker와 clusterer로, 현재 위치는 
   maps.event.addListener.mock.calls[0][2]();
   expect(onStationSelected).toHaveBeenCalledWith(station);
   expect(maps.Map.mock.results[0].value.panTo).toHaveBeenCalledWith(expect.objectContaining({ latitude: station.latitude, longitude: station.longitude }));
+  expect(maps.CustomOverlay).not.toHaveBeenCalled();
+  adapter.showStationOverlay(station);
   expect(maps.CustomOverlay).toHaveBeenCalledWith(expect.objectContaining({ content: expect.any(HTMLElement), yAnchor: 1.45 }));
 });
