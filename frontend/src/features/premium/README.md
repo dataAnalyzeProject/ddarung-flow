@@ -130,5 +130,5 @@ warning: in the working copy of 'frontend/src/features/premium/PremiumSandboxPag
 
 C:\Users\M\Documents\GitHub\ddarung-flow>
 ```
-> Trailing whitespace(끝 공백) 에러 출력 없이 100% 정상 통과.
 
+> Trailing whitespace(끝 공백) 에러 출력 없이 100% 정상 통과.
