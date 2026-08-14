@@ -142,6 +142,7 @@ export default function MainPage({ onNavigate }) {
           selectedPlaces={routePlaces}
           onDurationChange={(minutes) => updateInput("directMinutes", minutes)}
           fallbackImage={routeMap}
+          canViewStations={authState === "authenticated"}
         />
         <PredictionSummaryPanel stationName={selectedStationName} predictionVisible={predictionVisible} />
       </section>

@@ -24,6 +24,7 @@ export default function MapRoutePanel({
   selectedPlaces,
   onDurationChange,
   fallbackImage,
+  canViewStations = false,
 }) {
   const containerRef = useRef(null);
   const adapterRef = useRef(null);
@@ -88,8 +89,13 @@ export default function MapRoutePanel({
   }, [points, current, sdkStatus]);
   useEffect(() => {
     if (!adapterRef.current) return;
-    adapterRef.current.setStations(showStations && stationLocations ? stationLocations : [], handleStationSelected);
-  }, [handleStationSelected, showStations, stationLocations, sdkStatus]);
+    adapterRef.current.setStations(canViewStations && showStations && stationLocations ? stationLocations : [], handleStationSelected);
+  }, [canViewStations, handleStationSelected, showStations, stationLocations, sdkStatus]);
+  useEffect(() => {
+    if (canViewStations) return;
+    stationRequestRef.current += 1;
+    setShowStations(false);
+  }, [canViewStations]);
   useEffect(() => { adapterRef.current?.setLevel(mapLevel); }, [mapLevel]);
   useEffect(() => { adapterRef.current?.setMapType(mapType === "위성"); }, [mapType]);
 
@@ -142,6 +148,7 @@ export default function MapRoutePanel({
   };
 
   const toggleStations = async () => {
+    if (!canViewStations) return;
     if (showStations) {
       stationRequestRef.current += 1;
       setShowStations(false);
@@ -175,9 +182,9 @@ export default function MapRoutePanel({
         {sdkStatus === "missing-key" && <p className="map-route-panel__message" style={{ top: 63, bottom: "auto", left: 14 }}>지도 SDK 키가 없어 예시 지도를 표시합니다.</p>}
         {sdkStatus === "failed" && <p className="map-route-panel__message" style={{ top: 63, bottom: "auto", left: 14 }}>지도 SDK를 불러오지 못해 예시 지도를 표시합니다.</p>}
         <div className="main-map-tabs">{["지도", "위성"].map((type) => <button className={mapType === type ? "active" : ""} type="button" aria-pressed={mapType === type} key={type} onClick={() => setMapType(type)}>{type}</button>)}</div>
-        <button className="map-route-panel__stations-toggle" type="button" aria-pressed={showStations} disabled={stationLoadState === "loading"} onClick={toggleStations}>
+        {canViewStations && <button className="map-route-panel__stations-toggle" type="button" aria-pressed={showStations} disabled={stationLoadState === "loading"} onClick={toggleStations}>
           {stationLoadState === "loading" ? "대여소 불러오는 중" : showStations ? "대여소 숨기기" : "대여소 표시"}
-        </button>
+        </button>}
         <button className="main-redraw" type="button" aria-label="내 위치 확인" disabled={locationState === "loading"} onClick={locate}>
           <span aria-hidden="true">{locationState === "loading" ? "⌛" : "📍"}</span>
           {locationState === "loading" ? "확인 중" : "내 위치"}

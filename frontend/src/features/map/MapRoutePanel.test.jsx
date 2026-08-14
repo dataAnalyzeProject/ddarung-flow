@@ -20,7 +20,7 @@ const selectedPlaces = {
 };
 
 function renderPanel(props = {}) {
-  return render(<MapRoutePanel travelMode="도보" selectedPlaces={{ origin: null, destination: null }} fallbackImage="fallback.png" {...props} />);
+  return render(<MapRoutePanel travelMode="도보" selectedPlaces={{ origin: null, destination: null }} fallbackImage="fallback.png" canViewStations {...props} />);
 }
 
 describe("INT-3.6 MapRoutePanel", () => {
@@ -100,6 +100,13 @@ describe("INT-3.6 MapRoutePanel", () => {
     ));
     fireEvent.click(screen.getByRole("button", { name: "대여소 숨기기" }));
     await waitFor(() => expect(adapter.setStations).toHaveBeenLastCalledWith([], expect.any(Function)));
+  });
+
+  test("비로그인 사용자는 대여소 토글과 위치 목록을 볼 수 없다", () => {
+    renderPanel({ canViewStations: false });
+
+    expect(screen.queryByRole("button", { name: "대여소 표시" })).not.toBeInTheDocument();
+    expect(fetchStationLocations).not.toHaveBeenCalled();
   });
 
   test("대여소 핀 선택은 조회 중과 조회 성공 말풍선을 순서대로 표시한다", async () => {
