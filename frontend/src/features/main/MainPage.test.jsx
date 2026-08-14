@@ -23,6 +23,7 @@ describe("시안 6 메인 로그인 통합", () => {
     render(<MainPage />);
     await screen.findByRole("link", { name: "로그인" });
 
+    expect(screen.getByRole("navigation", { name: "주요 메뉴" })).toBeInTheDocument();
     expect(screen.getByLabelText("예측 지도")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "성수역 3번 출구" })).toBeInTheDocument();
     expect(screen.queryByText("로그인 후 확인")).not.toBeInTheDocument();
