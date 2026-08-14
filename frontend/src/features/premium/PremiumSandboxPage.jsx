@@ -36,15 +36,15 @@ const STATUS_DETAILS = {
 };
 
 export default function PremiumSandboxPage({
-    status = 'PREPARING',
-    subscription = null,
-    onCheckout,
-    onCallbackResult,
-    onRefreshSubscription,
-    onRetry,
+  status = 'PREPARING',
+  subscription = null,
+  onCheckout,
+  onCallbackResult,
+  onRefreshSubscription,
+  onRetry,
 }) {
+  const currentDetail = STATUS_DETAILS[status] ?? STATUS_DETAILS.PREPARING;
 
-     const currentDetail = STATUS_DETAILS[status] ?? STATUS_DETAILS.PREPARING;
   // 1. 실시간 callback 호출 카운트 상태 관리
   const [callbackCounts, setCallbackCounts] = useState({
     checkout: 0,
@@ -53,35 +53,39 @@ export default function PremiumSandboxPage({
     retry: 0,
   });
 
-   // 2. 버튼 클릭 핸들러들
+  // 2. 버튼 클릭 핸들러들
   const handleCheckout = useCallback(() => {
     setCallbackCounts(prev => ({ ...prev, checkout: prev.checkout + 1 }));
     onCheckout?.();
   }, [onCheckout]);
+
   const handleCallbackResult = useCallback(() => {
-        setCallbackCounts(prev => ({ ...prev, callbackResult: prev.callbackResult + 1 }));
-        onCallbackResult?.(status);
+    setCallbackCounts(prev => ({ ...prev, callbackResult: prev.callbackResult + 1 }));
+    onCallbackResult?.(status);
   }, [onCallbackResult, status]);
+
   const handleRefreshSubscription = useCallback(() => {
     setCallbackCounts(prev => ({ ...prev, refresh: prev.refresh + 1 }));
     onRefreshSubscription?.();
   }, [onRefreshSubscription]);
+
   const handleRetry = useCallback(() => {
     setCallbackCounts(prev => ({ ...prev, retry: prev.retry + 1 }));
     onRetry?.();
   }, [onRetry]);
 
-    // 3. 결과 상태(SUCCESS, CANCELLED, FAILED) 진입 시 onCallbackResult 카운트 & 호출
-    const lastReportedStatusRef = useRef(null);
+  // 3. 결과 상태(SUCCESS, CANCELLED, FAILED) 진입 시 onCallbackResult 카운트 & 호출
+  const lastReportedStatusRef = useRef(null);
   useEffect(() => {
     if (
       lastReportedStatusRef.current !== status &&
       ['SUCCESS', 'CANCELLED', 'FAILED'].includes(status)
     ) {
-      handleCallbackResult(); 
+      handleCallbackResult();
     }
     lastReportedStatusRef.current = status;
   }, [status, handleCallbackResult]);
+
   return (
     <main className="premium-sandbox" data-status={status}>
       {/* 1. 상단 타이틀 영역 */}
@@ -92,21 +96,25 @@ export default function PremiumSandboxPage({
           이 화면은 테스트용 상태 UI입니다. 실제 결제와 과금은 진행되지 않습니다.
         </p>
       </div>
+
       {/* 2. 필수 공통 안전 배지 바 */}
       <div className="premium-sandbox__notice-banner">
         <span>SANDBOX TEST · 실제 결제 없음</span>
         <span className="premium-sandbox__status-badge">{status}</span>
       </div>
+
       {/* 3. 본문 2열 카드 영역 */}
       <div className="premium-sandbox__container">
         {/* 좌측 카드: 테스트 상품 */}
         <div className="premium-sandbox__card">
           <h2>테스트 상품</h2>
           <p className="premium-sandbox__card-subtitle">테스트 fixture에서만 표시하는 고정 정보</p>
+
           <div className="premium-sandbox__product-box">
             <h3>프리미엄 30일 sandbox 체험</h3>
             <p>테스트 상태 확인용 · 실제 결제 수단 입력 없음</p>
           </div>
+
           <div className="premium-sandbox__action-area">
             {status === 'PREPARING' && (
               <button type="button" onClick={handleCheckout}>
@@ -139,11 +147,14 @@ export default function PremiumSandboxPage({
               </button>
             )}
           </div>
+
           <p className="premium-sandbox__hint">{currentDetail.hint}</p>
         </div>
+
         {/* 우측 카드: 현재 상태 & 실시간 callback 카운트 관찰기 */}
         <div className="premium-sandbox__card">
           <h2>현재 상태</h2>
+
           <div className="premium-sandbox__sub-info">
             <h3>{currentDetail.title}</h3>
             <p>{currentDetail.description}</p>
@@ -154,6 +165,7 @@ export default function PremiumSandboxPage({
               </div>
             )}
           </div>
+
           <div className="premium-sandbox__callback-section">
             <p className="premium-sandbox__callback-title">테스트에서 확인할 callback</p>
             <div className="premium-sandbox__callback-counts">
