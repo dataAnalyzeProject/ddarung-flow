@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createKakaoMapAdapter, estimateRoute, loadKakaoMapSdk } from "./kakaoMapApi";
+import currentLocationMarker from "./assets/current-location-marker.png";
+import bikeStationMarker from "./assets/bike-station-marker.png";
+import { stationMapFixture } from "./data/stationMapFixture";
 import "./MapRoutePanel.css";
 
 const MODE_MAP = { "도보": "WALK", "대중교통": "PUBLIC_TRANSIT", WALK: "WALK", PUBLIC_TRANSIT: "PUBLIC_TRANSIT" };
@@ -21,6 +24,7 @@ export default function MapRoutePanel({
   selectedPlaces,
   onDurationChange,
   fallbackImage,
+  stations = stationMapFixture,
 }) {
   const containerRef = useRef(null);
   const adapterRef = useRef(null);
@@ -46,17 +50,24 @@ export default function MapRoutePanel({
     loadKakaoMapSdk()
       .then((maps) => {
         if (!active || !containerRef.current) return;
-        adapterRef.current = createKakaoMapAdapter(containerRef.current, maps);
+        adapterRef.current = createKakaoMapAdapter(containerRef.current, maps, undefined, {
+          currentMarkerImage: currentLocationMarker,
+          stationMarkerImage: bikeStationMarker,
+        });
+        adapterRef.current.setStations(stations);
         setSdkStatus("ready");
       })
       .catch((error) => active && setSdkStatus(error.message === "KAKAO_MAP_KEY_MISSING" ? "missing-key" : "failed"));
     return () => { active = false; };
-  }, []);
+  }, [stations]);
 
   useEffect(() => {
     adapterRef.current?.setPoints(points);
     if (current) adapterRef.current?.setCenter(current);
   }, [points, current, sdkStatus]);
+  useEffect(() => {
+    adapterRef.current?.setStations(stations);
+  }, [stations]);
   useEffect(() => { adapterRef.current?.setLevel(mapLevel); }, [mapLevel]);
   useEffect(() => { adapterRef.current?.setMapType(mapType === "위성"); }, [mapType]);
 
