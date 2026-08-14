@@ -1,0 +1,16 @@
+[
+  {
+    "stationId": "ST-10",
+    "featureAsOf": "2026-08-14T10:00:00Z",
+    "currentBikeCount": 8,
+    "modelVersion": "hgb-global-v1.0",
+    "inputManifestHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "stationId": "ST-20",
+    "featureAsOf": "2026-08-14T10:00:00Z",
+    "currentBikeCount": 3,
+    "modelVersion": "hgb-global-v1.0",
+    "inputManifestHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+]
