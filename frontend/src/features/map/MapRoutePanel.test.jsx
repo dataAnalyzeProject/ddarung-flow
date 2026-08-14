@@ -1,11 +1,17 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import MapRoutePanel, { formatArrival, locationErrorMessage } from "./MapRoutePanel";
 import { createKakaoMapAdapter, estimateRoute, loadKakaoMapSdk } from "./kakaoMapApi";
+import { fetchStationDetail, fetchStationLocations } from "./stationApi";
 
 jest.mock("./kakaoMapApi", () => ({
   estimateRoute: jest.fn(),
   loadKakaoMapSdk: jest.fn(),
   createKakaoMapAdapter: jest.fn(),
+}));
+
+jest.mock("./stationApi", () => ({
+  fetchStationLocations: jest.fn(),
+  fetchStationDetail: jest.fn(),
 }));
 
 const selectedPlaces = {
@@ -25,6 +31,8 @@ describe("INT-3.6 MapRoutePanel", () => {
     jest.clearAllMocks();
     loadKakaoMapSdk.mockRejectedValue(new Error("KAKAO_MAP_KEY_MISSING"));
     estimateRoute.mockResolvedValue({ distanceMeters: 1784, durationSeconds: 1759, travelMode: "WALK" });
+    fetchStationLocations.mockResolvedValue([{ stationId: "station-1", name: "성수역 3번 출구", latitude: 37.544, longitude: 127.056 }]);
+    fetchStationDetail.mockResolvedValue({ stationId: "station-1", name: "성수역 3번 출구", latitude: 37.544, longitude: 127.056, availableBikeCount: 8, collectedAt: "2026-08-14T10:32:00+09:00", inventoryStatus: "NORMAL" });
   });
 
   afterEach(() => {
@@ -57,7 +65,7 @@ describe("INT-3.6 MapRoutePanel", () => {
 
   test("내 위치 확인 성공 시 마커를 갱신하고 지도 중심을 이동한다", async () => {
     process.env.REACT_APP_KAKAO_MAP_APP_KEY = "test-key";
-    const adapter = { setCenter: jest.fn(), setLevel: jest.fn(), setMapType: jest.fn(), setPoints: jest.fn(), setStations: jest.fn() };
+    const adapter = { setCenter: jest.fn(), setLevel: jest.fn(), setMapType: jest.fn(), setPoints: jest.fn(), setStations: jest.fn(), showStationOverlay: jest.fn() };
     createKakaoMapAdapter.mockReturnValue(adapter);
     loadKakaoMapSdk.mockResolvedValue({});
     Object.defineProperty(navigator, "geolocation", {
@@ -77,17 +85,40 @@ describe("INT-3.6 MapRoutePanel", () => {
     expect(adapter.setCenter).toHaveBeenCalledWith({ latitude: 37.5665, longitude: 126.978 });
   });
 
-  test("실제 지도 adapter에 대여소 fixture를 전달한다", async () => {
+  test("대여소 토글을 켜면 위치 목록을 한 번 로드하고 지도 adapter에 전달한다", async () => {
     process.env.REACT_APP_KAKAO_MAP_APP_KEY = "test-key";
-    const adapter = { setCenter: jest.fn(), setLevel: jest.fn(), setMapType: jest.fn(), setPoints: jest.fn(), setStations: jest.fn() };
+    const adapter = { setCenter: jest.fn(), setLevel: jest.fn(), setMapType: jest.fn(), setPoints: jest.fn(), setStations: jest.fn(), showStationOverlay: jest.fn() };
     createKakaoMapAdapter.mockReturnValue(adapter);
     loadKakaoMapSdk.mockResolvedValue({});
 
     renderPanel();
+    fireEvent.click(await screen.findByRole("button", { name: "대여소 표시" }));
 
-    await waitFor(() => expect(adapter.setStations).toHaveBeenCalledWith(expect.arrayContaining([
-      expect.objectContaining({ stationName: "성수역 3번 출구", availableBikeCount: 8 }),
-    ])));
+    await waitFor(() => expect(fetchStationLocations).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(adapter.setStations).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ stationId: "station-1" })]), expect.any(Function)
+    ));
+    fireEvent.click(screen.getByRole("button", { name: "대여소 숨기기" }));
+    await waitFor(() => expect(adapter.setStations).toHaveBeenLastCalledWith([], expect.any(Function)));
+  });
+
+  test("대여소 핀 선택은 조회 중과 조회 성공 말풍선을 순서대로 표시한다", async () => {
+    process.env.REACT_APP_KAKAO_MAP_APP_KEY = "test-key";
+    let resolveDetail;
+    fetchStationDetail.mockReturnValue(new Promise((resolve) => { resolveDetail = resolve; }));
+    const adapter = { setCenter: jest.fn(), setLevel: jest.fn(), setMapType: jest.fn(), setPoints: jest.fn(), setStations: jest.fn(), showStationOverlay: jest.fn() };
+    createKakaoMapAdapter.mockReturnValue(adapter);
+    loadKakaoMapSdk.mockResolvedValue({});
+
+    renderPanel();
+    fireEvent.click(await screen.findByRole("button", { name: "대여소 표시" }));
+    await waitFor(() => expect(adapter.setStations.mock.calls.some(([stations]) => stations.length > 0)).toBe(true));
+    const onStationSelected = adapter.setStations.mock.calls.find(([stations]) => stations.length > 0)[1];
+    onStationSelected({ stationId: "station-1", name: "성수역 3번 출구", latitude: 37.544, longitude: 127.056 });
+
+    expect(adapter.showStationOverlay).toHaveBeenCalledWith(expect.objectContaining({ inventoryStatus: "LOADING" }));
+    resolveDetail({ stationId: "station-1", name: "성수역 3번 출구", latitude: 37.544, longitude: 127.056, availableBikeCount: 8, inventoryStatus: "NORMAL" });
+    await waitFor(() => expect(adapter.showStationOverlay).toHaveBeenLastCalledWith(expect.objectContaining({ availableBikeCount: 8 })));
   });
 
   test("위치 미지원과 권한 거부를 사용자에게 안내한다", async () => {

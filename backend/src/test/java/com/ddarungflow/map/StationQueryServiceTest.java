@@ -57,6 +57,17 @@ class StationQueryServiceTest {
     }
 
     @Test
+    @DisplayName("활성 대여소 위치는 재고를 포함하지 않고 모두 반환한다")
+    void findAllActiveLocations() {
+        stationRepository.save(new Station("ST-INACTIVE", "00104", "비활성 대여소", new BigDecimal("37.5510"), new BigDecimal("126.9000"), false));
+
+        List<MapApiDtos.StationLocationResponseDto> results = stationQueryService.findAllActiveLocations();
+
+        assertThat(results).extracting(MapApiDtos.StationLocationResponseDto::stationId)
+            .containsExactlyInAnyOrder("ST-4", "ST-5");
+    }
+
+    @Test
     @DisplayName("잘못된 bounds (swLat >= neLat) 입력 시 빈 목록을 반환한다")
     void invalidBoundsReturnsEmptyList() {
         List<MapApiDtos.StationMapResponseDto> results = stationQueryService.findInBounds(
