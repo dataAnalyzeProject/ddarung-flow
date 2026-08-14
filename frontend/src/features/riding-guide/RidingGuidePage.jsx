@@ -1,5 +1,9 @@
 import AppHeader from "../../shared/AppHeader";
 import "./RidingGuidePage.css";
+import {
+  AIR_QUALITY_GRADE_LABEL,
+  airQualityNormalFixture,
+} from "./data/airQualityMock";
 
 const hourlyFixture = [
   { time: "09시", temperature: "21°C", rain: "10%", condition: "추천", tone: "safe" },
@@ -13,7 +17,6 @@ const guideMetrics = [
   { icon: "bike", label: "대여 가능성", value: "87%", note: "매우 높음", tone: "safe" },
   { icon: "rain", label: "강수확률", value: "10%", note: "낮음", tone: "blue" },
   { icon: "wind", label: "풍속", value: "2m/s", note: "양호", tone: "blue" },
-  { icon: "air", label: "통합대기환경지수", value: "63", note: "보통", tone: "caution" },
 ];
 
 const iconPaths = {
@@ -53,8 +56,93 @@ function GuideIcon({ name, className = "", title }) {
   );
 }
 
-export default function RidingGuidePage({ stationName = "성수역 3번 출구", onBack, onNavigate }) {
+const AIR_QUALITY_GRADE_TONE = {
+  GOOD: "safe-text",
+  MODERATE: "caution-text",
+  BAD: "warn-text",
+  VERY_BAD: "danger-text",
+};
+
+function formatAirQualityTime(isoString) {
+  if (!isoString) return null;
+  const parsed = new Date(isoString);
+  if (Number.isNaN(parsed.getTime())) return null;
+  const hours = String(parsed.getHours()).padStart(2, "0");
+  const minutes = String(parsed.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
+function getGuideKhaiMetric(airQuality, isLoading) {
+  const hidden = { icon: "air", label: "통합대기환경지수", value: "-", note: "정보 없음", tone: "" };
+  if (isLoading || !airQuality) return hidden;
+  if (airQuality.status === "MISSING" || airQuality.status === "UNAVAILABLE") return hidden;
+  const hasValue = airQuality.khai && airQuality.khai.value !== null && airQuality.khai.value !== undefined;
+  if (!hasValue) return hidden;
+  return {
+    icon: "air",
+    label: "통합대기환경지수",
+    value: String(airQuality.khai.value),
+    note: AIR_QUALITY_GRADE_LABEL[airQuality.khai.grade] || "-",
+    tone: airQuality.khai.grade === "GOOD" ? "safe" : "caution",
+  };
+}
+
+function AirQualityValue({ label, pollutant, unit }) {
+  const hasValue = pollutant && pollutant.value !== null && pollutant.value !== undefined;
+  const tone = hasValue ? AIR_QUALITY_GRADE_TONE[pollutant.grade] || "" : "";
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd>
+        {hasValue ? (
+          <>
+            <span>{pollutant.value}</span>
+            <small>{unit}</small>
+            <em className={tone}>{AIR_QUALITY_GRADE_LABEL[pollutant.grade] || "-"}</em>
+          </>
+        ) : (
+          <span aria-label={`${label} 측정값 없음`}>-</span>
+        )}
+      </dd>
+    </div>
+  );
+}
+
+function AirQualityLoading() {
+  return (
+    <div aria-busy="true" aria-live="polite" className="guide-air-loading" role="status">
+      <span className="guide-air-skeleton" />
+      <p>대기질 정보를 불러오는 중이에요.</p>
+    </div>
+  );
+}
+
+function AirQualityUnavailableNotice({ status }) {
+  const message =
+    status === "MISSING"
+      ? "측정값이 없어 대기질을 표시할 수 없어요."
+      : "대기질 정보를 조회할 수 없어요.";
+  return (
+    <div className="guide-air-unavailable" role="status">
+      <GuideIcon name="warning" />
+      <p>{message}</p>
+    </div>
+  );
+}
+
+export default function RidingGuidePage({
+  stationName = "성수역 3번 출구",
+  onBack,
+  onNavigate,
+  airQuality = airQualityNormalFixture,
+  isAirQualityLoading = false,
+}) {
   const returnToPrediction = () => onBack?.();
+  const airQualityMeasuredTime = formatAirQualityTime(airQuality?.measuredAt);
+  const guideMetricsWithAirQuality = [
+    ...guideMetrics,
+    getGuideKhaiMetric(airQuality, isAirQualityLoading),
+  ];
 
   return (
     <main className="riding-guide-shell">
@@ -91,7 +179,7 @@ export default function RidingGuidePage({ stationName = "성수역 3번 출구",
               <p>지금 출발하면<br />자전거 이용을 <span>추천해요.</span></p>
             </div>
             <dl className="guide-metrics">
-              {guideMetrics.map((metric) => (
+              {guideMetricsWithAirQuality.map((metric) => (
                 <div key={metric.label}>
                   <span className={`guide-metric-icon ${metric.tone}`}><GuideIcon name={metric.icon} /></span>
                   <dt>{metric.label}</dt>
@@ -155,18 +243,37 @@ export default function RidingGuidePage({ stationName = "성수역 3번 출구",
 
               <section className="guide-card guide-air" aria-labelledby="arrival-air-title">
                 <h2 id="arrival-air-title">도착지 대기질</h2>
-                <div className="guide-air-body">
-                  <div className="guide-air-dots" aria-label="통합대기환경지수 보통"><span /></div>
-                  <dl className="guide-air-values">
-                    <div><dt>PM10</dt><dd>42<small>㎍/㎥</small><em className="caution-text">보통</em></dd></div>
-                    <div><dt>PM2.5</dt><dd>18<small>㎍/㎥</small><em className="safe-text">좋음</em></dd></div>
-                    <div><dt>오존 (O₃)</dt><dd>0.031<small>ppm</small><em className="caution-text">보통</em></dd></div>
-                  </dl>
-                </div>
-                <dl className="guide-air-meta">
-                  <div><dt>측정소</dt><dd>천호 측정소</dd></div>
-                  <div><dt>측정시간</dt><dd>10:00 기준</dd></div>
-                </dl>
+                {isAirQualityLoading || !airQuality ? (
+                  <AirQualityLoading />
+                ) : airQuality.status === "MISSING" || airQuality.status === "UNAVAILABLE" ? (
+                  <AirQualityUnavailableNotice status={airQuality.status} />
+                ) : (
+                  <>
+                    <div className="guide-air-body">
+                      <div
+                        className="guide-air-dots"
+                        aria-label={`통합대기환경지수 ${AIR_QUALITY_GRADE_LABEL[airQuality.khai?.grade] || "정보 없음"}`}
+                      >
+                        <span />
+                      </div>
+                      <dl className="guide-air-values">
+                        <AirQualityValue label="PM10" pollutant={airQuality.pm10} unit="㎍/㎥" />
+                        <AirQualityValue label="PM2.5" pollutant={airQuality.pm25} unit="㎍/㎥" />
+                        <AirQualityValue label="오존 (O₃)" pollutant={airQuality.o3} unit="ppm" />
+                      </dl>
+                    </div>
+                    <dl className="guide-air-meta">
+                      <div><dt>측정소</dt><dd>{airQuality.measurementStation}</dd></div>
+                      <div><dt>측정시간</dt><dd>{airQualityMeasuredTime ? `${airQualityMeasuredTime} 기준` : "-"}</dd></div>
+                    </dl>
+                    {airQuality.status === "DELAYED" && (
+                      <p className="guide-air-delayed-note" role="status">
+                        <GuideIcon name="info" />
+                        측정값 갱신이 지연되고 있어요.
+                      </p>
+                    )}
+                  </>
+                )}
               </section>
             </div>
           </section>
@@ -204,7 +311,7 @@ export default function RidingGuidePage({ stationName = "성수역 3번 출구",
         <footer className="guide-status" aria-label="데이터 상태">
           <span><GuideIcon name="status" /><b>데이터 상태</b><i className="guide-status-ok">✓</i> 정상</span>
           <span><i className="guide-status-spinner" /><b>날씨 발표</b>10:00</span>
-          <span><GuideIcon name="air" /><b>대기질 측정</b>10:00</span>
+          <span><GuideIcon name="air" /><b>대기질 측정</b>{isAirQualityLoading || !airQuality ? "-" : airQualityMeasuredTime || "-"}</span>
           <span><GuideIcon name="clock" /><b>대여 예측 갱신</b>10:32</span>
           <span className="guide-status-note"><GuideIcon name="info" />실시간 측정값과 예측 결과는 실제 상황과 다를 수 있습니다.</span>
         </footer>

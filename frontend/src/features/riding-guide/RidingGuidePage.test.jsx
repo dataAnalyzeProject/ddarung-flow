@@ -1,5 +1,12 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import RidingGuidePage from "./RidingGuidePage";
+import {
+  airQualityDelayedFixture,
+  airQualityMissingFixture,
+  airQualityNormalFixture,
+  airQualityPartialNullFixture,
+  airQualityUnavailableFixture,
+} from "./data/airQualityMock";
 
 describe("라이딩 가이드 화면", () => {
   test("선택한 대여소명과 고정 안내 데이터를 표시한다", () => {
@@ -41,5 +48,100 @@ describe("라이딩 가이드 화면", () => {
     fireEvent.click(screen.getByRole("button", { name: "대여 예측 메인으로 이동" }));
 
     expect(onBack).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("라이딩 가이드 대기질 상태", () => {
+  test("NORMAL 상태는 측정소, 측정시간과 모든 오염물질 수치·등급을 표시한다", () => {
+    render(<RidingGuidePage airQuality={airQualityNormalFixture} onBack={jest.fn()} />);
+
+    expect(screen.getByText("천호 측정소")).toBeInTheDocument();
+    expect(screen.getByText("10:00 기준")).toBeInTheDocument();
+    expect(screen.getByText("42")).toBeInTheDocument();
+    expect(screen.getByText("18")).toBeInTheDocument();
+    expect(screen.getByText("0.031")).toBeInTheDocument();
+    expect(screen.getAllByText("보통", { selector: ".guide-air-values em" })).toHaveLength(2);
+    expect(screen.getByText("좋음", { selector: ".guide-air-values em" })).toBeInTheDocument();
+  });
+
+  test("DELAYED 상태는 측정시각을 유지하며 지연 문구를 표시한다", () => {
+    render(<RidingGuidePage airQuality={airQualityDelayedFixture} onBack={jest.fn()} />);
+
+    expect(screen.getByText("07:40 기준")).toBeInTheDocument();
+    expect(screen.getByText("측정값 갱신이 지연되고 있어요.")).toBeInTheDocument();
+    expect(screen.getByText("48")).toBeInTheDocument();
+  });
+
+  test("PM2.5 한 항목이 null이면 해당 값만 대시로 표시하고 나머지는 유지한다", () => {
+    render(<RidingGuidePage airQuality={airQualityPartialNullFixture} onBack={jest.fn()} />);
+
+    expect(screen.getByLabelText("PM2.5 측정값 없음")).toHaveTextContent("-");
+    expect(screen.getByText("42")).toBeInTheDocument();
+    expect(screen.getByText("0.031")).toBeInTheDocument();
+  });
+
+  test("MISSING 상태에서는 수치나 좋음 문구 없이 안내 메시지만 표시한다", () => {
+    render(<RidingGuidePage airQuality={airQualityMissingFixture} onBack={jest.fn()} />);
+    const airCard = screen.getByRole("heading", { name: "도착지 대기질" }).closest("section");
+
+    expect(within(airCard).getByText("측정값이 없어 대기질을 표시할 수 없어요.")).toBeInTheDocument();
+    expect(within(airCard).queryByText("㎍/㎥")).not.toBeInTheDocument();
+    expect(within(airCard).queryByText("좋음")).not.toBeInTheDocument();
+    expect(within(airCard).queryByText("42")).not.toBeInTheDocument();
+  });
+
+  test("UNAVAILABLE 상태에서는 수치나 좋음 문구 없이 조회 불가 메시지만 표시한다", () => {
+    render(<RidingGuidePage airQuality={airQualityUnavailableFixture} onBack={jest.fn()} />);
+    const airCard = screen.getByRole("heading", { name: "도착지 대기질" }).closest("section");
+
+    expect(within(airCard).getByText("대기질 정보를 조회할 수 없어요.")).toBeInTheDocument();
+    expect(within(airCard).queryByText("좋음")).not.toBeInTheDocument();
+    expect(within(airCard).queryByText("18")).not.toBeInTheDocument();
+  });
+
+  test("loading 상태에서는 값 대신 불러오는 중 안내를 표시한다", () => {
+    render(<RidingGuidePage isAirQualityLoading onBack={jest.fn()} />);
+    const airCard = screen.getByRole("heading", { name: "도착지 대기질" }).closest("section");
+
+    expect(within(airCard).getByText("대기질 정보를 불러오는 중이에요.")).toBeInTheDocument();
+    expect(within(airCard).queryByText("천호 측정소")).not.toBeInTheDocument();
+  });
+
+  test("대기질 상태와 무관하게 대여 확률과 종합 추천 문구는 바뀌지 않는다", () => {
+    render(<RidingGuidePage airQuality={airQualityUnavailableFixture} onBack={jest.fn()} />);
+
+    expect(screen.getByText("87%")).toBeInTheDocument();
+    expect(screen.getByText("추천해요.")).toBeInTheDocument();
+    expect(screen.getByText("매우 높음")).toBeInTheDocument();
+  });
+
+  test("측정소 응답이 두 항목 모두 정상 등급이어도 통합대기환경지수 라벨에 등급명을 포함한다", () => {
+    render(<RidingGuidePage airQuality={airQualityNormalFixture} onBack={jest.fn()} />);
+
+    expect(screen.getByLabelText("통합대기환경지수 보통")).toBeInTheDocument();
+  });
+
+  test("DELAYED 상태에서는 종합 요약의 통합대기환경지수가 airQuality.khai 값(71)로 표시된다", () => {
+    render(<RidingGuidePage airQuality={airQualityDelayedFixture} onBack={jest.fn()} />);
+    const khaiSummary = screen.getByText("통합대기환경지수").closest("div").querySelector("dd");
+
+    expect(khaiSummary).toHaveTextContent("71");
+    expect(khaiSummary).toHaveTextContent("보통");
+  });
+
+  test("MISSING/UNAVAILABLE 상태에서는 종합 요약의 통합대기환경지수에 이전 수치나 긍정 등급이 남지 않는다", () => {
+    const { rerender } = render(<RidingGuidePage airQuality={airQualityMissingFixture} onBack={jest.fn()} />);
+    let khaiSummary = screen.getByText("통합대기환경지수").closest("div").querySelector("dd");
+
+    expect(khaiSummary).not.toHaveTextContent("63");
+    expect(khaiSummary).not.toHaveTextContent("보통");
+    expect(khaiSummary).toHaveTextContent("-");
+
+    rerender(<RidingGuidePage airQuality={airQualityUnavailableFixture} onBack={jest.fn()} />);
+    khaiSummary = screen.getByText("통합대기환경지수").closest("div").querySelector("dd");
+
+    expect(khaiSummary).not.toHaveTextContent("63");
+    expect(khaiSummary).not.toHaveTextContent("보통");
+    expect(khaiSummary).toHaveTextContent("-");
   });
 });
