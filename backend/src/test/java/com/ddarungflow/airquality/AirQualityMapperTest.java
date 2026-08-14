@@ -38,6 +38,33 @@ class AirQualityMapperTest {
         }
         """;
 
+    private static final String EXAMPLE_INPUT_FIXTURE = """
+        {
+          "response": {
+            "header": {
+              "resultCode": "00",
+              "resultMsg": "NORMAL_SERVICE"
+            },
+            "body": {
+              "items": [
+                {
+                  "stationName": "종로구",
+                  "dataTime": "2026-08-13 17:00",
+                  "pm10Value": "8",
+                  "pm25Value": "2",
+                  "o3Value": "0.035",
+                  "khaiValue": "55",
+                  "pm10Grade": "1",
+                  "pm25Grade": "1",
+                  "o3Grade": "2",
+                  "khaiGrade": "2"
+                }
+              ]
+            }
+          }
+        }
+        """;
+
     private static final String FIXTURE_WITH_HYPHEN_AND_NULL = """
         {
           "response": {
@@ -77,6 +104,41 @@ class AirQualityMapperTest {
           }
         }
         """;
+
+    @Test
+    @DisplayName("사용자 입력 예시(dataTime 17:00, pm10=8, pm25=2, o3=0.035, khai=55, source grade 1/2)에 대한 올바른 출력 매핑 검증")
+    void testExampleInputOutputMapping() {
+        OffsetDateTime targetTime = OffsetDateTime.of(2026, 8, 13, 17, 30, 0, 0, KST);
+
+        AirQualityResult result = AirQualityMapper.mapFromJson(
+                "종로구",
+                targetTime,
+                null,
+                EXAMPLE_INPUT_FIXTURE,
+                null,
+                false
+        );
+
+        assertEquals(AirQualityStatus.NORMAL, result.status());
+        assertEquals("종로구", result.stationName());
+        assertEquals(OffsetDateTime.of(2026, 8, 13, 17, 0, 0, 0, KST), result.dataTime());
+
+        // PM10 8 GOOD
+        assertEquals(8.0, result.pm10().value());
+        assertEquals(AirQualityGrade.GOOD, result.pm10().grade());
+
+        // PM2.5 2 GOOD
+        assertEquals(2.0, result.pm25().value());
+        assertEquals(AirQualityGrade.GOOD, result.pm25().grade());
+
+        // O3 0.035 MODERATE
+        assertEquals(0.035, result.o3().value());
+        assertEquals(AirQualityGrade.MODERATE, result.o3().grade());
+
+        // KHAI 55 MODERATE
+        assertEquals(55.0, result.khai().value());
+        assertEquals(AirQualityGrade.MODERATE, result.khai().grade());
+    }
 
     @Test
     @DisplayName("계약 테스트: resultCode=00 응답 데이터를 CHG-085 AirQualityResult 및 AirQualityPollutant 객체로 정규화한다")

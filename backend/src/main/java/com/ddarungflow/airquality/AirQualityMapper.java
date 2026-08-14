@@ -111,7 +111,6 @@ public final class AirQualityMapper {
         try {
             JsonNode rootNode = OBJECT_MAPPER.readTree(jsonFixture);
 
-            // resultCode check: must be "00"
             if (rootNode.has("response") && rootNode.get("response").has("header")) {
                 JsonNode header = rootNode.get("response").get("header");
                 String resultCode = header.path("resultCode").asText("");
@@ -155,10 +154,12 @@ public final class AirQualityMapper {
 
         String pm10GradeCode = parseString(item.path("pm10Grade"));
         String pm25GradeCode = parseString(item.path("pm25Grade"));
+        String o3GradeCode = parseString(item.path("o3Grade"));
         String khaiGradeCode = parseString(item.path("khaiGrade"));
 
         AirQualityGrade pm10Grade = AirQualityGrade.fromCode(pm10GradeCode);
         AirQualityGrade pm25Grade = AirQualityGrade.fromCode(pm25GradeCode);
+        AirQualityGrade o3Grade = AirQualityGrade.fromCode(o3GradeCode);
         AirQualityGrade khaiGrade = AirQualityGrade.fromCode(khaiGradeCode);
 
         return new AirKoreaMeasurementPoint(
@@ -170,9 +171,11 @@ public final class AirQualityMapper {
                 khaiValue,
                 pm10GradeCode,
                 pm25GradeCode,
+                o3GradeCode,
                 khaiGradeCode,
                 pm10Grade,
                 pm25Grade,
+                o3Grade,
                 khaiGrade
         );
     }
@@ -259,8 +262,8 @@ public final class AirQualityMapper {
         AirQualityPollutant o3 = new AirQualityPollutant(
                 point.o3Value(),
                 UNIT_O3,
-                null,
-                null
+                point.o3Grade(),
+                point.o3GradeCode()
         );
 
         AirQualityPollutant khai = new AirQualityPollutant(

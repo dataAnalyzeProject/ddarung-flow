@@ -11,9 +11,11 @@ public record AirKoreaMeasurementPoint(
     Integer khaiValue,
     String pm10GradeCode,
     String pm25GradeCode,
+    String o3GradeCode,
     String khaiGradeCode,
     AirQualityGrade pm10Grade,
     AirQualityGrade pm25Grade,
+    AirQualityGrade o3Grade,
     AirQualityGrade khaiGrade
 ) {
 }
