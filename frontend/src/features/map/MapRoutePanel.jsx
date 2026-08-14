@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createKakaoMapAdapter, estimateRoute, loadKakaoMapSdk } from "./kakaoMapApi";
+import currentLocationMarker from "./assets/current-location-marker.png";
+import bikeStationMarker from "./assets/bike-station-marker.png";
+import { stationMapFixture } from "./data/stationMapFixture";
 import "./MapRoutePanel.css";
 
 const MODE_MAP = { "도보": "WALK", "대중교통": "PUBLIC_TRANSIT", WALK: "WALK", PUBLIC_TRANSIT: "PUBLIC_TRANSIT" };
@@ -21,6 +24,7 @@ export default function MapRoutePanel({
   selectedPlaces,
   onDurationChange,
   fallbackImage,
+  stations = stationMapFixture,
 }) {
   const containerRef = useRef(null);
   const adapterRef = useRef(null);
@@ -34,6 +38,7 @@ export default function MapRoutePanel({
   const [message, setMessage] = useState("");
   const [route, setRoute] = useState(null);
   const [routeState, setRouteState] = useState("idle");
+  const [selectedStation, setSelectedStation] = useState(stations[0] || null);
 
   const mode = MODE_MAP[travelMode] || "WALK";
   const fallbackScale = Number((1 + (5 - mapLevel) * 0.1).toFixed(2));
@@ -46,17 +51,26 @@ export default function MapRoutePanel({
     loadKakaoMapSdk()
       .then((maps) => {
         if (!active || !containerRef.current) return;
-        adapterRef.current = createKakaoMapAdapter(containerRef.current, maps);
+        adapterRef.current = createKakaoMapAdapter(containerRef.current, maps, undefined, {
+          currentMarkerImage: currentLocationMarker,
+          stationMarkerImage: bikeStationMarker,
+          onStationSelected: setSelectedStation,
+        });
+        adapterRef.current.setStations(stations);
         setSdkStatus("ready");
       })
       .catch((error) => active && setSdkStatus(error.message === "KAKAO_MAP_KEY_MISSING" ? "missing-key" : "failed"));
     return () => { active = false; };
-  }, []);
+  }, [stations]);
 
   useEffect(() => {
     adapterRef.current?.setPoints(points);
     if (current) adapterRef.current?.setCenter(current);
   }, [points, current, sdkStatus]);
+  useEffect(() => {
+    adapterRef.current?.setStations(stations);
+    setSelectedStation((selected) => stations.find((station) => station.stationId === selected?.stationId) || stations[0] || null);
+  }, [stations]);
   useEffect(() => { adapterRef.current?.setLevel(mapLevel); }, [mapLevel]);
   useEffect(() => { adapterRef.current?.setMapType(mapType === "위성"); }, [mapType]);
 
@@ -128,6 +142,11 @@ export default function MapRoutePanel({
         </button>
         <div className="main-zoom"><button type="button" aria-label="지도 확대" onClick={() => setMapLevel((level) => Math.max(1, level - 1))}>＋</button><button type="button" aria-label="지도 축소" onClick={() => setMapLevel((level) => Math.min(14, level + 1))}>−</button></div>
         <button className="map-route-panel__estimate" type="button" disabled={routeState === "loading"} onClick={requestRoute}>{routeState === "loading" ? "경로 확인 중" : "경로 확인"}</button>
+        {selectedStation && <section className={`map-route-panel__station-card ${selectedStation.inventoryStatus.toLowerCase()}`} aria-live="polite">
+          <strong>{selectedStation.stationName}</strong>
+          <span>{selectedStation.availableBikeCount === null ? "재고 확인 필요" : `현재 ${selectedStation.availableBikeCount}대`}</span>
+          <small>{selectedStation.collectedAt} 기준 · {selectedStation.inventoryStatus}</small>
+        </section>}
         {message && <p className="map-route-panel__message" role="status">{message}</p>}
         {route && <dl className="map-route-panel__summary"><div><dt>거리</dt><dd>{route.distanceMeters.toLocaleString()}m</dd></div><div><dt>예상 이동시간</dt><dd>{Math.ceil(route.durationSeconds / 60)}분</dd></div><div><dt>도착시각</dt><dd>{route.arrivalAt}</dd></div></dl>}
       </div>
