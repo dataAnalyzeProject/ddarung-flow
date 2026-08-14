@@ -1,7 +1,12 @@
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080';
+const AUTH_BASE_URL = process.env.REACT_APP_AUTH_BASE_URL || API_BASE_URL;
+
+export function getSocialLoginUrl(provider) {
+    return `${AUTH_BASE_URL}/api/v1/auth/oauth2/${provider.toLowerCase()}/start`;
+}
 
 export function startSocialLogin(provider) {
-    window.location.assign(`${API_BASE_URL}/api/v1/auth/oauth2/${provider.toLowerCase()}/start`);
+    window.location.assign(getSocialLoginUrl(provider));
 }
 
 export async function getCurrentUser() {
