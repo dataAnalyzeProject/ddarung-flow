@@ -1,4 +1,4 @@
-import logo from "../../assets/main/ddaragayo-logo.png";
+import AppHeader from "../../shared/AppHeader";
 import "./RidingGuidePage.css";
 
 const hourlyFixture = [
@@ -53,28 +53,12 @@ function GuideIcon({ name, className = "", title }) {
   );
 }
 
-export default function RidingGuidePage({ stationName = "성수역 3번 출구", onBack }) {
+export default function RidingGuidePage({ stationName = "성수역 3번 출구", onBack, onNavigate }) {
   const returnToPrediction = () => onBack?.();
 
   return (
     <main className="riding-guide-shell">
-      <header className="guide-header">
-        <div className="guide-brand">
-          <img src={logo} alt="따라가요" />
-          <span aria-hidden="true" />
-          <strong>따릉이 도착 대여 예측</strong>
-        </div>
-        <nav aria-label="주요 메뉴" className="guide-nav">
-          <span aria-current="page">대여 예측</span>
-          <span>Q&amp;A</span>
-          <span>보관함</span>
-          <span>알림</span>
-        </nav>
-        <a className="guide-login" href="/login">
-          <GuideIcon name="user" />
-          로그인
-        </a>
-      </header>
+      <AppHeader onHome={onBack} onNavigate={onNavigate} />
 
       <div className="guide-page">
         <button className="guide-back" type="button" onClick={returnToPrediction}>

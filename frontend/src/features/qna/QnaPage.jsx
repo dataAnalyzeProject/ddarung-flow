@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import logo from "../../assets/main/ddaragayo-logo.png";
+import AppHeader from "../../shared/AppHeader";
 import { qnaFixture } from "./data/qnaFixture";
 import "./QnaPage.css";
 
@@ -9,27 +9,6 @@ const CATEGORY_OPTIONS = [
   ["PREDICTION", "예측 결과"],
   ["ACCOUNT", "계정"],
 ];
-
-function QnaHeader({ onNavigate }) {
-  return (
-    <header className="qna-header">
-      <button className="qna-brand" type="button" onClick={() => onNavigate?.("main")} aria-label="대여 예측 메인으로 이동">
-        <img src={logo} alt="따라가요" />
-        <span aria-hidden="true" />
-        <strong>따릉이 도착 대여 예측</strong>
-      </button>
-      <nav className="qna-menu" aria-label="주요 메뉴">
-        <button type="button" onClick={() => onNavigate?.("main")}>대여 예측</button>
-        <button type="button" className="active" aria-current="page">Q&amp;A</button>
-        <button type="button">보관함</button>
-        <button type="button">알림</button>
-      </nav>
-      <button className="qna-account" type="button" aria-label="내 계정">
-        <span aria-hidden="true" />김따릉 · 내 계정
-      </button>
-    </header>
-  );
-}
 
 function QuestionForm({ onCancel, onCreate }) {
   const [category, setCategory] = useState("SERVICE");
@@ -117,7 +96,7 @@ export default function QnaPage({ onNavigate }) {
 
   return (
     <div className="qna-shell">
-      <QnaHeader onNavigate={onNavigate} />
+      <AppHeader activeRoute="qna" onNavigate={onNavigate} />
       <main className="qna-content">
         {view === "create" ? (
           <QuestionForm onCancel={() => setView("list")} onCreate={createQuestion} />

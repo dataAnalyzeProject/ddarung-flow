@@ -31,91 +31,6 @@
   flex: 0 0 auto;
 }
 
-.guide-header {
-  height: var(--guide-header-height);
-  padding: 0 clamp(18px, 1.7vw, 32px) 0 clamp(14px, 1.05vw, 20px);
-  display: flex;
-  align-items: center;
-  border-bottom: 1px solid #e3e8ef;
-  background: rgba(255, 255, 255, .96);
-}
-
-.guide-brand {
-  display: flex;
-  align-items: center;
-  gap: clamp(16px, 1.75vw, 32px);
-  white-space: nowrap;
-}
-
-.guide-brand img {
-  width: clamp(143px, 9.8vw, 183px);
-  height: calc(var(--guide-header-height) - 10px);
-  object-fit: contain;
-}
-
-.guide-brand > span {
-  width: 1px;
-  height: clamp(22px, 1.45vw, 28px);
-  background: #91a0b6;
-}
-
-.guide-brand strong {
-  font-size: clamp(16px, 1.2vw, 22px);
-  letter-spacing: -.035em;
-}
-
-.guide-nav {
-  height: 100%;
-  margin-left: auto;
-  display: flex;
-  align-items: stretch;
-  gap: clamp(24px, 3.1vw, 58px);
-}
-
-.guide-nav span {
-  position: relative;
-  display: flex;
-  align-items: center;
-  color: #081733;
-  font-size: clamp(13px, .9vw, 17px);
-  font-weight: 800;
-  white-space: nowrap;
-}
-
-.guide-nav span[aria-current="page"] {
-  color: var(--guide-blue);
-}
-
-.guide-nav span[aria-current="page"]::after {
-  position: absolute;
-  right: -10px;
-  bottom: 0;
-  left: -10px;
-  height: 3px;
-  background: var(--guide-blue);
-  content: "";
-}
-
-.guide-login {
-  min-width: clamp(106px, 7.3vw, 136px);
-  height: clamp(38px, 2.55vw, 48px);
-  margin-left: clamp(28px, 3.35vw, 62px);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  border: 1px solid #0b6ef2;
-  border-radius: 8px;
-  color: var(--guide-navy);
-  font-size: clamp(13px, .9vw, 17px);
-  font-weight: 800;
-  text-decoration: none;
-}
-
-.guide-login .guide-icon {
-  color: #096af0;
-}
-
 .guide-page {
   height: calc(100vh - var(--guide-header-height));
   padding: clamp(12px, 1.25vw, 23px) clamp(22px, 1.78vw, 33px) clamp(10px, 1.15vw, 20px);
@@ -1013,33 +928,6 @@
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
-  }
-
-  .guide-header {
-    height: auto;
-    min-height: 64px;
-    padding: 8px 16px;
-  }
-
-  .guide-brand {
-    gap: 12px;
-  }
-
-  .guide-brand img {
-    width: 130px;
-    height: 44px;
-  }
-
-  .guide-brand strong,
-  .guide-brand > span,
-  .guide-nav {
-    display: none;
-  }
-
-  .guide-login {
-    min-width: 96px;
-    height: 38px;
-    margin-left: auto;
   }
 
   .guide-page {

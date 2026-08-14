@@ -61,9 +61,13 @@ test("question composer validates, creates a local fixture, and returns to my qu
   expect(screen.getByText("새 질문")).toBeInTheDocument();
 });
 
-test("header navigation returns to the main route callback", () => {
+test("shared header logo and prediction menu return to the main route callback", () => {
   const onNavigate = jest.fn();
   render(<QnaPage onNavigate={onNavigate} />);
+
+  fireEvent.click(screen.getByRole("button", { name: "대여 예측 메인으로 이동" }));
   fireEvent.click(screen.getByRole("button", { name: "대여 예측" }));
-  expect(onNavigate).toHaveBeenCalledWith("main");
+
+  expect(onNavigate).toHaveBeenNthCalledWith(1, "main");
+  expect(onNavigate).toHaveBeenNthCalledWith(2, "main");
 });

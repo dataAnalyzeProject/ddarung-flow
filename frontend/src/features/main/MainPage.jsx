@@ -3,9 +3,9 @@ import "./MainPage.css";
 import { serviceData, stations } from "./mainPageData";
 import { getCurrentUser, logout } from "../login/authApi";
 import { loadPendingPrediction, savePendingPrediction } from "../login/loginStorage";
-import logo from "../../assets/main/ddaragayo-logo.png";
 import routeMap from "../../assets/main/route-map.png";
 import heroBike from "../../assets/main/hero-bike.png";
+import AppHeader from "../../shared/AppHeader";
 import RidingGuidePage from "../riding-guide/RidingGuidePage";
 import MapRoutePanel from "../map/MapRoutePanel";
 import PlaceAutocompleteInput from "../map/PlaceAutocompleteInput";
@@ -119,36 +119,20 @@ export default function MainPage({ onNavigate }) {
       <RidingGuidePage
         stationName={guideStation.name}
         onBack={() => setGuideStation(null)}
+        onNavigate={onNavigate}
       />
     );
   }
 
   return (
     <main className="main-shell">
-      <header className="main-header">
-        <div className="main-brand">
-          <img src={logo} alt="따라가요" />
-          <span aria-hidden="true" />
-          <strong>{serviceData.serviceName}</strong>
-        </div>
-        <nav aria-label="주요 메뉴" className="main-menu">
-          <button className="active" aria-current="page" type="button">대여 예측</button>
-          <button type="button" onClick={() => onNavigate?.("qna")}>Q&amp;A</button>
-          <button type="button">보관함</button>
-          <button type="button">알림</button>
-        </nav>
-        <div className="main-auth">
-          {authState === "authenticated" || authState === "logging-out" ? (
-            <><span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>{user ? `${user.displayName} · ${user.provider}` : ""}</span><button aria-label="로그아웃" type="button" disabled={authState === "logging-out"} onClick={handleLogout}>
-              {authState === "logging-out" ? "로그아웃 중" : `${user?.displayName || "사용자"} · 로그아웃`}
-            </button></>
-          ) : authState === "loading" ? (
-            <button type="button" disabled>확인 중</button>
-          ) : (
-            <a className="main-login-link" aria-label="로그인" href="/login" onClick={saveInputBeforeLogin}>{serviceData.loginButton}</a>
-          )}
-        </div>
-      </header>
+      <AppHeader
+        authState={authState}
+        onNavigate={onNavigate}
+        onBeforeLogin={saveInputBeforeLogin}
+        onLogout={handleLogout}
+        user={user}
+      />
 
       <section className="main-search">
         <div className="main-hero-copy">
