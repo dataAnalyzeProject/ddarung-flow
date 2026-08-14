@@ -14,10 +14,10 @@
 
 - **역할**: 프리미엄 구독 결제 샌드박스 전용 순수 Presentational UI 컴포넌트.
 - **구현 내용**:
-  - 자체 Header/nav/로그인 UI를 배제하고 본문(`<main className="premium-sandbox">`)만 렌더링.
-  - 와이어프레임 1:1 대조 좌측(테스트 상품 박스, 상태별 주 액션 버튼, 힌트 문구) 및 우측(현재 상태 안내, 실시간 callback 호출 관찰기) 2열 구성.
-  - 6가지 상태(`PREPARING`, `PROCESSING`, `SUCCESS`, `CANCELLED`, `FAILED`, `PAYMENT_NOT_ENABLED`) 단일 조건부 렌더링 및 필수 안전 배지(`SANDBOX TEST · 실제 결제 없음`) 상시 노출.
-  - 결과 상태(`SUCCESS`, `CANCELLED`, `FAILED`) 진입 시 `onCallbackResult` 1회 안전 호출 연동.
+  - 자체 Header/nav/로그인 UI를 완전히 배제하고 본문(`<main className="premium-sandbox">`)만 렌더링하도록 조장 통합 계약 준수.
+  - 와이어프레임 1:1 대조 좌측(테스트 상품 정보 박스, 상태별 정확한 주 버튼 문구, 힌트 안내문) 및 우측(6개 상태별 상세 안내, 실시간 callback 호출 카운트 관찰기) 2열 Layout 복원.
+  - 6가지 상태(`PREPARING`, `PROCESSING`, `SUCCESS`, `CANCELLED`, `FAILED`, `PAYMENT_NOT_ENABLED`) 단일 조건부 렌더링 및 `SANDBOX TEST · 실제 결제 없음` 안전 배지 상시 노출.
+  - 결과 상태(`SUCCESS`, `CANCELLED`, `FAILED`) 진입 시 `lastReportedStatusRef`를 활용하여 리렌더링 중복 없이 정확히 1회 안전하게 `onCallbackResult` 호출 연동.
   - 실시간 callback 카운트 상태(`callbackCounts`) 및 4대 콜백 인자 바인딩.
 
 ### 2. `PremiumSandboxPage.css`
@@ -31,16 +31,16 @@
 ### 3. `PremiumSandboxPage.test.jsx`
 
 - **역할**: RTL / Jest 기반 독립 단위 테스트 수트.
-- **추가한 테스트**:
+- **수정한 테스트**:
   1. `renders SANDBOX TEST banner on all 6 statuses`: 6가지 전 상태 필수 배지 상시 노출 검증.
-  2. `renders all 6 payment statuses correctly`: 6가지 상태별 타이틀, 버튼, disabled, subscription 데이터 및 우측 상태 카드 렌더링 검증.
-  3. `calls onCheckout, onCallbackResult, onRefreshSubscription, and onRetry callbacks correctly`: 4대 콜백 1회 정상 호출 검증 (FAILED 상태 포함).
-  4. `prevents duplicate clicks during PROCESSING status`: `PROCESSING` 중 버튼 disabled 및 클릭 방지 검증.
+  2. `renders all 6 payment statuses correctly`: 6가지 상태별 타이틀, 버튼 문구(`sandbox checkout 시작`, `구독 상태 새로고침` 등), disabled, subscription 데이터 및 우측 상태 카드 렌더링 검증.
+  3. `calls onCheckout, onCallbackResult, onRefreshSubscription, and onRetry callbacks correctly`: 버튼 액션 및 결과 상태 진입에 따른 4대 콜백 호출 횟수 단정 (FAILED 상태 포함 및 `onCallbackResult` 3회 누적 수신 검증).
+  4. `prevents duplicate clicks during PROCESSING status`: `PROCESSING` 중 버튼 disabled 및 중복 클릭 방지 검증.
   5. `결제정보 입력 필드 및 외부 PG SDK / URL 링크가 렌더링되지 않는지 검사한다.`: 입력창 및 외부 PG SDK 미존재 보안 검증.
 
 ### 4. `README.md`
 
-- **역할**: 모듈 구성 설명, 보안 한계 기록, 콜백 설계 정책, 단위 테스트 실행 방법 및 결과 명세서.
+- **역할**: 모듈 구성 설명, 보안 한계 기록, 콜백 설계 정책, 전체 단위 테스트/빌드 실행 방법 및 CI 결과 명세서.
 
 ---
 
@@ -59,14 +59,13 @@
 
 ---
 
-## 🧪 독립 단위 테스트 실행 가이드 및 결과
+## 🧪 테스트 및 빌드 실행 검증 결과 (CI 증빙)
+
+### 1. 프리미엄 샌드박스 단위 테스트 (`PremiumSandboxPage.test.jsx`)
 
 ```bash
-# 프리미엄 샌드박스 전용 테스트 독립 실행
 npm test -- --testPathPattern=PremiumSandboxPage.test.jsx --watchAll=false
 ```
-
-### 테스트 실행 통과 결과 (PASS)
 
 ```text
 PASS  src/features/premium/PremiumSandboxPage.test.jsx
@@ -81,3 +80,55 @@ Tests:       5 passed, 5 total
 Snapshots:   0 total
 Time:        1.404 s
 ```
+
+### 2. 전체 프론트엔드 테스트 (`All 10 Test Suites`)
+
+```bash
+npm test -- --watchAll=false
+```
+
+```text
+PASS src/features/login/loginStorage.test.js
+PASS src/features/premium/PremiumSandboxPage.test.jsx
+PASS src/features/riding-guide/RidingGuidePage.test.jsx
+PASS src/App.test.jsx
+PASS src/features/weather/WeatherCard.test.jsx
+PASS src/features/intro/IntroPage.test.jsx
+PASS src/features/login/LoginPage.test.jsx
+PASS src/features/prediction-results/PredictionResults.test.jsx
+PASS src/features/place-search/PlaceStationSearchPage.test.jsx
+PASS src/features/main/MainPage.test.jsx
+
+Test Suites: 10 passed, 10 total
+Tests:       84 passed, 84 total
+Snapshots:   0 total
+Time:        4.015 s
+Ran all test suites.
+```
+
+### 3. 프로덕션 빌드 (`npm run build`)
+
+```text
+Creating an optimized production build...
+Compiled successfully.
+
+File sizes after gzip:
+  59.31 kB  build\static\js\main.57be4603.js
+  14.81 kB  build\static\css\main.11cfb6c2.css
+  1.77 kB   build\static\js\453.782f0a85.chunk.js
+```
+
+### 4. Git 공백 검사 (`git diff --check`)
+
+```bash
+git diff --check
+```
+
+```text
+C:\Users\M\Documents\GitHub\ddarung-flow>"C:\Program Files\Git\cmd\git.exe" diff --check
+warning: in the working copy of 'frontend/src/features/premium/PremiumSandboxPage.jsx', LF will be replaced by CRLF the next time Git touches it
+
+C:\Users\M\Documents\GitHub\ddarung-flow>
+```
+> Trailing whitespace(끝 공백) 에러 출력 없이 100% 정상 통과.
+
