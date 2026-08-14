@@ -4,11 +4,14 @@ import { serviceData, stations } from "./mainPageData";
 import { getCurrentUser, logout } from "../login/authApi";
 import { loadPendingPrediction, savePendingPrediction } from "../login/loginStorage";
 import routeMap from "../../assets/main/route-map.png";
-import heroBike from "../../assets/main/hero-bike.png";
 import AppHeader from "../../shared/AppHeader";
 import RidingGuidePage from "../riding-guide/RidingGuidePage";
 import MapRoutePanel from "../map/MapRoutePanel";
-import PlaceAutocompleteInput from "../map/PlaceAutocompleteInput";
+import LoginPromptModal from "./components/LoginPromptModal";
+import MainSearchForm from "./components/MainSearchForm";
+import PredictionSummaryPanel from "./components/PredictionSummaryPanel";
+import StationRecommendationPanel from "./components/StationRecommendationPanel";
+import { stationMeta } from "./data/mainPageFixture";
 
 const EMPTY_INPUT = {
   origin: "",
@@ -17,17 +20,6 @@ const EMPTY_INPUT = {
   directMinutes: 15,
 };
 
-const stationMeta = [
-  { arrival: "11:05", range: "5~9대", rate: "87%", level: "매우 높음" },
-  { arrival: "11:07", range: "2~5대", rate: "72%", level: "높음" },
-  { arrival: "11:09", range: "0~2대", rate: "45%", level: "보통" },
-];
-
-function formatArrivalTime(minutes, offsetMinutes = 0, now = new Date()) {
-  return new Intl.DateTimeFormat("ko-KR", {
-    timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false,
-  }).format(new Date(now.getTime() + (minutes + offsetMinutes) * 60000));
-}
 
 export default function MainPage({ onNavigate }) {
   const [authState, setAuthState] = useState("anonymous");
@@ -134,33 +126,7 @@ export default function MainPage({ onNavigate }) {
         user={user}
       />
 
-      <section className="main-search">
-        <div className="main-hero-copy">
-          <h1>도착할 때 빌릴 수 있는<br /><em>따릉이를 미리 확인</em>하세요.</h1>
-          <p>예상 도착시간 기준 대여 가능 여부를 알려드립니다.</p>
-        </div>
-        <div className="main-fields">
-          <PlaceAutocompleteInput label={serviceData.originLabel} value={input.origin} onChange={(value) => updateInput("origin", value)} onSelect={(place) => selectPlace("origin", place)} placeholder={serviceData.originPlaceholder} />
-          <i aria-hidden="true">→</i>
-          <PlaceAutocompleteInput label={serviceData.destinationLabel} value={input.destination} onChange={(value) => updateInput("destination", value)} onSelect={(place) => selectPlace("destination", place)} placeholder={serviceData.destinationPlaceholder} />
-          <label className="main-time">
-            <span>{serviceData.expectedTimeLabel}</span>
-            <div><input aria-label={serviceData.expectedTimeLabel} type="number" min="1" value={input.directMinutes ?? ""} onChange={(event) => updateInput("directMinutes", event.target.value === "" ? null : Number(event.target.value))} /><small>분 단위</small><button type="button" onClick={() => setTimeConfirmed(true)}>시간 확인</button></div>
-          </label>
-        </div>
-        <div className="main-actions">
-          <span>이동 수단</span>
-          <div className="main-mode-buttons">
-            {serviceData.modes.map((mode) => (
-              <button className={mode === input.travelMode ? "active" : ""} key={mode} type="button" onClick={() => updateInput("travelMode", mode)}>
-                <b className={mode === "도보" ? "walk-icon" : "transit-icon"} aria-hidden="true" />{mode}
-              </button>
-            ))}
-          </div>
-          <img className="main-hero-bike" src={heroBike} alt="" />
-          <button aria-label={serviceData.predictButton} className="main-submit" type="button" onClick={handlePredict}><span aria-hidden="true" />{serviceData.predictButton}</button>
-        </div>
-      </section>
+      <MainSearchForm serviceData={serviceData} input={input} onInputChange={updateInput} onPlaceSelect={selectPlace} onConfirmTime={() => setTimeConfirmed(true)} onPredict={handlePredict} />
 
       {timeConfirmed && <p className="main-time-notice">예상시간을 <strong>{input.directMinutes || "이동수단 기준"}{input.directMinutes ? "분" : ""}</strong>으로 확인했습니다.</p>}
       {authNotice && <section className="main-feedback error"><b>로그인 안내</b><p>{authNotice}</p><button type="button" onClick={() => setAuthNotice("")}>닫기</button></section>}
@@ -168,44 +134,7 @@ export default function MainPage({ onNavigate }) {
 
       <section className="main-dashboard">
         {predictionVisible && <span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}><b>{serviceData.resultTitle}</b><i>화면 확인용 예시 결과 · 대여소 3곳</i></span>}
-        <section className="main-station-panel">
-          <header className="main-section-head"><h2>추천 대여소</h2><span>마지막 업데이트 10:32</span><select aria-label="대여소 정렬"><option>예상 도착시간 기준</option></select></header>
-          <div className="main-station-list">
-            {stations.map((station, index) => {
-              const selected = selectedStation === station.id;
-              const meta = stationMeta[index];
-              return (
-                <div aria-label={`${station.name} 대여소 카드`} className={`main-station ${selected ? "selected" : ""}`} key={station.id} role="group">
-                  <button
-                    aria-label={`${station.name} 대여소 선택`}
-                    aria-pressed={selected}
-                    className="main-station-select"
-                    type="button"
-                    onClick={() => setSelectedStation(station.id)}
-                  />
-                  <b className="main-rank">{index + 1}</b>
-                  <span className="main-station-name"><h3 style={{ margin: 0, fontSize: 15 }}>{station.name}</h3>{index === 0 && <em>추천</em>}<small>{station.distance} · 도보 {2 + index * 2}분</small></span>
-                  <span className="main-station-stat"><small>현재 자전거</small><strong>{station.bikes}<i>대</i></strong></span>
-                  <span className="main-station-stat"><small>예상 도착 시({predictionMinutes ? formatArrivalTime(predictionMinutes, index * 2) : meta.arrival})</small><strong>{predictionVisible ? meta.range : "--"}</strong></span>
-                  <span className="main-station-rate"><small>예상 대여 성공률</small><b aria-label={`성공률 ${predictionVisible ? meta.rate : "미확인"}`}>{predictionVisible ? `${meta.rate.slice(0, -1)} %` : "--"}</b><em>{predictionVisible ? meta.level : "로그인 후 확인"}</em></span>
-                  <button
-                    aria-label={`${station.name} 상세보기`}
-                    className="main-details"
-                    type="button"
-                    onClick={() => {
-                      setSelectedStation(station.id);
-                      setGuideStation(station);
-                    }}
-                  >
-                    상세보기
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-          <button className="main-more" type="button">더 많은 대여소 보기⌄</button>
-        </section>
-
+        <StationRecommendationPanel stations={stations} metadata={stationMeta} selectedStation={selectedStation} predictionMinutes={predictionMinutes} predictionVisible={predictionVisible} onSelect={setSelectedStation} onDetails={(station) => { setSelectedStation(station.id); setGuideStation(station); }} />
         <MapRoutePanel
           originText={input.origin}
           destinationText={input.destination}
@@ -214,14 +143,10 @@ export default function MainPage({ onNavigate }) {
           onDurationChange={(minutes) => updateInput("directMinutes", minutes)}
           fallbackImage={routeMap}
         />
-        <aside className="main-side-panels">
-          <section><header><h2>예상 대여 성공률</h2><i className="main-info" aria-label="도움말" /></header><div className="main-success"><strong>{predictionVisible ? "87%" : "--"}</strong><p><b>매우 높음</b><span>{selectedStationName || "성수역 3번 출구"} 기준</span><em>도착 시 대여 가능성이 매우 높아요!</em></p></div></section>
-          <section><header><h2>도착 시간대 혼잡도</h2></header><div className="main-chart"><span>혼잡</span>{[34,25,49,39,22].map((height,index)=><i className={index===2?"current":""} style={{height}} key={index}><b>{9+index}시</b></i>)}</div></section>
-          <section><header><h2>날씨 &amp; 추천 이동 팁</h2><i className="main-info" aria-label="도움말" /></header><div className="main-weather"><b aria-label="맑음" /><strong>24°C<small>맑음</small></strong><dl><div><dt>강수확률</dt><dd>10%</dd></div><div><dt>미세먼지</dt><dd>보통</dd></div><div><dt>바람</dt><dd>약 2m/s</dd></div></dl></div><p className="main-tip">날씨가 좋아 자전거 이용하기 좋은 날씨예요!</p></section>
-        </aside>
+        <PredictionSummaryPanel stationName={selectedStationName} predictionVisible={predictionVisible} />
       </section>
 
-      {loginPromptOpen && <section className="main-login-modal" role="dialog" aria-modal="true" aria-label="로그인 필요 안내"><span aria-hidden="true">!</span><h2>로그인이 필요합니다</h2><p>{serviceData.loginNotice}</p><div><button type="button" onClick={() => setLoginPromptOpen(false)}>닫기</button><a className="primary" href="/login" onClick={saveInputBeforeLogin}>로그인하기</a></div></section>}
+      {loginPromptOpen && <LoginPromptModal notice={serviceData.loginNotice} onClose={() => setLoginPromptOpen(false)} onBeforeLogin={saveInputBeforeLogin} />}
     </main>
   );
 }
