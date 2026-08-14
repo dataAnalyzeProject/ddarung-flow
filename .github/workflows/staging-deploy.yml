@@ -180,6 +180,8 @@ jobs:
           KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
           NAVER_CLIENT_ID: ${{ vars.NAVER_CLIENT_ID }}
           NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
+          MODEL_POINTER_KEY: ${{ vars.MODEL_POINTER_KEY }}
+          MODEL_POINTER_SHA256: ${{ vars.MODEL_POINTER_SHA256 }}
         run: |
           set -euo pipefail
           for name in GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET KAKAO_CLIENT_ID KAKAO_CLIENT_SECRET NAVER_CLIENT_ID NAVER_CLIENT_SECRET; do
@@ -205,6 +207,10 @@ jobs:
             printf 'MODEL_BUCKET=ddarung-flow-bucket\n'
             printf 'MODEL_OBJECT_KEY=models/data-3.1/2f2ece729fd4b03954212d2fcc2ece4cd07110c947fae1dfc0c7ba29cde34db9/model_winner.joblib\n'
             printf 'MODEL_SHA256=2f2ece729fd4b03954212d2fcc2ece4cd07110c947fae1dfc0c7ba29cde34db9\n'
+            if [ -n "${MODEL_POINTER_KEY:-}" ] && [ -n "${MODEL_POINTER_SHA256:-}" ]; then
+              printf 'MODEL_POINTER_KEY=%s\n' "$MODEL_POINTER_KEY"
+              printf 'MODEL_POINTER_SHA256=%s\n' "$MODEL_POINTER_SHA256"
+            fi
           } > release.candidate.env
           umask 077
           {

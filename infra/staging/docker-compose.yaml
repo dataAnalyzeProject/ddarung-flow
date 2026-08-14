@@ -76,6 +76,8 @@ services:
       MODEL_BUCKET: ${MODEL_BUCKET:-ddarung-flow-bucket}
       MODEL_OBJECT_KEY: ${MODEL_OBJECT_KEY:-models/data-3.1/2f2ece729fd4b03954212d2fcc2ece4cd07110c947fae1dfc0c7ba29cde34db9/model_winner.joblib}
       MODEL_SHA256: ${MODEL_SHA256:-2f2ece729fd4b03954212d2fcc2ece4cd07110c947fae1dfc0c7ba29cde34db9}
+      MODEL_POINTER_KEY: ${MODEL_POINTER_KEY:-}
+      MODEL_POINTER_SHA256: ${MODEL_POINTER_SHA256:-}
     restart: "no"
     networks:
       - staging
