@@ -1,14 +1,28 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import MainPage from "./MainPage";
 import { getCurrentUser, logout } from "../login/authApi";
 import { loadPendingPrediction, savePendingPrediction } from "../login/loginStorage";
+import { searchPlaces } from "../map/kakaoMapApi";
+import { fetchRouteCandidates } from "../map/candidatesApi";
 
 jest.mock("../login/authApi", () => ({
   getCurrentUser: jest.fn(),
   logout: jest.fn(),
   startSocialLogin: jest.fn(),
 }));
+
+jest.mock("../map/kakaoMapApi", () => ({ searchPlaces: jest.fn() }));
+jest.mock("../map/candidatesApi", () => ({ fetchRouteCandidates: jest.fn() }));
+
+async function selectPlace(labelPlaceholder, resultName, queryText) {
+  const input = screen.getByPlaceholderText(labelPlaceholder);
+  fireEvent.focus(input);
+  fireEvent.change(input, { target: { value: queryText } });
+  await act(async () => {
+    jest.advanceTimersByTime(300);
+  });
+  fireEvent.click(await screen.findByRole("button", { name: new RegExp(resultName) }));
+}
 
 describe("시안 6 메인 로그인 통합", () => {
   beforeEach(() => {
@@ -25,9 +39,7 @@ describe("시안 6 메인 로그인 통합", () => {
 
     expect(screen.getByRole("navigation", { name: "주요 메뉴" })).toBeInTheDocument();
     expect(screen.getByLabelText("예측 지도")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "성수역 3번 출구" })).toBeInTheDocument();
-    expect(screen.queryByText("로그인 후 확인")).not.toBeInTheDocument();
-    expect(screen.getByText("87%")).toBeInTheDocument();
+    expect(screen.getByText(/출발지와 목적지를 검색 결과에서 선택한 뒤/)).toBeInTheDocument();
 
     fireEvent.change(screen.getByPlaceholderText("출발지를 입력하세요"), { target: { value: "서울숲" } });
     fireEvent.change(screen.getByPlaceholderText("목적지를 입력하세요"), { target: { value: "성수역" } });
@@ -36,7 +48,6 @@ describe("시안 6 메인 로그인 통합", () => {
     fireEvent.click(screen.getByRole("button", { name: "대여 가능성 예측" }));
 
     expect(screen.getByRole("dialog", { name: "로그인 필요 안내" })).toBeInTheDocument();
-    expect(screen.getByText("87%")).toBeInTheDocument();
     expect(loadPendingPrediction()).toEqual({
       origin: "서울숲",
       destination: "성수역",
@@ -71,7 +82,7 @@ describe("시안 6 메인 로그인 통합", () => {
     await waitFor(() => expect(window.location.search).toBe(""));
   });
 
-  test("로그인 사용자는 메인에서 예시 예측 결과를 확인한다", async () => {
+  test("로그인 사용자가 실제 장소를 선택하지 않고 예측하면 안내 메시지를 보여준다", async () => {
     getCurrentUser.mockResolvedValue({
       authenticated: true,
       user: { userId: "user-1", displayName: "사용자", provider: "google" },
@@ -81,9 +92,8 @@ describe("시안 6 메인 로그인 통합", () => {
     await screen.findByRole("button", { name: "로그아웃" });
     fireEvent.click(screen.getByRole("button", { name: "대여 가능성 예측" }));
 
-    expect(screen.getByText("목적지 주변 대여소")).toBeInTheDocument();
-    expect(screen.getByText("화면 확인용 예시 결과 · 대여소 3곳")).toBeInTheDocument();
-    expect(screen.getByText("87%")).toBeInTheDocument();
+    expect(await screen.findByText("실제 출발지·목적지를 검색 결과에서 선택해 주세요.")).toBeInTheDocument();
+    expect(fetchRouteCandidates).not.toHaveBeenCalled();
   });
 
   test("로그아웃하면 메인 화면의 비로그인 상태로 돌아간다", async () => {
@@ -125,54 +135,6 @@ describe("시안 6 메인 로그인 통합", () => {
     expect(screen.queryByRole("article")).not.toBeInTheDocument();
   });
 
-  test("대여소 상세보기는 독립 버튼으로 가이드를 열고 기존 메인 상태를 보존한다", async () => {
-    render(<MainPage />);
-    await screen.findByRole("link", { name: "로그인" });
-
-    fireEvent.change(screen.getByPlaceholderText("출발지를 입력하세요"), { target: { value: "서울숲" } });
-    fireEvent.change(screen.getByPlaceholderText("목적지를 입력하세요"), { target: { value: "천호동" } });
-    fireEvent.click(screen.getByRole("button", { name: "성수동 카페거리 대여소 선택" }));
-    fireEvent.click(screen.getByRole("button", { name: "성수동 카페거리 상세보기" }));
-
-    expect(screen.getByRole("heading", { name: "성수동 카페거리 라이딩 가이드" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "대여 예측으로 돌아가기" }));
-
-    expect(screen.getByDisplayValue("서울숲")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("천호동")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "성수동 카페거리 대여소 선택" })).toHaveAttribute("aria-pressed", "true");
-  });
-
-  test("상세보기 버튼은 Enter와 Space 키로 각각 가이드를 연다", async () => {
-    render(<MainPage />);
-    await screen.findByRole("link", { name: "로그인" });
-
-    const enterDetail = screen.getByRole("button", { name: "성수역 3번 출구 상세보기" });
-    enterDetail.focus();
-    userEvent.keyboard("{enter}");
-    expect(screen.getByRole("heading", { name: "성수역 3번 출구 라이딩 가이드" })).toBeInTheDocument();
-
-    userEvent.click(screen.getByRole("button", { name: "대여 예측으로 돌아가기" }));
-    const spaceDetail = screen.getByRole("button", { name: "서울숲 남문 상세보기" });
-    spaceDetail.focus();
-    userEvent.keyboard(" ");
-    expect(screen.getByRole("heading", { name: "서울숲 남문 라이딩 가이드" })).toBeInTheDocument();
-  });
-
-  test("가이드의 경로 다시 보기는 메인 입력과 대여소 선택을 복원한다", async () => {
-    render(<MainPage />);
-    await screen.findByRole("link", { name: "로그인" });
-
-    userEvent.type(screen.getByPlaceholderText("출발지를 입력하세요"), "잠실역");
-    userEvent.type(screen.getByPlaceholderText("목적지를 입력하세요"), "천호동");
-    userEvent.click(screen.getByRole("button", { name: "서울숲 남문 대여소 선택" }));
-    userEvent.click(screen.getByRole("button", { name: "서울숲 남문 상세보기" }));
-    userEvent.click(screen.getByRole("button", { name: "경로 다시 보기" }));
-
-    expect(screen.getByDisplayValue("잠실역")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("천호동")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "서울숲 남문 대여소 선택" })).toHaveAttribute("aria-pressed", "true");
-  });
-
   test("Q&A 메뉴는 인앱 화면 전환 콜백을 호출한다", async () => {
     const onNavigate = jest.fn();
     render(<MainPage onNavigate={onNavigate} />);
@@ -182,14 +144,72 @@ describe("시안 6 메인 로그인 통합", () => {
     expect(onNavigate).toHaveBeenCalledWith("qna");
   });
 
-  test("상세 화면의 Q&A 메뉴도 같은 화면 전환 콜백을 호출한다", async () => {
-    const onNavigate = jest.fn();
-    render(<MainPage onNavigate={onNavigate} />);
-    await screen.findByRole("link", { name: "로그인" });
+  describe("실제 좌표로 출발지·목적지를 선택한 뒤 예측하는 경우", () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+      getCurrentUser.mockResolvedValue({
+        authenticated: true,
+        user: { userId: "user-1", displayName: "사용자", provider: "kakao" },
+      });
+      searchPlaces.mockResolvedValue({
+        places: [{ placeId: "p1", name: "서울숲공원", address: "서울 성동구", latitude: 37.5, longitude: 127.0 }],
+      });
+    });
 
-    fireEvent.click(screen.getByRole("button", { name: "성수역 3번 출구 상세보기" }));
-    fireEvent.click(screen.getByRole("button", { name: "Q&A" }));
+    afterEach(() => {
+      jest.useRealTimers();
+    });
 
-    expect(onNavigate).toHaveBeenCalledWith("qna");
+    async function renderAndSelectPlaces() {
+      render(<MainPage />);
+      await screen.findByRole("button", { name: "로그아웃" });
+      await selectPlace("출발지를 입력하세요", "서울숲공원", "서울숲");
+      await selectPlace("목적지를 입력하세요", "서울숲공원", "서울숲");
+    }
+
+    test("실제 API 응답을 예측 결과 화면으로 보여준다", async () => {
+      fetchRouteCandidates.mockResolvedValue([
+        {
+          stationId: "ST-9",
+          stationName: "테스트 대여소",
+          distanceMeters: 200,
+          durationSeconds: 300,
+          arrivalAt: "2026-08-15T10:05:00+09:00",
+          predictionTargetAt: "2026-08-15T11:00:00+09:00",
+          targetOffsetMinutes: 55,
+          featureAsOf: "2026-08-15T10:00:00+09:00",
+          horizonMinutes: 60,
+          availabilityLevel: "HIGH",
+          predictionProbability: 0.9,
+          probabilities: { atLeast1: 0.95, atLeast2: 0.9, atLeast3: 0.8, atLeast4: 0.6, atLeast5: 0.4 },
+          availableBikeCount: 6,
+          inventoryCollectedAt: "2026-08-15T10:01:00+09:00",
+          inventoryStatus: "NORMAL",
+          generatedAt: "2026-08-15T10:02:00+09:00",
+          expiresAt: "2026-08-15T12:00:00+09:00",
+          predictionStatus: "NORMAL",
+          modelVersion: "availability-v1",
+        },
+      ]);
+
+      await renderAndSelectPlaces();
+      fireEvent.click(screen.getByRole("button", { name: "대여 가능성 예측" }));
+
+      expect(await screen.findByRole("heading", { name: "테스트 대여소" })).toBeInTheDocument();
+      expect(fetchRouteCandidates).toHaveBeenCalledWith(
+        expect.objectContaining({ originLatitude: 37.5, destinationLatitude: 37.5, requiredBikeCount: 1 })
+      );
+      // 실제 결과가 뜨면 예시 대여소 패널은 더 이상 보이지 않는다.
+      expect(screen.queryByText(/출발지와 목적지를 검색 결과에서 선택한 뒤/)).not.toBeInTheDocument();
+    });
+
+    test("API 실패 시 오류 메시지를 보여주고 결과 없이 안내만 표시한다", async () => {
+      fetchRouteCandidates.mockRejectedValue(new Error("CANDIDATE_FETCH_FAILED"));
+
+      await renderAndSelectPlaces();
+      fireEvent.click(screen.getByRole("button", { name: "대여 가능성 예측" }));
+
+      expect(await screen.findByText("예측 결과를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.")).toBeInTheDocument();
+    });
   });
 });

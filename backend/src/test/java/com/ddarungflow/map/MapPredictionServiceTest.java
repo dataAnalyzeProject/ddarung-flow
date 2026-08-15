@@ -14,7 +14,10 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -22,6 +25,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 @DataJpaTest
 @ActiveProfiles("test")
 class MapPredictionServiceTest {
+
+    // 정시 30분 전(예: XX:50)에 고정해, 가까운 도보 후보라도 arrivalAt+30분이 다음 정시로 넘어가
+    // TOO_SOON이 아닌 NORMAL로 판정되도록 한다. 벽시계 시간에 의존한 flaky 테스트를 방지한다.
+    private static final Clock NOT_TOO_SOON_CLOCK =
+        Clock.fixed(Instant.parse("2026-08-15T09:50:00Z"), ZoneOffset.ofHours(9));
+
+    // 정시 직후(예: XX:05)에 고정해, 가까운 도보 후보의 arrivalAt+30분이 같은 시간대 안에 머물러
+    // TOO_SOON으로 판정되도록 한다.
+    private static final Clock TOO_SOON_CLOCK =
+        Clock.fixed(Instant.parse("2026-08-15T09:05:00Z"), ZoneOffset.ofHours(9));
 
     @Test
     @DisplayName("승인된 공통 임계값으로 20개 조합의 확률 등급을 일관되게 매핑한다")
@@ -54,7 +67,7 @@ class MapPredictionServiceTest {
     void setUp() {
         RouteCandidateService candidateService = new RouteCandidateService(stationRepository);
         PredictionLookupService predictionLookupService = new PredictionLookupService(predictionRepository);
-        mapPredictionService = new MapPredictionService(candidateService, inventoryRepository, predictionLookupService);
+        mapPredictionService = new MapPredictionService(candidateService, inventoryRepository, predictionLookupService, NOT_TOO_SOON_CLOCK);
 
         Station s1 = new Station("ST-4", "00102", "102. 망원역 1번출구 앞", new BigDecimal("37.5556488"), new BigDecimal("126.91062927"), true);
         stationRepository.save(s1);
@@ -103,7 +116,7 @@ class MapPredictionServiceTest {
         };
 
         RouteCandidateService candService = new RouteCandidateService(stationRepository);
-        MapPredictionService serviceWithPartialFailure = new MapPredictionService(candService, inventoryRepository, failingPredictionService);
+        MapPredictionService serviceWithPartialFailure = new MapPredictionService(candService, inventoryRepository, failingPredictionService, NOT_TOO_SOON_CLOCK);
 
         List<PredictionApiDtos.CandidatePredictionResponseDto> results = serviceWithPartialFailure.buildRouteCandidates(
             new BigDecimal("37.5500"), new BigDecimal("126.9000"),
@@ -134,7 +147,7 @@ class MapPredictionServiceTest {
 
         RouteCandidateService candService = new RouteCandidateService(stationRepository);
         PredictionLookupService predLookupService = new PredictionLookupService(predictionRepository);
-        MapPredictionService service = new MapPredictionService(candService, failingInvRepo, predLookupService);
+        MapPredictionService service = new MapPredictionService(candService, failingInvRepo, predLookupService, NOT_TOO_SOON_CLOCK);
 
         List<PredictionApiDtos.CandidatePredictionResponseDto> results = service.buildRouteCandidates(
             new BigDecimal("37.5500"), new BigDecimal("126.9000"),
@@ -165,7 +178,7 @@ class MapPredictionServiceTest {
 
         RouteCandidateService candService = new RouteCandidateService(stationRepository, failingKakaoClient);
         PredictionLookupService predLookupService = new PredictionLookupService(predictionRepository);
-        MapPredictionService service = new MapPredictionService(candService, inventoryRepository, predLookupService);
+        MapPredictionService service = new MapPredictionService(candService, inventoryRepository, predLookupService, NOT_TOO_SOON_CLOCK);
 
         List<PredictionApiDtos.CandidatePredictionResponseDto> results = service.buildRouteCandidates(
             new BigDecimal("37.5500"), new BigDecimal("126.9000"),
@@ -175,5 +188,38 @@ class MapPredictionServiceTest {
 
         assertThat(results).hasSize(2);
         assertThat(results.stream().anyMatch(r -> "ST-4".equals(r.stationId()))).isTrue();
+    }
+
+    @Test
+    @DisplayName("정시 직후 요청한 가까운 도보 후보는 TOO_SOON으로 판정되고 정상 확률 응답을 만들지 않는다")
+    void nearbyWalkCandidateRightAfterHourIsTooSoon() {
+        RouteCandidateService candService = new RouteCandidateService(stationRepository);
+        PredictionLookupService predLookupService = new PredictionLookupService(predictionRepository);
+        MapPredictionService service = new MapPredictionService(candService, inventoryRepository, predLookupService, TOO_SOON_CLOCK);
+
+        List<PredictionApiDtos.CandidatePredictionResponseDto> results = service.buildRouteCandidates(
+            new BigDecimal("37.5500"), new BigDecimal("126.9000"),
+            new BigDecimal("37.5556488"), new BigDecimal("126.91062927"),
+            "WALK", 60, 1
+        );
+
+        assertThat(results).hasSize(1);
+        PredictionApiDtos.CandidatePredictionResponseDto dto = results.get(0);
+        assertThat(dto.predictionStatus()).isEqualTo(PredictionApiDtos.PredictionStatus.TOO_SOON);
+        assertThat(dto.predictionProbability()).isNull();
+        assertThat(dto.probabilities()).isNull();
+    }
+
+    @Test
+    @DisplayName("DIRECT 모드는 사용자가 입력한 도착 예정 분을 도착시각 계산에 사용한다")
+    void directModeUsesUserSuppliedMinutesAhead() {
+        List<PredictionApiDtos.CandidatePredictionResponseDto> results = mapPredictionService.buildDirectRoute(
+            "ST-4", new BigDecimal("37.5500"), new BigDecimal("126.9000"), "DIRECT", 45, 1
+        );
+
+        assertThat(results).isNotEmpty();
+        PredictionApiDtos.CandidatePredictionResponseDto dto = results.get(0);
+        OffsetDateTime expectedArrivalAt = OffsetDateTime.now(NOT_TOO_SOON_CLOCK).plusMinutes(45);
+        assertThat(dto.arrivalAt()).isEqualTo(expectedArrivalAt);
     }
 }

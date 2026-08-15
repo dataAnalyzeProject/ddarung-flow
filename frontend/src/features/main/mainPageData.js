@@ -21,39 +21,6 @@ export const serviceData = {
   errorNotice: "결과를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
 };
 
-export const stations = [
-  {
-    id: "station-1",
-    name: "성수역 3번 출구",
-    distance: "도착지에서 120m",
-    bikes: 8,
-    arrivalTime: "오후 2:32",
-    availability: "높음",
-    probability: "87%",
-    role: "추천 대여소",
-  },
-  {
-    id: "station-2",
-    name: "성수동 카페거리",
-    distance: "도착지에서 310m",
-    bikes: 5,
-    arrivalTime: "오후 2:35",
-    availability: "중간",
-    probability: "62%",
-    role: "대체 대여소 1",
-  },
-  {
-    id: "station-3",
-    name: "서울숲 남문",
-    distance: "도착지에서 480m",
-    bikes: 2,
-    arrivalTime: "오후 2:39",
-    availability: "낮음",
-    probability: "31%",
-    role: "대체 대여소 2",
-  },
-];
-
 export const mapRoads = [
   { id: "road-a", className: "road road-a" },
   { id: "road-b", className: "road road-b" },
