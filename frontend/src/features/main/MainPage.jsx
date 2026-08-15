@@ -11,6 +11,8 @@ import LoginPromptModal from "./components/LoginPromptModal";
 import MainSearchForm from "./components/MainSearchForm";
 import PredictionResults from "../prediction-results/PredictionResults";
 import { adaptCandidateResponse } from "../prediction-results/adaptCandidateResponse";
+import WeatherCard from "../weather/WeatherCard";
+import { adaptArrivalWeather, fetchArrivalWeather } from "../weather/weatherApi";
 
 const EMPTY_INPUT = {
   origin: "",
@@ -35,6 +37,8 @@ export default function MainPage({ onNavigate }) {
   const [apiPredictionResult, setApiPredictionResult] = useState(null);
   const [predictLoading, setPredictLoading] = useState(false);
   const [predictError, setPredictError] = useState("");
+  const [arrivalWeather, setArrivalWeather] = useState(null);
+  const [weatherExpanded, setWeatherExpanded] = useState(false);
 
   useEffect(() => {
     const loginResult = new URLSearchParams(window.location.search).get("login");
@@ -70,6 +74,7 @@ export default function MainPage({ onNavigate }) {
     if (key === "origin" || key === "destination") {
       setRoutePlaces((current) => ({ ...current, [key]: null }));
       setApiPredictionResult(null);
+      setArrivalWeather(null);
     }
     if (key === "directMinutes") setTimeConfirmed(false);
   };
@@ -105,12 +110,24 @@ export default function MainPage({ onNavigate }) {
         travelMode: TRAVEL_MODE_TO_API[input.travelMode] || "WALK",
         requiredBikeCount: input.requiredBikeCount,
       });
-      setApiPredictionResult(adaptCandidateResponse(candidates, { requestedAt, requiredBikeCount: input.requiredBikeCount }));
+      const result = adaptCandidateResponse(candidates, { requestedAt, requiredBikeCount: input.requiredBikeCount });
+      if (!result.candidates.length) {
+        setApiPredictionResult(null);
+        setPredictError("목적지 주변에 조건에 맞는 대여소가 없습니다. 출발지나 목적지를 바꿔 다시 시도해 주세요.");
+        return;
+      }
+      setApiPredictionResult(result);
+      const firstCandidate = result.candidates[0];
+      fetchArrivalWeather({ latitude: routePlaces.destination.latitude, longitude: routePlaces.destination.longitude, arrivalAt: firstCandidate.arrivalAt })
+        .then((weather) => setArrivalWeather(adaptArrivalWeather(weather, routePlaces.destination.name)))
+        .catch(() => setArrivalWeather(adaptArrivalWeather({ status: "UNAVAILABLE", hourlyForecasts: [] }, routePlaces.destination.name)));
     } catch (error) {
       setApiPredictionResult(null);
       setPredictError(
         error.message === "AUTH_REQUIRED"
           ? "로그인이 필요합니다. 다시 로그인해 주세요."
+          : error.message === "ROUTE_PROVIDER_ERROR"
+            ? "경로 제공자를 사용할 수 없습니다. 잠시 후 다시 시도해 주세요."
           : "예측 결과를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요."
       );
     } finally {
@@ -129,6 +146,7 @@ export default function MainPage({ onNavigate }) {
       setView("idle");
       setAuthNotice("로그아웃되었습니다.");
       setApiPredictionResult(null);
+      setArrivalWeather(null);
     } catch {
       setAuthState("authenticated");
       setAuthNotice("로그아웃에 실패했습니다. 다시 시도해 주세요.");
@@ -151,13 +169,13 @@ export default function MainPage({ onNavigate }) {
       {authNotice && <section className="main-feedback error"><b>로그인 안내</b><p>{authNotice}</p><button type="button" onClick={() => setAuthNotice("")}>닫기</button></section>}
       {view === "restored" && <section className="main-feedback restored"><b>입력값을 불러왔습니다</b><p>이전 입력값을 확인한 뒤 다시 예측해 주세요.</p><button type="button" onClick={handlePredict}>{serviceData.retryButton}</button></section>}
       {predictLoading && <p className="main-time-notice" role="status">예측 결과를 불러오는 중입니다…</p>}
-      {predictError && <section className="main-feedback error"><b>예측 안내</b><p>{predictError}</p><button type="button" onClick={() => setPredictError("")}>닫기</button></section>}
+      {predictError && <section className="main-feedback error"><b>예측 안내</b><p>{predictError}</p><button type="button" onClick={handlePredict}>다시 시도</button><button type="button" onClick={() => setPredictError("")}>닫기</button></section>}
 
       {apiPredictionResult ? (
-        <PredictionResults
-          result={apiPredictionResult}
-          onEditInput={() => setApiPredictionResult(null)}
-        />
+        <>
+          <PredictionResults result={apiPredictionResult} onEditInput={() => setApiPredictionResult(null)} />
+          {arrivalWeather && <WeatherCard weather={arrivalWeather} expanded={weatherExpanded} onToggle={() => setWeatherExpanded((expanded) => !expanded)} />}
+        </>
       ) : (
         <section className="main-dashboard main-dashboard-empty">
           <MapRoutePanel
