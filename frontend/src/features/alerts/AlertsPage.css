@@ -1,0 +1,55 @@
+.alerts-shell{--navy:#071c40;--blue:#086ff2;--green:#00a875;--line:#d9e3ed;--muted:#667990;width:100%;min-height:100vh;min-width:1180px;background:#fff;color:var(--navy);font-family:"Pretendard","Noto Sans KR","Segoe UI",sans-serif}
+.alerts-shell button{font:inherit;color:inherit}
+.alerts-content{max-width:1344px;margin:0 auto;padding:49px 32px 64px}
+.alerts-head{display:flex;align-items:flex-end;justify-content:space-between;gap:20px}
+.alerts-title{margin:0;font-size:43px;line-height:1;letter-spacing:-.03em}
+.alerts-subtitle{margin:20px 0 0;color:var(--muted);font-size:18px}
+.alerts-actions{display:flex;gap:21px}
+.alerts-btn{height:55px;padding:0 24px;border:1.5px solid #0a73f2;border-radius:9px;background:#fff;color:var(--navy);font-weight:800;font-size:17px;cursor:pointer}
+.alerts-btn.primary{background:linear-gradient(135deg,#0876f6,#096ae5);color:#fff;border-color:#0874f1}
+
+.alerts-grid{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:22px;margin-top:42px}
+.alerts-card{border:1px solid var(--line);border-radius:13px;background:#fff}
+
+.alert-list{overflow:hidden}
+.alert-tabs{height:85px;padding:0 28px;border-bottom:1px solid #cfd9e5;display:flex;align-items:stretch}
+.alert-tabs button{position:relative;padding:0 18px;border:0;background:transparent;font-size:18px;font-weight:800;cursor:pointer}
+.alert-tabs button.active{color:#0874ef}
+.alert-tabs button.active::after{position:absolute;bottom:-1px;left:0;right:0;height:3px;background:#0877f7;content:""}
+.alerts-count{display:inline-grid;place-items:center;width:22px;height:22px;margin-left:6px;border-radius:50%;background:#0b73ed;color:#fff;font-size:12px}
+
+.notification-list{margin:0;padding:0;list-style:none}
+.notification{width:100%;height:auto;min-height:120px;padding:20px 28px;display:grid;grid-template-columns:15px 78px 1fr 200px;align-items:center;gap:18px;border:0;border-bottom:1px solid #d6dfe9;background:transparent;text-align:left;cursor:pointer}
+.notification:last-child{border-bottom:0}
+.notification[disabled]{opacity:.55;cursor:default}
+.dot{width:15px;height:15px;border-radius:50%;background:#0c75ee}
+.dot.read{background:#98a5b5}
+.circle-icon{width:60px;height:60px;border:1.5px solid #b6d4fa;border-radius:50%;display:grid;place-items:center;background:#fff;color:#0876ef}
+.circle-icon.green{border-color:#87dfbb;color:#07a36d}
+.circle-icon svg{width:34px;height:34px}
+.notification-body{display:flex;flex-direction:column;gap:8px}
+.notification-title{font-size:18px;font-weight:900}
+.notification-detail{font-size:14px;color:var(--muted)}
+.notification-side{text-align:right;font-size:14px;color:#5d7089;line-height:1.7}
+.linkish{color:#0877ef;font-weight:700}
+.read-pill{display:inline-flex;height:29px;align-items:center;padding:0 10px;margin-top:6px;border:1px solid #9eb1c7;border-radius:6px;background:#fff;color:#5e7189;font-size:13px}
+.read-pill.unread{border-color:#0877ef;color:#0877ef}
+
+.rule-card{padding:27px 29px}
+.rule-header{display:flex;align-items:center;justify-content:space-between}
+.rule-header h2{margin:0;font-size:22px}
+.using{height:36px;padding:0 14px;display:inline-flex;align-items:center;border:1px solid #a9e2c7;border-radius:12px;background:#eaf8f2;color:#07966a;font-weight:800;font-size:15px}
+.rule-list{margin:0;padding:0;list-style:none}
+.rule-row{height:90px;padding:0 4px;border-bottom:1px solid #d0dae5;display:grid;grid-template-columns:52px 1fr 51px;align-items:center;gap:14px}
+.rule-row .circle-icon{width:48px;height:48px}
+.rule-row .circle-icon svg{width:30px;height:30px}
+.rule-name{font-size:16px;font-weight:800}
+.switch{position:relative;width:48px;height:29px;border:0;border-radius:999px;background:#c7d0dc;cursor:pointer}
+.switch::after{content:"";position:absolute;top:4px;left:4px;width:21px;height:21px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.14)}
+.switch.on{background:#0aa975}
+.switch.on::after{left:23px}
+.rule-manage{width:100%;height:50px;margin-top:20px;border:1px solid #0877f4;border-radius:8px;background:#fff;color:#0874ef;font-size:16px;font-weight:800;cursor:pointer}
+
+@media(max-width:1500px){
+  .alerts-grid{grid-template-columns:1fr;}
+}

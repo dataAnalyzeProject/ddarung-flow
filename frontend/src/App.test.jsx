@@ -99,3 +99,37 @@ test("brand button returns from Q&A to the prediction main page", async () => {
   expect(window.location.hash).toBe("");
   await waitFor(() => expect(document.querySelector(".main-shell")).toBeInTheDocument());
 });
+
+test("opens the archive page from the main menu and reflects the hash", async () => {
+  window.history.replaceState({}, "", "/");
+  window.localStorage.setItem(INTRO_SEEN_KEY, "true");
+  getCurrentUser.mockResolvedValue({ authenticated: false, user: null });
+
+  render(<App />);
+  fireEvent.click(await screen.findByRole("button", { name: "보관함" }));
+
+  expect(window.location.hash).toBe("#archive");
+  expect(screen.getByRole("heading", { name: "내 보관함" })).toBeInTheDocument();
+});
+
+test("opens the alerts page from the main menu and reflects the hash", async () => {
+  window.history.replaceState({}, "", "/");
+  window.localStorage.setItem(INTRO_SEEN_KEY, "true");
+  getCurrentUser.mockResolvedValue({ authenticated: false, user: null });
+
+  render(<App />);
+  fireEvent.click(await screen.findByRole("button", { name: "알림" }));
+
+  expect(window.location.hash).toBe("#alerts");
+  expect(screen.getByRole("heading", { name: "알림" })).toBeInTheDocument();
+});
+
+test("shows the mypage guest notice when navigating there while logged out", async () => {
+  window.history.replaceState({}, "", "/#mypage");
+  window.localStorage.setItem(INTRO_SEEN_KEY, "true");
+  getCurrentUser.mockResolvedValue({ authenticated: false, user: null });
+
+  render(<App />);
+
+  expect(await screen.findByRole("heading", { name: "로그인이 필요합니다" })).toBeInTheDocument();
+});

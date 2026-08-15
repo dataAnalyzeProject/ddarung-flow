@@ -30,15 +30,23 @@ export default function AppHeader({
       <nav aria-label="주요 메뉴" className="app-header-menu">
         <button aria-current={activeRoute === "main" ? "page" : undefined} type="button" onClick={goHome}>대여 예측</button>
         <button aria-current={activeRoute === "qna" ? "page" : undefined} type="button" onClick={() => onNavigate?.("qna")}>Q&amp;A</button>
-        <button type="button">보관함</button>
-        <button type="button">알림</button>
+        <button aria-current={activeRoute === "archive" ? "page" : undefined} type="button" onClick={() => onNavigate?.("archive")}>보관함</button>
+        <button aria-current={activeRoute === "alerts" ? "page" : undefined} type="button" onClick={() => onNavigate?.("alerts")}>알림</button>
       </nav>
       <div className="app-header-auth">
         {isAuthenticated ? (
           <>
             <span className="app-header-user">{user ? `${user.displayName} · ${user.provider}` : ""}</span>
+            <button
+              aria-current={activeRoute === "mypage" ? "page" : undefined}
+              className="app-header-account"
+              type="button"
+              onClick={() => onNavigate?.("mypage")}
+            >
+              {user?.displayName || "사용자"} · 내 계정
+            </button>
             <button aria-label="로그아웃" type="button" disabled={authState === "logging-out"} onClick={onLogout}>
-              {authState === "logging-out" ? "로그아웃 중" : `${user?.displayName || "사용자"} · 로그아웃`}
+              {authState === "logging-out" ? "로그아웃 중" : "로그아웃"}
             </button>
           </>
         ) : authState === "loading" ? (
