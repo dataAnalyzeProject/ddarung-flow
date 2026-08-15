@@ -3,10 +3,17 @@
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
+import sys
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Union
 
 import numpy as np
 import pandas as pd
+
+if __name__ == "__main__":
+    # Allow `python pipeline/src/batch_inference.py --fixture ...` from the repo
+    # root without a separate PYTHONPATH export.
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from pipeline.src.quality.prediction_batch_quality import validate_prediction_batch
 
@@ -233,3 +240,42 @@ def run_batch_inference(
         "rowCount": len(rows),
         "sha256Hash": sha256_hash,
     }
+
+
+def _fixture_predictor(feature_rows):
+    """Deterministic non-increasing predictor used only for --fixture CLI checks.
+
+    Not the DATA-3.1 approved model — real approved-model runs must inject the
+    joblib artifact's predict_proba as the predictor argument instead.
+    """
+    return [round(0.95 - f["required_bike_count"] * 0.08, 4) for f in feature_rows]
+
+
+def _main() -> None:
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Run DATA-3.2 batch inference against a fixture file.")
+    parser.add_argument("--fixture", required=True, help="Path to a JSON file with a list of station inputs.")
+    args = parser.parse_args()
+
+    with open(args.fixture, "r", encoding="utf-8") as fixture_file:
+        inputs = json.load(fixture_file)
+
+    result = run_batch_inference(inputs, predictor=_fixture_predictor)
+    print(
+        json.dumps(
+            {
+                "rowCount": result["rowCount"],
+                "publishable": result["publishable"],
+                "errors": result["errors"],
+                "batchId": result["batchId"],
+                "sha256Hash": result["sha256Hash"],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
+if __name__ == "__main__":
+    _main()
