@@ -46,6 +46,9 @@ public final class AirQualityMapper {
     ) {
     }
 
+    private record ParsedFixture(List<RawMeasurementPoint> points, boolean sourceFailed) {
+    }
+
     public static AirQualityResult mapFromJson(
             String stationName,
             OffsetDateTime targetTime,
@@ -54,10 +57,12 @@ public final class AirQualityMapper {
             String previousJsonFixture,
             boolean latestFetchFailed
     ) {
-        List<RawMeasurementPoint> latestPoints = parseJsonFixtureInternal(latestJsonFixture);
-        List<RawMeasurementPoint> previousPoints = parseJsonFixtureInternal(previousJsonFixture);
+        ParsedFixture latestParsed = parseJsonFixtureInternal(latestJsonFixture);
+        ParsedFixture previousParsed = parseJsonFixtureInternal(previousJsonFixture);
 
-        return mapInternal(stationName, targetTime, collectedAt, latestPoints, previousPoints, latestFetchFailed);
+        boolean sourceUnavailable = latestFetchFailed || latestParsed.sourceFailed();
+
+        return mapInternal(stationName, targetTime, collectedAt, latestParsed.points(), previousParsed.points(), sourceUnavailable);
     }
 
     private static AirQualityResult mapInternal(
@@ -66,15 +71,15 @@ public final class AirQualityMapper {
             OffsetDateTime collectedAt,
             List<RawMeasurementPoint> latest,
             List<RawMeasurementPoint> previous,
-            boolean latestFetchFailed
+            boolean sourceUnavailable
     ) {
         validateInputs(stationName, targetTime, collectedAt);
 
         List<RawMeasurementPoint> safeLatest = Optional.ofNullable(latest).orElse(Collections.emptyList());
         List<RawMeasurementPoint> safePrevious = Optional.ofNullable(previous).orElse(Collections.emptyList());
 
-        if (latestFetchFailed) {
-            return processDelayedOrUnavailable(stationName, targetTime, safePrevious);
+        if (sourceUnavailable) {
+            return buildEmptyResult(stationName, AirQualityStatus.UNAVAILABLE);
         }
 
         Optional<RawMeasurementPoint> latestPointOpt = findPointByStation(safeLatest, stationName);
@@ -120,9 +125,9 @@ public final class AirQualityMapper {
         return buildEmptyResult(stationName, AirQualityStatus.UNAVAILABLE);
     }
 
-    private static List<RawMeasurementPoint> parseJsonFixtureInternal(String jsonFixture) {
+    private static ParsedFixture parseJsonFixtureInternal(String jsonFixture) {
         if (jsonFixture == null || jsonFixture.isBlank()) {
-            return Collections.emptyList();
+            return new ParsedFixture(Collections.emptyList(), false);
         }
 
         List<RawMeasurementPoint> points = new ArrayList<>();
@@ -133,7 +138,7 @@ public final class AirQualityMapper {
                 JsonNode header = rootNode.get("response").get("header");
                 String resultCode = header.path("resultCode").asText("");
                 if (!"00".equals(resultCode)) {
-                    return Collections.emptyList();
+                    return new ParsedFixture(Collections.emptyList(), true);
                 }
             }
 
@@ -155,9 +160,9 @@ public final class AirQualityMapper {
                 }
             }
         } catch (Exception e) {
-            return Collections.emptyList();
+            return new ParsedFixture(Collections.emptyList(), false);
         }
-        return points;
+        return new ParsedFixture(points, false);
     }
 
     private static RawMeasurementPoint parseItemNode(JsonNode item) {

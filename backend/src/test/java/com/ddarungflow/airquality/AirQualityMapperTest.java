@@ -120,6 +120,47 @@ class AirQualityMapperTest {
         }
         """;
 
+    private static final String RESULT_CODE_NOT_OK_FIXTURE = """
+        {
+          "response": {
+            "header": {
+              "resultCode": "99",
+              "resultMsg": "SERVICE_ERROR"
+            },
+            "body": {
+              "items": []
+            }
+          }
+        }
+        """;
+
+    private static final String CONTRACT_EXAMPLE_FIXTURE = """
+        {
+          "response": {
+            "header": {
+              "resultCode": "00",
+              "resultMsg": "NORMAL_SERVICE"
+            },
+            "body": {
+              "items": [
+                {
+                  "stationName": "종로구",
+                  "dataTime": "2026-08-13 17:00",
+                  "pm10Value": "8",
+                  "pm25Value": "2",
+                  "o3Value": "0.035",
+                  "khaiValue": "55",
+                  "pm10Grade": "1",
+                  "pm25Grade": "1",
+                  "o3Grade": "2",
+                  "khaiGrade": "2"
+                }
+              ]
+            }
+          }
+        }
+        """;
+
     @Test
     @DisplayName("정상 resultCode 00: PM10, PM2.5, O3, KHAI, grade, dataTime을 화면 DTO로 정상 정규화한다")
     void testNormalResult00FullNormalization() {
@@ -220,14 +261,14 @@ class AirQualityMapperTest {
     }
 
     @Test
-    @DisplayName("[담당자 추가 test] 최신 수집 실패(latestFetchFailed=true) 시 직전 360분 이내 수집 데이터 대체(DELAYED) 및 361분 초과 시 UNAVAILABLE 검증")
-    void testLatestFetchFailedWithPreviousDataFallbackAndAgeLimit() {
+    @DisplayName("[담당자 추가 test] 최신 수집 실패(latestFetchFailed=true) 시 직전 데이터 대체 없이 항상 UNAVAILABLE 반환 검증")
+    void testLatestFetchFailedAlwaysUnavailableIgnoringPreviousData() {
         // previous dataTime = 2026-08-14 11:00
-        OffsetDateTime target360m = OffsetDateTime.of(2026, 8, 14, 17, 0, 0, 0, KST);   // 360분
-        OffsetDateTime target361m = OffsetDateTime.of(2026, 8, 14, 17, 1, 0, 0, KST);   // 361분
+        OffsetDateTime target360m = OffsetDateTime.of(2026, 8, 14, 17, 0, 0, 0, KST);   // 360분 이내
+        OffsetDateTime target361m = OffsetDateTime.of(2026, 8, 14, 17, 1, 0, 0, KST);   // 361분 초과
 
-        // 1. latestFetchFailed = true, 직전 데이터가 360분 이내 -> DELAYED 반환
-        AirQualityResult delayedResult = AirQualityMapper.mapFromJson(
+        // 1. latestFetchFailed = true, 직전 데이터가 360분 이내여도 값으로 대체하지 않고 UNAVAILABLE 반환
+        AirQualityResult withinAgeResult = AirQualityMapper.mapFromJson(
                 "종로구",
                 target360m,
                 null,
@@ -235,11 +276,12 @@ class AirQualityMapperTest {
                 NORMAL_RESULT_00_FIXTURE,
                 true
         );
-        assertEquals(AirQualityStatus.DELAYED, delayedResult.status());
-        assertEquals(35.0, delayedResult.pm10().value());
+        assertEquals(AirQualityStatus.UNAVAILABLE, withinAgeResult.status());
+        assertNull(withinAgeResult.pm10().value());
+        assertNull(withinAgeResult.dataTime());
 
-        // 2. latestFetchFailed = true, 직전 데이터가 361분 초과 -> UNAVAILABLE 반환
-        AirQualityResult unavailableResult = AirQualityMapper.mapFromJson(
+        // 2. latestFetchFailed = true, 직전 데이터가 361분 초과인 경우도 동일하게 UNAVAILABLE 반환
+        AirQualityResult beyondAgeResult = AirQualityMapper.mapFromJson(
                 "종로구",
                 target361m,
                 null,
@@ -247,6 +289,60 @@ class AirQualityMapperTest {
                 NORMAL_RESULT_00_FIXTURE,
                 true
         );
-        assertEquals(AirQualityStatus.UNAVAILABLE, unavailableResult.status());
+        assertEquals(AirQualityStatus.UNAVAILABLE, beyondAgeResult.status());
+        assertNull(beyondAgeResult.pm10().value());
+    }
+
+    @Test
+    @DisplayName("resultCode가 00이 아닌 소스 장애 응답은 직전 데이터 대체 없이 UNAVAILABLE 반환")
+    void testResultCodeNotOkReturnsUnavailable() {
+        OffsetDateTime targetTime = OffsetDateTime.of(2026, 8, 14, 11, 30, 0, 0, KST);
+
+        AirQualityResult result = AirQualityMapper.mapFromJson(
+                "종로구",
+                targetTime,
+                null,
+                RESULT_CODE_NOT_OK_FIXTURE,
+                NORMAL_RESULT_00_FIXTURE,
+                false
+        );
+
+        assertEquals(AirQualityStatus.UNAVAILABLE, result.status());
+        assertNull(result.pm10().value());
+        assertNull(result.dataTime());
+    }
+
+    @Test
+    @DisplayName("계약 입력/출력 예시 검증: dataTime 2026-08-13 17:00, pm10 8, pm25 2, o3 0.035, khai 55 -> NORMAL 정규화")
+    void testContractExampleInputOutputNormalization() {
+        OffsetDateTime targetTime = OffsetDateTime.of(2026, 8, 13, 17, 0, 0, 0, KST);
+
+        AirQualityResult result = AirQualityMapper.mapFromJson(
+                "종로구",
+                targetTime,
+                null,
+                CONTRACT_EXAMPLE_FIXTURE,
+                null,
+                false
+        );
+
+        assertEquals(AirQualityStatus.NORMAL, result.status());
+        assertEquals(OffsetDateTime.of(2026, 8, 13, 17, 0, 0, 0, KST), result.dataTime());
+
+        assertEquals(8.0, result.pm10().value());
+        assertEquals(AirQualityGrade.GOOD, result.pm10().grade());
+        assertEquals("1", result.pm10().sourceGradeCode());
+
+        assertEquals(2.0, result.pm25().value());
+        assertEquals(AirQualityGrade.GOOD, result.pm25().grade());
+        assertEquals("1", result.pm25().sourceGradeCode());
+
+        assertEquals(0.035, result.o3().value());
+        assertEquals(AirQualityGrade.MODERATE, result.o3().grade());
+        assertEquals("2", result.o3().sourceGradeCode());
+
+        assertEquals(55.0, result.khai().value());
+        assertEquals(AirQualityGrade.MODERATE, result.khai().grade());
+        assertEquals("2", result.khai().sourceGradeCode());
     }
 }
