@@ -12,3 +12,5 @@ openpyxl>=3.1.0
 duckdb==1.5.5
 # Reproducible classical models for DATA-3.1
 scikit-learn==1.9.0
+# PostgreSQL publisher for validated DATA-3.2 prediction batches.
+psycopg[binary]==3.2.10
