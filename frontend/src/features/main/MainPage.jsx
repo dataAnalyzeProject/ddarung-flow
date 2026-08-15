@@ -3,6 +3,7 @@ import "./MainPage.css";
 import { serviceData, stations } from "./mainPageData";
 import { getCurrentUser, logout } from "../login/authApi";
 import { loadPendingPrediction, savePendingPrediction } from "../login/loginStorage";
+import { fetchRouteCandidates } from "../map/candidatesApi";
 import routeMap from "../../assets/main/route-map.png";
 import AppHeader from "../../shared/AppHeader";
 import RidingGuidePage from "../riding-guide/RidingGuidePage";
@@ -11,6 +12,8 @@ import LoginPromptModal from "./components/LoginPromptModal";
 import MainSearchForm from "./components/MainSearchForm";
 import PredictionSummaryPanel from "./components/PredictionSummaryPanel";
 import StationRecommendationPanel from "./components/StationRecommendationPanel";
+import PredictionResults from "../prediction-results/PredictionResults";
+import { adaptCandidateResponse } from "../prediction-results/adaptCandidateResponse";
 import { stationMeta } from "./data/mainPageFixture";
 
 const EMPTY_INPUT = {
@@ -18,7 +21,10 @@ const EMPTY_INPUT = {
   destination: "",
   travelMode: serviceData.selectedMode,
   directMinutes: 15,
+  requiredBikeCount: 1,
 };
+
+const TRAVEL_MODE_TO_API = { "도보": "WALK", "대중교통": "PUBLIC_TRANSIT" };
 
 
 export default function MainPage({ onNavigate }) {
@@ -33,6 +39,9 @@ export default function MainPage({ onNavigate }) {
   const [loginPromptOpen, setLoginPromptOpen] = useState(false);
   const [guideStation, setGuideStation] = useState(null);
   const [predictionMinutes, setPredictionMinutes] = useState(null);
+  const [apiPredictionResult, setApiPredictionResult] = useState(null);
+  const [predictLoading, setPredictLoading] = useState(false);
+  const [predictError, setPredictError] = useState("");
   const predictionVisible = true;
 
   useEffect(() => {
@@ -71,7 +80,10 @@ export default function MainPage({ onNavigate }) {
 
   const updateInput = (key, value) => {
     setInput((current) => ({ ...current, [key]: value }));
-    if (key === "origin" || key === "destination") setRoutePlaces((current) => ({ ...current, [key]: null }));
+    if (key === "origin" || key === "destination") {
+      setRoutePlaces((current) => ({ ...current, [key]: null }));
+      setApiPredictionResult(null);
+    }
     if (key === "directMinutes") setTimeConfirmed(false);
   };
 
@@ -80,7 +92,7 @@ export default function MainPage({ onNavigate }) {
     setRoutePlaces((current) => ({ ...current, [key]: place }));
   };
 
-  const handlePredict = () => {
+  const handlePredict = async () => {
     if (authState !== "authenticated") {
       savePendingPrediction(input);
       setLoginPromptOpen(true);
@@ -88,6 +100,37 @@ export default function MainPage({ onNavigate }) {
     }
     setPredictionMinutes(input.directMinutes);
     setView("result");
+    setPredictError("");
+
+    // 실제 좌표(자동완성으로 선택한 출발지·목적지)가 있을 때만 실제 API를 호출한다.
+    // 자유 입력 텍스트만 있고 좌표가 없으면 기존 화면 확인용 예시 결과를 그대로 보여준다.
+    if (!routePlaces.origin || !routePlaces.destination) {
+      setApiPredictionResult(null);
+      return;
+    }
+
+    setPredictLoading(true);
+    try {
+      const requestedAt = new Date().toISOString();
+      const candidates = await fetchRouteCandidates({
+        originLatitude: routePlaces.origin.latitude,
+        originLongitude: routePlaces.origin.longitude,
+        destinationLatitude: routePlaces.destination.latitude,
+        destinationLongitude: routePlaces.destination.longitude,
+        travelMode: TRAVEL_MODE_TO_API[input.travelMode] || "WALK",
+        requiredBikeCount: input.requiredBikeCount,
+      });
+      setApiPredictionResult(adaptCandidateResponse(candidates, { requestedAt, requiredBikeCount: input.requiredBikeCount }));
+    } catch (error) {
+      setApiPredictionResult(null);
+      setPredictError(
+        error.message === "AUTH_REQUIRED"
+          ? "로그인이 필요합니다. 다시 로그인해 주세요."
+          : "예측 결과를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요."
+      );
+    } finally {
+      setPredictLoading(false);
+    }
   };
 
   const saveInputBeforeLogin = () => savePendingPrediction(input);
@@ -131,21 +174,30 @@ export default function MainPage({ onNavigate }) {
       {timeConfirmed && <p className="main-time-notice">예상시간을 <strong>{input.directMinutes || "이동수단 기준"}{input.directMinutes ? "분" : ""}</strong>으로 확인했습니다.</p>}
       {authNotice && <section className="main-feedback error"><b>로그인 안내</b><p>{authNotice}</p><button type="button" onClick={() => setAuthNotice("")}>닫기</button></section>}
       {view === "restored" && <section className="main-feedback restored"><b>입력값을 불러왔습니다</b><p>이전 입력값을 확인한 뒤 다시 예측해 주세요.</p><button type="button" onClick={handlePredict}>{serviceData.retryButton}</button></section>}
+      {predictLoading && <p className="main-time-notice" role="status">실제 예측 결과를 불러오는 중입니다…</p>}
+      {predictError && <section className="main-feedback error"><b>예측 오류</b><p>{predictError}</p><button type="button" onClick={() => setPredictError("")}>닫기</button></section>}
 
-      <section className="main-dashboard">
-        {predictionVisible && <span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}><b>{serviceData.resultTitle}</b><i>화면 확인용 예시 결과 · 대여소 3곳</i></span>}
-        <StationRecommendationPanel stations={stations} metadata={stationMeta} selectedStation={selectedStation} predictionMinutes={predictionMinutes} predictionVisible={predictionVisible} onSelect={setSelectedStation} onDetails={(station) => { setSelectedStation(station.id); setGuideStation(station); }} />
-        <MapRoutePanel
-          originText={input.origin}
-          destinationText={input.destination}
-          travelMode={input.travelMode}
-          selectedPlaces={routePlaces}
-          onDurationChange={(minutes) => updateInput("directMinutes", minutes)}
-          fallbackImage={routeMap}
-          canViewStations={authState === "authenticated"}
+      {apiPredictionResult ? (
+        <PredictionResults
+          result={apiPredictionResult}
+          onEditInput={() => setApiPredictionResult(null)}
         />
-        <PredictionSummaryPanel stationName={selectedStationName} predictionVisible={predictionVisible} />
-      </section>
+      ) : (
+        <section className="main-dashboard">
+          {predictionVisible && <span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}><b>{serviceData.resultTitle}</b><i>화면 확인용 예시 결과 · 대여소 3곳</i></span>}
+          <StationRecommendationPanel stations={stations} metadata={stationMeta} selectedStation={selectedStation} predictionMinutes={predictionMinutes} predictionVisible={predictionVisible} onSelect={setSelectedStation} onDetails={(station) => { setSelectedStation(station.id); setGuideStation(station); }} />
+          <MapRoutePanel
+            originText={input.origin}
+            destinationText={input.destination}
+            travelMode={input.travelMode}
+            selectedPlaces={routePlaces}
+            onDurationChange={(minutes) => updateInput("directMinutes", minutes)}
+            fallbackImage={routeMap}
+            canViewStations={authState === "authenticated"}
+          />
+          <PredictionSummaryPanel stationName={selectedStationName} predictionVisible={predictionVisible} />
+        </section>
+      )}
 
       {loginPromptOpen && <LoginPromptModal notice={serviceData.loginNotice} onClose={() => setLoginPromptOpen(false)} onBeforeLogin={saveInputBeforeLogin} />}
     </main>

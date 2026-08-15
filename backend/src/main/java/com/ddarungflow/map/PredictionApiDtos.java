@@ -15,7 +15,8 @@ public class PredictionApiDtos {
     public enum PredictionStatus {
         NORMAL,
         MISSING,
-        UNAVAILABLE
+        UNAVAILABLE,
+        TOO_SOON
     }
 
     public record PredictionDirectRequestDto(
@@ -27,6 +28,14 @@ public class PredictionApiDtos {
         Integer requiredBikeCount
     ) {}
 
+    public record QuantityProbabilities(
+        BigDecimal atLeast1,
+        BigDecimal atLeast2,
+        BigDecimal atLeast3,
+        BigDecimal atLeast4,
+        BigDecimal atLeast5
+    ) {}
+
     public record CandidatePredictionResponseDto(
         String stationId,
         String stationName,
@@ -36,8 +45,16 @@ public class PredictionApiDtos {
         int durationSeconds,
         Integer availableBikeCount,
         InventoryStatus inventoryStatus,
+        OffsetDateTime inventoryCollectedAt,
         BigDecimal predictionProbability,
+        QuantityProbabilities probabilities,
+        Integer requiredBikeCount,
+        OffsetDateTime arrivalAt,
         OffsetDateTime predictionTargetAt,
+        long targetOffsetMinutes,
+        long horizonMinutes,
+        OffsetDateTime featureAsOf,
+        OffsetDateTime expiresAt,
         AvailabilityLevel availabilityLevel,
         PredictionStatus predictionStatus,
         String modelVersion,

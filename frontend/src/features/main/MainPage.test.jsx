@@ -1,14 +1,29 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import MainPage from "./MainPage";
 import { getCurrentUser, logout } from "../login/authApi";
 import { loadPendingPrediction, savePendingPrediction } from "../login/loginStorage";
+import { searchPlaces } from "../map/kakaoMapApi";
+import { fetchRouteCandidates } from "../map/candidatesApi";
 
 jest.mock("../login/authApi", () => ({
   getCurrentUser: jest.fn(),
   logout: jest.fn(),
   startSocialLogin: jest.fn(),
 }));
+
+jest.mock("../map/kakaoMapApi", () => ({ searchPlaces: jest.fn() }));
+jest.mock("../map/candidatesApi", () => ({ fetchRouteCandidates: jest.fn() }));
+
+async function selectPlace(labelPlaceholder, resultName, queryText) {
+  const input = screen.getByPlaceholderText(labelPlaceholder);
+  fireEvent.focus(input);
+  fireEvent.change(input, { target: { value: queryText } });
+  await act(async () => {
+    jest.advanceTimersByTime(300);
+  });
+  fireEvent.click(await screen.findByRole("button", { name: new RegExp(resultName) }));
+}
 
 describe("시안 6 메인 로그인 통합", () => {
   beforeEach(() => {
@@ -191,5 +206,73 @@ describe("시안 6 메인 로그인 통합", () => {
     fireEvent.click(screen.getByRole("button", { name: "Q&A" }));
 
     expect(onNavigate).toHaveBeenCalledWith("qna");
+  });
+
+  describe("실제 좌표로 출발지·목적지를 선택한 뒤 예측하는 경우", () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+      getCurrentUser.mockResolvedValue({
+        authenticated: true,
+        user: { userId: "user-1", displayName: "사용자", provider: "kakao" },
+      });
+      searchPlaces.mockResolvedValue({
+        places: [{ placeId: "p1", name: "서울숲공원", address: "서울 성동구", latitude: 37.5, longitude: 127.0 }],
+      });
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    async function renderAndSelectPlaces() {
+      render(<MainPage />);
+      await screen.findByRole("button", { name: "로그아웃" });
+      await selectPlace("출발지를 입력하세요", "서울숲공원", "서울숲");
+      await selectPlace("목적지를 입력하세요", "서울숲공원", "서울숲");
+    }
+
+    test("실제 API 응답을 예측 결과 화면으로 보여준다", async () => {
+      fetchRouteCandidates.mockResolvedValue([
+        {
+          stationId: "ST-9",
+          stationName: "테스트 대여소",
+          distanceMeters: 200,
+          durationSeconds: 300,
+          arrivalAt: "2026-08-15T10:05:00+09:00",
+          predictionTargetAt: "2026-08-15T11:00:00+09:00",
+          targetOffsetMinutes: 55,
+          featureAsOf: "2026-08-15T10:00:00+09:00",
+          horizonMinutes: 60,
+          availabilityLevel: "HIGH",
+          predictionProbability: 0.9,
+          probabilities: { atLeast1: 0.95, atLeast2: 0.9, atLeast3: 0.8, atLeast4: 0.6, atLeast5: 0.4 },
+          availableBikeCount: 6,
+          inventoryCollectedAt: "2026-08-15T10:01:00+09:00",
+          inventoryStatus: "NORMAL",
+          generatedAt: "2026-08-15T10:02:00+09:00",
+          expiresAt: "2026-08-15T12:00:00+09:00",
+          predictionStatus: "NORMAL",
+          modelVersion: "availability-v1",
+        },
+      ]);
+
+      await renderAndSelectPlaces();
+      fireEvent.click(screen.getByRole("button", { name: "대여 가능성 예측" }));
+
+      expect(await screen.findByRole("heading", { name: "테스트 대여소" })).toBeInTheDocument();
+      expect(fetchRouteCandidates).toHaveBeenCalledWith(
+        expect.objectContaining({ originLatitude: 37.5, destinationLatitude: 37.5, requiredBikeCount: 1 })
+      );
+    });
+
+    test("API 실패 시 오류 메시지를 보여주고 기존 예시 결과를 유지한다", async () => {
+      fetchRouteCandidates.mockRejectedValue(new Error("CANDIDATE_FETCH_FAILED"));
+
+      await renderAndSelectPlaces();
+      fireEvent.click(screen.getByRole("button", { name: "대여 가능성 예측" }));
+
+      expect(await screen.findByText("예측 결과를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.")).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "추천 대여소" })).toBeInTheDocument();
+    });
   });
 });

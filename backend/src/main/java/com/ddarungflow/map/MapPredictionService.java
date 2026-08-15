@@ -4,12 +4,17 @@ import com.ddarungflow.dto.PredictionLookupResult;
 import com.ddarungflow.entity.Station;
 import com.ddarungflow.entity.StationInventoryCurrent;
 import com.ddarungflow.inventory.InventoryStatus;
+import com.ddarungflow.prediction.PredictionTimeCalculator;
+import com.ddarungflow.prediction.PredictionTimeResult;
+import com.ddarungflow.prediction.PredictionTimeStatus;
 import com.ddarungflow.repository.StationInventoryCurrentRepository;
 import com.ddarungflow.service.PredictionLookupService;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -23,15 +28,29 @@ public class MapPredictionService {
     private final RouteCandidateService routeCandidateService;
     private final StationInventoryCurrentRepository inventoryRepository;
     private final PredictionLookupService predictionLookupService;
+    private final PredictionTimeCalculator predictionTimeCalculator;
+    private final Clock clock;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public MapPredictionService(
         RouteCandidateService routeCandidateService,
         StationInventoryCurrentRepository inventoryRepository,
         PredictionLookupService predictionLookupService
     ) {
+        this(routeCandidateService, inventoryRepository, predictionLookupService, Clock.systemDefaultZone());
+    }
+
+    public MapPredictionService(
+        RouteCandidateService routeCandidateService,
+        StationInventoryCurrentRepository inventoryRepository,
+        PredictionLookupService predictionLookupService,
+        Clock clock
+    ) {
         this.routeCandidateService = routeCandidateService;
         this.inventoryRepository = inventoryRepository;
         this.predictionLookupService = predictionLookupService;
+        this.predictionTimeCalculator = new PredictionTimeCalculator();
+        this.clock = clock;
     }
 
     public List<PredictionApiDtos.CandidatePredictionResponseDto> buildRouteCandidates(
@@ -44,7 +63,8 @@ public class MapPredictionService {
         Integer requiredBikeCount
     ) {
         List<RouteCandidateService.StationDistance> candidates = routeCandidateService.findCandidates(originLat, originLng, destLat, destLng, travelMode);
-        return assembleCandidates(candidates, minutesAhead, requiredBikeCount);
+        // ROUTE 모드는 후보별 실제 경로 소요시간으로 도착시각을 계산한다. minutesAhead는 사용하지 않는다.
+        return assembleCandidates(candidates, null, requiredBikeCount);
     }
 
     public List<PredictionApiDtos.CandidatePredictionResponseDto> buildDirectRoute(
@@ -56,61 +76,94 @@ public class MapPredictionService {
         Integer requiredBikeCount
     ) {
         List<RouteCandidateService.StationDistance> candidates = routeCandidateService.findCandidatesForDirect(stationId, originLat, originLng, null, null, travelMode);
+        // DIRECT 모드는 사용자가 직접 입력한 도착 예정 분(minutesAhead)을 모든 후보의 도착시각으로 사용한다.
         return assembleCandidates(candidates, minutesAhead, requiredBikeCount);
     }
 
     private List<PredictionApiDtos.CandidatePredictionResponseDto> assembleCandidates(
         List<RouteCandidateService.StationDistance> candidates,
-        Integer minutesAhead,
+        Integer minutesAheadOverride,
         Integer requiredBikeCount
     ) {
-        int horizon = (minutesAhead != null && minutesAhead > 0) ? minutesAhead : 60;
         int bikeCount = (requiredBikeCount != null && requiredBikeCount >= 1 && requiredBikeCount <= 5) ? requiredBikeCount : 1;
-        OffsetDateTime requestedAt = OffsetDateTime.now();
-        OffsetDateTime predictionTargetAt = requestedAt.plusMinutes(horizon);
+        OffsetDateTime requestedAt = OffsetDateTime.now(clock);
 
         List<PredictionApiDtos.CandidatePredictionResponseDto> resultList = new ArrayList<>();
 
         for (RouteCandidateService.StationDistance cand : candidates) {
             Station station = cand.station();
+
+            // 1. 후보별 실제 도착시각 계산: DIRECT 모드는 사용자 입력, ROUTE 모드는 실제 경로 소요시간
+            OffsetDateTime arrivalAt = (minutesAheadOverride != null && minutesAheadOverride > 0)
+                ? requestedAt.plusMinutes(minutesAheadOverride)
+                : requestedAt.plusSeconds(cand.durationSeconds());
+
+            // 저장된 배치의 featureAsOf는 정시 단위이므로, 현재 정시로 내림한 값을 근사값으로 사용해야
+            // horizonMinutes가 60/120/180/240 중 하나로 맞아떨어진다. requestedAt을 그대로 쓰면
+            // 분 단위 오차 때문에 거의 항상 UNAVAILABLE로 오판정된다.
+            OffsetDateTime featureAsOfApprox = requestedAt.truncatedTo(ChronoUnit.HOURS);
+            PredictionTimeResult timeResult = predictionTimeCalculator.calculate(requestedAt, arrivalAt, featureAsOfApprox);
+            OffsetDateTime predictionTargetAt = timeResult.predictionTargetAt();
+
             Integer bikeAvailable = null;
             InventoryStatus invStatus = InventoryStatus.MISSING;
+            OffsetDateTime inventoryCollectedAt = null;
             BigDecimal probability = null;
+            PredictionApiDtos.QuantityProbabilities probabilities = null;
             PredictionApiDtos.AvailabilityLevel availabilityLevel = null;
-            PredictionApiDtos.PredictionStatus predictionStatus = PredictionApiDtos.PredictionStatus.MISSING;
+            PredictionApiDtos.PredictionStatus predictionStatus;
             String modelVersion = null;
             OffsetDateTime generatedAt = null;
+            OffsetDateTime featureAsOf = null;
+            OffsetDateTime expiresAt = null;
 
-            // 1. Candidate isolated inventory lookup
+            // 2. Candidate isolated inventory lookup
             try {
                 Optional<StationInventoryCurrent> invOpt = inventoryRepository.findById(station.getStationId());
                 bikeAvailable = invOpt.map(StationInventoryCurrent::getAvailableBikeCount).orElse(null);
                 invStatus = invOpt.map(StationInventoryCurrent::getInventoryStatus).orElse(InventoryStatus.MISSING);
+                inventoryCollectedAt = invOpt.map(StationInventoryCurrent::getCollectedAt).orElse(null);
             } catch (Exception e) {
                 invStatus = InventoryStatus.UNAVAILABLE;
             }
 
-            // 2. Candidate isolated ML prediction lookup
-            try {
-                Optional<PredictionLookupResult> predOpt = predictionLookupService.findLatestValid(
-                    station.getStationId(),
-                    predictionTargetAt,
-                    horizon,
-                    bikeCount,
-                    requestedAt
-                );
-                Optional<PredictionLookupResult> validPrediction = predOpt;
-                if (validPrediction.isPresent()) {
-                    PredictionLookupResult prediction = validPrediction.get();
-                    probability = prediction.selectedProbability();
-                    modelVersion = prediction.modelVersion();
-                    generatedAt = prediction.generatedAt();
-                    availabilityLevel = toAvailabilityLevel(probability);
-                    predictionStatus = PredictionApiDtos.PredictionStatus.NORMAL;
-                }
-            } catch (Exception e) {
-                probability = null;
+            if (timeResult.status() == PredictionTimeStatus.TOO_SOON) {
+                // TOO_SOON이면 예측 조회를 건너뛰고 정상 확률 응답을 만들지 않는다.
+                predictionStatus = PredictionApiDtos.PredictionStatus.TOO_SOON;
+            } else if (timeResult.status() == PredictionTimeStatus.UNAVAILABLE) {
                 predictionStatus = PredictionApiDtos.PredictionStatus.UNAVAILABLE;
+            } else {
+                // 3. Candidate isolated ML prediction lookup
+                predictionStatus = PredictionApiDtos.PredictionStatus.MISSING;
+                try {
+                    Optional<PredictionLookupResult> predOpt = predictionLookupService.findLatestValid(
+                        station.getStationId(),
+                        predictionTargetAt,
+                        (int) timeResult.horizonMinutes(),
+                        bikeCount,
+                        requestedAt
+                    );
+                    if (predOpt.isPresent()) {
+                        PredictionLookupResult prediction = predOpt.get();
+                        probability = prediction.selectedProbability();
+                        modelVersion = prediction.modelVersion();
+                        generatedAt = prediction.generatedAt();
+                        featureAsOf = prediction.featureAsOf();
+                        expiresAt = prediction.expiresAt();
+                        probabilities = new PredictionApiDtos.QuantityProbabilities(
+                            prediction.atLeast1Probability(),
+                            prediction.atLeast2Probability(),
+                            prediction.atLeast3Probability(),
+                            prediction.atLeast4Probability(),
+                            prediction.atLeast5Probability()
+                        );
+                        availabilityLevel = toAvailabilityLevel(probability);
+                        predictionStatus = PredictionApiDtos.PredictionStatus.NORMAL;
+                    }
+                } catch (Exception e) {
+                    probability = null;
+                    predictionStatus = PredictionApiDtos.PredictionStatus.UNAVAILABLE;
+                }
             }
 
             int distMeters = (int) Math.round(cand.distanceMeters());
@@ -125,8 +178,16 @@ public class MapPredictionService {
                 durationSeconds,
                 bikeAvailable,
                 invStatus,
+                inventoryCollectedAt,
                 probability,
+                probabilities,
+                bikeCount,
+                arrivalAt,
                 predictionTargetAt,
+                timeResult.targetOffsetMinutes(),
+                timeResult.horizonMinutes(),
+                featureAsOf,
+                expiresAt,
                 availabilityLevel,
                 predictionStatus,
                 modelVersion,
