@@ -1,0 +1,51 @@
+name: INT-4.3 GATE-CATALOG probe (diagnostic, one-off)
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  probe-msrstn-list:
+    runs-on: ubuntu-latest
+    environment: oci-staging
+    steps:
+      - name: Mask key defensively
+        run: echo "::add-mask::${{ secrets.AIRKOREA_SERVICE_KEY }}"
+
+      - name: Call MsrstnInfoInqireSvc/getMsrstnList (station catalog)
+        env:
+          AIRKOREA_SERVICE_KEY: ${{ secrets.AIRKOREA_SERVICE_KEY }}
+        run: |
+          set -euo pipefail
+          http_code=$(curl -sS -o response.json -w '%{http_code}' \
+            --get 'https://apis.data.go.kr/B552584/MsrstnInfoInqireSvc/getMsrstnList' \
+            --data-urlencode "serviceKey=${AIRKOREA_SERVICE_KEY}" \
+            --data-urlencode "returnType=json" \
+            --data-urlencode "numOfRows=5" \
+            --data-urlencode "pageNo=1")
+          echo "HTTP status: ${http_code}"
+          echo "--- resultCode / resultMsg ---"
+          jq -r '.response.header // "no .response.header - check raw shape below"' response.json || true
+          echo "--- first item field names (public station data only, no secret) ---"
+          jq -r '.response.body.items[0] // "no items[0]"' response.json || true
+          echo "--- raw response (first 2000 chars, key is never in the body) ---"
+          head -c 2000 response.json
+
+      - name: Call MsrstnInfoInqireSvc/getNearbyMsrstnList (nearest-station-by-coordinate, if catalog call revealed a coordinate field)
+        env:
+          AIRKOREA_SERVICE_KEY: ${{ secrets.AIRKOREA_SERVICE_KEY }}
+        run: |
+          set -euo pipefail
+          # Seoul City Hall TM(Korea 2000 / EPSG:5179) approx coordinates - unverified, adjust if the prior step's
+          # item schema shows a different coordinate system (e.g. WGS84 tmX/tmY vs dmX/dmY vs lat/lon).
+          http_code=$(curl -sS -o nearby.json -w '%{http_code}' \
+            --get 'https://apis.data.go.kr/B552584/MsrstnInfoInqireSvc/getNearbyMsrstnList' \
+            --data-urlencode "serviceKey=${AIRKOREA_SERVICE_KEY}" \
+            --data-urlencode "returnType=json" \
+            --data-urlencode "tmX=198154.116494" \
+            --data-urlencode "tmY=453081.017181" \
+            --data-urlencode "ver=1.1")
+          echo "HTTP status: ${http_code}"
+          echo "--- resultCode / resultMsg ---"
+          jq -r '.response.header // "no .response.header - check raw shape below"' nearby.json || true
+          echo "--- raw response (first 2000 chars, key is never in the body) ---"
+          head -c 2000 nearby.json
