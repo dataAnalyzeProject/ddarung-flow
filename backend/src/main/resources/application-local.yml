@@ -29,4 +29,4 @@ springdoc:
     enabled: true
   swagger-ui:
     enabled: true
-  packages-to-scan: com.ddarungflow.controller
+  packages-to-scan: com.ddarungflow.controller,com.ddarungflow.airquality
