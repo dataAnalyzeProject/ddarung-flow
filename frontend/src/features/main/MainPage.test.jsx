@@ -4,6 +4,7 @@ import { getCurrentUser, logout } from "../login/authApi";
 import { loadPendingPrediction, savePendingPrediction } from "../login/loginStorage";
 import { searchPlaces } from "../map/kakaoMapApi";
 import { fetchRouteCandidates } from "../map/candidatesApi";
+import { fetchAirQuality } from "../riding-guide/airQualityApi";
 
 jest.mock("../login/authApi", () => ({
   getCurrentUser: jest.fn(),
@@ -13,6 +14,7 @@ jest.mock("../login/authApi", () => ({
 
 jest.mock("../map/kakaoMapApi", () => ({ searchPlaces: jest.fn() }));
 jest.mock("../map/candidatesApi", () => ({ fetchRouteCandidates: jest.fn() }));
+jest.mock("../riding-guide/airQualityApi", () => ({ fetchAirQuality: jest.fn() }));
 
 async function selectPlace(labelPlaceholder, resultName, queryText) {
   const input = screen.getByPlaceholderText(labelPlaceholder);
@@ -210,6 +212,107 @@ describe("시안 6 메인 로그인 통합", () => {
       fireEvent.click(screen.getByRole("button", { name: "대여 가능성 예측" }));
 
       expect(await screen.findByText("예측 결과를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.")).toBeInTheDocument();
+    });
+
+    describe("라이딩 가이드 상세 진입 (INT-4.3)", () => {
+      const candidateResponse = [
+        {
+          stationId: "ST-9",
+          stationName: "테스트 대여소",
+          distanceMeters: 200,
+          durationSeconds: 300,
+          arrivalAt: "2026-08-15T10:05:00+09:00",
+          predictionTargetAt: "2026-08-15T11:00:00+09:00",
+          targetOffsetMinutes: 55,
+          featureAsOf: "2026-08-15T10:00:00+09:00",
+          horizonMinutes: 60,
+          availabilityLevel: "HIGH",
+          predictionProbability: 0.9,
+          probabilities: { atLeast1: 0.95, atLeast2: 0.9, atLeast3: 0.8, atLeast4: 0.6, atLeast5: 0.4 },
+          availableBikeCount: 6,
+          inventoryCollectedAt: "2026-08-15T10:01:00+09:00",
+          inventoryStatus: "NORMAL",
+          generatedAt: "2026-08-15T10:02:00+09:00",
+          expiresAt: "2026-08-15T12:00:00+09:00",
+          predictionStatus: "NORMAL",
+          modelVersion: "availability-v1",
+        },
+      ];
+
+      async function renderWithSelectedStation() {
+        fetchRouteCandidates.mockResolvedValue(candidateResponse);
+        await renderAndSelectPlaces();
+        fireEvent.click(screen.getByRole("button", { name: "대여 가능성 예측" }));
+        await screen.findByRole("heading", { name: "테스트 대여소" });
+        fireEvent.click(screen.getByRole("button", { name: /테스트 대여소/ }));
+      }
+
+      test("대여소 선택 시 라이딩 가이드 진입 버튼이 나타난다", async () => {
+        await renderWithSelectedStation();
+
+        expect(screen.getByRole("button", { name: "테스트 대여소 라이딩 가이드 보기" })).toBeInTheDocument();
+      });
+
+      test("라이딩 가이드 진입 시 stationId로 1회 실제 조회하고 대기질을 렌더링한다", async () => {
+        fetchAirQuality.mockResolvedValue({
+          stationId: "ST-9",
+          status: "NORMAL",
+          message: null,
+          measurementStation: { name: "강남구", distanceMeters: 842 },
+          measuredAt: "2026-08-16T17:00:00+09:00",
+          collectedAt: "2026-08-16T17:03:00+09:00",
+          khai: { value: 55, grade: "MODERATE", sourceGradeCode: "2" },
+          pm10: { value: 8, unit: "µg/m³", grade: "GOOD", sourceGradeCode: "1" },
+          pm25: { value: 2, unit: "µg/m³", grade: "GOOD", sourceGradeCode: "1" },
+          o3: { value: 0.035, unit: "ppm", grade: "MODERATE", sourceGradeCode: "2" },
+        });
+
+        await renderWithSelectedStation();
+        fireEvent.click(screen.getByRole("button", { name: "테스트 대여소 라이딩 가이드 보기" }));
+
+        expect(await screen.findByRole("heading", { name: "테스트 대여소 라이딩 가이드" })).toBeInTheDocument();
+        expect(fetchAirQuality).toHaveBeenCalledTimes(1);
+        expect(fetchAirQuality).toHaveBeenCalledWith("ST-9");
+        expect(await screen.findByText("강남구")).toBeInTheDocument();
+        await waitFor(() => expect(screen.queryByText("대기질 정보를 불러오는 중이에요.")).not.toBeInTheDocument());
+      });
+
+      test("뒤로가기 시 예측 결과 화면과 선택 상태를 그대로 보존한다", async () => {
+        fetchAirQuality.mockResolvedValue({
+          stationId: "ST-9",
+          status: "MISSING",
+          message: null,
+          measurementStation: null,
+          measuredAt: null,
+          collectedAt: "2026-08-16T17:03:00+09:00",
+          khai: { value: null, grade: null },
+          pm10: { value: null, grade: null },
+          pm25: { value: null, grade: null },
+          o3: { value: null, grade: null },
+        });
+
+        await renderWithSelectedStation();
+        fireEvent.click(screen.getByRole("button", { name: "테스트 대여소 라이딩 가이드 보기" }));
+        await screen.findByRole("heading", { name: "테스트 대여소 라이딩 가이드" });
+        await waitFor(() => expect(screen.queryByText("대기질 정보를 불러오는 중이에요.")).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByRole("button", { name: /대여 예측으로 돌아가기/ }));
+
+        expect(await screen.findByRole("heading", { name: "테스트 대여소" })).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "테스트 대여소 라이딩 가이드 보기" })).toBeInTheDocument();
+      });
+
+      test("실측 실패 시 화면 전체를 실패시키지 않고 조회 불가 상태로 표시한다", async () => {
+        fetchAirQuality.mockRejectedValue(new Error("AIR_QUALITY_FETCH_FAILED"));
+
+        await renderWithSelectedStation();
+        fireEvent.click(screen.getByRole("button", { name: "테스트 대여소 라이딩 가이드 보기" }));
+
+        expect(await screen.findByRole("heading", { name: "테스트 대여소 라이딩 가이드" })).toBeInTheDocument();
+        expect(await screen.findByText("대기질 정보를 조회할 수 없어요.")).toBeInTheDocument();
+        expect(fetchAirQuality).toHaveBeenCalledTimes(1);
+        await waitFor(() => expect(screen.queryByText("대기질 정보를 불러오는 중이에요.")).not.toBeInTheDocument());
+      });
     });
   });
 });

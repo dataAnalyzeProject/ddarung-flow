@@ -13,7 +13,9 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
+import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -48,6 +50,18 @@ public class SecurityConfig {
         return source;
     }
 
+    private AuthenticationEntryPoint apiVsRedirectEntryPoint() {
+        AntPathRequestMatcher airQualityMatcher = new AntPathRequestMatcher("/api/v1/stations/*/air-quality");
+        return (request, response, authException) -> {
+            if (airQualityMatcher.matches(request)) {
+                response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
+                return;
+            }
+            String redirectBase = frontendUrl.endsWith("/") ? frontendUrl : frontendUrl + "/";
+            response.sendRedirect(redirectBase + "login");
+        };
+    }
+
     @Bean
     public SecurityFilterChain filterChain(
             HttpSecurity http,
@@ -72,6 +86,9 @@ public class SecurityConfig {
                                 "/v3/api-docs/**"
                         ).permitAll()
                         .anyRequest().authenticated()
+                )
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint(apiVsRedirectEntryPoint())
                 )
                 .oauth2Login(oauth2 -> oauth2
                         .loginPage(frontendUrl + "/login")

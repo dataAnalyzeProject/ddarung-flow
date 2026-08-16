@@ -11,6 +11,8 @@ import LoginPromptModal from "./components/LoginPromptModal";
 import MainSearchForm from "./components/MainSearchForm";
 import PredictionResults from "../prediction-results/PredictionResults";
 import { adaptCandidateResponse } from "../prediction-results/adaptCandidateResponse";
+import RidingGuidePage from "../riding-guide/RidingGuidePage";
+import { fetchAirQuality } from "../riding-guide/airQualityApi";
 
 const EMPTY_INPUT = {
   origin: "",
@@ -22,6 +24,13 @@ const EMPTY_INPUT = {
 
 const TRAVEL_MODE_TO_API = { "도보": "WALK", "대중교통": "PUBLIC_TRANSIT" };
 const PLACE_SELECTION_REQUIRED_NOTICE = "실제 출발지·목적지를 검색 결과에서 선택해 주세요.";
+
+// RidingGuidePage(FE-4.5)는 measurementStation을 표시용 문자열로 렌더링하므로
+// 백엔드의 { name, distanceMeters } 객체에서 name만 꺼내 전달한다.
+function adaptAirQualityResponse(response) {
+  if (!response) return null;
+  return { ...response, measurementStation: response.measurementStation?.name ?? null };
+}
 
 export default function MainPage({ onNavigate }) {
   const [authState, setAuthState] = useState("anonymous");
@@ -35,6 +44,10 @@ export default function MainPage({ onNavigate }) {
   const [apiPredictionResult, setApiPredictionResult] = useState(null);
   const [predictLoading, setPredictLoading] = useState(false);
   const [predictError, setPredictError] = useState("");
+  const [selectedStationInfo, setSelectedStationInfo] = useState(null);
+  const [ridingGuideOpen, setRidingGuideOpen] = useState(false);
+  const [guideAirQuality, setGuideAirQuality] = useState(null);
+  const [guideAirQualityLoading, setGuideAirQualityLoading] = useState(false);
 
   useEffect(() => {
     const loginResult = new URLSearchParams(window.location.search).get("login");
@@ -118,6 +131,47 @@ export default function MainPage({ onNavigate }) {
     }
   };
 
+  const handleSelectStation = (stationId) => {
+    const candidate = apiPredictionResult?.candidates?.find((item) => item.stationId === stationId);
+    if (candidate) {
+      setSelectedStationInfo({ stationId: candidate.stationId, stationName: candidate.stationName });
+    }
+  };
+
+  const openRidingGuide = () => setRidingGuideOpen(true);
+  const closeRidingGuide = () => setRidingGuideOpen(false);
+
+  useEffect(() => {
+    if (!ridingGuideOpen || !selectedStationInfo) return;
+    let cancelled = false;
+    setGuideAirQualityLoading(true);
+    fetchAirQuality(selectedStationInfo.stationId)
+      .then((response) => {
+        if (!cancelled) setGuideAirQuality(adaptAirQualityResponse(response));
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setGuideAirQuality({
+            status: "UNAVAILABLE",
+            message: null,
+            measurementStation: null,
+            measuredAt: null,
+            collectedAt: null,
+            khai: { value: null, grade: null },
+            pm10: { value: null, grade: null },
+            pm25: { value: null, grade: null },
+            o3: { value: null, grade: null },
+          });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setGuideAirQualityLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [ridingGuideOpen, selectedStationInfo]);
+
   const saveInputBeforeLogin = () => savePendingPrediction(input);
 
   const handleLogout = async () => {
@@ -134,6 +188,18 @@ export default function MainPage({ onNavigate }) {
       setAuthNotice("로그아웃에 실패했습니다. 다시 시도해 주세요.");
     }
   };
+
+  if (ridingGuideOpen && selectedStationInfo) {
+    return (
+      <RidingGuidePage
+        stationName={selectedStationInfo.stationName}
+        airQuality={guideAirQuality}
+        isAirQualityLoading={guideAirQualityLoading}
+        onBack={closeRidingGuide}
+        onNavigate={onNavigate}
+      />
+    );
+  }
 
   return (
     <main className="main-shell">
@@ -154,10 +220,20 @@ export default function MainPage({ onNavigate }) {
       {predictError && <section className="main-feedback error"><b>예측 안내</b><p>{predictError}</p><button type="button" onClick={() => setPredictError("")}>닫기</button></section>}
 
       {apiPredictionResult ? (
-        <PredictionResults
-          result={apiPredictionResult}
-          onEditInput={() => setApiPredictionResult(null)}
-        />
+        <>
+          <PredictionResults
+            result={apiPredictionResult}
+            onEditInput={() => setApiPredictionResult(null)}
+            onSelectStation={handleSelectStation}
+          />
+          {selectedStationInfo && (
+            <p className="main-riding-guide-entry">
+              <button type="button" onClick={openRidingGuide}>
+                {selectedStationInfo.stationName} 라이딩 가이드 보기
+              </button>
+            </p>
+          )}
+        </>
       ) : (
         <section className="main-dashboard main-dashboard-empty">
           <MapRoutePanel
