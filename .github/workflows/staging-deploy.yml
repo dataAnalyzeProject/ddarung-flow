@@ -200,7 +200,7 @@ jobs:
               exit 1
             fi
           done
-          for name in KAKAO_REST_API_KEY KMA_SERVICE_KEY; do
+          for name in KAKAO_REST_API_KEY; do
             if [ -z "${!name:-}" ]; then
               echo "Required external API configuration is missing: $name" >&2
               exit 1

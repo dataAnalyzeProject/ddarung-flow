@@ -39,6 +39,8 @@ export default function MainPage({ onNavigate }) {
   const [predictError, setPredictError] = useState("");
   const [arrivalWeather, setArrivalWeather] = useState(null);
   const [weatherExpanded, setWeatherExpanded] = useState(false);
+  const [weatherRequest, setWeatherRequest] = useState(null);
+  const [weatherLoading, setWeatherLoading] = useState(false);
 
   useEffect(() => {
     const loginResult = new URLSearchParams(window.location.search).get("login");
@@ -75,6 +77,7 @@ export default function MainPage({ onNavigate }) {
       setRoutePlaces((current) => ({ ...current, [key]: null }));
       setApiPredictionResult(null);
       setArrivalWeather(null);
+      setWeatherRequest(null);
     }
     if (key === "directMinutes") setTimeConfirmed(false);
   };
@@ -82,6 +85,19 @@ export default function MainPage({ onNavigate }) {
   const selectPlace = (key, place) => {
     setInput((current) => ({ ...current, [key]: place.name }));
     setRoutePlaces((current) => ({ ...current, [key]: place }));
+  };
+
+  const loadArrivalWeather = async (request) => {
+    if (!request) return;
+    setWeatherLoading(true);
+    try {
+      const weather = await fetchArrivalWeather(request);
+      setArrivalWeather(adaptArrivalWeather(weather, request.location));
+    } catch {
+      setArrivalWeather(adaptArrivalWeather({ status: "UNAVAILABLE", hourlyForecasts: [] }, request.location));
+    } finally {
+      setWeatherLoading(false);
+    }
   };
 
   const handlePredict = async () => {
@@ -92,6 +108,8 @@ export default function MainPage({ onNavigate }) {
     }
     setView("result");
     setPredictError("");
+    setArrivalWeather(null);
+    setWeatherRequest(null);
 
     if (!routePlaces.origin || !routePlaces.destination) {
       setApiPredictionResult(null);
@@ -118,9 +136,14 @@ export default function MainPage({ onNavigate }) {
       }
       setApiPredictionResult(result);
       const firstCandidate = result.candidates[0];
-      fetchArrivalWeather({ latitude: routePlaces.destination.latitude, longitude: routePlaces.destination.longitude, arrivalAt: firstCandidate.arrivalAt })
-        .then((weather) => setArrivalWeather(adaptArrivalWeather(weather, routePlaces.destination.name)))
-        .catch(() => setArrivalWeather(adaptArrivalWeather({ status: "UNAVAILABLE", hourlyForecasts: [] }, routePlaces.destination.name)));
+      const request = {
+        latitude: routePlaces.destination.latitude,
+        longitude: routePlaces.destination.longitude,
+        arrivalAt: firstCandidate.arrivalAt,
+        location: routePlaces.destination.name,
+      };
+      setWeatherRequest(request);
+      void loadArrivalWeather(request);
     } catch (error) {
       setApiPredictionResult(null);
       setPredictError(
@@ -147,6 +170,7 @@ export default function MainPage({ onNavigate }) {
       setAuthNotice("로그아웃되었습니다.");
       setApiPredictionResult(null);
       setArrivalWeather(null);
+      setWeatherRequest(null);
     } catch {
       setAuthState("authenticated");
       setAuthNotice("로그아웃에 실패했습니다. 다시 시도해 주세요.");
@@ -174,7 +198,7 @@ export default function MainPage({ onNavigate }) {
       {apiPredictionResult ? (
         <>
           <PredictionResults result={apiPredictionResult} onEditInput={() => setApiPredictionResult(null)} />
-          {arrivalWeather && <WeatherCard weather={arrivalWeather} expanded={weatherExpanded} onToggle={() => setWeatherExpanded((expanded) => !expanded)} />}
+          {arrivalWeather && <WeatherCard weather={arrivalWeather} expanded={weatherExpanded} onToggle={() => setWeatherExpanded((expanded) => !expanded)} onRetry={() => void loadArrivalWeather(weatherRequest)} retrying={weatherLoading} />}
         </>
       ) : (
         <section className="main-dashboard main-dashboard-empty">
