@@ -4,6 +4,7 @@ import { getCurrentUser, logout } from "../login/authApi";
 import { loadPendingPrediction, savePendingPrediction } from "../login/loginStorage";
 import { searchPlaces } from "../map/kakaoMapApi";
 import { fetchRouteCandidates } from "../map/candidatesApi";
+import { fetchArrivalWeather } from "../weather/weatherApi";
 
 jest.mock("../login/authApi", () => ({
   getCurrentUser: jest.fn(),
@@ -13,6 +14,10 @@ jest.mock("../login/authApi", () => ({
 
 jest.mock("../map/kakaoMapApi", () => ({ searchPlaces: jest.fn() }));
 jest.mock("../map/candidatesApi", () => ({ fetchRouteCandidates: jest.fn() }));
+jest.mock("../weather/weatherApi", () => ({
+  adaptArrivalWeather: jest.fn((weather) => weather),
+  fetchArrivalWeather: jest.fn(),
+}));
 
 async function selectPlace(labelPlaceholder, resultName, queryText) {
   const input = screen.getByPlaceholderText(labelPlaceholder);
@@ -31,6 +36,7 @@ describe("시안 6 메인 로그인 통합", () => {
     jest.clearAllMocks();
     getCurrentUser.mockResolvedValue({ authenticated: false, user: null });
     logout.mockResolvedValue();
+    fetchArrivalWeather.mockResolvedValue({ status: "UNAVAILABLE", hourlyForecasts: [] });
   });
 
   test("비로그인 예측 입력을 저장하고 기존 로그인 페이지로 연결한다", async () => {
