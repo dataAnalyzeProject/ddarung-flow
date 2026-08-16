@@ -1,10 +1,13 @@
 import json
+import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from pipeline.src.batch_inference import run_batch_inference
 from pipeline.src.prediction_batch_publisher import PUBLISH_TTL, publish_prediction_batch
+from pipeline.src.publish_prediction_batch import main, publish_batch_file
 
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "batch_inference_sample.json"
@@ -36,6 +39,9 @@ class FakeConnection:
 
     def rollback(self):
         self.rollbacks += 1
+
+    def close(self):
+        self.closed = True
 
 
 def valid_batch_result():
@@ -74,3 +80,28 @@ def test_publisher_rejects_invalid_batch_without_touching_database():
 
     assert connection.cursor_value.calls == []
     assert connection.commits == 0
+
+
+def test_manual_publish_entry_point_loads_a_validated_batch_file(tmp_path):
+    batch_file = tmp_path / "batch-result.json"
+    batch_file.write_text(json.dumps(valid_batch_result()), encoding="utf-8")
+    connection = FakeConnection()
+
+    result = publish_batch_file(batch_file, "postgresql://unused", lambda _: connection)
+
+    assert result["publishedStationPredictions"] == 8
+    assert connection.commits == 1
+    assert connection.closed is True
+
+
+def test_manual_publish_cli_uses_database_url_without_printing_it(tmp_path, monkeypatch, capsys):
+    batch_file = tmp_path / "batch-result.json"
+    batch_file.write_text(json.dumps(valid_batch_result()), encoding="utf-8")
+    connection = FakeConnection()
+    monkeypatch.setenv("DATABASE_URL", "postgresql://publisher:secret@db/predictions")
+    monkeypatch.setitem(sys.modules, "psycopg", SimpleNamespace(connect=lambda _: connection))
+
+    assert main(["--batch-result", str(batch_file)]) == 0
+
+    assert connection.commits == 1
+    assert "secret" not in capsys.readouterr().out
