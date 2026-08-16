@@ -46,8 +46,15 @@ HOURLY_AGGREGATION_APPROVAL = "RULE_APPROVED_IMPLEMENTATION_DEFERRED"
 
 def _logical_time():
     # 실행할 때마다 현재 시각을 쓰지 않고 Airflow 논리시각을 사용해 재현성을 유지한다.
-    logical_date = get_current_context()["logical_date"]
-    return logical_date.in_timezone("Asia/Seoul")
+    # Airflow 3.x는 schedule=None DAG을 수동 트리거하면 context에 logical_date
+    # 키 자체가 없을 수 있다(dag_run.logical_date가 None인 경우). 이때는
+    # run_after(트리거 접수 시각)로 대체해 같은 재현성 목적을 유지한다.
+    # run_after는 Pendulum이 아닌 표준 datetime일 수 있어 astimezone을 쓴다.
+    context = get_current_context()
+    logical_date = context.get("logical_date")
+    if logical_date is None:
+        logical_date = context["dag_run"].run_after
+    return logical_date.astimezone(SEOUL_TZ)
 
 
 def _require_api_source(variable_name):

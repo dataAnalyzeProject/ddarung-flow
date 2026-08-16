@@ -94,23 +94,34 @@ secret 패턴 스캔(신규 파일) → 0건
 
 키는 코드에 없다. `SEOUL_OPEN_API_KEY`, `KMA_SERVICE_KEY`, `KMA_NX`, `KMA_NY`는 모두 `os.getenv`로만 읽으며 기본값은 빈 문자열이다.
 
-## 4. 실제 수동 실행 (구분 B) — NOT_RUN
+## 4. 실제 수동 실행 (구분 B) — PASS (2026-08-16, 로컬 `infra/airflow` compose)
 
-**상태: NOT_RUN**
+**상태: PASS**
 
-사유:
+조장이 로컬 Docker로 `infra/airflow/docker-compose.yaml`을 단독 실행해(staging과 무관, 포트 충돌 없이 호스트 포트만 8081로 임시 조정) 실제 Airflow 3.3.0에서 stage-1 DAG를 수동 트리거했다. 자격증명은 조장의 로컬 `.env`에서 값을 노출하지 않는 방식으로 컨테이너 전용 env 파일에 옮겨 사용했고, 실행 종료 후 해당 파일은 삭제했다.
 
-1. 로컬 `.venv`에 `airflow` 패키지가 설치되어 있지 않다 (`ModuleNotFoundError: No module named 'airflow'`). 따라서 실제 DAG import와 태스크 실행을 이 환경에서 수행할 수 없다.
-2. 실제 실행 환경인 `infra/airflow` compose는 이번 작업 계약의 금지 경로다.
-3. 승인된 staging 환경이 제공되지 않았다.
+### 실행 결과 (run_id=`manual__2026-08-16T09:50:54.181109+00:00`)
 
-실행하려면 조장이 Git 밖에서 다음을 준비해야 하며, 값은 코드·로그·증거에 남기지 않는다.
+| 태스크 | 상태 | 소요 |
+|---|---|---|
+| collect_bike_inventory | success | ~1.0s |
+| collect_weather | success | ~0.3s |
+| validate_raw_quality | success | ~0.3s |
+| declare_hourly_aggregation_boundary | success | ~0.7s |
 
-- `.env`의 `SEOUL_OPEN_API_KEY`, `KMA_SERVICE_KEY` 실제 값
-- 실행 시 `BIKE_INVENTORY_SOURCE=api`, `WEATHER_SOURCE=api`
-- `RAW_STORAGE_MODE`는 변경하지 않는다 (실제 Raw 저장은 stage-2 범위)
+4개 태스크 모두 실제 성공, 의존 순서(collect → quality → aggregate)대로 실행됐다. 4개 태스크 로그 전체에서 `serviceKey`·`authKey`·`Bearer` 등 비밀값 패턴 스캔 0건, `write_raw`·`oci.object_storage`·`psycopg` 등 저장 관련 호출 흔적 0건을 확인했다(코드에 저장 경로가 없다는 설계와 일치).
 
-실행 후에는 마스킹된 요청 수·성공/실패·응답 시각만 이 절에 추가한다.
+### 실제 실행에서만 드러난 3개 발견 (AST 검사로는 불가능했던 것들)
+
+1. **`schedule=None`이 실제 스케줄러에서 지켜짐**: dag-processor 로그에 `next_info=None`이 찍혀, 자동 다음 실행이 계산되지 않음을 실증했다.
+2. **downstream 차단이 실제 실행에서 증명됨**: 인프라 결함으로 수집 태스크가 실패했을 때 `validate_raw_quality`·`declare_hourly_aggregation_boundary`가 실제로 `upstream_failed`가 됐다.
+3. **DAG 코드의 실제 버그 2건 발견·수정**: `_logical_time()`이 Airflow 3.x에서 `schedule=None` DAG을 수동 트리거하면 context에 `logical_date` 키가 없을 수 있는데(`KeyError`), 이를 `context["dag_run"].run_after`로 폴백하도록 고쳤다. 이 폴백값이 Pendulum이 아닌 표준 `datetime`이라 `.in_timezone()`이 없어 `AttributeError`가 났고, `.astimezone(SEOUL_TZ)`로 교체해 두 타입 모두 대응하게 했다. 두 버그 모두 AST 기반 구조 테스트로는 잡을 수 없었고 실제 Airflow 실행에서만 드러났다.
+
+### infra 인프라 결함 (별도 후속 필요, 이번엔 로컬 override로만 우회)
+
+- `infra/airflow/docker-compose.yaml`에 `AIRFLOW__CORE__EXECUTION_API_SERVER_URL`이 없어, Airflow 3.x의 태스크 실행 SDK가 api-server를 못 찾고 `Connection refused`가 났다.
+- `AIRFLOW__API_AUTH__JWT_SECRET`도 명시돼 있지 않아, 컨테이너마다 다른 값이 자동 생성되어 scheduler↔api-server 간 `Invalid auth token`이 났다.
+- 이번 로컬 테스트는 임시 override 파일(`infra/airflow/docker-compose.local-port.yaml`, 실행 후 삭제)로 두 값을 컨테이너 간 동일하게 맞춰 우회했다. **compose 파일 자체의 정식 수정은 이 작업 계약의 forbidden path(`infra/**` 전반)라 하지 않았다.** stage-2에서 별도 조장 결정으로 처리한다.
 
 ## 5. 자동 운영 (구분 C) — NOT_APPROVED
 
@@ -136,4 +147,5 @@ stage-2에서 `schedule=None`을 바꾸거나 scheduler 배포를 만들려면 �
 - stage-1 증거를 검토하고 `검토 요청` 판정을 기록한다.
 - CHG-092 자동 수집 활성화 항목을 날짜가 있는 별도 승인으로 결정한다.
 - 시간당 집계 기준시각·선택 규칙은 DEC-010으로 확정 완료. 구현 착수는 stage-2 게이트 해소 뒤 결정한다.
-- 실제 수동 실행이 필요하면 staging과 자격증명을 준비하고 4절을 갱신한다.
+- 실제 수동 실행은 2026-08-16에 완료·PASS. 4절 참조.
+- `infra/airflow/docker-compose.yaml`의 `EXECUTION_API_SERVER_URL`·`JWT_SECRET` 누락을 stage-2 준비 시 정식으로 반영할지 결정한다(이번 작업 계약의 forbidden path라 이번엔 로컬 override로만 우회함).
