@@ -35,11 +35,13 @@ SEOUL_TZ = ZoneInfo("Asia/Seoul")
 # DATA-OPS-3.5 승인: 연결·HTTP 실패는 60초 뒤 1회만 재시도한다.
 COLLECT_RETRIES = 1
 COLLECT_RETRY_DELAY = timedelta(seconds=60)
-# DATA-OPS-3.5 승인: 제한 MVP 검증의 프로젝트 자체 API 보호 상한.
-# 제공처 공식 쿼터가 아니며 사용 조건이 확인되면 교체한다.
-DAILY_REQUEST_ATTEMPT_CAP = 864
-# 시간당 집계 기준시각·선택 규칙은 DATA-OPS-3.5에서 승인되지 않았다.
-HOURLY_AGGREGATION_APPROVAL = "NOT_APPROVED"
+# DEC-009: 따릉이 API는 요청당 1000건 외에 일일 호출 한도가 없다.
+# 따라서 일일 요청 상한을 두지 않는다. 다만 쿼터 부재가 무제한 재시도를
+# 허용하는 것은 아니므로, 실패는 아래 COLLECT_RETRIES 규칙으로만 재시도한다.
+PAGE_SIZE_LIMIT = 1000
+# 시간당 집계 기준시각·선택 규칙은 DEC-010에서 정각 스냅샷 채택으로 확정됐다.
+# 다만 구현은 stage-2 범위이므로 이 DAG는 계산하지 않고 경계만 선언한다.
+HOURLY_AGGREGATION_APPROVAL = "RULE_APPROVED_IMPLEMENTATION_DEFERRED"
 
 
 def _logical_time():
@@ -155,19 +157,24 @@ def bike_weather_ten_minute_collection():
     def declare_hourly_aggregation_boundary_task(quality_result):
         """집계 경계를 선언만 하고 계산하지 않는다.
 
-        DATA-OPS-3.5는 시간당 집계 기준시각·선택 규칙을 승인하지 않았다.
-        여기서 규칙을 임의로 정하면 현재 H1~H4 모델 입력 계약을 침범한다.
+        DEC-010은 기준시각을 Asia/Seoul 정각으로, 선택 규칙을 정각 cycle
+        원본 관측 채택으로 확정했다. 그러나 구현은 stage-2 범위이며
+        CHG-092의 나머지 게이트가 남아 있어 여기서 계산하지 않는다.
         """
         return {
             "observed_at": quality_result["observed_at"],
             "upstream_quality_passed": True,
             "hourly_aggregation": HOURLY_AGGREGATION_APPROVAL,
             "aggregation_performed": False,
-            "daily_request_attempt_cap": DAILY_REQUEST_ATTEMPT_CAP,
+            "approved_rule": (
+                "Asia/Seoul on-the-hour snapshot; adopt the HH:00 cycle "
+                "observation as-is; no averaging; no backfill on a missing cycle."
+            ),
+            "page_size_limit": PAGE_SIZE_LIMIT,
             "request_attempts_this_run": quality_result["request_attempts"],
-            "blocked_reason": (
-                "Hourly aggregation rule is not approved in DATA-OPS-3.5; "
-                "stage-2 activation requires a dated CHG-092 approval."
+            "deferred_reason": (
+                "Aggregation implementation belongs to stage-2; CHG-092 still "
+                "blocks activation until the remaining gates are resolved."
             ),
         }
 

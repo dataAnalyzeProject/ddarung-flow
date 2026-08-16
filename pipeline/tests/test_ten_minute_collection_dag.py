@@ -175,7 +175,8 @@ def test_quality_failure_blocks_downstream_tasks(tree):
     assert ast.literal_eval(_decorator_kwargs(quality_function, "task")["retries"]) == 0
 
 
-def test_unapproved_hourly_aggregation_is_declared_but_not_computed(tree, source):
+def test_hourly_aggregation_is_declared_but_not_computed(tree, source):
+    """DEC-010이 규칙을 확정했지만 구현은 stage-2 범위이므로 계산하지 않는다."""
     aggregation_function = next(
         function
         for function in _task_functions(_dag_function(tree))
@@ -185,7 +186,20 @@ def test_unapproved_hourly_aggregation_is_declared_but_not_computed(tree, source
 
     assert "HOURLY_AGGREGATION_APPROVAL" in body
     assert "'aggregation_performed': False" in body
-    assert 'HOURLY_AGGREGATION_APPROVAL = "NOT_APPROVED"' in source
+    assert (
+        'HOURLY_AGGREGATION_APPROVAL = "RULE_APPROVED_IMPLEMENTATION_DEFERRED"'
+        in source
+    )
+    # 승인된 규칙을 문서화하되 계산 로직은 없어야 한다.
+    assert "on-the-hour snapshot" in body
+    assert "no backfill" in body
+
+
+def test_no_daily_request_cap_is_asserted(source):
+    """DEC-009: 따릉이 API에 일일 호출 한도가 없으므로 자체 상한을 두지 않는다."""
+    assert "DAILY_REQUEST_ATTEMPT_CAP" not in source
+    assert "864" not in source
+    assert "PAGE_SIZE_LIMIT = 1000" in source
 
 
 def test_no_raw_storage_oci_database_or_model_publishing_is_imported(tree, source):
