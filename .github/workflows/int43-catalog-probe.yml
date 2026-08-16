@@ -1,7 +1,9 @@
 name: INT-4.3 GATE-CATALOG probe (diagnostic, one-off)
 
 on:
-  workflow_dispatch: {}
+  push:
+    branches:
+      - codex/int-4.3-catalog-probe
 
 jobs:
   probe-msrstn-list:
