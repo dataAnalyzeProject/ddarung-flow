@@ -1,21 +1,23 @@
 package com.ddarungflow.map;
 
-import com.ddarungflow.dto.PredictionLookupResult;
 import com.ddarungflow.entity.Station;
 import com.ddarungflow.entity.StationInventoryCurrent;
+import com.ddarungflow.inference.InferenceClient;
+import com.ddarungflow.inference.InferenceDtos;
 import com.ddarungflow.inventory.InventoryStatus;
 import com.ddarungflow.prediction.PredictionTimeCalculator;
 import com.ddarungflow.prediction.PredictionTimeResult;
 import com.ddarungflow.prediction.PredictionTimeStatus;
 import com.ddarungflow.repository.StationInventoryCurrentRepository;
-import com.ddarungflow.service.PredictionLookupService;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
@@ -24,10 +26,11 @@ public class MapPredictionService {
 
     private static final BigDecimal LOW_THRESHOLD = new BigDecimal("0.24");
     private static final BigDecimal HIGH_THRESHOLD = new BigDecimal("0.36");
+    private static final Duration MAX_INVENTORY_AGE = Duration.ofMinutes(10);
 
     private final RouteCandidateService routeCandidateService;
     private final StationInventoryCurrentRepository inventoryRepository;
-    private final PredictionLookupService predictionLookupService;
+    private final InferenceClient inferenceClient;
     private final PredictionTimeCalculator predictionTimeCalculator;
     private final Clock clock;
 
@@ -35,20 +38,20 @@ public class MapPredictionService {
     public MapPredictionService(
         RouteCandidateService routeCandidateService,
         StationInventoryCurrentRepository inventoryRepository,
-        PredictionLookupService predictionLookupService
+        InferenceClient inferenceClient
     ) {
-        this(routeCandidateService, inventoryRepository, predictionLookupService, Clock.systemDefaultZone());
+        this(routeCandidateService, inventoryRepository, inferenceClient, Clock.systemDefaultZone());
     }
 
     public MapPredictionService(
         RouteCandidateService routeCandidateService,
         StationInventoryCurrentRepository inventoryRepository,
-        PredictionLookupService predictionLookupService,
+        InferenceClient inferenceClient,
         Clock clock
     ) {
         this.routeCandidateService = routeCandidateService;
         this.inventoryRepository = inventoryRepository;
-        this.predictionLookupService = predictionLookupService;
+        this.inferenceClient = inferenceClient;
         this.predictionTimeCalculator = new PredictionTimeCalculator();
         this.clock = clock;
     }
@@ -123,6 +126,11 @@ public class MapPredictionService {
                 bikeAvailable = invOpt.map(StationInventoryCurrent::getAvailableBikeCount).orElse(null);
                 invStatus = invOpt.map(StationInventoryCurrent::getInventoryStatus).orElse(InventoryStatus.MISSING);
                 inventoryCollectedAt = invOpt.map(StationInventoryCurrent::getCollectedAt).orElse(null);
+                if (invStatus == InventoryStatus.NORMAL
+                    && (inventoryCollectedAt == null
+                        || Duration.between(inventoryCollectedAt, requestedAt).compareTo(MAX_INVENTORY_AGE) > 0)) {
+                    invStatus = InventoryStatus.DELAYED;
+                }
             } catch (Exception e) {
                 invStatus = InventoryStatus.UNAVAILABLE;
             }
@@ -132,30 +140,44 @@ public class MapPredictionService {
                 predictionStatus = PredictionApiDtos.PredictionStatus.TOO_SOON;
             } else if (timeResult.status() == PredictionTimeStatus.UNAVAILABLE) {
                 predictionStatus = PredictionApiDtos.PredictionStatus.UNAVAILABLE;
-            } else {
-                // 3. Candidate isolated ML prediction lookup
+            } else if (invStatus != InventoryStatus.NORMAL || bikeAvailable == null) {
                 predictionStatus = PredictionApiDtos.PredictionStatus.MISSING;
+            } else {
+                // 3. Candidate isolated on-demand model inference
+                predictionStatus = PredictionApiDtos.PredictionStatus.UNAVAILABLE;
                 try {
-                    Optional<PredictionLookupResult> predOpt = predictionLookupService.findLatestValid(
-                        station.getStationId(),
-                        predictionTargetAt,
-                        (int) timeResult.horizonMinutes(),
-                        bikeCount,
-                        requestedAt
-                    );
-                    if (predOpt.isPresent()) {
-                        PredictionLookupResult prediction = predOpt.get();
-                        probability = prediction.selectedProbability();
-                        modelVersion = prediction.modelVersion();
-                        generatedAt = prediction.generatedAt();
-                        featureAsOf = prediction.featureAsOf();
-                        expiresAt = prediction.expiresAt();
+                    InferenceDtos.PredictResponse response = inferenceClient.predict(List.of(
+                        new InferenceDtos.CandidateRequest(
+                            station.getStationId(),
+                            station.getStationNumber(),
+                            bikeAvailable,
+                            featureAsOfApprox
+                        )
+                    ));
+                    InferenceDtos.CandidatePrediction prediction = response.predictions().stream()
+                        .filter(item -> station.getStationId().equals(item.stationId()))
+                        .findFirst()
+                        .orElseThrow();
+                    if ("MISSING".equals(prediction.status())) {
+                        predictionStatus = PredictionApiDtos.PredictionStatus.MISSING;
+                    } else if ("NORMAL".equals(prediction.status())) {
+                        List<InferenceDtos.ProbabilityRow> horizonRows = prediction.rows().stream()
+                            .filter(row -> row.horizonMinutes() == timeResult.horizonMinutes())
+                            .sorted(Comparator.comparingInt(InferenceDtos.ProbabilityRow::requiredBikeCount))
+                            .toList();
+                        if (horizonRows.size() != 5) {
+                            throw new IllegalStateException("inference response must contain five quantity rows");
+                        }
+                        probability = horizonRows.get(bikeCount - 1).probability();
+                        modelVersion = response.modelVersion();
+                        generatedAt = response.generatedAt();
+                        featureAsOf = featureAsOfApprox;
                         probabilities = new PredictionApiDtos.QuantityProbabilities(
-                            prediction.atLeast1Probability(),
-                            prediction.atLeast2Probability(),
-                            prediction.atLeast3Probability(),
-                            prediction.atLeast4Probability(),
-                            prediction.atLeast5Probability()
+                            horizonRows.get(0).probability(),
+                            horizonRows.get(1).probability(),
+                            horizonRows.get(2).probability(),
+                            horizonRows.get(3).probability(),
+                            horizonRows.get(4).probability()
                         );
                         availabilityLevel = toAvailabilityLevel(probability);
                         predictionStatus = PredictionApiDtos.PredictionStatus.NORMAL;

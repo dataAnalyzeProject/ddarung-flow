@@ -11,9 +11,17 @@ const VISIBLE_STEP = 3;
 
 export function formatStationTime(value) {
   if (!value) return "-";
-  const [hourText, minute] = value.slice(11, 16).split(":");
-  const hour = Number(hourText);
-  return `${hour < 12 ? "오전" : "오후"} ${hour % 12 || 12}:${minute}`;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "-";
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Seoul",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(parsed);
+  const part = (type) => parts.find((item) => item.type === type)?.value;
+  const hour = Number(part("hour"));
+  return `${hour < 12 ? "오전" : "오후"} ${hour % 12 || 12}:${part("minute")}`;
 }
 
 function sortCandidates(candidates, sortBy) {

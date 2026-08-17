@@ -4,6 +4,8 @@ describe("adaptCandidateResponse", () => {
   const dto = {
     stationId: "ST-1",
     stationName: "성수역 3번 출구",
+    latitude: 37.51,
+    longitude: 127.01,
     distanceMeters: 120,
     durationSeconds: 720,
     arrivalAt: "2026-08-15T09:41:00+09:00",
@@ -32,6 +34,7 @@ describe("adaptCandidateResponse", () => {
     expect(result.candidates).toHaveLength(1);
 
     const candidate = result.candidates[0];
+    expect(candidate).toEqual(expect.objectContaining({ latitude: 37.51, longitude: 127.01 }));
     expect(candidate.selectedProbability).toBe(0.87);
     expect(candidate.probabilities).toEqual({ atLeast1: 0.93, atLeast2: 0.87, atLeast3: 0.76, atLeast4: 0.61, atLeast5: 0.45 });
     expect(candidate.currentInventory).toEqual({

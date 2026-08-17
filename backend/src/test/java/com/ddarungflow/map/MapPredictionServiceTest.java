@@ -2,10 +2,11 @@ package com.ddarungflow.map;
 
 import com.ddarungflow.entity.Station;
 import com.ddarungflow.entity.StationInventoryCurrent;
+import com.ddarungflow.inference.InferenceClient;
+import com.ddarungflow.inference.InferenceDtos;
 import com.ddarungflow.inventory.InventoryStatus;
 import com.ddarungflow.repository.StationInventoryCurrentRepository;
 import com.ddarungflow.repository.StationRepository;
-import com.ddarungflow.service.PredictionLookupService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -58,21 +59,23 @@ class MapPredictionServiceTest {
     @Autowired
     private StationInventoryCurrentRepository inventoryRepository;
 
-    @Autowired
-    private com.ddarungflow.repository.StationPredictionRepository predictionRepository;
-
     private MapPredictionService mapPredictionService;
+    private InferenceClient inferenceClient;
 
     @BeforeEach
     void setUp() {
         RouteCandidateService candidateService = new RouteCandidateService(stationRepository);
-        PredictionLookupService predictionLookupService = new PredictionLookupService(predictionRepository);
-        mapPredictionService = new MapPredictionService(candidateService, inventoryRepository, predictionLookupService, NOT_TOO_SOON_CLOCK);
+        inferenceClient = org.mockito.Mockito.mock(InferenceClient.class);
+        org.mockito.Mockito.when(inferenceClient.predict(org.mockito.ArgumentMatchers.anyList()))
+            .thenAnswer(invocation -> normalInferenceResponse(candidateId(invocation)));
+        mapPredictionService = new MapPredictionService(candidateService, inventoryRepository, inferenceClient, NOT_TOO_SOON_CLOCK);
 
         Station s1 = new Station("ST-4", "00102", "102. 망원역 1번출구 앞", new BigDecimal("37.5556488"), new BigDecimal("126.91062927"), true);
         stationRepository.save(s1);
 
-        inventoryRepository.save(new StationInventoryCurrent("ST-4", 11, OffsetDateTime.now(), InventoryStatus.NORMAL));
+        inventoryRepository.save(new StationInventoryCurrent(
+            "ST-4", 11, OffsetDateTime.now(NOT_TOO_SOON_CLOCK), InventoryStatus.NORMAL
+        ));
     }
 
     @Test
@@ -91,8 +94,9 @@ class MapPredictionServiceTest {
         assertThat(dto.inventoryStatus()).isEqualTo(InventoryStatus.NORMAL);
         assertThat(dto.distanceMeters()).isGreaterThanOrEqualTo(0);
         assertThat(dto.durationSeconds()).isGreaterThanOrEqualTo(0);
-        assertThat(dto.predictionStatus()).isEqualTo(PredictionApiDtos.PredictionStatus.MISSING);
-        assertThat(dto.availabilityLevel()).isNull();
+        assertThat(dto.predictionStatus()).isEqualTo(PredictionApiDtos.PredictionStatus.NORMAL);
+        assertThat(dto.predictionProbability()).isEqualByComparingTo("0.75");
+        assertThat(dto.availabilityLevel()).isEqualTo(PredictionApiDtos.AvailabilityLevel.HIGH);
     }
 
     @Test
@@ -101,19 +105,17 @@ class MapPredictionServiceTest {
         // ST-5 추가 (예측 조회 실패 모의 대상)
         Station s2 = new Station("ST-5", "00103", "103. 망원한강공원 앞", new BigDecimal("37.5556000"), new BigDecimal("126.9106000"), true);
         stationRepository.save(s2);
-        inventoryRepository.save(new StationInventoryCurrent("ST-5", 3, OffsetDateTime.now(), InventoryStatus.NORMAL));
+        inventoryRepository.save(new StationInventoryCurrent(
+            "ST-5", 3, OffsetDateTime.now(NOT_TOO_SOON_CLOCK), InventoryStatus.NORMAL
+        ));
 
-        PredictionLookupService failingPredictionService = new PredictionLookupService(predictionRepository) {
-            @Override
-            public java.util.Optional<com.ddarungflow.dto.PredictionLookupResult> findLatestValid(
-                String stationId, OffsetDateTime predictionTargetAt, int minutesAhead, int requiredBikeCount, OffsetDateTime requestedAt
-            ) {
-                if ("ST-5".equals(stationId)) {
-                    throw new RuntimeException("ST-5 ML Prediction Service Error");
-                }
-                return java.util.Optional.empty();
-            }
-        };
+        InferenceClient failingPredictionService = org.mockito.Mockito.mock(InferenceClient.class);
+        org.mockito.Mockito.when(failingPredictionService.predict(org.mockito.ArgumentMatchers.anyList()))
+            .thenAnswer(invocation -> {
+                String stationId = candidateId(invocation);
+                if ("ST-5".equals(stationId)) throw new RuntimeException("ST-5 ML Prediction Service Error");
+                return normalInferenceResponse(stationId);
+            });
 
         RouteCandidateService candService = new RouteCandidateService(stationRepository);
         MapPredictionService serviceWithPartialFailure = new MapPredictionService(candService, inventoryRepository, failingPredictionService, NOT_TOO_SOON_CLOCK);
@@ -146,8 +148,7 @@ class MapPredictionServiceTest {
         org.mockito.Mockito.when(failingInvRepo.findById("ST-5")).thenThrow(new RuntimeException("ST-5 DB Inventory Failure"));
 
         RouteCandidateService candService = new RouteCandidateService(stationRepository);
-        PredictionLookupService predLookupService = new PredictionLookupService(predictionRepository);
-        MapPredictionService service = new MapPredictionService(candService, failingInvRepo, predLookupService, NOT_TOO_SOON_CLOCK);
+        MapPredictionService service = new MapPredictionService(candService, failingInvRepo, inferenceClient, NOT_TOO_SOON_CLOCK);
 
         List<PredictionApiDtos.CandidatePredictionResponseDto> results = service.buildRouteCandidates(
             new BigDecimal("37.5500"), new BigDecimal("126.9000"),
@@ -177,8 +178,7 @@ class MapPredictionServiceTest {
         });
 
         RouteCandidateService candService = new RouteCandidateService(stationRepository, failingKakaoClient);
-        PredictionLookupService predLookupService = new PredictionLookupService(predictionRepository);
-        MapPredictionService service = new MapPredictionService(candService, inventoryRepository, predLookupService, NOT_TOO_SOON_CLOCK);
+        MapPredictionService service = new MapPredictionService(candService, inventoryRepository, inferenceClient, NOT_TOO_SOON_CLOCK);
 
         List<PredictionApiDtos.CandidatePredictionResponseDto> results = service.buildRouteCandidates(
             new BigDecimal("37.5500"), new BigDecimal("126.9000"),
@@ -194,8 +194,7 @@ class MapPredictionServiceTest {
     @DisplayName("정시 직후 요청한 가까운 도보 후보는 TOO_SOON으로 판정되고 정상 확률 응답을 만들지 않는다")
     void nearbyWalkCandidateRightAfterHourIsTooSoon() {
         RouteCandidateService candService = new RouteCandidateService(stationRepository);
-        PredictionLookupService predLookupService = new PredictionLookupService(predictionRepository);
-        MapPredictionService service = new MapPredictionService(candService, inventoryRepository, predLookupService, TOO_SOON_CLOCK);
+        MapPredictionService service = new MapPredictionService(candService, inventoryRepository, inferenceClient, TOO_SOON_CLOCK);
 
         List<PredictionApiDtos.CandidatePredictionResponseDto> results = service.buildRouteCandidates(
             new BigDecimal("37.5500"), new BigDecimal("126.9000"),
@@ -221,5 +220,51 @@ class MapPredictionServiceTest {
         PredictionApiDtos.CandidatePredictionResponseDto dto = results.get(0);
         OffsetDateTime expectedArrivalAt = OffsetDateTime.now(NOT_TOO_SOON_CLOCK).plusMinutes(45);
         assertThat(dto.arrivalAt()).isEqualTo(expectedArrivalAt);
+    }
+
+    @Test
+    @DisplayName("10분보다 오래된 재고는 DELAYED로 표시하고 모델을 호출하지 않는다")
+    void staleInventoryDoesNotCallInference() {
+        inventoryRepository.save(new StationInventoryCurrent(
+            "ST-4", 11, OffsetDateTime.now(NOT_TOO_SOON_CLOCK).minusMinutes(11), InventoryStatus.NORMAL
+        ));
+
+        List<PredictionApiDtos.CandidatePredictionResponseDto> results = mapPredictionService.buildRouteCandidates(
+            new BigDecimal("37.5500"), new BigDecimal("126.9000"),
+            new BigDecimal("37.5556488"), new BigDecimal("126.91062927"),
+            "WALK", 60, 1
+        );
+
+        PredictionApiDtos.CandidatePredictionResponseDto dto = results.get(0);
+        assertThat(dto.inventoryStatus()).isEqualTo(InventoryStatus.DELAYED);
+        assertThat(dto.predictionStatus()).isEqualTo(PredictionApiDtos.PredictionStatus.MISSING);
+        assertThat(dto.predictionProbability()).isNull();
+        org.mockito.Mockito.verifyNoInteractions(inferenceClient);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static String candidateId(org.mockito.invocation.InvocationOnMock invocation) {
+        List<InferenceDtos.CandidateRequest> requests = invocation.getArgument(0);
+        return requests.get(0).stationId();
+    }
+
+    private static InferenceDtos.PredictResponse normalInferenceResponse(String stationId) {
+        List<InferenceDtos.ProbabilityRow> rows = new java.util.ArrayList<>();
+        for (int horizon : List.of(60, 120, 180, 240)) {
+            for (int quantity = 1; quantity <= 5; quantity++) {
+                rows.add(new InferenceDtos.ProbabilityRow(
+                    horizon,
+                    quantity,
+                    new BigDecimal("0.80").subtract(new BigDecimal("0.05").multiply(BigDecimal.valueOf(quantity)))
+                ));
+            }
+        }
+        return new InferenceDtos.PredictResponse(
+            "NORMAL",
+            null,
+            "hist_gradient_boosting@2f2ece729fd4",
+            OffsetDateTime.parse("2026-08-15T09:50:01Z"),
+            List.of(new InferenceDtos.CandidatePrediction(stationId, "NORMAL", rows))
+        );
     }
 }

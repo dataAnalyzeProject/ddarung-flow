@@ -94,6 +94,7 @@ export default function PredictionSummaryPanel({ candidates, selectedStationId, 
           <p>
             <b>{availabilityLabels[level] ?? "-"}</b>
             <span>{selectedCandidate?.stationName ?? "-"} 기준</span>
+            <span>모델 {selectedCandidate?.modelVersion ?? "-"}</span>
             <em>{AVAILABILITY_TIP[level] ?? "선택한 대여소의 예측 결과를 확인하세요."}</em>
           </p>
         </div>

@@ -6,6 +6,7 @@ import { searchPlaces } from "../map/kakaoMapApi";
 import { fetchRouteCandidates } from "../map/candidatesApi";
 import { fetchAirQuality } from "../riding-guide/airQualityApi";
 import { fetchArrivalWeather } from "../weather/weatherApi";
+import { formatStationTime } from "./components/StationRecommendationPanel";
 
 jest.mock("../login/authApi", () => ({
   getCurrentUser: jest.fn(),
@@ -20,6 +21,10 @@ jest.mock("../weather/weatherApi", () => ({
   adaptArrivalWeather: jest.fn((weather) => weather),
   fetchArrivalWeather: jest.fn(),
 }));
+
+test("UTC 도착시각을 Asia/Seoul 시각으로 표시한다", () => {
+  expect(formatStationTime("2026-08-17T07:35:00Z")).toBe("오후 4:35");
+});
 
 async function selectPlace(labelPlaceholder, resultName, queryText) {
   const input = screen.getByPlaceholderText(labelPlaceholder);
@@ -178,6 +183,8 @@ describe("시안 6 메인 로그인 통합", () => {
         {
           stationId: "ST-9",
           stationName: "테스트 대여소",
+          latitude: 37.51,
+          longitude: 127.01,
           distanceMeters: 200,
           durationSeconds: 300,
           arrivalAt: "2026-08-15T10:05:00+09:00",
@@ -202,9 +209,16 @@ describe("시안 6 메인 로그인 통합", () => {
       fireEvent.click(screen.getByRole("button", { name: "대여 가능성 예측" }));
 
       expect(await screen.findByRole("heading", { name: "테스트 대여소" })).toBeInTheDocument();
+      expect(screen.getByText("모델 availability-v1")).toBeInTheDocument();
       expect(fetchRouteCandidates).toHaveBeenCalledWith(
         expect.objectContaining({ originLatitude: 37.5, destinationLatitude: 37.5, requiredBikeCount: 1 })
       );
+      expect(fetchArrivalWeather).toHaveBeenCalledWith({
+        latitude: 37.51,
+        longitude: 127.01,
+        arrivalAt: "2026-08-15T10:05:00+09:00",
+        location: "테스트 대여소",
+      });
     });
 
     test("후보가 3곳을 넘으면 더 많은 대여소 보기로 나머지를 펼친다", async () => {

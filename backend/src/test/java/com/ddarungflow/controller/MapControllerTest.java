@@ -512,7 +512,7 @@ class MapControllerTest {
                 .content(jsonPayload))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].predictionStatus").value("MISSING"))
+                .andExpect(jsonPath("$[0].predictionStatus").value("UNAVAILABLE"))
                 .andExpect(jsonPath("$[0].availabilityLevel").doesNotExist());
     }
 
