@@ -25,7 +25,6 @@ const EMPTY_INPUT = {
 };
 
 const TRAVEL_MODE_TO_API = { "도보": "WALK", "대중교통": "PUBLIC_TRANSIT" };
-const PLACE_SELECTION_REQUIRED_NOTICE = "실제 출발지·목적지를 검색 결과에서 선택해 주세요.";
 
 // RidingGuidePage(FE-4.5)는 measurementStation을 표시용 문자열로 렌더링하므로
 // 백엔드의 { name, distanceMeters } 객체에서 name만 꺼내 전달한다.
@@ -39,13 +38,10 @@ export default function MainPage({ onNavigate }) {
   const [user, setUser] = useState(null);
   const [input, setInput] = useState(EMPTY_INPUT);
   const [routePlaces, setRoutePlaces] = useState({ origin: null, destination: null });
-  const [view, setView] = useState("idle");
-  const [authNotice, setAuthNotice] = useState("");
   const [timeConfirmed, setTimeConfirmed] = useState(false);
   const [loginPromptOpen, setLoginPromptOpen] = useState(false);
   const [apiPredictionResult, setApiPredictionResult] = useState(null);
   const [predictLoading, setPredictLoading] = useState(false);
-  const [predictError, setPredictError] = useState("");
   const [selectedStationInfo, setSelectedStationInfo] = useState(null);
   const [ridingGuideOpen, setRidingGuideOpen] = useState(false);
   const [guideAirQuality, setGuideAirQuality] = useState(null);
@@ -58,9 +54,6 @@ export default function MainPage({ onNavigate }) {
     const loginResult = new URLSearchParams(window.location.search).get("login");
     const pendingInput = loadPendingPrediction();
 
-    if (loginResult === "failed") setAuthNotice("로그인에 실패했습니다. 다시 시도해 주세요.");
-    if (loginResult === "cancelled") setAuthNotice("로그인이 취소되었습니다.");
-
     getCurrentUser()
       .then((auth) => {
         if (!auth.authenticated) {
@@ -69,10 +62,8 @@ export default function MainPage({ onNavigate }) {
         }
         setUser(auth.user);
         setAuthState("authenticated");
-        setView("result");
         if (loginResult === "success" && pendingInput) {
           setInput({ ...EMPTY_INPUT, ...pendingInput });
-          setView("restored");
         }
       })
       .catch(() => {
@@ -118,14 +109,11 @@ export default function MainPage({ onNavigate }) {
       setLoginPromptOpen(true);
       return;
     }
-    setView("result");
-    setPredictError("");
     setArrivalWeather(null);
     setWeatherRequest(null);
 
     if (!routePlaces.origin || !routePlaces.destination) {
       setApiPredictionResult(null);
-      setPredictError(PLACE_SELECTION_REQUIRED_NOTICE);
       return;
     }
 
@@ -143,7 +131,6 @@ export default function MainPage({ onNavigate }) {
       const result = adaptCandidateResponse(candidates, { requestedAt, requiredBikeCount: input.requiredBikeCount });
       if (!result.candidates.length) {
         setApiPredictionResult(null);
-        setPredictError("목적지 주변에 조건에 맞는 대여소가 없습니다. 출발지나 목적지를 바꿔 다시 시도해 주세요.");
         return;
       }
       setApiPredictionResult(result);
@@ -156,15 +143,8 @@ export default function MainPage({ onNavigate }) {
       };
       setWeatherRequest(request);
       void loadArrivalWeather(request);
-    } catch (error) {
+    } catch {
       setApiPredictionResult(null);
-      setPredictError(
-        error.message === "AUTH_REQUIRED"
-          ? "로그인이 필요합니다. 다시 로그인해 주세요."
-          : error.message === "ROUTE_PROVIDER_ERROR"
-            ? "경로 제공자를 사용할 수 없습니다. 잠시 후 다시 시도해 주세요."
-          : "예측 결과를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요."
-      );
     } finally {
       setPredictLoading(false);
     }
@@ -222,14 +202,11 @@ export default function MainPage({ onNavigate }) {
       await logout();
       setUser(null);
       setAuthState("anonymous");
-      setView("idle");
-      setAuthNotice("로그아웃되었습니다.");
       setApiPredictionResult(null);
       setArrivalWeather(null);
       setWeatherRequest(null);
     } catch {
       setAuthState("authenticated");
-      setAuthNotice("로그아웃에 실패했습니다. 다시 시도해 주세요.");
     }
   };
 
@@ -258,10 +235,7 @@ export default function MainPage({ onNavigate }) {
       <MainSearchForm serviceData={serviceData} input={input} onInputChange={updateInput} onPlaceSelect={selectPlace} onConfirmTime={() => setTimeConfirmed(true)} onPredict={handlePredict} />
 
       {timeConfirmed && <p className="main-time-notice">예상시간을 <strong>{input.directMinutes || "이동수단 기준"}{input.directMinutes ? "분" : ""}</strong>으로 확인했습니다.</p>}
-      {authNotice && <section className="main-feedback error"><b>로그인 안내</b><p>{authNotice}</p><button type="button" onClick={() => setAuthNotice("")}>닫기</button></section>}
-      {view === "restored" && <section className="main-feedback restored"><b>입력값을 불러왔습니다</b><p>이전 입력값을 확인한 뒤 다시 예측해 주세요.</p><button type="button" onClick={handlePredict}>{serviceData.retryButton}</button></section>}
       {predictLoading && <p className="main-time-notice" role="status">예측 결과를 불러오는 중입니다…</p>}
-      {predictError && <section className="main-feedback error"><b>예측 안내</b><p>{predictError}</p><button type="button" onClick={handlePredict}>다시 시도</button><button type="button" onClick={() => setPredictError("")}>닫기</button></section>}
 
       {apiPredictionResult ? (
         <section className="main-dashboard">

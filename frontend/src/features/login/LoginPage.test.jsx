@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import LoginPage from './LoginPage';
 import { LOGIN_STATUS } from './data/authDemoData';
@@ -32,6 +32,21 @@ describe('LoginPage 핵심 테스트', () => {
     test('LOADING 처리 중에는 버튼이 비활성화되어 중복 클릭할 수 없다', () => {
         render(<LoginPage initialStatus={LOGIN_STATUS.LOADING} />);
         expect(screen.getByTitle('Kakao 로그인')).toBeDisabled();
+    });
+
+    test('OAuth 화면에서 뒤로가기로 복귀하면 진행 상태를 해제하고 다른 로그인을 선택할 수 있다', () => {
+        render(<LoginPage initialStatus={LOGIN_STATUS.LOADING} />);
+
+        const restoredPageShow = new Event('pageshow');
+        Object.defineProperty(restoredPageShow, 'persisted', { value: true });
+        act(() => {
+            window.dispatchEvent(restoredPageShow);
+        });
+
+        const naverButton = screen.getByRole('button', { name: '네이버로 계속하기' });
+        expect(naverButton).not.toBeDisabled();
+        fireEvent.click(naverButton);
+        expect(startSocialLogin).toHaveBeenCalledWith('Naver');
     });
 
     test('소셜 로그인 버튼은 선택한 공급자의 OAuth 로그인을 시작한다', () => {

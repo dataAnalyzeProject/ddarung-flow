@@ -139,6 +139,18 @@ export default function LoginPage({ initialStatus, mockOutcome, initialPredictio
       .catch(() => setLoginStatus(LOGIN_STATUS.FAILED));
   }, [initialPredictionInput, initialStatus]);
 
+  useEffect(() => {
+    const handlePageShow = (event) => {
+      if (!event.persisted) return;
+      setLoginStatus((currentStatus) => (
+        currentStatus === LOGIN_STATUS.LOADING ? LOGIN_STATUS.WAITING : currentStatus
+      ));
+    };
+
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
+  }, []);
+
   const handleRepeatPredict = () => {
     if (isPredicted) return;
     if (typeof onRepeatPrediction === "function") {
