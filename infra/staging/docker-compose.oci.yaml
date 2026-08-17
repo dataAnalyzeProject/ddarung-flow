@@ -1,0 +1,5 @@
+services:
+  inference:
+    environment:
+      MODEL_LOCAL_PATH: ""
+    volumes: !reset []
