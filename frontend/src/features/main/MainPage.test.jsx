@@ -81,7 +81,7 @@ describe("시안 6 메인 로그인 통합", () => {
 
     render(<MainPage />);
 
-    expect(await screen.findByText("입력값을 불러왔습니다")).toBeInTheDocument();
+    await screen.findByDisplayValue("서울역");
     expect(screen.getByDisplayValue("서울역")).toBeInTheDocument();
     expect(screen.getByDisplayValue("광화문")).toBeInTheDocument();
     expect(screen.getByDisplayValue("20")).toBeInTheDocument();
@@ -89,7 +89,7 @@ describe("시안 6 메인 로그인 통합", () => {
     await waitFor(() => expect(window.location.search).toBe(""));
   });
 
-  test("로그인 사용자가 실제 장소를 선택하지 않고 예측하면 안내 메시지를 보여준다", async () => {
+  test("로그인 사용자가 실제 장소를 선택하지 않고 예측하면 알림 패널을 표시하지 않는다", async () => {
     getCurrentUser.mockResolvedValue({
       authenticated: true,
       user: { userId: "user-1", displayName: "사용자", provider: "google" },
@@ -99,7 +99,7 @@ describe("시안 6 메인 로그인 통합", () => {
     await screen.findByRole("button", { name: "로그아웃" });
     fireEvent.click(screen.getByRole("button", { name: "대여 가능성 예측" }));
 
-    expect(await screen.findByText("실제 출발지·목적지를 검색 결과에서 선택해 주세요.")).toBeInTheDocument();
+    expect(screen.queryByText("예측 안내")).not.toBeInTheDocument();
     expect(fetchRouteCandidates).not.toHaveBeenCalled();
   });
 
@@ -113,8 +113,7 @@ describe("시안 6 메인 로그인 통합", () => {
     fireEvent.click(await screen.findByRole("button", { name: "로그아웃" }));
 
     await waitFor(() => expect(logout).toHaveBeenCalledTimes(1));
-    expect(await screen.findByText("로그아웃되었습니다.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "로그인" })).toHaveAttribute("href", "/login");
+    expect(await screen.findByRole("link", { name: "로그인" })).toHaveAttribute("href", "/login");
   });
 
   test("지도 탭과 확대 축소 컨트롤은 상태를 왕복 변경한다", async () => {
@@ -244,13 +243,14 @@ describe("시안 6 메인 로그인 통합", () => {
       expect(screen.getByRole("heading", { name: "대여소 4" })).toBeInTheDocument();
     });
 
-    test("API 실패 시 오류 메시지를 보여주고 결과 없이 안내만 표시한다", async () => {
+    test("API 실패 시 알림 패널 없이 결과 영역을 유지한다", async () => {
       fetchRouteCandidates.mockRejectedValue(new Error("CANDIDATE_FETCH_FAILED"));
 
       await renderAndSelectPlaces();
       fireEvent.click(screen.getByRole("button", { name: "대여 가능성 예측" }));
 
-      expect(await screen.findByText("예측 결과를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.")).toBeInTheDocument();
+      await waitFor(() => expect(fetchRouteCandidates).toHaveBeenCalledTimes(1));
+      expect(screen.queryByText("예측 안내")).not.toBeInTheDocument();
     });
 
     describe("라이딩 가이드 상세 진입 (INT-4.3)", () => {
