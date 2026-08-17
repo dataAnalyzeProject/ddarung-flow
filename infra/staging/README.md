@@ -152,6 +152,8 @@ git diff --name-only origin/main...HEAD
 
 OPS-3.4는 승인된 main SHA image를 OCIR에 push하고 기존 ARM64 `crawling_server`에서 별도 `ddarung-flow-staging` Compose 프로젝트로 pull하여 실행합니다. staging frontend 3100과 loopback backend 8180을 사용하며 두 port는 loopback에만 bind합니다. host nginx의 기존 인증서와 domain은 따릉이를 계속 가리킵니다. 성공한 main CI 뒤 `.github/workflows/staging-deploy.yml`이 동일 SHA의 ARM64 image를 자동 배포·smoke하고, 실패하면 직전 정상 release로 자동 복귀합니다.
 
+INT-4.4 이후 로컬 Compose의 inference는 `.local-models/model_winner.joblib` 읽기 전용 마운트를 사용한다. OCI CD는 `docker-compose.oci.yaml`을 함께 적용해 이 마운트를 제거하고, 서버 Instance Principal로 Object Storage artifact를 다운로드한 뒤 SHA-256을 검증한다. 따라서 OCI 서버에 개발자의 로컬 모델 파일을 복사하지 않는다. CD는 `inventory-refresher` image도 같은 main SHA로 pull하고, GitHub `oci-staging` Environment의 `SEOUL_OPEN_API_KEY`를 서버 전용 env 파일로 전달한다.
+
 - 설정 예시: `infra/staging/oci.env.example`
 - 최초 bootstrap·장애 복구: `infra/staging/deploy-staging.ps1`
 - 지속형 자동 CD: `.github/workflows/staging-deploy.yml`

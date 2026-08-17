@@ -44,6 +44,9 @@ jobs:
           - component: inference
             context: ./infra/inference
             dockerfile: ./infra/inference/Dockerfile
+          - component: inventory-refresher
+            context: .
+            dockerfile: ./infra/inventory-refresher/Dockerfile
     env:
       DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
       OCI_REGISTRY: ${{ vars.OCI_REGISTRY }}
@@ -184,6 +187,7 @@ jobs:
           KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
           AIRKOREA_SERVICE_KEY: ${{ secrets.AIRKOREA_SERVICE_KEY }}
           KMA_SERVICE_KEY: ${{ secrets.KMA_SERVICE_KEY }}
+          SEOUL_OPEN_API_KEY: ${{ secrets.SEOUL_OPEN_API_KEY }}
           NAVER_CLIENT_ID: ${{ vars.NAVER_CLIENT_ID }}
           NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
           MODEL_POINTER_KEY: ${{ vars.MODEL_POINTER_KEY }}
@@ -201,7 +205,7 @@ jobs:
               exit 1
             fi
           done
-          for name in KAKAO_REST_API_KEY AIRKOREA_SERVICE_KEY; do
+          for name in KAKAO_REST_API_KEY AIRKOREA_SERVICE_KEY SEOUL_OPEN_API_KEY; do
             if [ -z "${!name:-}" ]; then
               echo "Required external API configuration is missing: $name" >&2
               exit 1
@@ -213,6 +217,7 @@ jobs:
             printf 'FRONTEND_IMAGE=%s/frontend:%s\n' "$image_base" "$DEPLOY_SHA"
             printf 'BACKEND_IMAGE=%s/backend:%s\n' "$image_base" "$DEPLOY_SHA"
             printf 'INFERENCE_IMAGE=%s/inference:%s\n' "$image_base" "$DEPLOY_SHA"
+            printf 'INVENTORY_REFRESHER_IMAGE=%s/inventory-refresher:%s\n' "$image_base" "$DEPLOY_SHA"
             printf 'REACT_APP_API_BASE_URL=%s\n' "$STAGING_PUBLIC_URL"
             printf 'DEPLOYED_COMMIT=%s\n' "$DEPLOY_SHA"
             printf 'OCI_OBJECT_NAMESPACE=nrzeviuvbcrd\n'
@@ -233,6 +238,7 @@ jobs:
             printf 'KAKAO_REST_API_KEY=%s\n' "$KAKAO_REST_API_KEY"
             printf 'AIRKOREA_SERVICE_KEY=%s\n' "$AIRKOREA_SERVICE_KEY"
             printf 'KMA_SERVICE_KEY=%s\n' "$KMA_SERVICE_KEY"
+            printf 'SEOUL_OPEN_API_KEY=%s\n' "$SEOUL_OPEN_API_KEY"
             printf 'NAVER_CLIENT_ID=%s\n' "$NAVER_CLIENT_ID"
             printf 'NAVER_CLIENT_SECRET=%s\n' "$NAVER_CLIENT_SECRET"
           } > oauth.candidate.env
@@ -245,6 +251,7 @@ jobs:
           target="$SSH_USER@$SSH_HOST"
           ssh -i "$HOME/.ssh/id_staging" -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "mkdir -p '$REMOTE_APP_DIR'"
           scp -i "$HOME/.ssh/id_staging" -o BatchMode=yes -o StrictHostKeyChecking=yes infra/staging/docker-compose.yaml "$target:$REMOTE_APP_DIR/docker-compose.yaml.candidate"
+          scp -i "$HOME/.ssh/id_staging" -o BatchMode=yes -o StrictHostKeyChecking=yes infra/staging/docker-compose.oci.yaml "$target:$REMOTE_APP_DIR/docker-compose.oci.yaml.candidate"
           scp -i "$HOME/.ssh/id_staging" -o BatchMode=yes -o StrictHostKeyChecking=yes release.candidate.env "$target:$REMOTE_APP_DIR/release.candidate.env"
           scp -i "$HOME/.ssh/id_staging" -o BatchMode=yes -o StrictHostKeyChecking=yes oauth.candidate.env "$target:$REMOTE_APP_DIR/oauth.candidate.env"
 
@@ -266,9 +273,16 @@ jobs:
               cp release.previous.env release.env
               cp oauth.previous.env oauth.env
               cp docker-compose.previous.yaml docker-compose.yaml
+              if [ -f docker-compose.oci.previous.yaml ]; then
+                cp docker-compose.oci.previous.yaml docker-compose.oci.yaml
+              else
+                rm -f docker-compose.oci.yaml
+              fi
               chmod 600 release.env oauth.env
-              docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml pull
-              docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml up -d --no-build --remove-orphans
+              compose_files=(-f docker-compose.yaml)
+              if [ -f docker-compose.oci.yaml ]; then compose_files+=(-f docker-compose.oci.yaml); fi
+              docker compose --env-file .env --env-file oauth.env --env-file release.env "${compose_files[@]}" pull
+              docker compose --env-file .env --env-file oauth.env --env-file release.env "${compose_files[@]}" up -d --no-build --remove-orphans
             else
               echo "No previous release exists for automatic rollback." >&2
             fi
@@ -278,14 +292,17 @@ jobs:
           if [ -f release.env ]; then cp release.env release.previous.env; fi
           if [ -f oauth.env ]; then cp oauth.env oauth.previous.env; else cp oauth.candidate.env oauth.previous.env; fi
           if [ -f docker-compose.yaml ]; then cp docker-compose.yaml docker-compose.previous.yaml; fi
+          if [ -f docker-compose.oci.yaml ]; then cp docker-compose.oci.yaml docker-compose.oci.previous.yaml; else rm -f docker-compose.oci.previous.yaml; fi
           mv release.candidate.env release.env
           mv oauth.candidate.env oauth.env
           mv docker-compose.yaml.candidate docker-compose.yaml
+          mv docker-compose.oci.yaml.candidate docker-compose.oci.yaml
           chmod 600 release.env oauth.env
 
-          docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml config --quiet
-          docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml pull frontend backend postgres inference
-          docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml up -d --no-build --remove-orphans
+          compose_files=(-f docker-compose.yaml -f docker-compose.oci.yaml)
+          docker compose --env-file .env --env-file oauth.env --env-file release.env "${compose_files[@]}" config --quiet
+          docker compose --env-file .env --env-file oauth.env --env-file release.env "${compose_files[@]}" pull frontend backend postgres inference inventory-refresher
+          docker compose --env-file .env --env-file oauth.env --env-file release.env "${compose_files[@]}" up -d --no-build --remove-orphans
 
           staging_healthy=false
           for attempt in $(seq 1 18); do
@@ -315,7 +332,7 @@ jobs:
           done
 
           trap - ERR
-          docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml ps
+          docker compose --env-file .env --env-file oauth.env --env-file release.env "${compose_files[@]}" ps
           echo "Public staging and OAuth HTTPS callback verification passed."
           REMOTE
 
@@ -389,9 +406,16 @@ jobs:
             cp release.previous.env release.env
             cp oauth.previous.env oauth.env
             cp docker-compose.previous.yaml docker-compose.yaml
+            if [ -f docker-compose.oci.previous.yaml ]; then
+              cp docker-compose.oci.previous.yaml docker-compose.oci.yaml
+            else
+              rm -f docker-compose.oci.yaml
+            fi
             chmod 600 release.env oauth.env
-            docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml pull
-            docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml up -d --no-build --remove-orphans
+            compose_files=(-f docker-compose.yaml)
+            if [ -f docker-compose.oci.yaml ]; then compose_files+=(-f docker-compose.oci.yaml); fi
+            docker compose --env-file .env --env-file oauth.env --env-file release.env "${compose_files[@]}" pull
+            docker compose --env-file .env --env-file oauth.env --env-file release.env "${compose_files[@]}" up -d --no-build --remove-orphans
           }
           trap rollback ERR
 
@@ -415,7 +439,9 @@ jobs:
           deployed_sha=$(sed -n 's/^DEPLOYED_COMMIT=//p' release.env)
           [[ "$expected_sha" =~ ^[0-9a-f]{40}$ ]]
           test "$deployed_sha" = "$expected_sha"
-          docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml config --quiet
+          compose_files=(-f docker-compose.yaml)
+          if [ -f docker-compose.oci.yaml ]; then compose_files+=(-f docker-compose.oci.yaml); fi
+          docker compose --env-file .env --env-file oauth.env --env-file release.env "${compose_files[@]}" config --quiet
 
           restored_healthy=false
           for attempt in $(seq 1 18); do
