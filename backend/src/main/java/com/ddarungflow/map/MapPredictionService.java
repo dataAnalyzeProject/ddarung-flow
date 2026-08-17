@@ -24,8 +24,8 @@ import java.util.Optional;
 @Service
 public class MapPredictionService {
 
-    private static final BigDecimal LOW_THRESHOLD = new BigDecimal("0.24");
-    private static final BigDecimal HIGH_THRESHOLD = new BigDecimal("0.36");
+    private static final BigDecimal LOW_THRESHOLD = new BigDecimal("0.40");
+    private static final BigDecimal HIGH_THRESHOLD = new BigDecimal("0.70");
     private static final Duration MAX_INVENTORY_AGE = Duration.ofMinutes(10);
 
     private final RouteCandidateService routeCandidateService;

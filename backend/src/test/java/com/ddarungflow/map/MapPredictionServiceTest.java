@@ -40,13 +40,13 @@ class MapPredictionServiceTest {
     @Test
     @DisplayName("승인된 공통 임계값으로 20개 조합의 확률 등급을 일관되게 매핑한다")
     void mapsApprovedAvailabilityBoundaries() {
-        assertThat(MapPredictionService.toAvailabilityLevel(new BigDecimal("0.2399")))
+        assertThat(MapPredictionService.toAvailabilityLevel(new BigDecimal("0.3999")))
             .isEqualTo(PredictionApiDtos.AvailabilityLevel.LOW);
-        assertThat(MapPredictionService.toAvailabilityLevel(new BigDecimal("0.24")))
+        assertThat(MapPredictionService.toAvailabilityLevel(new BigDecimal("0.40")))
             .isEqualTo(PredictionApiDtos.AvailabilityLevel.MEDIUM);
-        assertThat(MapPredictionService.toAvailabilityLevel(new BigDecimal("0.3599")))
+        assertThat(MapPredictionService.toAvailabilityLevel(new BigDecimal("0.6999")))
             .isEqualTo(PredictionApiDtos.AvailabilityLevel.MEDIUM);
-        assertThat(MapPredictionService.toAvailabilityLevel(new BigDecimal("0.36")))
+        assertThat(MapPredictionService.toAvailabilityLevel(new BigDecimal("0.70")))
             .isEqualTo(PredictionApiDtos.AvailabilityLevel.HIGH);
         assertThat(MapPredictionService.toAvailabilityLevel(BigDecimal.ZERO))
             .isEqualTo(PredictionApiDtos.AvailabilityLevel.LOW);

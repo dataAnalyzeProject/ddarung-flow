@@ -98,6 +98,7 @@ services:
       dockerfile: infra/inventory-refresher/Dockerfile
     environment:
       SEOUL_OPEN_API_KEY: ${SEOUL_OPEN_API_KEY}
+      DATABASE_URL: postgresql://${DB_USERNAME}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
       DB_HOST: postgres
       DB_NAME: ${DB_NAME}
       DB_USERNAME: ${DB_USERNAME}

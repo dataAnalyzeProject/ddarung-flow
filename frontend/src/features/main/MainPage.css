@@ -303,3 +303,67 @@
 /* Idle state (no prediction yet): only the map renders, so let it fill the whole dashboard row. */
 .main-dashboard-empty{grid-template-columns:1fr}
 .main-dashboard-empty .main-map-panel{grid-column:1/-1}
+
+/* Prediction result panels: keep the selected result readable at narrow desktop widths. */
+.main-side-panels>section{display:grid;grid-template-rows:auto minmax(0,1fr);padding-bottom:10px}
+.main-success{min-height:86px;align-self:center}
+.main-success-gauge{--gauge-color:#00a978;--gauge-progress:0deg;width:78px;height:78px;display:grid;flex:0 0 78px;place-items:center;border:0!important;border-radius:50%;background:radial-gradient(circle,#fff 0 59%,transparent 60%),conic-gradient(var(--gauge-color) var(--gauge-progress),#dfe7ef 0);color:var(--gauge-color);font-size:22px!important;font-variant-numeric:tabular-nums}
+.main-success-gauge.is-unavailable{background:radial-gradient(circle,#f8fafc 0 59%,transparent 60%),#dfe7ef;color:#71839a}
+.main-chart{height:auto;min-height:94px;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));align-items:end;gap:8px;padding:0 12px 2px}
+.main-chart-column{height:92px;display:grid;grid-template-rows:15px 1fr 15px;align-items:end;justify-items:center;gap:3px;color:#71839a;font-size:9px}
+.main-chart-column>strong{font-size:9px;font-variant-numeric:tabular-nums}
+.main-chart-track{width:16px;height:55px;display:flex;align-items:end;border-radius:4px 4px 0 0;background:#eef3f7;overflow:hidden}
+.main-chart-track i{width:100%;min-height:2px;border-radius:4px 4px 0 0;background:#02aa75}
+.main-chart-column>b{font-size:9px;font-style:normal;white-space:nowrap}
+.main-weather{min-height:53px;display:grid;grid-template-columns:48px minmax(54px,auto) minmax(0,1fr);align-items:center;column-gap:10px}
+.main-weather-temperature{padding-right:10px;border-right:1px solid #d8e1ea;font-size:19px;line-height:1.05}
+.main-weather-temperature small{display:block;margin-top:4px;font-size:8px}
+.main-weather dl{display:grid;gap:5px}
+.main-weather dl div{grid-template-columns:auto auto;justify-content:start;gap:5px}
+.main-side-panels>section:last-child .main-tip{align-self:stretch}
+
+/* KMA 상태별 이미지 아이콘 */
+.main-weather-icon{width:58px;height:58px;object-fit:contain}
+@media(max-height:720px){.main-weather-icon{width:38px;height:38px}}
+@media(max-height:720px){.main-success{min-height:56px}.main-success-gauge{width:50px;height:50px;flex-basis:50px;font-size:14px!important}.main-success-gauge::before{inset:4px}.main-chart{min-height:62px}.main-chart-column{height:60px;grid-template-rows:11px 1fr 12px;font-size:7px}.main-chart-column>strong,.main-chart-column>b{font-size:7px}.main-chart-track{width:12px;height:36px}.main-weather{min-height:40px;grid-template-columns:38px minmax(43px,auto) minmax(0,1fr);column-gap:6px}.main-weather-temperature{padding-right:7px;font-size:15px}.main-weather-temperature small,.main-weather dl{font-size:7px}}
+
+/* Use a real SVG arc so the percentage remains visually unambiguous. */
+.main-success-gauge{position:relative;background:none!important;color:var(--gauge-color)}
+.main-success-gauge svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
+.main-success-gauge circle{fill:none;stroke-width:9}
+.main-success-gauge-track{stroke:#dfe7ef}
+.main-success-gauge-progress{stroke:var(--gauge-color);stroke-linecap:round;stroke-dasharray:264;stroke-dashoffset:var(--gauge-offset);transition:stroke-dashoffset .2s ease}
+.main-success-gauge>strong{position:relative;font-size:inherit;font-weight:800}
+.main-success-gauge.is-unavailable{background:#f8fafc!important}
+
+/* Let the comparison chart and weather content use their full cards. */
+.main-chart{height:100%;min-height:0;align-items:stretch;padding:4px 18px 8px}
+.main-chart-column{height:100%;min-height:118px;grid-template-rows:18px minmax(0,1fr) 17px;gap:5px}
+.main-chart-column>strong,.main-chart-column>b{font-size:10px}
+.main-chart-track{width:22px;height:100%;min-height:72px}
+.main-side-panels>section:last-child{display:grid;grid-template-rows:auto auto minmax(0,1fr);align-items:start}
+.main-side-panels>section:last-child .main-weather{min-height:72px;padding:6px 0 10px;grid-template-columns:58px minmax(70px,auto) minmax(0,1fr);column-gap:12px}
+.main-side-panels>section:last-child .main-weather>b{width:58px;height:58px}
+.main-side-panels>section:last-child .main-weather>b:before{left:16px;top:16px;width:22px;height:22px}
+.main-side-panels>section:last-child .main-weather-temperature{padding-right:12px;font-size:22px}
+.main-side-panels>section:last-child .main-weather-temperature small{font-size:10px}
+.main-side-panels>section:last-child .main-weather dl{gap:7px;font-size:10px}
+.main-side-panels>section:last-child .main-tip{margin:0;align-self:end;line-height:1.4}
+@media(max-height:720px){.main-chart{padding:2px 12px 4px}.main-chart-column{min-height:64px;grid-template-rows:12px minmax(0,1fr) 12px;gap:2px}.main-chart-column>strong,.main-chart-column>b{font-size:7px}.main-chart-track{width:13px;min-height:36px}.main-side-panels>section:last-child .main-weather{min-height:42px;padding:1px 0 4px;grid-template-columns:38px minmax(44px,auto) minmax(0,1fr);column-gap:6px}.main-side-panels>section:last-child .main-weather>b{width:38px;height:38px}.main-side-panels>section:last-child .main-weather>b:before{left:10px;top:10px;width:17px;height:17px}.main-side-panels>section:last-child .main-weather-temperature{padding-right:7px;font-size:15px}.main-side-panels>section:last-child .main-weather-temperature small,.main-side-panels>section:last-child .main-weather dl{font-size:7px}}
+
+/* Desktop result cards: emphasize the main percentage and center the weather content. */
+@media(min-width:960px){
+  .main-success{min-height:112px}
+  .main-success-gauge{width:104px;height:104px;flex-basis:104px;font-size:26px!important}
+  .main-success-gauge circle{stroke-width:8}
+  .main-side-panels>section:last-child{grid-template-rows:auto minmax(0,1fr) auto}
+  .main-side-panels>section:last-child .main-weather{align-self:center;min-height:92px;padding:8px 0;grid-template-columns:66px minmax(82px,auto) minmax(0,1fr);column-gap:14px}
+  .main-side-panels>section:last-child .main-weather>b{width:66px;height:66px}
+  .main-side-panels>section:last-child .main-weather-icon{width:66px;height:66px}
+  .main-side-panels>section:last-child .main-weather>b:before{left:18px;top:18px;width:24px;height:24px}
+  .main-side-panels>section:last-child .main-weather-temperature{padding-right:14px;font-size:26px}
+  .main-side-panels>section:last-child .main-weather-temperature small{margin-top:5px;font-size:11px}
+  .main-side-panels>section:last-child .main-weather dl{gap:8px;font-size:11px}
+  .main-side-panels>section:last-child .main-tip{font-size:9px}
+  .main-side-panels>section:last-child .main-tip{align-self:stretch;margin:0}
+}
