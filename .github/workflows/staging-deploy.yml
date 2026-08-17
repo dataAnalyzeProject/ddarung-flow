@@ -182,6 +182,7 @@ jobs:
           KAKAO_CLIENT_ID: ${{ vars.KAKAO_CLIENT_ID }}
           KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
           KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
+          AIRKOREA_SERVICE_KEY: ${{ secrets.AIRKOREA_SERVICE_KEY }}
           KMA_SERVICE_KEY: ${{ secrets.KMA_SERVICE_KEY }}
           NAVER_CLIENT_ID: ${{ vars.NAVER_CLIENT_ID }}
           NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
@@ -200,7 +201,7 @@ jobs:
               exit 1
             fi
           done
-          for name in KAKAO_REST_API_KEY; do
+          for name in KAKAO_REST_API_KEY AIRKOREA_SERVICE_KEY; do
             if [ -z "${!name:-}" ]; then
               echo "Required external API configuration is missing: $name" >&2
               exit 1
@@ -230,6 +231,7 @@ jobs:
             printf 'KAKAO_CLIENT_ID=%s\n' "$KAKAO_CLIENT_ID"
             printf 'KAKAO_CLIENT_SECRET=%s\n' "$KAKAO_CLIENT_SECRET"
             printf 'KAKAO_REST_API_KEY=%s\n' "$KAKAO_REST_API_KEY"
+            printf 'AIRKOREA_SERVICE_KEY=%s\n' "$AIRKOREA_SERVICE_KEY"
             printf 'KMA_SERVICE_KEY=%s\n' "$KMA_SERVICE_KEY"
             printf 'NAVER_CLIENT_ID=%s\n' "$NAVER_CLIENT_ID"
             printf 'NAVER_CLIENT_SECRET=%s\n' "$NAVER_CLIENT_SECRET"

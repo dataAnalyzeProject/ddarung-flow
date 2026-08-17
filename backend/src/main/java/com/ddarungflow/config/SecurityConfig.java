@@ -13,12 +13,14 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
+import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.List;
+import java.util.regex.Pattern;
 
 @Configuration
 @EnableWebSecurity
@@ -48,6 +50,22 @@ public class SecurityConfig {
         return source;
     }
 
+    private static final Pattern AIR_QUALITY_PATH = Pattern.compile("^/api/v1/stations/[^/]+/air-quality/?$");
+
+    private AuthenticationEntryPoint apiVsRedirectEntryPoint() {
+        return (request, response, authException) -> {
+            if (AIR_QUALITY_PATH.matcher(request.getRequestURI()).matches()) {
+                // setStatus (not sendError) - sendError triggers a /error forward that Spring
+                // Security re-processes, invoking this entry point a second time for "/error"
+                // (which doesn't match), overwriting the 401 with the redirect branch below.
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                return;
+            }
+            String redirectBase = frontendUrl.endsWith("/") ? frontendUrl : frontendUrl + "/";
+            response.sendRedirect(redirectBase + "login");
+        };
+    }
+
     @Bean
     public SecurityFilterChain filterChain(
             HttpSecurity http,
@@ -72,6 +90,9 @@ public class SecurityConfig {
                                 "/v3/api-docs/**"
                         ).permitAll()
                         .anyRequest().authenticated()
+                )
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint(apiVsRedirectEntryPoint())
                 )
                 .oauth2Login(oauth2 -> oauth2
                         .loginPage(frontendUrl + "/login")

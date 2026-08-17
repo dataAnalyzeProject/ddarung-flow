@@ -9,9 +9,11 @@ import AppHeader from "../../shared/AppHeader";
 import MapRoutePanel from "../map/MapRoutePanel";
 import LoginPromptModal from "./components/LoginPromptModal";
 import MainSearchForm from "./components/MainSearchForm";
-import PredictionResults from "../prediction-results/PredictionResults";
+import StationRecommendationPanel from "./components/StationRecommendationPanel";
+import PredictionSummaryPanel from "./components/PredictionSummaryPanel";
 import { adaptCandidateResponse } from "../prediction-results/adaptCandidateResponse";
-import WeatherCard from "../weather/WeatherCard";
+import RidingGuidePage from "../riding-guide/RidingGuidePage";
+import { fetchAirQuality } from "../riding-guide/airQualityApi";
 import { adaptArrivalWeather, fetchArrivalWeather } from "../weather/weatherApi";
 
 const EMPTY_INPUT = {
@@ -25,6 +27,13 @@ const EMPTY_INPUT = {
 const TRAVEL_MODE_TO_API = { "도보": "WALK", "대중교통": "PUBLIC_TRANSIT" };
 const PLACE_SELECTION_REQUIRED_NOTICE = "실제 출발지·목적지를 검색 결과에서 선택해 주세요.";
 
+// RidingGuidePage(FE-4.5)는 measurementStation을 표시용 문자열로 렌더링하므로
+// 백엔드의 { name, distanceMeters } 객체에서 name만 꺼내 전달한다.
+function adaptAirQualityResponse(response) {
+  if (!response) return null;
+  return { ...response, measurementStation: response.measurementStation?.name ?? null };
+}
+
 export default function MainPage({ onNavigate }) {
   const [authState, setAuthState] = useState("anonymous");
   const [user, setUser] = useState(null);
@@ -37,8 +46,11 @@ export default function MainPage({ onNavigate }) {
   const [apiPredictionResult, setApiPredictionResult] = useState(null);
   const [predictLoading, setPredictLoading] = useState(false);
   const [predictError, setPredictError] = useState("");
+  const [selectedStationInfo, setSelectedStationInfo] = useState(null);
+  const [ridingGuideOpen, setRidingGuideOpen] = useState(false);
+  const [guideAirQuality, setGuideAirQuality] = useState(null);
+  const [guideAirQualityLoading, setGuideAirQualityLoading] = useState(false);
   const [arrivalWeather, setArrivalWeather] = useState(null);
-  const [weatherExpanded, setWeatherExpanded] = useState(false);
   const [weatherRequest, setWeatherRequest] = useState(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
 
@@ -158,6 +170,50 @@ export default function MainPage({ onNavigate }) {
     }
   };
 
+  const handleSelectStation = (stationId) => {
+    const candidate = apiPredictionResult?.candidates?.find((item) => item.stationId === stationId);
+    if (candidate) {
+      setSelectedStationInfo({ stationId: candidate.stationId, stationName: candidate.stationName });
+    }
+  };
+
+  const openRidingGuideFor = (candidate) => {
+    setSelectedStationInfo({ stationId: candidate.stationId, stationName: candidate.stationName });
+    setRidingGuideOpen(true);
+  };
+  const closeRidingGuide = () => setRidingGuideOpen(false);
+
+  useEffect(() => {
+    if (!ridingGuideOpen || !selectedStationInfo) return;
+    let cancelled = false;
+    setGuideAirQualityLoading(true);
+    fetchAirQuality(selectedStationInfo.stationId)
+      .then((response) => {
+        if (!cancelled) setGuideAirQuality(adaptAirQualityResponse(response));
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setGuideAirQuality({
+            status: "UNAVAILABLE",
+            message: null,
+            measurementStation: null,
+            measuredAt: null,
+            collectedAt: null,
+            khai: { value: null, grade: null },
+            pm10: { value: null, grade: null },
+            pm25: { value: null, grade: null },
+            o3: { value: null, grade: null },
+          });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setGuideAirQualityLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [ridingGuideOpen, selectedStationInfo]);
+
   const saveInputBeforeLogin = () => savePendingPrediction(input);
 
   const handleLogout = async () => {
@@ -176,6 +232,18 @@ export default function MainPage({ onNavigate }) {
       setAuthNotice("로그아웃에 실패했습니다. 다시 시도해 주세요.");
     }
   };
+
+  if (ridingGuideOpen && selectedStationInfo) {
+    return (
+      <RidingGuidePage
+        stationName={selectedStationInfo.stationName}
+        airQuality={guideAirQuality}
+        isAirQualityLoading={guideAirQualityLoading}
+        onBack={closeRidingGuide}
+        onNavigate={onNavigate}
+      />
+    );
+  }
 
   return (
     <main className="main-shell">
@@ -196,10 +264,30 @@ export default function MainPage({ onNavigate }) {
       {predictError && <section className="main-feedback error"><b>예측 안내</b><p>{predictError}</p><button type="button" onClick={handlePredict}>다시 시도</button><button type="button" onClick={() => setPredictError("")}>닫기</button></section>}
 
       {apiPredictionResult ? (
-        <>
-          <PredictionResults result={apiPredictionResult} onEditInput={() => setApiPredictionResult(null)} />
-          {arrivalWeather && <WeatherCard weather={arrivalWeather} expanded={weatherExpanded} onToggle={() => setWeatherExpanded((expanded) => !expanded)} onRetry={() => void loadArrivalWeather(weatherRequest)} retrying={weatherLoading} />}
-        </>
+        <section className="main-dashboard">
+          <StationRecommendationPanel
+            candidates={apiPredictionResult.candidates}
+            selectedStationId={selectedStationInfo?.stationId}
+            onSelect={handleSelectStation}
+            onViewGuide={openRidingGuideFor}
+          />
+          <MapRoutePanel
+            originText={input.origin}
+            destinationText={input.destination}
+            travelMode={input.travelMode}
+            selectedPlaces={routePlaces}
+            onDurationChange={(minutes) => updateInput("directMinutes", minutes)}
+            fallbackImage={routeMap}
+            canViewStations={authState === "authenticated"}
+          />
+          <PredictionSummaryPanel
+            candidates={apiPredictionResult.candidates}
+            selectedStationId={selectedStationInfo?.stationId}
+            arrivalWeather={arrivalWeather}
+            weatherLoading={weatherLoading}
+            onRetryWeather={() => void loadArrivalWeather(weatherRequest)}
+          />
+        </section>
       ) : (
         <section className="main-dashboard main-dashboard-empty">
           <MapRoutePanel
@@ -211,9 +299,6 @@ export default function MainPage({ onNavigate }) {
             fallbackImage={routeMap}
             canViewStations={authState === "authenticated"}
           />
-          <p className="main-empty-state">
-            출발지와 목적지를 검색 결과에서 선택한 뒤 예측 버튼을 눌러 실제 대여소 예측 결과를 확인하세요.
-          </p>
         </section>
       )}
 
