@@ -26,6 +26,31 @@ test("UTC 도착시각을 Asia/Seoul 시각으로 표시한다", () => {
   expect(formatStationTime("2026-08-17T07:35:00Z")).toBe("오후 4:35");
 });
 
+const PREDICTION_RESULT_KEY = "ddarung.mainPredictionResult.v1";
+
+function savedPredictionCandidate(overrides = {}) {
+  return {
+    stationId: "ST-saved",
+    stationName: "저장된 대여소",
+    latitude: 37.51,
+    longitude: 127.01,
+    distanceMeters: 200,
+    durationSeconds: 300,
+    arrivalAt: "2026-08-15T10:05:00+09:00",
+    selectedProbability: 0.46,
+    probabilities: { atLeast1: 0.61, atLeast2: 0.54, atLeast3: 0.46, atLeast4: 0.28, atLeast5: 0.09 },
+    currentInventory: {
+      availableBikeCount: 6,
+      collectedAt: "2026-08-15T10:01:00+09:00",
+      inventoryStatus: "NORMAL",
+    },
+    availabilityLevel: "MEDIUM",
+    predictionStatus: "NORMAL",
+    modelVersion: "availability-v1",
+    ...overrides,
+  };
+}
+
 async function selectPlace(labelPlaceholder, resultName, queryText) {
   const input = screen.getByPlaceholderText(labelPlaceholder);
   fireEvent.focus(input);
@@ -44,6 +69,57 @@ describe("시안 6 메인 로그인 통합", () => {
     getCurrentUser.mockResolvedValue({ authenticated: false, user: null });
     logout.mockResolvedValue();
     fetchArrivalWeather.mockResolvedValue({ status: "UNAVAILABLE", hourlyForecasts: [] });
+  });
+
+  test("새로고침 후 저장된 성공률 게이지·수량별 막대·날씨 아이콘을 복원한다", async () => {
+    const candidate = savedPredictionCandidate();
+    sessionStorage.setItem(PREDICTION_RESULT_KEY, JSON.stringify({
+      input: { origin: "잠실역", destination: "천호역", travelMode: "도보", directMinutes: 15, requiredBikeCount: 3 },
+      routePlaces: { origin: null, destination: null },
+      result: { candidates: [candidate] },
+      selectedStationInfo: { stationId: candidate.stationId, stationName: candidate.stationName },
+      arrivalWeather: {
+        status: "NORMAL",
+        temperatureC: 27,
+        precipitationType: "NONE",
+        skyStatus: "CLEAR",
+        precipitationProbabilityPercent: 0,
+        rainGuidance: false,
+      },
+      weatherRequest: null,
+    }));
+
+    render(<MainPage />);
+
+    expect(await screen.findByRole("img", { name: "성공률 게이지 46%" })).toBeInTheDocument();
+    expect(screen.getAllByText("중간").length).toBeGreaterThan(0);
+    expect(screen.getByRole("img", { name: "맑음" })).toBeInTheDocument();
+    ["61%", "54%", "46%", "28%", "9%"].forEach((probability) => {
+      expect(screen.getAllByText(probability).length).toBeGreaterThan(0);
+    });
+  });
+
+  test("저장된 예측 불가 상태는 확률 대신 안전한 안내를 표시한다", async () => {
+    const candidate = savedPredictionCandidate({
+      selectedProbability: null,
+      probabilities: null,
+      availabilityLevel: null,
+      predictionStatus: "UNAVAILABLE",
+    });
+    sessionStorage.setItem(PREDICTION_RESULT_KEY, JSON.stringify({
+      input: {},
+      routePlaces: {},
+      result: { candidates: [candidate] },
+      selectedStationInfo: { stationId: candidate.stationId, stationName: candidate.stationName },
+      arrivalWeather: null,
+      weatherRequest: null,
+    }));
+
+    render(<MainPage />);
+
+    expect(await screen.findByText("예측을 불러올 수 없음")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "예측을 불러올 수 없음" })).toBeInTheDocument();
+    expect(screen.getByText("선택한 대여소의 대수별 확률 정보가 없어요.")).toBeInTheDocument();
   });
 
   test("비로그인 예측 입력을 저장하고 기존 로그인 페이지로 연결한다", async () => {
