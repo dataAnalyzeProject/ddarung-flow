@@ -5,8 +5,6 @@ import unittest
 from datetime import datetime, timezone
 from unittest.mock import Mock
 
-import numpy as np
-
 import app
 
 
@@ -137,7 +135,7 @@ class PredictionTests(unittest.TestCase):
     def bundle(self, probabilities=None):
         model = Mock()
         values = probabilities or [0.9, 0.8, 0.7, 0.6, 0.5] * 4
-        model.predict_proba.return_value = np.asarray([[1.0 - value, value] for value in values])
+        model.predict_proba.return_value = [[1.0 - value, value] for value in values]
         return {
             "model": model,
             "model_name": "hist_gradient_boosting",
@@ -164,7 +162,7 @@ class PredictionTests(unittest.TestCase):
             values = [row["probability"] for row in prediction["rows"][start:start + 5]]
             self.assertEqual(values, sorted(values, reverse=True))
         model_input = bundle["model"].predict_proba.call_args.args[0]
-        self.assertEqual([102, 0, 14, 8, 0, 11, 60, 1], model_input[0].tolist())
+        self.assertEqual([102, 0, 14, 8, 0, 11, 60, 1], list(model_input[0]))
 
     def test_non_numeric_station_number_is_missing(self):
         result = app.predict_candidates(self.bundle(), {"candidates": [{

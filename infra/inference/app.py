@@ -1,12 +1,11 @@
 import hashlib
 import json
+import math
 import os
 import re
 import tempfile
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
-
-import numpy as np
 
 LEGACY_SETTINGS = (
     "OCI_OBJECT_NAMESPACE",
@@ -210,10 +209,10 @@ def predict_candidates(bundle, payload, generated_at=None, model_sha256=""):
             response.append({"stationId": station_id, "status": "MISSING", "rows": []})
             continue
         try:
-            probabilities = model.predict_proba(np.asarray(rows, dtype=float))[:, 1]
+            probabilities = [float(row[1]) for row in model.predict_proba(rows)]
             if (len(probabilities) != 20
-                or not np.isfinite(probabilities).all()
-                or ((probabilities < 0.0) | (probabilities > 1.0)).any()):
+                or any(not math.isfinite(probability) for probability in probabilities)
+                or any(probability < 0.0 or probability > 1.0 for probability in probabilities)):
                 raise ValueError("model returned invalid probabilities")
             output_rows = []
             offset = 0
