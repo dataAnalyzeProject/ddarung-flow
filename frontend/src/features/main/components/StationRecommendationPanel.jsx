@@ -27,7 +27,7 @@ export function formatStationTime(value) {
 function sortCandidates(candidates, sortBy) {
   return [...candidates].sort((a, b) => {
     if (sortBy === "probability") {
-      const probabilityDifference = b.selectedProbability - a.selectedProbability;
+      const probabilityDifference = (b.selectedProbability ?? -1) - (a.selectedProbability ?? -1);
       if (probabilityDifference !== 0) return probabilityDifference;
     }
     const durationDifference = a.durationSeconds - b.durationSeconds;
@@ -88,9 +88,8 @@ export default function StationRecommendationPanel({ candidates, selectedStation
                 <strong>{formatStationTime(candidate.arrivalAt)}</strong>
               </span>
               <span className="main-station-rate">
-                <small>예상 대여 성공률</small>
-                <b aria-label={`성공률 ${Math.round(candidate.selectedProbability * 100)}%`}>{Math.round(candidate.selectedProbability * 100)}%</b>
-                <em>{availabilityLabels[level] ?? "-"}</em>
+                <small>대여 가능성</small>
+                <em>{availabilityLabels[level] ?? "예측 불가"}</em>
               </span>
               <button aria-label={`${candidate.stationName} 상세보기`} className="main-details" type="button" onClick={() => onViewGuide(candidate)}>상세보기</button>
             </div>

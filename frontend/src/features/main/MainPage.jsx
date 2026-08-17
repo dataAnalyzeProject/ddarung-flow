@@ -146,9 +146,15 @@ export default function MainPage({ onNavigate }) {
         return;
       }
       setApiPredictionResult(result);
-      const firstCandidate = result.candidates[0];
-      setSelectedStationInfo({ stationId: firstCandidate.stationId, stationName: firstCandidate.stationName });
-      selectCandidateWeather(firstCandidate);
+      const defaultCandidate = [...result.candidates].sort((a, b) => {
+        const probabilityDifference = (b.selectedProbability ?? -1) - (a.selectedProbability ?? -1);
+        if (probabilityDifference !== 0) return probabilityDifference;
+        const durationDifference = a.durationSeconds - b.durationSeconds;
+        if (durationDifference !== 0) return durationDifference;
+        return a.distanceMeters - b.distanceMeters;
+      })[0];
+      setSelectedStationInfo({ stationId: defaultCandidate.stationId, stationName: defaultCandidate.stationName });
+      selectCandidateWeather(defaultCandidate);
     } catch {
       setApiPredictionResult(null);
     } finally {

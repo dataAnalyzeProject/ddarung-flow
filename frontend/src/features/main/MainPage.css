@@ -303,3 +303,22 @@
 /* Idle state (no prediction yet): only the map renders, so let it fill the whole dashboard row. */
 .main-dashboard-empty{grid-template-columns:1fr}
 .main-dashboard-empty .main-map-panel{grid-column:1/-1}
+
+/* Prediction result panels: keep the selected result readable at narrow desktop widths. */
+.main-side-panels>section{display:grid;grid-template-rows:auto minmax(0,1fr);padding-bottom:10px}
+.main-success{min-height:86px;align-self:center}
+.main-success-gauge{--gauge-color:#00a978;--gauge-progress:0deg;width:78px;height:78px;display:grid;flex:0 0 78px;place-items:center;border:0!important;border-radius:50%;background:radial-gradient(circle,#fff 0 59%,transparent 60%),conic-gradient(var(--gauge-color) var(--gauge-progress),#dfe7ef 0);color:var(--gauge-color);font-size:22px!important;font-variant-numeric:tabular-nums}
+.main-success-gauge.is-unavailable{background:radial-gradient(circle,#f8fafc 0 59%,transparent 60%),#dfe7ef;color:#71839a}
+.main-chart{height:auto;min-height:94px;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));align-items:end;gap:8px;padding:0 12px 2px}
+.main-chart-column{height:92px;display:grid;grid-template-rows:15px 1fr 15px;align-items:end;justify-items:center;gap:3px;color:#71839a;font-size:9px}
+.main-chart-column>strong{font-size:9px;font-variant-numeric:tabular-nums}
+.main-chart-track{width:16px;height:55px;display:flex;align-items:end;border-radius:4px 4px 0 0;background:#eef3f7;overflow:hidden}
+.main-chart-track i{width:100%;min-height:2px;border-radius:4px 4px 0 0;background:#02aa75}
+.main-chart-column>b{font-size:9px;font-style:normal;white-space:nowrap}
+.main-weather{min-height:53px;display:grid;grid-template-columns:48px minmax(54px,auto) minmax(0,1fr);align-items:center;column-gap:10px}
+.main-weather-temperature{padding-right:10px;border-right:1px solid #d8e1ea;font-size:19px;line-height:1.05}
+.main-weather-temperature small{display:block;margin-top:4px;font-size:8px}
+.main-weather dl{display:grid;gap:5px}
+.main-weather dl div{grid-template-columns:auto auto;justify-content:start;gap:5px}
+.main-side-panels>section:last-child .main-tip{align-self:stretch}
+@media(max-height:720px){.main-success{min-height:56px}.main-success-gauge{width:50px;height:50px;flex-basis:50px;font-size:14px!important}.main-success-gauge::before{inset:4px}.main-chart{min-height:62px}.main-chart-column{height:60px;grid-template-rows:11px 1fr 12px;font-size:7px}.main-chart-column>strong,.main-chart-column>b{font-size:7px}.main-chart-track{width:12px;height:36px}.main-weather{min-height:40px;grid-template-columns:38px minmax(43px,auto) minmax(0,1fr);column-gap:6px}.main-weather-temperature{padding-right:7px;font-size:15px}.main-weather-temperature small,.main-weather dl{font-size:7px}}
