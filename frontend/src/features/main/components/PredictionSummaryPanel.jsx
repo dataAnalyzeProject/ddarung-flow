@@ -1,4 +1,10 @@
 import { formatStationTime } from "./StationRecommendationPanel";
+import sunnyIcon from "../../../assets/weather/sunny.png";
+import partlyCloudyIcon from "../../../assets/weather/partly-cloudy.png";
+import cloudyIcon from "../../../assets/weather/cloudy.png";
+import rainIcon from "../../../assets/weather/rain.png";
+import snowIcon from "../../../assets/weather/snow.png";
+import thunderstormIcon from "../../../assets/weather/thunderstorm.png";
 
 const availabilityLabels = { HIGH: "높음", MEDIUM: "중간", LOW: "낮음" };
 const availabilityColors = { HIGH: "#00a978", MEDIUM: "#e7a400", LOW: "#df5a55" };
@@ -15,6 +21,7 @@ const AVAILABILITY_TIP = {
 };
 
 const PROBABILITY_BARS = [1, 2, 3, 4, 5];
+const GAUGE_CIRCUMFERENCE = 264;
 
 const SKY_TEXT = { CLEAR: "맑음", MOSTLY_CLOUDY: "구름 많음", OVERCAST: "흐림" };
 const PRECIPITATION_TEXT = { RAIN: "비", RAIN_SNOW: "비 또는 눈", SNOW: "눈", SHOWER: "소나기" };
@@ -24,6 +31,15 @@ function weatherConditionText(weather) {
     return PRECIPITATION_TEXT[weather.precipitationType] || weather.precipitationType;
   }
   return SKY_TEXT[weather.skyStatus] || "맑음";
+}
+
+function weatherIcon(weather) {
+  if (weather.skyStatus === "THUNDERSTORM") return thunderstormIcon;
+  if (weather.precipitationType === "SNOW" || weather.precipitationType === "RAIN_SNOW") return snowIcon;
+  if (weather.precipitationType === "RAIN" || weather.precipitationType === "SHOWER") return rainIcon;
+  if (weather.skyStatus === "MOSTLY_CLOUDY") return partlyCloudyIcon;
+  if (weather.skyStatus === "OVERCAST") return cloudyIcon;
+  return sunnyIcon;
 }
 
 function PredictionChart({ candidate }) {
@@ -72,7 +88,7 @@ function PredictionWeather({ weather, weatherLoading, onRetryWeather, arrivalAt 
       ) : (
         <>
           <div className="main-weather">
-            <b aria-label={weatherConditionText(weather)} />
+            <img className="main-weather-icon" src={weatherIcon(weather)} alt={weatherConditionText(weather)} />
             <strong className="main-weather-temperature">{weather.temperatureC}°C<small>{weatherConditionText(weather)}</small></strong>
             <dl>
               <div><dt>강수확률</dt><dd>{weather.precipitationProbabilityPercent}%</dd></div>
@@ -96,7 +112,7 @@ export default function PredictionSummaryPanel({ candidates, selectedStationId, 
   const percentage = hasProbability ? Math.round(probability * 100) : null;
   const gaugeStyle = hasProbability ? {
     "--gauge-color": availabilityColors[level] || "#00a978",
-    "--gauge-progress": `${percentage * 3.6}deg`,
+    "--gauge-offset": `${GAUGE_CIRCUMFERENCE * (1 - percentage / 100)}`,
   } : undefined;
   const statusText = predictionStatusText[selectedCandidate?.predictionStatus] || "예측 결과를 확인하세요.";
 
@@ -105,13 +121,18 @@ export default function PredictionSummaryPanel({ candidates, selectedStationId, 
       <section aria-labelledby="main-success-title">
         <header><h2 id="main-success-title">예상 대여 성공률</h2></header>
         <div className="main-success">
-          <strong
+          <div
             aria-label={hasProbability ? `성공률 게이지 ${percentage}%` : statusText}
             className={`main-success-gauge ${hasProbability ? "" : "is-unavailable"}`}
+            role="img"
             style={gaugeStyle}
           >
-            {hasProbability ? `${percentage}%` : "-"}
-          </strong>
+            <svg aria-hidden="true" viewBox="0 0 100 100">
+              <circle className="main-success-gauge-track" cx="50" cy="50" r="42" />
+              {hasProbability && <circle className="main-success-gauge-progress" cx="50" cy="50" r="42" />}
+            </svg>
+            <strong>{hasProbability ? `${percentage}%` : "-"}</strong>
+          </div>
           <p>
             <b>{hasProbability ? availabilityLabels[level] : statusText}</b>
             <span>{selectedCandidate?.stationName ?? "-"} 기준</span>

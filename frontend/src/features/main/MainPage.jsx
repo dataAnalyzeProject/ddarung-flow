@@ -25,6 +25,16 @@ const EMPTY_INPUT = {
 };
 
 const TRAVEL_MODE_TO_API = { "도보": "WALK", "대중교통": "PUBLIC_TRANSIT" };
+const PREDICTION_RESULT_KEY = "ddarung.mainPredictionResult.v1";
+
+function loadSavedPredictionResult() {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(PREDICTION_RESULT_KEY));
+    return Array.isArray(saved?.result?.candidates) ? saved : null;
+  } catch {
+    return null;
+  }
+}
 
 // RidingGuidePage(FE-4.5)는 measurementStation을 표시용 문자열로 렌더링하므로
 // 백엔드의 { name, distanceMeters } 객체에서 name만 꺼내 전달한다.
@@ -74,6 +84,29 @@ export default function MainPage({ onNavigate }) {
       });
   }, []);
 
+  useEffect(() => {
+    const saved = loadSavedPredictionResult();
+    if (!saved) return;
+    setInput({ ...EMPTY_INPUT, ...saved.input });
+    setRoutePlaces(saved.routePlaces || { origin: null, destination: null });
+    setApiPredictionResult(saved.result);
+    setSelectedStationInfo(saved.selectedStationInfo || null);
+    setArrivalWeather(saved.arrivalWeather || null);
+    setWeatherRequest(saved.weatherRequest || null);
+  }, []);
+
+  useEffect(() => {
+    if (!apiPredictionResult) return;
+    sessionStorage.setItem(PREDICTION_RESULT_KEY, JSON.stringify({
+      input,
+      routePlaces,
+      result: apiPredictionResult,
+      selectedStationInfo,
+      arrivalWeather,
+      weatherRequest,
+    }));
+  }, [apiPredictionResult, arrivalWeather, input, routePlaces, selectedStationInfo, weatherRequest]);
+
   const updateInput = (key, value) => {
     setInput((current) => ({ ...current, [key]: value }));
     if (key === "origin" || key === "destination") {
@@ -81,6 +114,7 @@ export default function MainPage({ onNavigate }) {
       setApiPredictionResult(null);
       setArrivalWeather(null);
       setWeatherRequest(null);
+      sessionStorage.removeItem(PREDICTION_RESULT_KEY);
     }
     if (key === "directMinutes") setTimeConfirmed(false);
   };
@@ -218,6 +252,7 @@ export default function MainPage({ onNavigate }) {
       setApiPredictionResult(null);
       setArrivalWeather(null);
       setWeatherRequest(null);
+      sessionStorage.removeItem(PREDICTION_RESULT_KEY);
     } catch {
       setAuthState("authenticated");
     }
