@@ -9,7 +9,7 @@ export function formatTime(value) {
 export default function PredictionCard({ candidate, requiredBikeCount, selected, onSelect, onToggleDetails, detailsOpen, alternative = false }) {
   const level = candidate.availabilityLevel;
 
-  return <article className={`prediction-card level-${level.toLowerCase()} ${selected ? "selected" : ""} ${alternative ? "alternative" : ""}`}>
+  return <article className={`prediction-card level-${level ? level.toLowerCase() : "unknown"} ${selected ? "selected" : ""} ${alternative ? "alternative" : ""}`}>
     <button className="prediction-card-main" type="button" onClick={() => onSelect(candidate.stationId)} aria-pressed={selected}>
       <header><span>{alternative ? "대체 후보" : candidate.stationId}</span><strong>{Math.round(candidate.selectedProbability * 100)}%</strong></header>
       <h3>{candidate.stationName}</h3>
