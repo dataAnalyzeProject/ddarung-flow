@@ -46,7 +46,7 @@ function dateTimeText(value) {
   return `${date} ${time.slice(0, 5)}`;
 }
 
-export default function WeatherCard({ weather, expanded = false, onToggle }) {
+export default function WeatherCard({ weather, expanded = false, onToggle, onRetry, retrying = false }) {
   if (!weather) return null;
 
   const isFailure = weather.status === "MISSING" || weather.status === "UNAVAILABLE";
@@ -58,7 +58,7 @@ export default function WeatherCard({ weather, expanded = false, onToggle }) {
     <section className={`weather-card status-${weather.status.toLowerCase()}`} aria-labelledby="weather-card-title">
       <header className="weather-card__header">
         <div>
-          <p className="weather-card__eyebrow">ARRIVAL WEATHER · 승인 Mock</p>
+          <p className="weather-card__eyebrow">ARRIVAL WEATHER</p>
           <h2 id="weather-card-title">도착 예정시간 날씨</h2>
           <p className="weather-card__location">{locationText(weather.location)}</p>
         </div>
@@ -68,7 +68,14 @@ export default function WeatherCard({ weather, expanded = false, onToggle }) {
       </header>
 
       {isFailure ? (
-        <p className="weather-card__message" role="status">{weather.message}</p>
+        <>
+          <p className="weather-card__message" role="status">{weather.message}</p>
+          {weather.status === "UNAVAILABLE" && onRetry && (
+            <button className="weather-card__toggle" type="button" onClick={onRetry} disabled={retrying}>
+              {retrying ? "날씨 다시 불러오는 중" : "날씨 다시 시도"}
+            </button>
+          )}
+        </>
       ) : (
         <>
           {weather.status === "DELAYED" && (

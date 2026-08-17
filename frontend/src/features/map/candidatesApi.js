@@ -41,8 +41,6 @@ export async function fetchRouteCandidates({
   if (response.status === 401 || response.status === 403) {
     throw new Error("AUTH_REQUIRED");
   }
-  if (!response.ok) {
-    throw new Error("CANDIDATE_FETCH_FAILED");
-  }
+  if (!response.ok) throw new Error(response.status === 502 ? "ROUTE_PROVIDER_ERROR" : "CANDIDATE_FETCH_FAILED");
   return response.json();
 }

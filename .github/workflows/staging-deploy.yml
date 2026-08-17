@@ -183,6 +183,7 @@ jobs:
           KAKAO_CLIENT_SECRET: ${{ secrets.KAKAO_CLIENT_SECRET }}
           KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
           AIRKOREA_SERVICE_KEY: ${{ secrets.AIRKOREA_SERVICE_KEY }}
+          KMA_SERVICE_KEY: ${{ secrets.KMA_SERVICE_KEY }}
           NAVER_CLIENT_ID: ${{ vars.NAVER_CLIENT_ID }}
           NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
           MODEL_POINTER_KEY: ${{ vars.MODEL_POINTER_KEY }}
@@ -200,14 +201,12 @@ jobs:
               exit 1
             fi
           done
-          if [ -z "${KAKAO_REST_API_KEY:-}" ]; then
-            echo "Required Kakao REST configuration is missing: KAKAO_REST_API_KEY" >&2
-            exit 1
-          fi
-          if [ -z "${AIRKOREA_SERVICE_KEY:-}" ]; then
-            echo "Required AirKorea configuration is missing: AIRKOREA_SERVICE_KEY" >&2
-            exit 1
-          fi
+          for name in KAKAO_REST_API_KEY AIRKOREA_SERVICE_KEY; do
+            if [ -z "${!name:-}" ]; then
+              echo "Required external API configuration is missing: $name" >&2
+              exit 1
+            fi
+          done
 
           image_base="$OCI_REGISTRY/$OCI_NAMESPACE/$OCI_REPOSITORY"
           {
@@ -233,6 +232,7 @@ jobs:
             printf 'KAKAO_CLIENT_SECRET=%s\n' "$KAKAO_CLIENT_SECRET"
             printf 'KAKAO_REST_API_KEY=%s\n' "$KAKAO_REST_API_KEY"
             printf 'AIRKOREA_SERVICE_KEY=%s\n' "$AIRKOREA_SERVICE_KEY"
+            printf 'KMA_SERVICE_KEY=%s\n' "$KMA_SERVICE_KEY"
             printf 'NAVER_CLIENT_ID=%s\n' "$NAVER_CLIENT_ID"
             printf 'NAVER_CLIENT_SECRET=%s\n' "$NAVER_CLIENT_SECRET"
           } > oauth.candidate.env

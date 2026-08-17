@@ -75,6 +75,15 @@ test.each([
   expect(screen.queryByRole("button")).not.toBeInTheDocument();
 });
 
+test("UNAVAILABLE 상태에서 제공된 재시도 동작을 실행한다", async () => {
+  const onRetry = jest.fn();
+  render(<WeatherCard weather={unavailableWeather} onRetry={onRetry} />);
+
+  await userEvent.click(screen.getByRole("button", { name: "날씨 다시 시도" }));
+
+  expect(onRetry).toHaveBeenCalledTimes(1);
+});
+
 test("Tab과 Enter로 펼치기 버튼을 조작한다", async () => {
   const onToggle = jest.fn();
   render(<WeatherCard weather={rainyWeather} onToggle={onToggle} />);
