@@ -103,6 +103,18 @@ export default function MainPage({ onNavigate }) {
     }
   };
 
+  const selectCandidateWeather = (candidate) => {
+    if (!candidate) return;
+    const request = {
+      latitude: candidate.latitude,
+      longitude: candidate.longitude,
+      arrivalAt: candidate.arrivalAt,
+      location: candidate.stationName,
+    };
+    setWeatherRequest(request);
+    void loadArrivalWeather(request);
+  };
+
   const handlePredict = async () => {
     if (authState !== "authenticated") {
       savePendingPrediction(input);
@@ -135,14 +147,8 @@ export default function MainPage({ onNavigate }) {
       }
       setApiPredictionResult(result);
       const firstCandidate = result.candidates[0];
-      const request = {
-        latitude: routePlaces.destination.latitude,
-        longitude: routePlaces.destination.longitude,
-        arrivalAt: firstCandidate.arrivalAt,
-        location: routePlaces.destination.name,
-      };
-      setWeatherRequest(request);
-      void loadArrivalWeather(request);
+      setSelectedStationInfo({ stationId: firstCandidate.stationId, stationName: firstCandidate.stationName });
+      selectCandidateWeather(firstCandidate);
     } catch {
       setApiPredictionResult(null);
     } finally {
@@ -154,6 +160,7 @@ export default function MainPage({ onNavigate }) {
     const candidate = apiPredictionResult?.candidates?.find((item) => item.stationId === stationId);
     if (candidate) {
       setSelectedStationInfo({ stationId: candidate.stationId, stationName: candidate.stationName });
+      selectCandidateWeather(candidate);
     }
   };
 

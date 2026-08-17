@@ -39,11 +39,14 @@ services:
       KAKAO_REST_API_KEY: ${KAKAO_REST_API_KEY}
       AIRKOREA_SERVICE_KEY: ${AIRKOREA_SERVICE_KEY}
       KMA_SERVICE_KEY: ${KMA_SERVICE_KEY}
+      INFERENCE_BASE_URL: http://inference:8081
       SERVER_FORWARD_HEADERS_STRATEGY: framework
     ports:
       - "${BACKEND_BIND_ADDRESS:-127.0.0.1}:${BACKEND_PORT}:8080"
     depends_on:
       postgres:
+        condition: service_healthy
+      inference:
         condition: service_healthy
     restart: unless-stopped
     networks:
@@ -81,7 +84,29 @@ services:
       MODEL_SHA256: ${MODEL_SHA256:-2f2ece729fd4b03954212d2fcc2ece4cd07110c947fae1dfc0c7ba29cde34db9}
       MODEL_POINTER_KEY: ${MODEL_POINTER_KEY:-}
       MODEL_POINTER_SHA256: ${MODEL_POINTER_SHA256:-}
-    restart: "no"
+      MODEL_LOCAL_PATH: /models/model_winner.joblib
+    volumes:
+      - ${MODEL_LOCAL_PATH_HOST:-../../.local-models/model_winner.joblib}:/models/model_winner.joblib:ro
+    restart: unless-stopped
+    networks:
+      - staging
+
+  inventory-refresher:
+    image: ${INVENTORY_REFRESHER_IMAGE:-ddarung-flow-inventory-refresher:local}
+    build:
+      context: ../..
+      dockerfile: infra/inventory-refresher/Dockerfile
+    environment:
+      SEOUL_OPEN_API_KEY: ${SEOUL_OPEN_API_KEY}
+      DB_HOST: postgres
+      DB_NAME: ${DB_NAME}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      INVENTORY_REFRESH_SECONDS: ${INVENTORY_REFRESH_SECONDS:-600}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
     networks:
       - staging
 

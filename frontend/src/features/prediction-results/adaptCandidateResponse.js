@@ -5,6 +5,8 @@ export function adaptCandidateResponse(candidateDtos, { requestedAt, requiredBik
   const candidates = (candidateDtos ?? []).map((dto) => ({
     stationId: dto.stationId,
     stationName: dto.stationName,
+    latitude: dto.latitude,
+    longitude: dto.longitude,
     distanceMeters: dto.distanceMeters,
     durationSeconds: dto.durationSeconds,
     arrivalAt: dto.arrivalAt,

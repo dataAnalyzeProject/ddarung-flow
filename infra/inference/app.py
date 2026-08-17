@@ -1,8 +1,10 @@
 import hashlib
 import json
+import math
 import os
 import re
 import tempfile
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 LEGACY_SETTINGS = (
@@ -12,10 +14,29 @@ LEGACY_SETTINGS = (
     "MODEL_SHA256",
 )
 POINTER_SETTINGS = ("MODEL_POINTER_KEY", "MODEL_POINTER_SHA256")
+SUPPORTED_HORIZONS = (60, 120, 180, 240)
+SUPPORTED_QUANTITIES = (1, 2, 3, 4, 5)
+EXPECTED_FEATURE_NAMES = (
+    "station_id",
+    "day_of_week",
+    "hour_of_day",
+    "month",
+    "is_weekend",
+    "current_bike_count",
+    "horizon_minutes",
+    "required_bike_count",
+)
+KST = timezone(timedelta(hours=9))
 
 
 def settings_from_environment(environment=os.environ):
     settings = {name: environment.get(name, "") for name in LEGACY_SETTINGS + POINTER_SETTINGS}
+    settings["MODEL_LOCAL_PATH"] = environment.get("MODEL_LOCAL_PATH", "")
+    if settings["MODEL_LOCAL_PATH"]:
+        if not re.fullmatch(r"[0-9a-f]{64}", settings["MODEL_SHA256"]):
+            raise RuntimeError("MODEL_SHA256 must be a lowercase SHA-256 digest")
+        settings["MODEL_MODE"] = "local"
+        return settings
     pointer_values = [settings[name] for name in POINTER_SETTINGS]
     if any(pointer_values) and not all(pointer_values):
         raise RuntimeError("MODEL_POINTER_KEY and MODEL_POINTER_SHA256 must be set together")
@@ -106,6 +127,17 @@ def load_pointer_model(object_storage, settings):
 
 def load_model(settings):
     import joblib
+
+    if settings["MODEL_MODE"] == "local":
+        artifact_path = settings["MODEL_LOCAL_PATH"]
+        digest = hashlib.sha256()
+        with open(artifact_path, "rb") as artifact:
+            for chunk in iter(lambda: artifact.read(1024 * 1024), b""):
+                digest.update(chunk)
+        if digest.hexdigest() != settings["MODEL_SHA256"]:
+            raise RuntimeError("Local model checksum does not match MODEL_SHA256")
+        return joblib.load(artifact_path)
+
     import oci
 
     signer = oci.auth.signers.InstancePrincipalsSecurityTokenSigner()
@@ -117,7 +149,97 @@ def load_model(settings):
         return joblib.load(artifact.name)
 
 
-class HealthHandler(BaseHTTPRequestHandler):
+def _model_parts(bundle):
+    if not isinstance(bundle, dict):
+        raise RuntimeError("model artifact must contain a dictionary")
+    model = bundle.get("model")
+    feature_names = tuple(bundle.get("feature_names") or ())
+    if model is None or feature_names != EXPECTED_FEATURE_NAMES:
+        raise RuntimeError("model artifact feature names do not match the approved contract")
+    model_name = str(bundle.get("model_name") or "unknown")
+    return model, model_name
+
+
+def _parse_feature_as_of(value):
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("featureAsOf is required")
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        raise ValueError("featureAsOf must include a timezone")
+    return parsed.astimezone(KST)
+
+
+def _candidate_rows(candidate):
+    station_number = candidate.get("stationNumber")
+    if isinstance(station_number, bool):
+        raise ValueError("stationNumber must be numeric")
+    try:
+        station_number = int(str(station_number).strip())
+        current_bike_count = int(candidate.get("currentBikeCount"))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("stationNumber and currentBikeCount must be integers") from exc
+    if station_number <= 0 or current_bike_count < 0:
+        raise ValueError("stationNumber must be positive and currentBikeCount must not be negative")
+    feature_as_of = _parse_feature_as_of(candidate.get("featureAsOf"))
+    day_of_week = feature_as_of.weekday()
+    base = (
+        station_number,
+        day_of_week,
+        feature_as_of.hour,
+        feature_as_of.month,
+        1 if day_of_week >= 5 else 0,
+        current_bike_count,
+    )
+    return [base + (horizon, quantity) for horizon in SUPPORTED_HORIZONS for quantity in SUPPORTED_QUANTITIES]
+
+
+def predict_candidates(bundle, payload, generated_at=None, model_sha256=""):
+    candidates = payload.get("candidates") if isinstance(payload, dict) else None
+    if not isinstance(candidates, list) or not 1 <= len(candidates) <= 5:
+        return {"status": "UNAVAILABLE", "errorCode": "INVALID_CANDIDATES", "predictions": []}
+
+    model, model_name = _model_parts(bundle)
+    generated_at = generated_at or datetime.now(timezone.utc)
+    response = []
+    for candidate in candidates:
+        station_id = candidate.get("stationId") if isinstance(candidate, dict) else None
+        try:
+            rows = _candidate_rows(candidate)
+        except (AttributeError, ValueError):
+            response.append({"stationId": station_id, "status": "MISSING", "rows": []})
+            continue
+        try:
+            probabilities = [float(row[1]) for row in model.predict_proba(rows)]
+            if (len(probabilities) != 20
+                or any(not math.isfinite(probability) for probability in probabilities)
+                or any(probability < 0.0 or probability > 1.0 for probability in probabilities)):
+                raise ValueError("model returned invalid probabilities")
+            output_rows = []
+            offset = 0
+            for horizon in SUPPORTED_HORIZONS:
+                running = 1.0
+                for quantity in SUPPORTED_QUANTITIES:
+                    probability = min(running, float(probabilities[offset]))
+                    running = probability
+                    output_rows.append({
+                        "horizonMinutes": horizon,
+                        "requiredBikeCount": quantity,
+                        "probability": probability,
+                    })
+                    offset += 1
+            response.append({"stationId": station_id, "status": "NORMAL", "rows": output_rows})
+        except Exception:
+            response.append({"stationId": station_id, "status": "UNAVAILABLE", "rows": []})
+
+    return {
+        "status": "NORMAL",
+        "modelVersion": f"{model_name}@{model_sha256[:12]}",
+        "generatedAt": generated_at.isoformat().replace("+00:00", "Z"),
+        "predictions": response,
+    }
+
+
+class InferenceHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path != "/health":
             self.send_response(404)
@@ -130,14 +252,41 @@ class HealthHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def do_POST(self):
+        if self.path != "/predict":
+            self.send_response(404)
+            self.end_headers()
+            return
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if length <= 0 or length > 65536:
+                raise ValueError("invalid content length")
+            payload = json.loads(self.rfile.read(length))
+            result = predict_candidates(
+                self.server.model_bundle,
+                payload,
+                model_sha256=self.server.model_sha256,
+            )
+        except Exception:
+            result = {"status": "UNAVAILABLE", "errorCode": "INVALID_REQUEST", "predictions": []}
+        body = json.dumps(result).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def log_message(self, format, *args):
         return
 
 
 def main():
     settings = settings_from_environment()
-    load_model(settings)
-    server = HTTPServer(("0.0.0.0", 8081), HealthHandler)
+    model_bundle = load_model(settings)
+    _model_parts(model_bundle)
+    server = HTTPServer(("0.0.0.0", 8081), InferenceHandler)
+    server.model_bundle = model_bundle
+    server.model_sha256 = settings["MODEL_SHA256"]
     server.health_response = {"status": "healthy"}
     if settings["MODEL_MODE"] == "pointer":
         server.health_response["model_source"] = "verified_pointer"
