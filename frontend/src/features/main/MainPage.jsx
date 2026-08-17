@@ -9,11 +9,11 @@ import AppHeader from "../../shared/AppHeader";
 import MapRoutePanel from "../map/MapRoutePanel";
 import LoginPromptModal from "./components/LoginPromptModal";
 import MainSearchForm from "./components/MainSearchForm";
-import PredictionResults from "../prediction-results/PredictionResults";
+import StationRecommendationPanel from "./components/StationRecommendationPanel";
+import PredictionSummaryPanel from "./components/PredictionSummaryPanel";
 import { adaptCandidateResponse } from "../prediction-results/adaptCandidateResponse";
 import RidingGuidePage from "../riding-guide/RidingGuidePage";
 import { fetchAirQuality } from "../riding-guide/airQualityApi";
-import WeatherCard from "../weather/WeatherCard";
 import { adaptArrivalWeather, fetchArrivalWeather } from "../weather/weatherApi";
 
 const EMPTY_INPUT = {
@@ -51,7 +51,6 @@ export default function MainPage({ onNavigate }) {
   const [guideAirQuality, setGuideAirQuality] = useState(null);
   const [guideAirQualityLoading, setGuideAirQualityLoading] = useState(false);
   const [arrivalWeather, setArrivalWeather] = useState(null);
-  const [weatherExpanded, setWeatherExpanded] = useState(false);
   const [weatherRequest, setWeatherRequest] = useState(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
 
@@ -178,7 +177,10 @@ export default function MainPage({ onNavigate }) {
     }
   };
 
-  const openRidingGuide = () => setRidingGuideOpen(true);
+  const openRidingGuideFor = (candidate) => {
+    setSelectedStationInfo({ stationId: candidate.stationId, stationName: candidate.stationName });
+    setRidingGuideOpen(true);
+  };
   const closeRidingGuide = () => setRidingGuideOpen(false);
 
   useEffect(() => {
@@ -262,21 +264,30 @@ export default function MainPage({ onNavigate }) {
       {predictError && <section className="main-feedback error"><b>예측 안내</b><p>{predictError}</p><button type="button" onClick={handlePredict}>다시 시도</button><button type="button" onClick={() => setPredictError("")}>닫기</button></section>}
 
       {apiPredictionResult ? (
-        <>
-          <PredictionResults
-            result={apiPredictionResult}
-            onEditInput={() => setApiPredictionResult(null)}
-            onSelectStation={handleSelectStation}
+        <section className="main-dashboard">
+          <StationRecommendationPanel
+            candidates={apiPredictionResult.candidates}
+            selectedStationId={selectedStationInfo?.stationId}
+            onSelect={handleSelectStation}
+            onViewGuide={openRidingGuideFor}
           />
-          {arrivalWeather && <WeatherCard weather={arrivalWeather} expanded={weatherExpanded} onToggle={() => setWeatherExpanded((expanded) => !expanded)} onRetry={() => void loadArrivalWeather(weatherRequest)} retrying={weatherLoading} />}
-          {selectedStationInfo && (
-            <p className="main-riding-guide-entry">
-              <button type="button" onClick={openRidingGuide}>
-                {selectedStationInfo.stationName} 라이딩 가이드 보기
-              </button>
-            </p>
-          )}
-        </>
+          <MapRoutePanel
+            originText={input.origin}
+            destinationText={input.destination}
+            travelMode={input.travelMode}
+            selectedPlaces={routePlaces}
+            onDurationChange={(minutes) => updateInput("directMinutes", minutes)}
+            fallbackImage={routeMap}
+            canViewStations={authState === "authenticated"}
+          />
+          <PredictionSummaryPanel
+            candidates={apiPredictionResult.candidates}
+            selectedStationId={selectedStationInfo?.stationId}
+            arrivalWeather={arrivalWeather}
+            weatherLoading={weatherLoading}
+            onRetryWeather={() => void loadArrivalWeather(weatherRequest)}
+          />
+        </section>
       ) : (
         <section className="main-dashboard main-dashboard-empty">
           <MapRoutePanel
@@ -288,9 +299,6 @@ export default function MainPage({ onNavigate }) {
             fallbackImage={routeMap}
             canViewStations={authState === "authenticated"}
           />
-          <p className="main-empty-state">
-            출발지와 목적지를 검색 결과에서 선택한 뒤 예측 버튼을 눌러 실제 대여소 예측 결과를 확인하세요.
-          </p>
         </section>
       )}
 
