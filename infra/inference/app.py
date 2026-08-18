@@ -24,7 +24,6 @@ EXPECTED_FEATURE_NAMES = (
     "is_weekend",
     "current_bike_count",
     "horizon_minutes",
-    "required_bike_count",
 )
 KST = timezone(timedelta(hours=9))
 
@@ -114,6 +113,18 @@ def validate_manifest(manifest, pointer):
         raise RuntimeError("manifest combination count does not match pointer")
 
 
+def validate_distribution_artifact(model):
+    if not isinstance(model, dict):
+        raise RuntimeError("model artifact must be a mapping")
+    if model.get("model_name") != "hist_gradient_boosting_inventory_distribution":
+        raise RuntimeError("model artifact is not an inventory distribution model")
+    if model.get("bucket_definition") != "0,1,2,3,4,5+":
+        raise RuntimeError("model artifact bucket definition is invalid")
+    if not isinstance(model.get("feature_columns"), list):
+        raise RuntimeError("model artifact feature columns are invalid")
+    return model
+
+
 def load_pointer_model(object_storage, settings):
     pointer = validate_pointer(json.loads(download_bytes_and_verify(object_storage, settings, settings["MODEL_POINTER_KEY"], settings["MODEL_POINTER_SHA256"])))
     manifest = json.loads(download_bytes_and_verify(object_storage, settings, pointer["manifest"]["key"], pointer["manifest"]["sha256"]))
@@ -136,28 +147,30 @@ def load_model(settings):
                 digest.update(chunk)
         if digest.hexdigest() != settings["MODEL_SHA256"]:
             raise RuntimeError("Local model checksum does not match MODEL_SHA256")
-        return joblib.load(artifact_path)
+        return validate_distribution_artifact(joblib.load(artifact_path))
 
     import oci
 
     signer = oci.auth.signers.InstancePrincipalsSecurityTokenSigner()
     object_storage = oci.object_storage.ObjectStorageClient({}, signer=signer)
     if settings["MODEL_MODE"] == "pointer":
-        return load_pointer_model(object_storage, settings)
+        return validate_distribution_artifact(load_pointer_model(object_storage, settings))
     with tempfile.NamedTemporaryFile(suffix=".joblib") as artifact:
         download_and_verify(object_storage, settings, artifact.name)
-        return joblib.load(artifact.name)
+        return validate_distribution_artifact(joblib.load(artifact.name))
 
 
 def _model_parts(bundle):
     if not isinstance(bundle, dict):
         raise RuntimeError("model artifact must contain a dictionary")
     model = bundle.get("model")
-    feature_names = tuple(bundle.get("feature_names") or ())
-    if model is None or feature_names != EXPECTED_FEATURE_NAMES:
+    feature_names = tuple(bundle.get("feature_columns") or ())
+    if (model is None
+        or feature_names != EXPECTED_FEATURE_NAMES
+        or bundle.get("model_name") != "hist_gradient_boosting_inventory_distribution"
+        or bundle.get("bucket_definition") != "0,1,2,3,4,5+"):
         raise RuntimeError("model artifact feature names do not match the approved contract")
-    model_name = str(bundle.get("model_name") or "unknown")
-    return model, model_name
+    return model, str(bundle["model_name"])
 
 
 def _parse_feature_as_of(value):
@@ -190,7 +203,23 @@ def _candidate_rows(candidate):
         1 if day_of_week >= 5 else 0,
         current_bike_count,
     )
-    return [base + (horizon, quantity) for horizon in SUPPORTED_HORIZONS for quantity in SUPPORTED_QUANTITIES]
+    return [base + (horizon,) for horizon in SUPPORTED_HORIZONS]
+
+
+def _tail_probabilities(model, rows):
+    probabilities = model.predict_proba(rows)
+    classes = [int(value) for value in model.classes_]
+    if len(probabilities) != len(rows) or set(classes) - set(range(6)):
+        raise ValueError("model returned invalid inventory classes")
+    tails = []
+    for row in probabilities:
+        if len(row) != len(classes) or any(not math.isfinite(float(value)) or not 0.0 <= float(value) <= 1.0 for value in row):
+            raise ValueError("model returned invalid probabilities")
+        buckets = {bucket: float(row[index]) for index, bucket in enumerate(classes)}
+        if not math.isclose(sum(buckets.values()), 1.0, rel_tol=1e-6, abs_tol=1e-6):
+            raise ValueError("model probabilities do not sum to one")
+        tails.append([sum(buckets.get(bucket, 0.0) for bucket in range(quantity, 6)) for quantity in SUPPORTED_QUANTITIES])
+    return tails
 
 
 def predict_candidates(bundle, payload, generated_at=None, model_sha256=""):
@@ -209,24 +238,15 @@ def predict_candidates(bundle, payload, generated_at=None, model_sha256=""):
             response.append({"stationId": station_id, "status": "MISSING", "rows": []})
             continue
         try:
-            probabilities = [float(row[1]) for row in model.predict_proba(rows)]
-            if (len(probabilities) != 20
-                or any(not math.isfinite(probability) for probability in probabilities)
-                or any(probability < 0.0 or probability > 1.0 for probability in probabilities)):
-                raise ValueError("model returned invalid probabilities")
+            tails = _tail_probabilities(model, rows)
             output_rows = []
-            offset = 0
-            for horizon in SUPPORTED_HORIZONS:
-                running = 1.0
-                for quantity in SUPPORTED_QUANTITIES:
-                    probability = min(running, float(probabilities[offset]))
-                    running = probability
+            for horizon, probabilities in zip(SUPPORTED_HORIZONS, tails):
+                for quantity, probability in zip(SUPPORTED_QUANTITIES, probabilities):
                     output_rows.append({
                         "horizonMinutes": horizon,
                         "requiredBikeCount": quantity,
                         "probability": probability,
                     })
-                    offset += 1
             response.append({"stationId": station_id, "status": "NORMAL", "rows": output_rows})
         except Exception:
             response.append({"stationId": station_id, "status": "UNAVAILABLE", "rows": []})

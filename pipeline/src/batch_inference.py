@@ -1,6 +1,7 @@
 """DATA-3.2 Batch inference pre-calculation pipeline module."""
 
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 import hashlib
 import json
 import sys
@@ -135,10 +136,11 @@ def run_batch_inference(
 
         as_of_str = _format_iso_dt(dt_as_of)
 
-        # Derive date/time features
-        day_of_week = dt_as_of.weekday()  # 0=Monday..6=Sunday
-        hour_of_day = dt_as_of.hour
-        month = dt_as_of.month
+        # Model time features use the approved Asia/Seoul training timezone.
+        local_as_of = dt_as_of.astimezone(ZoneInfo("Asia/Seoul"))
+        day_of_week = local_as_of.weekday()  # 0=Monday..6=Sunday
+        hour_of_day = local_as_of.hour
+        month = local_as_of.month
         is_weekend = 1 if day_of_week >= 5 else 0
 
         # Generate 20 combinations (4 horizons x 5 quantities)
