@@ -55,7 +55,7 @@ function PredictionChart({ candidate }) {
             <div className="main-chart-column" key={count}>
               <strong>{percent === null ? "-" : `${percent}%`}</strong>
               <span className="main-chart-track"><i style={{ height: `${percent ?? 0}%` }} /></span>
-              <b>{count}대</b>
+              <b>{count}대 이상</b>
             </div>
           );
         })}

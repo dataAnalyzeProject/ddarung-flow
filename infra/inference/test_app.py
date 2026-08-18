@@ -134,16 +134,18 @@ class PointerValidationTests(unittest.TestCase):
 class PredictionTests(unittest.TestCase):
     def bundle(self, probabilities=None):
         model = Mock()
-        values = probabilities or [0.9, 0.8, 0.7, 0.6, 0.5] * 4
-        model.predict_proba.return_value = [[1.0 - value, value] for value in values]
+        values = probabilities or [0.1, 0.1, 0.1, 0.1, 0.1, 0.5]
+        model.predict_proba.return_value = [values] * 4
+        model.classes_ = [0, 1, 2, 3, 4, 5]
         return {
             "model": model,
-            "model_name": "hist_gradient_boosting",
-            "feature_names": list(app.EXPECTED_FEATURE_NAMES),
+            "model_name": "hist_gradient_boosting_inventory_distribution",
+            "bucket_definition": "0,1,2,3,4,5+",
+            "feature_columns": list(app.EXPECTED_FEATURE_NAMES),
         }
 
     def test_returns_twenty_monotonic_probabilities(self):
-        bundle = self.bundle([0.5, 0.9, 0.7, 0.6, 0.4] * 4)
+        bundle = self.bundle([0.1, 0.2, 0.2, 0.1, 0.1, 0.3])
         result = app.predict_candidates(
             bundle,
             {"candidates": [{
@@ -162,7 +164,7 @@ class PredictionTests(unittest.TestCase):
             values = [row["probability"] for row in prediction["rows"][start:start + 5]]
             self.assertEqual(values, sorted(values, reverse=True))
         model_input = bundle["model"].predict_proba.call_args.args[0]
-        self.assertEqual([102, 0, 14, 8, 0, 11, 60, 1], list(model_input[0]))
+        self.assertEqual([102, 0, 14, 8, 0, 11, 60], list(model_input[0]))
 
     def test_non_numeric_station_number_is_missing(self):
         result = app.predict_candidates(self.bundle(), {"candidates": [{
@@ -189,7 +191,7 @@ class PredictionTests(unittest.TestCase):
     def test_model_error_or_out_of_range_probability_is_unavailable(self):
         failing_bundle = self.bundle()
         failing_bundle["model"].predict_proba.side_effect = RuntimeError("model failed")
-        invalid_bundle = self.bundle([1.1] * 20)
+        invalid_bundle = self.bundle([1.1, 0, 0, 0, 0, 0])
         payload = {"candidates": [{
             "stationId": "ST-4",
             "stationNumber": "102",
