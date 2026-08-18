@@ -121,6 +121,62 @@ describe("라이딩 가이드 대기질 상태", () => {
     expect(screen.getByLabelText("통합대기환경지수 보통")).toBeInTheDocument();
   });
 
+  test("실제 후보(candidate)가 있으면 고정 87% 대신 선택 수량 확률과 낮음·중간·높음 등급을 표시한다", () => {
+    const candidate = {
+      stationId: "ST-3",
+      stationName: "서울숲 남문",
+      arrivalAt: "2026-08-04T15:51:00+09:00",
+      predictionTargetAt: "2026-08-04T16:00:00+09:00",
+      targetOffsetMinutes: 9,
+      featureAsOf: "2026-08-04T15:00:00+09:00",
+      horizonMinutes: 60,
+      availabilityLevel: "LOW",
+      selectedProbability: 0.31,
+      probabilities: { atLeast1: 0.49, atLeast2: 0.31, atLeast3: 0.19, atLeast4: 0.11, atLeast5: 0.05 },
+      currentInventory: { availableBikeCount: 2, collectedAt: "2026-08-04T15:02:10+09:00", inventoryStatus: "NORMAL" },
+      predictionGeneratedAt: "2026-08-04T15:03:00+09:00",
+      predictionStatus: "NORMAL",
+      modelVersion: "availability-v1",
+    };
+
+    render(<RidingGuidePage candidate={candidate} onBack={jest.fn()} />);
+
+    expect(screen.getByText("31%")).toBeInTheDocument();
+    expect(screen.getByText("낮음")).toBeInTheDocument();
+    expect(screen.queryByText("87%")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "1~5대 누적확률 보기" }));
+    expect(screen.getByText("49%")).toBeInTheDocument();
+  });
+
+  test("candidate가 없으면 기존 고정 안내(87%·매우 높음·추천해요)를 유지한다", () => {
+    render(<RidingGuidePage onBack={jest.fn()} />);
+
+    expect(screen.getByText("87%")).toBeInTheDocument();
+    expect(screen.getByText("매우 높음")).toBeInTheDocument();
+    expect(screen.getByText("추천해요.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "1~5대 누적확률 보기" })).not.toBeInTheDocument();
+  });
+
+  test("도착지 날씨는 실제 arrivalWeather 값을 표시하고 비 가능성이 있으면 주의사항에 안내한다", () => {
+    const arrivalWeather = {
+      status: "NORMAL",
+      temperatureC: 30,
+      precipitationProbabilityPercent: 60,
+      precipitationType: "RAIN",
+      skyStatus: "OVERCAST",
+      rainGuidance: true,
+      hourlyForecasts: [],
+    };
+
+    render(<RidingGuidePage arrivalWeather={arrivalWeather} onBack={jest.fn()} />);
+    const weatherCard = screen.getByRole("heading", { name: "도착지 날씨" }).closest("section");
+
+    expect(within(weatherCard).getByText("30°C")).toBeInTheDocument();
+    expect(within(weatherCard).getByText("60%")).toBeInTheDocument();
+    expect(screen.getByText("도착 예정 시간대에 강수 가능성이 있어요.")).toBeInTheDocument();
+  });
+
   test("DELAYED 상태에서는 종합 요약의 통합대기환경지수가 airQuality.khai 값(71)로 표시된다", () => {
     render(<RidingGuidePage airQuality={airQualityDelayedFixture} onBack={jest.fn()} />);
     const khaiSummary = screen.getByText("통합대기환경지수").closest("div").querySelector("dd");

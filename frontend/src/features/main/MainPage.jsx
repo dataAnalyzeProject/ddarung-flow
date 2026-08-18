@@ -206,6 +206,9 @@ export default function MainPage({ onNavigate }) {
 
   const openRidingGuideFor = (candidate) => {
     setSelectedStationInfo({ stationId: candidate.stationId, stationName: candidate.stationName });
+    if (candidate.stationId !== selectedStationInfo?.stationId) {
+      selectCandidateWeather(candidate);
+    }
     setRidingGuideOpen(true);
   };
   const closeRidingGuide = () => setRidingGuideOpen(false);
@@ -259,9 +262,15 @@ export default function MainPage({ onNavigate }) {
   };
 
   if (ridingGuideOpen && selectedStationInfo) {
+    const selectedCandidate = apiPredictionResult?.candidates?.find(
+      (item) => item.stationId === selectedStationInfo.stationId
+    ) || null;
     return (
       <RidingGuidePage
         stationName={selectedStationInfo.stationName}
+        candidate={selectedCandidate}
+        arrivalWeather={arrivalWeather}
+        isWeatherLoading={weatherLoading}
         airQuality={guideAirQuality}
         isAirQualityLoading={guideAirQualityLoading}
         onBack={closeRidingGuide}
