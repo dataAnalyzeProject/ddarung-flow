@@ -341,6 +341,30 @@ function PredictionEvidence({ candidate, requiredBikeCount }) {
   );
 }
 
+function computeIntroCopy(verdict) {
+  if (verdict.rating === "주의") {
+    return {
+      badge: "이용 시 주의",
+      summary: "대여 가능성이나 날씨·대기질 상황을 확인하고 이용해주세요.",
+    };
+  }
+  if (verdict.rating === "확인 필요") {
+    return {
+      badge: "정보 확인 중",
+      summary: "예측 정보를 아직 확인할 수 없어요. 잠시 후 다시 확인해주세요.",
+    };
+  }
+  return {
+    badge: "자전거 이용 추천",
+    summary: "대여 가능성이 높고 날씨와 대기질도 자전거 이용에 적합해요.",
+  };
+}
+
+function formatDistance(meters) {
+  if (meters === null || meters === undefined) return null;
+  return meters >= 1000 ? `${(meters / 1000).toFixed(1)}km` : `${meters}m`;
+}
+
 function buildWarnings(arrivalWeather, airQuality) {
   const items = [];
   if (arrivalWeather?.rainGuidance === true) {
@@ -387,6 +411,8 @@ export default function RidingGuidePage({
   const predictionUpdatedTime = candidate?.predictionGeneratedAt ? formatClockTime(candidate.predictionGeneratedAt) : null;
   const dataStateOk = !(candidate && ["MISSING", "UNAVAILABLE"].includes(candidate.predictionStatus))
     && weatherData.status !== "UNAVAILABLE";
+  const introCopy = computeIntroCopy(verdict);
+  const airQualityDistanceText = formatDistance(airQuality?.measurementStationDistanceMeters);
 
   return (
     <main className="riding-guide-shell">
@@ -404,10 +430,10 @@ export default function RidingGuidePage({
               <h1 id="riding-guide-title">{stationName} 라이딩 가이드</h1>
               <p>도착 예정시간 {formatClockTime(candidate?.arrivalAt) || "11:05"} 기준</p>
             </div>
-            <span className="guide-badge">자전거 이용 추천</span>
+            <span className="guide-badge">{introCopy.badge}</span>
           </div>
           <div className="guide-intro-copy">
-            <strong>대여 가능성이 높고 날씨와 대기질도 자전거 이용에 적합해요.</strong>
+            <strong>{introCopy.summary}</strong>
             <p>
               기상청 · 에어코리아 · 따릉이 예측 데이터
               <GuideIcon name="info" title="화면 데이터 출처 안내" />
@@ -528,6 +554,9 @@ export default function RidingGuidePage({
                     </div>
                     <dl className="guide-air-meta">
                       <div><dt>측정소</dt><dd>{airQuality.measurementStation}</dd></div>
+                      {airQualityDistanceText && (
+                        <div><dt>대여소와의 거리</dt><dd>{airQualityDistanceText}</dd></div>
+                      )}
                       <div><dt>측정시간</dt><dd>{airQualityMeasuredTime ? `${airQualityMeasuredTime} 기준` : "-"}</dd></div>
                     </dl>
                     {airQuality.status === "DELAYED" && (

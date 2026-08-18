@@ -36,11 +36,15 @@ function loadSavedPredictionResult() {
   }
 }
 
-// RidingGuidePage(FE-4.5)는 measurementStation을 표시용 문자열로 렌더링하므로
-// 백엔드의 { name, distanceMeters } 객체에서 name만 꺼내 전달한다.
+// RidingGuidePage는 measurementStation을 표시용 문자열로, 거리는 별도 필드로 렌더링하므로
+// 백엔드의 { name, distanceMeters } 객체를 두 필드로 나눠 전달한다.
 function adaptAirQualityResponse(response) {
   if (!response) return null;
-  return { ...response, measurementStation: response.measurementStation?.name ?? null };
+  return {
+    ...response,
+    measurementStation: response.measurementStation?.name ?? null,
+    measurementStationDistanceMeters: response.measurementStation?.distanceMeters ?? null,
+  };
 }
 
 export default function MainPage({ onNavigate }) {

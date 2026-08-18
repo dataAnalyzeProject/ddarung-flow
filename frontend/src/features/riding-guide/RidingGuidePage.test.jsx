@@ -115,6 +115,22 @@ describe("라이딩 가이드 대기질 상태", () => {
     expect(screen.getByText("매우 높음")).toBeInTheDocument();
   });
 
+  test("측정소와의 거리 정보가 있으면 대기질 카드에 별도 행으로 표시한다", () => {
+    render(<RidingGuidePage airQuality={airQualityNormalFixture} onBack={jest.fn()} />);
+    const airCard = screen.getByRole("heading", { name: "도착지 대기질" }).closest("section");
+
+    expect(within(airCard).getByText("대여소와의 거리")).toBeInTheDocument();
+    expect(within(airCard).getByText("420m")).toBeInTheDocument();
+    expect(within(airCard).getByText("천호 측정소")).toBeInTheDocument();
+  });
+
+  test("거리 정보가 없으면 거리 행을 표시하지 않는다", () => {
+    render(<RidingGuidePage airQuality={airQualityDelayedFixture} onBack={jest.fn()} />);
+    const airCard = screen.getByRole("heading", { name: "도착지 대기질" }).closest("section");
+
+    expect(within(airCard).queryByText("대여소와의 거리")).not.toBeInTheDocument();
+  });
+
   test("측정소 응답이 두 항목 모두 정상 등급이어도 통합대기환경지수 라벨에 등급명을 포함한다", () => {
     render(<RidingGuidePage airQuality={airQualityNormalFixture} onBack={jest.fn()} />);
 
@@ -137,6 +153,7 @@ describe("라이딩 가이드 대기질 상태", () => {
       predictionGeneratedAt: "2026-08-04T15:03:00+09:00",
       predictionStatus: "NORMAL",
       modelVersion: "availability-v1",
+      requiredBikeCount: 2,
     };
 
     render(<RidingGuidePage candidate={candidate} onBack={jest.fn()} />);
@@ -147,6 +164,25 @@ describe("라이딩 가이드 대기질 상태", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "1~5대 누적확률 보기" }));
     expect(screen.getByText("49%")).toBeInTheDocument();
+
+    const highlightedRow = screen.getByText("2대 이상").closest("div");
+    expect(highlightedRow).toHaveClass("current");
+    expect(screen.getByText("1대 이상").closest("div")).not.toHaveClass("current");
+  });
+
+  test("종합판정이 주의(LOW)이면 인트로 배지·요약 문구가 바뀐다", () => {
+    const lowCandidate = {
+      stationId: "ST-3",
+      availabilityLevel: "LOW",
+      selectedProbability: 0.31,
+      predictionStatus: "NORMAL",
+      currentInventory: {},
+    };
+
+    render(<RidingGuidePage candidate={lowCandidate} onBack={jest.fn()} />);
+
+    expect(screen.getByText("이용 시 주의")).toBeInTheDocument();
+    expect(screen.getByText("대여 가능성이나 날씨·대기질 상황을 확인하고 이용해주세요.")).toBeInTheDocument();
   });
 
   test("candidate가 없으면 기존 고정 안내(87%·매우 높음·추천해요)를 유지한다", () => {
