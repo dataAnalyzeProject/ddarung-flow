@@ -1,10 +1,22 @@
 {
   "schemaVersion": "1.0",
+  "seed": 20260810,
+  "timezone": "Asia/Seoul",
   "profiles": {
-    "cpu_repro": {"device": "cpu", "treeMethod": "hist", "seed": 42},
-    "gpu_final": {"device": "cuda", "treeMethod": "hist", "seed": 42}
+    "cpu_repro": {
+      "device": "cpu",
+      "treeMethod": "hist",
+      "seed": 20260810
+    },
+    "gpu_final": {
+      "device": "cuda",
+      "treeMethod": "hist",
+      "seed": 20260810
+    }
   },
-  "artifactFormat": "ubj",
+  "artifactFormat": "joblib",
+  "artifactFilename": "model_winner.joblib",
+  "metricsFilename": "model_winner_metrics.json",
   "horizons": [60, 120, 180, 240],
   "requiredBikeCounts": [1, 2, 3, 4, 5]
 }

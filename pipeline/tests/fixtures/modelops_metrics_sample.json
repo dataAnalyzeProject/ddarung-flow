@@ -1,3 +1,25 @@
 [
-  {"horizonMinutes": 60, "requiredBikeCount": 1, "sampleCount": 10, "brierScore": 0.2, "shortageRecall": 0.7, "calibrationError": 0.04, "coverage": 1.0, "monotonicityViolations": 0}
+  {"horizonMinutes": 60, "requiredBikeCount": 1, "sampleCount": 23363, "brierScore": 0.0688, "shortageRecall": 0.7541, "accuracy": 0.9182, "calibrationError": 0.0797, "monotonicityViolations": 0},
+  {"horizonMinutes": 60, "requiredBikeCount": 2, "sampleCount": 23363, "brierScore": 0.0730, "shortageRecall": 0.8704, "accuracy": 0.9031, "calibrationError": 0.0784, "monotonicityViolations": 0},
+  {"horizonMinutes": 60, "requiredBikeCount": 3, "sampleCount": 23363, "brierScore": 0.0715, "shortageRecall": 0.9294, "accuracy": 0.9024, "calibrationError": 0.0788, "monotonicityViolations": 0},
+  {"horizonMinutes": 60, "requiredBikeCount": 4, "sampleCount": 23363, "brierScore": 0.0690, "shortageRecall": 0.9517, "accuracy": 0.9101, "calibrationError": 0.0712, "monotonicityViolations": 0},
+  {"horizonMinutes": 60, "requiredBikeCount": 5, "sampleCount": 23363, "brierScore": 0.0672, "shortageRecall": 0.9571, "accuracy": 0.9131, "calibrationError": 0.0674, "monotonicityViolations": 0},
+
+  {"horizonMinutes": 120, "requiredBikeCount": 1, "sampleCount": 23363, "brierScore": 0.0791, "shortageRecall": 0.7320, "accuracy": 0.9050, "calibrationError": 0.0810, "monotonicityViolations": 0},
+  {"horizonMinutes": 120, "requiredBikeCount": 2, "sampleCount": 23363, "brierScore": 0.0825, "shortageRecall": 0.8510, "accuracy": 0.8920, "calibrationError": 0.0805, "monotonicityViolations": 0},
+  {"horizonMinutes": 120, "requiredBikeCount": 3, "sampleCount": 23363, "brierScore": 0.0810, "shortageRecall": 0.9120, "accuracy": 0.8910, "calibrationError": 0.0800, "monotonicityViolations": 0},
+  {"horizonMinutes": 120, "requiredBikeCount": 4, "sampleCount": 23363, "brierScore": 0.0780, "shortageRecall": 0.9410, "accuracy": 0.9010, "calibrationError": 0.0750, "monotonicityViolations": 0},
+  {"horizonMinutes": 120, "requiredBikeCount": 5, "sampleCount": 23363, "brierScore": 0.0750, "shortageRecall": 0.9480, "accuracy": 0.9050, "calibrationError": 0.0710, "monotonicityViolations": 0},
+
+  {"horizonMinutes": 180, "requiredBikeCount": 1, "sampleCount": 23363, "brierScore": 0.0880, "shortageRecall": 0.7100, "accuracy": 0.8920, "calibrationError": 0.0830, "monotonicityViolations": 0},
+  {"horizonMinutes": 180, "requiredBikeCount": 2, "sampleCount": 23363, "brierScore": 0.0910, "shortageRecall": 0.8350, "accuracy": 0.8810, "calibrationError": 0.0820, "monotonicityViolations": 0},
+  {"horizonMinutes": 180, "requiredBikeCount": 3, "sampleCount": 23363, "brierScore": 0.0890, "shortageRecall": 0.8980, "accuracy": 0.8800, "calibrationError": 0.0815, "monotonicityViolations": 0},
+  {"horizonMinutes": 180, "requiredBikeCount": 4, "sampleCount": 23363, "brierScore": 0.0860, "shortageRecall": 0.9300, "accuracy": 0.8910, "calibrationError": 0.0780, "monotonicityViolations": 0},
+  {"horizonMinutes": 180, "requiredBikeCount": 5, "sampleCount": 23363, "brierScore": 0.0830, "shortageRecall": 0.9380, "accuracy": 0.8960, "calibrationError": 0.0740, "monotonicityViolations": 0},
+
+  {"horizonMinutes": 240, "requiredBikeCount": 1, "sampleCount": 23363, "brierScore": 0.0960, "shortageRecall": 0.6900, "accuracy": 0.8800, "calibrationError": 0.0860, "monotonicityViolations": 0},
+  {"horizonMinutes": 240, "requiredBikeCount": 2, "sampleCount": 23363, "brierScore": 0.0990, "shortageRecall": 0.8150, "accuracy": 0.8700, "calibrationError": 0.0850, "monotonicityViolations": 0},
+  {"horizonMinutes": 240, "requiredBikeCount": 3, "sampleCount": 23363, "brierScore": 0.0970, "shortageRecall": 0.8820, "accuracy": 0.8710, "calibrationError": 0.0840, "monotonicityViolations": 0},
+  {"horizonMinutes": 240, "requiredBikeCount": 4, "sampleCount": 23363, "brierScore": 0.0940, "shortageRecall": 0.9180, "accuracy": 0.8810, "calibrationError": 0.0810, "monotonicityViolations": 0},
+  {"horizonMinutes": 240, "requiredBikeCount": 5, "sampleCount": 23363, "brierScore": 0.0910, "shortageRecall": 0.9280, "accuracy": 0.8870, "calibrationError": 0.0780, "monotonicityViolations": 0}
 ]
