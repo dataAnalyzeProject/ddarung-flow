@@ -173,18 +173,50 @@ function computeOverallVerdict(candidate, arrivalWeather) {
 }
 
 function formatInventoryCount(inventory) {
-  if (!inventory) return "8대";
+  if (!inventory) return "정보 없음";
   if (inventory.inventoryStatus === "MISSING") return "정보 없음";
   if (inventory.inventoryStatus === "UNAVAILABLE") return "조회 불가";
   if (inventory.availableBikeCount === null || inventory.availableBikeCount === undefined) return "정보 없음";
   return `${inventory.availableBikeCount}대`;
 }
 
-function formatInventoryMeta(inventory) {
-  if (!inventory) return "도착 시 5~9대 예상";
-  const time = formatClockTime(inventory.collectedAt);
-  if (!time) return inventory.inventoryStatus === "DELAYED" ? "직전 정상 수집값" : "수집 시각 정보 없음";
-  return inventory.inventoryStatus === "DELAYED" ? `${time} 기준 · 지연` : `${time} 수집 기준`;
+// 오른쪽 "대여 예측 요약" 카드는 왼쪽 종합 카드와 같은 퍼센트·등급을 중복 표시하지 않고,
+// 이미 있는 필드만으로 "왜 이 결과가 나왔는지"를 문장으로 풀어준다.
+function buildPredictionNarrative(candidate) {
+  if (!candidate) {
+    return "실제 예측을 실행하면 이 대여소의 선택 수량 확률과 현재 재고, 예측 기준 시각을 근거로 보여드려요.";
+  }
+
+  const status = candidate.predictionStatus;
+  if (status === "TOO_SOON") return "아직 예측 가능한 시점이 아니라 확률을 계산하지 않았어요.";
+  if (status === "MISSING") return "이 시점의 예측 결과가 없어요.";
+  if (status === "UNAVAILABLE") return "지금은 예측을 사용할 수 없어요.";
+
+  const count = candidate.requiredBikeCount;
+  const percent = formatPercent(candidate.selectedProbability);
+  const levelLabel = AVAILABILITY_LABEL[candidate.availabilityLevel];
+  const inventoryCount = formatInventoryCount(candidate.currentInventory);
+  const collectedTime = formatClockTime(candidate.currentInventory?.collectedAt);
+  const arrivalTime = formatClockTime(candidate.arrivalAt);
+  const targetTime = formatClockTime(candidate.predictionTargetAt);
+
+  const probabilitySentence = count && percent
+    ? `${count}대 이상 빌릴 수 있을 확률이 ${percent}${levelLabel ? `(${levelLabel})` : ""}예요.`
+    : percent
+      ? `선택 수량 기준 확률이 ${percent}${levelLabel ? `(${levelLabel})` : ""}예요.`
+      : "";
+
+  const inventorySentence = inventoryCount === "정보 없음" || inventoryCount === "조회 불가"
+    ? "현재 재고 정보를 확인할 수 없어요."
+    : collectedTime
+      ? `현재 ${inventoryCount}가 있어요(${collectedTime} 수집).`
+      : `현재 ${inventoryCount}가 있어요.`;
+
+  const targetSentence = arrivalTime && targetTime
+    ? `도착 예정 ${arrivalTime}에 가장 가까운 정시 ${targetTime} 기준으로 예측했어요.`
+    : "";
+
+  return [probabilitySentence, inventorySentence, targetSentence].filter(Boolean).join(" ");
 }
 
 function buildHourlyRows(arrivalWeather) {
@@ -365,19 +397,56 @@ function formatDistance(meters) {
   return meters >= 1000 ? `${(meters / 1000).toFixed(1)}km` : `${meters}m`;
 }
 
-function buildWarnings(arrivalWeather, airQuality) {
+function findRainStartHour(arrivalWeather) {
+  if (!arrivalWeather || !Array.isArray(arrivalWeather.hourlyForecasts)) return null;
+  const sorted = [...arrivalWeather.hourlyForecasts].sort((a, b) => a.forecastAt.localeCompare(b.forecastAt));
+  const rainyItem = sorted.find((item) =>
+    (item.precipitationType && item.precipitationType !== "NONE") || (item.precipitationProbabilityPercent ?? 0) >= 50
+  );
+  if (!rainyItem || !rainyItem.forecastAt || !rainyItem.forecastAt.includes("T")) return null;
+  return { hourLabel: `${rainyItem.forecastAt.split("T")[1].slice(0, 2)}시`, pop: rainyItem.precipitationProbabilityPercent };
+}
+
+function buildWarnings(candidate, arrivalWeather, airQuality) {
   const items = [];
-  if (arrivalWeather?.rainGuidance === true) {
+
+  if (candidate?.availabilityLevel === "LOW") {
+    items.push({
+      key: "availability",
+      icon: "bike",
+      text: "이 대여소는 대여 가능성이 낮아요 — 대체 대여소를 확인해보세요.",
+    });
+  }
+
+  if (candidate?.currentInventory?.inventoryStatus === "DELAYED") {
+    const time = formatClockTime(candidate.currentInventory.collectedAt);
+    items.push({
+      key: "inventory-delayed",
+      icon: "clock",
+      text: time ? `재고 정보가 지연되고 있어요(최근 확인 ${time}).` : "재고 정보가 지연되고 있어요.",
+    });
+  }
+
+  const rainStart = findRainStartHour(arrivalWeather);
+  if (rainStart) {
+    items.push({ key: "rain", icon: "rain", text: `${rainStart.hourLabel}부터 강수확률 ${rainStart.pop}%로 올라요.` });
+  } else if (arrivalWeather?.rainGuidance === true) {
     items.push({ key: "rain", icon: "rain", text: "도착 예정 시간대에 강수 가능성이 있어요." });
   }
+
   const grade = airQuality?.khai?.grade;
+  const pm10Value = airQuality?.pm10?.value;
   if (grade === "MODERATE" || grade === "BAD" || grade === "VERY_BAD") {
+    const gradeLabel = AIR_QUALITY_GRADE_LABEL[grade];
     items.push({
       key: "air",
       dots: true,
-      text: `미세먼지 ${AIR_QUALITY_GRADE_LABEL[grade]} — 민감군 장시간 이용 주의`,
+      text: pm10Value !== null && pm10Value !== undefined
+        ? `PM10 ${pm10Value}㎍/㎥ ${gradeLabel} — 민감군 장시간 이용 주의`
+        : `미세먼지 ${gradeLabel} — 민감군 장시간 이용 주의`,
     });
   }
+
   items.push({ key: "info", icon: "info", text: "예보와 측정값은 갱신 시점에 따라 달라질 수 있어요." });
   return items;
 }
@@ -402,11 +471,8 @@ export default function RidingGuidePage({
   ];
   const verdict = computeOverallVerdict(candidate, arrivalWeather);
   const hourlyRows = buildHourlyRows(arrivalWeather) || hourlyFixture;
-  const warnings = buildWarnings(arrivalWeather, airQuality);
-  const inventoryCountText = formatInventoryCount(candidate?.currentInventory);
-  const inventoryMetaText = formatInventoryMeta(candidate?.currentInventory);
-  const availabilityLabel = candidate ? (AVAILABILITY_LABEL[candidate.availabilityLevel] || "정보 없음") : "매우 높음";
-  const summaryPercent = candidate ? (formatPercent(candidate.selectedProbability) ?? "-") : "87%";
+  const warnings = buildWarnings(candidate, arrivalWeather, airQuality);
+  const predictionNarrative = buildPredictionNarrative(candidate);
   const weatherIssuedTime = formatClockTime(weatherData.issuedAt);
   const predictionUpdatedTime = candidate?.predictionGeneratedAt ? formatClockTime(candidate.predictionGeneratedAt) : null;
   const dataStateOk = !(candidate && ["MISSING", "UNAVAILABLE"].includes(candidate.predictionStatus))
@@ -574,22 +640,8 @@ export default function RidingGuidePage({
           <aside className="guide-side-column" aria-label="대여 예측과 이용 안내">
             <section className="guide-card guide-summary" aria-labelledby="summary-title">
               <h2 id="summary-title">대여 예측 요약</h2>
-              <div className="guide-summary-body">
-                <div
-                  className="guide-percent-ring"
-                  style={{ background: `conic-gradient(var(--guide-green) 0 ${verdict.ringPercent}%, #deeee6 ${verdict.ringPercent}% 100%)` }}
-                >
-                  <strong>{summaryPercent.replace("%", "")}<small>%</small></strong>
-                </div>
-                <p>
-                  <b>{availabilityLabel}</b>
-                  <span>{stationName}</span>
-                  <span>현재 <strong>{inventoryCountText}</strong></span>
-                  <span>{inventoryMetaText}</span>
-                </p>
-              </div>
+              <p className="guide-summary-narrative">{predictionNarrative}</p>
               <PredictionEvidence candidate={candidate} requiredBikeCount={candidate?.requiredBikeCount} />
-              <a className="guide-station-link" href="#guide-overall">대여소 상세보기<span aria-hidden="true">›</span></a>
             </section>
 
             <section className="guide-card guide-warnings" aria-labelledby="warnings-title">
@@ -602,15 +654,6 @@ export default function RidingGuidePage({
                   </li>
                 ))}
               </ul>
-            </section>
-
-            <section className="guide-card guide-transit" aria-labelledby="transit-title">
-              <h2 id="transit-title">대안 이동</h2>
-              <div className="guide-transit-copy">
-                <span><GuideIcon name="transit" /></span>
-                <p>날씨가 나빠지면 대중교통으로 전환<small>도보 3분 · 지하철 22분</small></p>
-              </div>
-              <button type="button">대중교통 경로 보기<span aria-hidden="true">›</span></button>
             </section>
           </aside>
         </div>

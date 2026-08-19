@@ -112,7 +112,6 @@ describe("라이딩 가이드 대기질 상태", () => {
 
     expect(screen.getByText("87%")).toBeInTheDocument();
     expect(screen.getByText("추천해요.")).toBeInTheDocument();
-    expect(screen.getByText("매우 높음")).toBeInTheDocument();
   });
 
   test("측정소와의 거리 정보가 있으면 대기질 카드에 별도 행으로 표시한다", () => {
@@ -159,8 +158,10 @@ describe("라이딩 가이드 대기질 상태", () => {
     render(<RidingGuidePage candidate={candidate} onBack={jest.fn()} />);
 
     expect(screen.getByText("31%")).toBeInTheDocument();
-    expect(screen.getByText("낮음")).toBeInTheDocument();
     expect(screen.queryByText("87%")).not.toBeInTheDocument();
+
+    const summaryCard = screen.getByRole("heading", { name: "대여 예측 요약" }).closest("section");
+    expect(within(summaryCard).getByText(/낮음/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "1~5대 누적확률 보기" }));
     expect(screen.getByText("49%")).toBeInTheDocument();
@@ -185,13 +186,60 @@ describe("라이딩 가이드 대기질 상태", () => {
     expect(screen.getByText("대여 가능성이나 날씨·대기질 상황을 확인하고 이용해주세요.")).toBeInTheDocument();
   });
 
-  test("candidate가 없으면 기존 고정 안내(87%·매우 높음·추천해요)를 유지한다", () => {
+  test("candidate가 없으면 고정 지표(87%·추천해요)와 안내 문구를 보여준다", () => {
     render(<RidingGuidePage onBack={jest.fn()} />);
 
     expect(screen.getByText("87%")).toBeInTheDocument();
-    expect(screen.getByText("매우 높음")).toBeInTheDocument();
     expect(screen.getByText("추천해요.")).toBeInTheDocument();
+    expect(screen.getByText(/실제 예측을 실행하면/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "1~5대 누적확률 보기" })).not.toBeInTheDocument();
+  });
+
+  test("대여소 상세보기 링크는 더 이상 표시하지 않는다", () => {
+    render(<RidingGuidePage onBack={jest.fn()} />);
+
+    expect(screen.queryByRole("link", { name: /상세보기/ })).not.toBeInTheDocument();
+  });
+
+  test("대안 이동 카드는 더 이상 표시하지 않는다", () => {
+    render(<RidingGuidePage onBack={jest.fn()} />);
+
+    expect(screen.queryByRole("heading", { name: "대안 이동" })).not.toBeInTheDocument();
+  });
+
+  test("낮은 가용성이면 주의사항에 대체 대여소 확인 안내가 뜬다", () => {
+    const candidate = { availabilityLevel: "LOW", currentInventory: {} };
+    render(<RidingGuidePage candidate={candidate} onBack={jest.fn()} />);
+
+    expect(screen.getByText(/대여 가능성이 낮아요/)).toBeInTheDocument();
+  });
+
+  test("재고가 지연 상태면 주의사항에 지연 안내가 뜬다", () => {
+    const candidate = {
+      currentInventory: { availableBikeCount: 3, collectedAt: "2026-08-04T15:02:10+09:00", inventoryStatus: "DELAYED" },
+    };
+    render(<RidingGuidePage candidate={candidate} onBack={jest.fn()} />);
+
+    expect(screen.getByText(/재고 정보가 지연되고 있어요/)).toBeInTheDocument();
+  });
+
+  test("시간대별 예보에서 비가 시작되는 시각이 있으면 주의사항에 구체적으로 안내한다", () => {
+    const arrivalWeather = {
+      status: "NORMAL",
+      temperatureC: 22,
+      precipitationProbabilityPercent: 10,
+      precipitationType: "NONE",
+      skyStatus: "CLEAR",
+      rainGuidance: false,
+      hourlyForecasts: [
+        { forecastAt: "2026-08-04T15:00:00+09:00", temperatureC: 22, precipitationProbabilityPercent: 20, precipitationType: "NONE", skyStatus: "CLEAR" },
+        { forecastAt: "2026-08-04T17:00:00+09:00", temperatureC: 21, precipitationProbabilityPercent: 60, precipitationType: "RAIN", skyStatus: "OVERCAST" },
+      ],
+    };
+
+    render(<RidingGuidePage arrivalWeather={arrivalWeather} onBack={jest.fn()} />);
+
+    expect(screen.getByText("17시부터 강수확률 60%로 올라요.")).toBeInTheDocument();
   });
 
   test("도착지 날씨는 실제 arrivalWeather 값을 표시하고 비 가능성이 있으면 주의사항에 안내한다", () => {
