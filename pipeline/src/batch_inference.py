@@ -244,7 +244,71 @@ def run_batch_inference(
     }
 
 
+def build_trusted_predictor(
+    artifact_path: Union[str, Path],
+    expected_sha256: str,
+    feature_columns: List[str],
+) -> Callable[[List[Dict[str, Any]]], List[float]]:
+    """Build a predictor callable wrapping an approved model artifact verified by SHA-256 checksum.
+
+    Args:
+        artifact_path: Path to the joblib model artifact.
+        expected_sha256: Expected SHA-256 checksum hex string.
+        feature_columns: Ordered list of feature column names required by the model.
+
+    Returns:
+        Predictor callable that converts input feature rows into a DataFrame ordered by
+        `feature_columns` and returns positive class probabilities.
+
+    Raises:
+        RuntimeError: If artifact file is missing, checksum fails, or required feature columns are missing.
+    """
+    from pipeline.src.modeling import load_trusted_artifact
+
+    artifact_file = Path(artifact_path)
+    if not artifact_file.exists():
+        raise RuntimeError(f"Artifact file not found at path: {artifact_file}")
+
+    try:
+        model = load_trusted_artifact(artifact_file, expected_sha256)
+    except Exception as exc:
+        if isinstance(exc, RuntimeError):
+            raise
+        raise RuntimeError(f"Failed to load trusted artifact: {exc}") from exc
+
+    def predictor(feature_rows: List[Dict[str, Any]]) -> List[float]:
+        if not isinstance(feature_rows, list):
+            raise RuntimeError("feature_rows must be a list of dictionaries")
+
+        for idx, row in enumerate(feature_rows):
+            if not isinstance(row, dict):
+                raise RuntimeError(f"feature_row_{idx} is not a dictionary")
+            missing_cols = [col for col in feature_columns if col not in row]
+            if missing_cols:
+                raise RuntimeError(
+                    f"feature_row_{idx} missing required feature columns: {missing_cols}"
+                )
+
+        df = pd.DataFrame(feature_rows)[feature_columns]
+
+        if not hasattr(model, "predict_proba"):
+            raise RuntimeError("Model artifact does not support predict_proba")
+
+        try:
+            probs = model.predict_proba(df)
+            if probs.ndim == 2 and probs.shape[1] >= 2:
+                positive_probs = probs[:, 1]
+            else:
+                positive_probs = probs.ravel()
+            return [float(p) for p in positive_probs]
+        except Exception as exc:
+            raise RuntimeError(f"Inference execution failed: {exc}") from exc
+
+    return predictor
+
+
 def _fixture_predictor(feature_rows):
+
     """Deterministic non-increasing predictor used only for --fixture CLI checks.
 
     Not the DATA-3.1 approved model — real approved-model runs must inject the
