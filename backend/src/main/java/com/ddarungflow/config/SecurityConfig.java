@@ -54,11 +54,17 @@ public class SecurityConfig {
 
     private AuthenticationEntryPoint apiVsRedirectEntryPoint() {
         return (request, response, authException) -> {
-            if (AIR_QUALITY_PATH.matcher(request.getRequestURI()).matches()) {
-                // setStatus (not sendError) - sendError triggers a /error forward that Spring
-                // Security re-processes, invoking this entry point a second time for "/error"
-                // (which doesn't match), overwriting the 401 with the redirect branch below.
+            String uri = request.getRequestURI();
+            if (AIR_QUALITY_PATH.matcher(uri).matches() || uri.startsWith("/api/v1/qna/questions")) {
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.setContentType("application/json;charset=UTF-8");
+                response.getWriter().write("""
+                    {
+                      "code": "QNA_UNAUTHORIZED",
+                      "message": "로그인이 필요한 서비스입니다.",
+                      "timestamp": "%s"
+                    }
+                    """.formatted(java.time.OffsetDateTime.now().toString()).trim());
                 return;
             }
             String redirectBase = frontendUrl.endsWith("/") ? frontendUrl : frontendUrl + "/";
@@ -73,7 +79,7 @@ public class SecurityConfig {
     ) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/v1/routes/estimate"))
+                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/v1/routes/estimate", "/api/v1/qna/questions", "/api/v1/qna/questions/**"))
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
@@ -89,6 +95,7 @@ public class SecurityConfig {
                                 "/v3/api-docs",
                                 "/v3/api-docs/**"
                         ).permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/qna/questions", "/api/v1/qna/questions/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(exceptions -> exceptions
