@@ -26,6 +26,17 @@ describe('loginStorage 테스트', () => {
         });
         expect(loaded.invalidKey).toBeUndefined();
     });
+    test('선택한 장소 좌표를 함께 저장하고 복원한다', () => {
+        const routePlaces = {
+            origin: { name: '천마산역', latitude: 37.66, longitude: 127.29, ignored: 'x' },
+            destination: { name: '천호역', latitude: 37.54, longitude: 127.12 }
+        };
+        savePendingPrediction({ origin: '천마산역', destination: '천호역' }, routePlaces);
+        expect(loadPendingPrediction().routePlaces).toEqual({
+            origin: { name: '천마산역', latitude: 37.66, longitude: 127.29 },
+            destination: { name: '천호역', latitude: 37.54, longitude: 127.12 }
+        });
+    });
     // 비정상 값 0, 6, 문자열 등일 때 기본값 1 검증 경계 테스트
     test('requiredBikeCount가 0, 6, 문자열 등 비정상값일 때 양방향 모두 기본값 1로 보정된다', () => {
         // 0일 때

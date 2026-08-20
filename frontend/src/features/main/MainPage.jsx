@@ -77,7 +77,9 @@ export default function MainPage({ onNavigate }) {
         setUser(auth.user);
         setAuthState("authenticated");
         if (loginResult === "success" && pendingInput) {
-          setInput({ ...EMPTY_INPUT, ...pendingInput });
+          const { routePlaces: savedPlaces, ...savedInput } = pendingInput;
+          setInput({ ...EMPTY_INPUT, ...savedInput });
+          setRoutePlaces(savedPlaces || { origin: null, destination: null });
         }
       })
       .catch(() => {
@@ -120,7 +122,7 @@ export default function MainPage({ onNavigate }) {
       setWeatherRequest(null);
       sessionStorage.removeItem(PREDICTION_RESULT_KEY);
     }
-    if (key === "directMinutes") setTimeConfirmed(false);
+    if (key === "origin" || key === "destination" || key === "travelMode") setTimeConfirmed(false);
   };
 
   const selectPlace = (key, place) => {
@@ -155,7 +157,7 @@ export default function MainPage({ onNavigate }) {
 
   const handlePredict = async () => {
     if (authState !== "authenticated") {
-      savePendingPrediction(input);
+      savePendingPrediction(input, routePlaces);
       setLoginPromptOpen(true);
       return;
     }
@@ -248,7 +250,7 @@ export default function MainPage({ onNavigate }) {
     };
   }, [ridingGuideOpen, selectedStationInfo]);
 
-  const saveInputBeforeLogin = () => savePendingPrediction(input);
+  const saveInputBeforeLogin = () => savePendingPrediction(input, routePlaces);
 
   const handleLogout = async () => {
     setAuthState("logging-out");
@@ -293,7 +295,7 @@ export default function MainPage({ onNavigate }) {
         user={user}
       />
 
-      <MainSearchForm serviceData={serviceData} input={input} onInputChange={updateInput} onPlaceSelect={selectPlace} onConfirmTime={() => setTimeConfirmed(true)} onPredict={handlePredict} />
+      <MainSearchForm serviceData={serviceData} input={input} onInputChange={updateInput} onPlaceSelect={selectPlace} onPredict={handlePredict} />
 
       {timeConfirmed && <p className="main-time-notice">예상시간을 <strong>{input.directMinutes || "이동수단 기준"}{input.directMinutes ? "분" : ""}</strong>으로 확인했습니다.</p>}
       {predictLoading && <p className="main-time-notice" role="status">예측 결과를 불러오는 중입니다…</p>}
@@ -305,6 +307,7 @@ export default function MainPage({ onNavigate }) {
             selectedStationId={selectedStationInfo?.stationId}
             onSelect={handleSelectStation}
             onViewGuide={openRidingGuideFor}
+            routeDurationMinutes={timeConfirmed ? input.directMinutes : null}
           />
           <MapRoutePanel
             originText={input.origin}
@@ -312,6 +315,7 @@ export default function MainPage({ onNavigate }) {
             travelMode={input.travelMode}
             selectedPlaces={routePlaces}
             onDurationChange={(minutes) => updateInput("directMinutes", minutes)}
+            onRouteCalculated={() => setTimeConfirmed(true)}
             fallbackImage={routeMap}
             canViewStations={authState === "authenticated"}
           />
@@ -331,6 +335,7 @@ export default function MainPage({ onNavigate }) {
             travelMode={input.travelMode}
             selectedPlaces={routePlaces}
             onDurationChange={(minutes) => updateInput("directMinutes", minutes)}
+            onRouteCalculated={() => setTimeConfirmed(true)}
             fallbackImage={routeMap}
             canViewStations={authState === "authenticated"}
           />

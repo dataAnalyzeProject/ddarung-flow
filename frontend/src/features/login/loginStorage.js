@@ -23,7 +23,19 @@ function normalizeRequiredBikeCount(value) {
         ? value
         : DEFAULT_BIKE_COUNT;
 }
-export function savePendingPrediction(input) {
+function normalizePlace(place) {
+    if (!place || typeof place !== "object") return null;
+    const latitude = Number(place.latitude);
+    const longitude = Number(place.longitude);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+    return {
+        name: typeof place.name === "string" ? place.name : "",
+        latitude,
+        longitude,
+    };
+}
+
+export function savePendingPrediction(input, routePlaces) {
     if (!input || typeof input !== "object") return;
     const filteredInput = {};
 
@@ -36,6 +48,11 @@ export function savePendingPrediction(input) {
 
     // requiredBikeCount가 정수 1~5 사이가 아니면 기본값 1 적용
     filteredInput.requiredBikeCount = normalizeRequiredBikeCount(input.requiredBikeCount);
+    const savedPlaces = {
+        origin: normalizePlace(routePlaces?.origin),
+        destination: normalizePlace(routePlaces?.destination),
+    };
+    if (savedPlaces.origin || savedPlaces.destination) filteredInput.routePlaces = savedPlaces;
 
     // sessionStorage에 JSON 문자열로 저장
     sessionStorage.setItem(PENDING_PREDICTION_KEY, JSON.stringify(filteredInput));

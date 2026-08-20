@@ -61,9 +61,9 @@ class MapControllerTest {
                 org.mockito.Mockito.when(res.statusCode()).thenReturn(200);
                 String uriStr = req.uri().toString();
                 if (uriStr.contains("/v2/routing/walk")) {
-                    org.mockito.Mockito.when(res.body()).thenReturn("{ \"status\": \"OK\", \"route\": { \"properties\": { \"totalDistance\": 1784, \"totalTime\": 1759 } } }");
+                    org.mockito.Mockito.when(res.body()).thenReturn("{ \"status\": \"OK\", \"route\": { \"properties\": { \"totalDistance\": 1784, \"totalTime\": 1759 }, \"legs\": [{ \"steps\": [{ \"path\": { \"points\": [[126.9707, 37.5547], [126.9784, 37.5663]] } }] }] } }");
                 } else if (uriStr.contains("/v2/routing/publictraffic")) {
-                    org.mockito.Mockito.when(res.body()).thenReturn("{ \"status\": \"OK\", \"routes\": [{ \"properties\": { \"totalDistance\": 4200, \"totalTime\": 1080 } }] }");
+                    org.mockito.Mockito.when(res.body()).thenReturn("{ \"status\": \"OK\", \"routes\": [{ \"properties\": { \"totalDistance\": 4200, \"totalTime\": 1080 }, \"steps\": [{ \"path\": { \"points\": [[126.9707, 37.5547], [126.9784, 37.5663]] } }] }] }");
                 } else if (uriStr.contains("123") || uriStr.contains("%EC%A1%B4%EC%9E%AC")) {
                     org.mockito.Mockito.when(res.body()).thenReturn("{ \"meta\": { \"is_end\": true }, \"documents\": [] }");
                 } else {
@@ -372,7 +372,9 @@ class MapControllerTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.distanceMeters").value(1784))
             .andExpect(jsonPath("$.durationSeconds").value(1759))
-            .andExpect(jsonPath("$.travelMode").value("WALK"));
+            .andExpect(jsonPath("$.travelMode").value("WALK"))
+            .andExpect(jsonPath("$.pathPoints[0].latitude").value(37.5547))
+            .andExpect(jsonPath("$.pathPoints[1].longitude").value(126.9784));
     }
 
     @Test
@@ -387,7 +389,8 @@ class MapControllerTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.distanceMeters").value(4200))
             .andExpect(jsonPath("$.durationSeconds").value(1080))
-            .andExpect(jsonPath("$.travelMode").value("PUBLIC_TRANSIT"));
+            .andExpect(jsonPath("$.travelMode").value("PUBLIC_TRANSIT"))
+            .andExpect(jsonPath("$.pathPoints[0].latitude").value(37.5547));
     }
 
     @Test

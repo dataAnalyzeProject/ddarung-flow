@@ -42,8 +42,11 @@ public class MapApiDtos {
     public record RouteResultDto(
         int distanceMeters,
         int durationSeconds,
-        String travelMode
+        String travelMode,
+        List<RoutePointDto> pathPoints
     ) {}
+
+    public record RoutePointDto(BigDecimal latitude, BigDecimal longitude) {}
 
     public record RouteEstimateRequestDto(
         BigDecimal originLatitude,
