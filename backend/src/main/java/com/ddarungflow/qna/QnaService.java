@@ -14,6 +14,18 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class QnaService {
 
+    @lombok.Getter
+    public static class QnaException extends RuntimeException {
+        private final HttpStatus status;
+        private final String errorCode;
+
+        public QnaException(HttpStatus status, String errorCode, String message) {
+            super(message);
+            this.status = status;
+            this.errorCode = errorCode;
+        }
+    }
+
     private final QnaQuestionRepository qnaQuestionRepository;
 
     public QnaDtos.PageResponse<QnaDtos.QuestionResponse> listPublic(QnaCategory category, QnaStatus status, String query, int page, int size, UUID actorUserId) {
@@ -100,6 +112,10 @@ public class QnaService {
             throw new QnaException(HttpStatus.FORBIDDEN, "QNA_FORBIDDEN", "질문 수정 권한이 없습니다.");
         }
 
+        if (question.getStatus() == QnaStatus.ANSWERED) {
+            throw new QnaException(HttpStatus.CONFLICT, "QNA_CONFLICT", "답변 완료된 질문은 수정할 수 없습니다.");
+        }
+
         question.updateByAuthor(title, body, category, visibility);
         return question;
     }
@@ -115,6 +131,10 @@ public class QnaService {
 
         if (!question.getAuthorUserId().equals(actorUserId)) {
             throw new QnaException(HttpStatus.FORBIDDEN, "QNA_FORBIDDEN", "질문 삭제 권한이 없습니다.");
+        }
+
+        if (question.getStatus() == QnaStatus.ANSWERED) {
+            throw new QnaException(HttpStatus.CONFLICT, "QNA_CONFLICT", "답변 완료된 질문은 삭제할 수 없습니다.");
         }
 
         qnaQuestionRepository.delete(question);

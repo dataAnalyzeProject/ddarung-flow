@@ -13,6 +13,8 @@ import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.UUID;
 
+import com.ddarungflow.qna.QnaService.QnaException;
+
 @RestController
 @RequestMapping("/api/v1/qna/questions")
 @RequiredArgsConstructor

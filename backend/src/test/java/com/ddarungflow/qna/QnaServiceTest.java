@@ -13,6 +13,9 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.ddarungflow.qna.QnaService.QnaException;
+import org.springframework.http.HttpStatus;
+
 @SpringBootTest
 @ActiveProfiles("test")
 class QnaServiceTest {
@@ -169,6 +172,36 @@ class QnaServiceTest {
                 QnaCategory.SERVICE,
                 QnaVisibility.PUBLIC
         )).isInstanceOf(QnaException.class).hasMessage("질문 수정 권한이 없습니다.");
+    }
+
+    @Test
+    @DisplayName("409 CONFLICT: 답변 완료(ANSWERED) 질문 수정/삭제 시 409 QNA_CONFLICT 예외를 반환한다")
+    void updateOrDeleteAnsweredQuestionThrows409Conflict() {
+        // ANSWERED 상태인 privateQuestionUserA 수정 시도
+        assertThatThrownBy(() -> qnaService.updateByAuthor(
+                privateQuestionUserA.getPublicId(),
+                userA,
+                "답변 완료 질문 수정",
+                "내용",
+                QnaCategory.ACCOUNT,
+                QnaVisibility.PRIVATE
+        )).isInstanceOf(QnaException.class)
+                .satisfies(ex -> {
+                    QnaException qe = (QnaException) ex;
+                    assertThat(qe.getStatus()).isEqualTo(HttpStatus.CONFLICT);
+                    assertThat(qe.getErrorCode()).isEqualTo("QNA_CONFLICT");
+                });
+
+        // ANSWERED 상태인 privateQuestionUserA 삭제 시도
+        assertThatThrownBy(() -> qnaService.deleteByAuthor(
+                privateQuestionUserA.getPublicId(),
+                userA
+        )).isInstanceOf(QnaException.class)
+                .satisfies(ex -> {
+                    QnaException qe = (QnaException) ex;
+                    assertThat(qe.getStatus()).isEqualTo(HttpStatus.CONFLICT);
+                    assertThat(qe.getErrorCode()).isEqualTo("QNA_CONFLICT");
+                });
     }
 
     @Test
