@@ -41,6 +41,14 @@ pipeline/dataset/
 dataset/
 데이터셋/
 *.csv
+!.env.example
 !output/*.csv
 !docs/DATA-2.0-output/*.csv
 
+# Temporary virtualenv & model binaries
+project/
+.local-models/
+*.joblib
+*.pkl
+*.bin
+*.pt

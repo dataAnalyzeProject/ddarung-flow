@@ -182,3 +182,55 @@ def test_batch_inference_dataframe_input_and_empty_guard():
     res_empty = run_batch_inference([], predictor=_mock_valid_predictor)
     assert res_empty["publishable"] is False
     assert "empty_inputs" in res_empty["errors"]
+
+
+class DummyPredictorModel:
+    def predict_proba(self, X):
+        import numpy as np
+        if hasattr(X, "columns") and "required_bike_count" in X.columns:
+            qty = X["required_bike_count"].values
+            probs = 0.95 - (qty * 0.08)
+        else:
+            probs = np.full(len(X), 0.8)
+        return np.column_stack([1.0 - probs, probs])
+
+
+
+def test_trusted_predictor_normal_and_failure_modes(tmp_path):
+    """Verify build_trusted_predictor normal execution and failure guards (missing file, SHA mismatch, missing column)."""
+    import joblib
+    from pipeline.src.batch_inference import build_trusted_predictor
+    from pipeline.src.modeling import sha256_file
+
+    artifact_path = tmp_path / "test_model.joblib"
+    joblib.dump(DummyPredictorModel(), artifact_path)
+    real_sha = sha256_file(artifact_path)
+
+
+    feature_cols = ["station_id", "current_bike_count", "day_of_week", "hour_of_day", "month", "is_weekend", "horizon_minutes", "required_bike_count"]
+
+    predictor = build_trusted_predictor(artifact_path, real_sha, feature_cols)
+
+    with FIXTURE_PATH.open(encoding="utf-8") as file:
+        inputs = json.load(file)
+
+    res = run_batch_inference(inputs, predictor=predictor, generated_at="2026-08-14T10:00:00Z")
+    assert res["publishable"] is True
+    assert res["rowCount"] == 40
+    assert res["rows"][0]["probability"] == 0.87
+
+
+    # Failure mode 1: Artifact file missing
+    missing_path = tmp_path / "missing.joblib"
+    with pytest.raises(RuntimeError, match="not found"):
+        build_trusted_predictor(missing_path, real_sha, feature_cols)
+
+    # Failure mode 2: SHA mismatch
+    with pytest.raises(RuntimeError, match="SHA-256 does not match"):
+        build_trusted_predictor(artifact_path, "0" * 64, feature_cols)
+
+    # Failure mode 3: Missing required feature column in row
+    bad_predictor = build_trusted_predictor(artifact_path, real_sha, ["missing_col_xyz"])
+    with pytest.raises(RuntimeError, match="missing required feature columns"):
+        bad_predictor([{"current_bike_count": 5}])
+

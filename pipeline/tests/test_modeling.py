@@ -242,3 +242,27 @@ def test_manifest_matches_hist_artifact_and_checksum(tmp_path):
     assert loaded["model_name"] == "hist_gradient_boosting"
     with pytest.raises(RuntimeError, match="SHA-256"):
         load_trusted_artifact(artifact_path, "0" * 64)
+
+
+def test_inference_isolation_rejects_forbidden_features():
+    """Verify that forbidden future/route fields are rejected and not mixed into artifact inference."""
+    from pipeline.src.modeling import FORBIDDEN_FEATURES, validate_records
+
+    records = load_json(FIXTURE_PATH)
+    forbidden_sample_cols = [
+        "user_latitude",
+        "user_longitude",
+        "origin",
+        "destination",
+        "distance_meters",
+        "duration_seconds",
+        "future_bike_count",
+    ]
+
+    for col in forbidden_sample_cols:
+        assert col in FORBIDDEN_FEATURES
+        bad_records = copy.deepcopy(records)
+        bad_records[0][col] = 123
+        with pytest.raises(ValueError, match="forbidden fields"):
+            validate_records(bad_records)
+
