@@ -1,7 +1,5 @@
 package com.ddarungflow.qna;
 
-import com.ddarungflow.dto.QnaDtos;
-import com.ddarungflow.exception.QnaException;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -22,9 +20,9 @@ public class QnaService {
         int pageNum = Math.max(0, page - 1);
         int pageSize = size > 0 ? size : 10;
         org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(pageNum, pageSize);
-        
+
         org.springframework.data.domain.Page<QnaQuestion> questionPage = qnaQuestionRepository.findPublicNonHiddenQuestions(category, status, query, pageable);
-        
+
         List<QnaDtos.QuestionResponse> items = questionPage.getContent().stream()
                 .map(q -> QnaDtos.QuestionResponse.from(q, actorUserId))
                 .collect(Collectors.toList());

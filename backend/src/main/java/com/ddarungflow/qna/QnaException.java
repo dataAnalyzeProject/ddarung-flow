@@ -1,4 +1,4 @@
-package com.ddarungflow.exception;
+package com.ddarungflow.qna;
 
 import lombok.Getter;
 import org.springframework.http.HttpStatus;
