@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createKakaoMapAdapter, estimateRoute, loadKakaoMapSdk } from "./kakaoMapApi";
 import currentLocationMarker from "./assets/current-location-marker.png";
+import currentLocationButton from "./assets/current-location-button.png";
 import bikeStationMarker from "./assets/bike-station-marker.png";
 import { fetchStationDetail, fetchStationLocations } from "./stationApi";
 import "./MapRoutePanel.css";
@@ -23,6 +24,7 @@ export default function MapRoutePanel({
   travelMode,
   selectedPlaces,
   onDurationChange,
+  onRouteCalculated,
   fallbackImage,
   canViewStations = false,
 }) {
@@ -88,6 +90,12 @@ export default function MapRoutePanel({
     if (current) adapterRef.current?.setCenter(current);
   }, [points, current, sdkStatus]);
   useEffect(() => {
+    adapterRef.current?.setRoutePath?.(route?.pathPoints || []);
+  }, [route, sdkStatus]);
+  useEffect(() => {
+    setRoute(null);
+  }, [selected.origin, selected.destination, travelMode]);
+  useEffect(() => {
     if (!adapterRef.current) return;
     adapterRef.current.setStations(canViewStations && showStations && stationLocations ? stationLocations : [], handleStationSelected);
   }, [canViewStations, handleStationSelected, showStations, stationLocations, sdkStatus]);
@@ -139,6 +147,7 @@ export default function MapRoutePanel({
       });
       setRoute({ ...result, arrivalAt: formatArrival(result.durationSeconds) });
       onDurationChange?.(Math.max(1, Math.ceil(result.durationSeconds / 60)));
+      onRouteCalculated?.();
       setRouteState("success");
     } catch (error) {
       setRoute(null);
@@ -168,11 +177,6 @@ export default function MapRoutePanel({
     }
   };
 
-  // Route estimation intentionally follows the selected places and travel mode.
-  useEffect(() => {
-    if (selected.origin && selected.destination) requestRoute();
-  }, [selected.origin, selected.destination, mode]); // eslint-disable-line react-hooks/exhaustive-deps
-
   return (
     <section className="main-map-panel map-route-panel" aria-label="예측 지도">
       <header className="main-section-head"><h2>경로 지도</h2><span>장소 선택 후 거리와 도착시각을 확인하세요.</span></header>
@@ -186,8 +190,7 @@ export default function MapRoutePanel({
           {stationLoadState === "loading" ? "대여소 불러오는 중" : showStations ? "대여소 숨기기" : "대여소 표시"}
         </button>}
         <button className="main-redraw" type="button" aria-label="내 위치 확인" disabled={locationState === "loading"} onClick={locate}>
-          <span aria-hidden="true">{locationState === "loading" ? "⌛" : "📍"}</span>
-          {locationState === "loading" ? "확인 중" : "내 위치"}
+          <img src={currentLocationButton} alt="" aria-hidden="true" />
         </button>
         <div className="main-zoom"><button type="button" aria-label="지도 확대" onClick={() => setMapLevel((level) => Math.max(1, level - 1))}>＋</button><button type="button" aria-label="지도 축소" onClick={() => setMapLevel((level) => Math.min(14, level + 1))}>−</button></div>
         <button className="map-route-panel__estimate" type="button" disabled={routeState === "loading"} onClick={requestRoute}>{routeState === "loading" ? "경로 확인 중" : "경로 확인"}</button>

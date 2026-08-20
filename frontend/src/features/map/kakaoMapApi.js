@@ -49,6 +49,7 @@ export function createKakaoMapAdapter(container, maps, center = { latitude: 37.5
   let stationMarkers = [];
   let stationClusterer = null;
   let stationOverlay = null;
+  let routePolyline = null;
 
   const createMarkerImage = (src, width, height) => {
     if (!src || !maps.MarkerImage) return undefined;
@@ -68,6 +69,11 @@ export function createKakaoMapAdapter(container, maps, center = { latitude: 37.5
     stationClusterer = null;
     stationOverlay?.setMap(null);
     stationOverlay = null;
+  };
+
+  const clearRoute = () => {
+    routePolyline?.setMap(null);
+    routePolyline = null;
   };
 
   const createStationOverlay = (station) => {
@@ -99,6 +105,25 @@ export function createKakaoMapAdapter(container, maps, center = { latitude: 37.5
       setMarker("destination", destination);
       if (destination) map.setCenter(toLatLng(destination));
       else if (origin) map.setCenter(toLatLng(origin));
+    },
+    setRoutePath(points) {
+      clearRoute();
+      if (!Array.isArray(points) || points.length < 2 || !maps.Polyline) return;
+      const path = points.map(toLatLng);
+      routePolyline = new maps.Polyline({
+        map,
+        path,
+        strokeWeight: 5,
+        strokeColor: "#1476ff",
+        strokeOpacity: 0.85,
+        strokeStyle: "solid",
+        zIndex: 10,
+      });
+      if (maps.LatLngBounds) {
+        const bounds = new maps.LatLngBounds();
+        path.forEach((point) => bounds.extend(point));
+        map.setBounds(bounds);
+      }
     },
     setStations(stations, onStationSelected = markerOptions.onStationSelected) {
       clearStations();
