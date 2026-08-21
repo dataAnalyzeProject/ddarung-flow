@@ -80,6 +80,7 @@ export default function MainPage({ onNavigate }) {
           const { routePlaces: savedPlaces, ...savedInput } = pendingInput;
           setInput({ ...EMPTY_INPUT, ...savedInput });
           setRoutePlaces(savedPlaces || { origin: null, destination: null });
+          setTimeConfirmed(Number(savedInput.directMinutes) > 0);
         }
       })
       .catch(() => {

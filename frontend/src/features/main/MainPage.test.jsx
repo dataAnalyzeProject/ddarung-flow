@@ -165,7 +165,7 @@ describe("시안 6 메인 로그인 통합", () => {
     await screen.findByDisplayValue("서울역");
     expect(screen.getByDisplayValue("서울역")).toBeInTheDocument();
     expect(screen.getByDisplayValue("광화문")).toBeInTheDocument();
-    expect(screen.queryByLabelText("계산된 예상시간")).not.toBeInTheDocument();
+    expect(screen.getByText((_, node) => node?.textContent === "예상시간을 20분으로 확인했습니다.")).toBeInTheDocument();
     expect(screen.getByText(/따릉이 사용자 · kakao/)).toBeInTheDocument();
     await waitFor(() => expect(window.location.search).toBe(""));
   });
