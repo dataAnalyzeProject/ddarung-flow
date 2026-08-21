@@ -126,6 +126,10 @@ export default function LoginPage({ initialStatus, mockOutcome, initialPredictio
       setLoginStatus(LOGIN_STATUS.CANCELLED);
       return;
     }
+    if (loginResult === "expired") {
+      setLoginStatus(LOGIN_STATUS.EXPIRED);
+      return;
+    }
 
     getCurrentUser()
       .then((auth) => {
