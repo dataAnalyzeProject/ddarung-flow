@@ -35,6 +35,7 @@ test("operator can answer and close public qna", () => {
 test("private question text is protected and only super admin can hide", () => {
   const { rerender } = render(<AdminPage menuId="qna" actorRole="ADMIN_OPERATOR" />);
   expect(screen.getByText("PRIVATE 문의 원문과 개인정보는 관리자 fixture에서 표시하지 않습니다.")).toBeInTheDocument();
+  expect(screen.getByText("PRIVATE 보호")).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "숨김" })).not.toBeInTheDocument();
   rerender(<AdminPage menuId="qna" actorRole="SUPER_ADMIN" onAction={jest.fn()} />);
   expect(screen.getByRole("button", { name: "숨김" })).toBeInTheDocument();
