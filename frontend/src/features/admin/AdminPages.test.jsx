@@ -43,7 +43,9 @@ test("private question text is protected and only super admin can hide", () => {
 test("qna overview keeps eight fixture rows and the state transition guide", () => {
   renderPage("qna", "ADMIN_READER");
   expect(screen.getByText("문의 목록 · 8건")).toBeInTheDocument();
-  expect(screen.getByText(/OPEN.*ANSWERED.*CLOSED/)).toBeInTheDocument();
+  expect(screen.getByText("OPEN")).toBeInTheDocument();
+  expect(screen.getByText("ANSWERED")).toBeInTheDocument();
+  expect(screen.getByText("CLOSED")).toBeInTheDocument();
 });
 
 test("approver may approve model but has no qna page", () => {
