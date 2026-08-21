@@ -1,0 +1,76 @@
+import { useState } from "react";
+import { canDo, fixture } from "./adminFixture";
+
+const Icon = ({ children }) => <span className="admin-card-icon" aria-hidden="true">{children}</span>;
+const Button = ({ children, onClick, kind = "secondary", disabled = false }) => <button type="button" className={`admin-button ${kind}`} onClick={onClick} disabled={disabled}>{children}</button>;
+const Chip = ({ children, tone = "blue" }) => <span className={`admin-chip ${tone}`}>{children}</span>;
+
+function Section({ title, action, children, className = "" }) {
+  return <section className={`admin-panel ${className}`}><header className="admin-panel-head"><h2>{title}</h2>{action}</header>{children}</section>;
+}
+
+function StatCard({ label, value, note, icon, tone = "blue" }) {
+  return <article className={`admin-stat-card ${tone}`}><div><p>{label}</p><strong>{value}</strong><small>{note}</small></div><Icon>{icon}</Icon></article>;
+}
+
+export function AdminStatePanel({ state }) {
+  const content = {
+    loading: ["불러오는 중", "fixture 화면을 준비하고 있습니다."],
+    empty: ["표시할 fixture가 없습니다", "필터를 조정하거나 다시 시도해 주세요."],
+    error: ["일시적으로 표시할 수 없습니다", "실제 API 오류가 아닌 fixture 상태입니다."],
+    forbidden: ["관리자 권한이 필요합니다", "관리자 데이터와 카드, 표는 표시하지 않습니다."],
+  }[state] || ["알 수 없는 상태", ""];
+  return <section className="admin-state-panel" data-testid={`admin-${state}`} aria-live="polite"><Icon>{state === "error" ? "!" : state === "forbidden" ? "×" : "…"}</Icon><h1>{content[0]}</h1><p>{content[1]}</p></section>;
+}
+
+function Dashboard({ data }) {
+  return <>
+    <div className="admin-page-title"><div><p className="admin-eyebrow">UI-ADMIN-01 · fixture only</p><h1>운영 현황</h1><span>실시간 운영 통계가 아닌 검토용 fixture입니다.</span></div><Chip tone="green">서비스 상태 · 정상</Chip></div>
+    <div className="admin-stat-grid"><StatCard label="데이터 신선도" value="15분" note="최근 배치 21:15" icon="◷" tone="green" /><StatCard label="활성 모델" value="v17" note="승인된 fixture 모델" icon="◇" /><StatCard label="Export 대기" value="2건" note="요청 callback 대기" icon="⇩" tone="orange" /><StatCard label="Q&A 처리 대기" value="1건" note="OPEN 문의 기준" icon="◌" tone="coral" /></div>
+    <div className="admin-dashboard-grid">
+      <Section title="운영 대기 항목" className="admin-tall-panel"><div className="admin-queue-list"><Queue icon="⇩" title="Export 요청 검토" detail="정거장 가용성 집계 · ADMIN_OPERATOR" badge="2건" /><Queue icon="◇" title="모델 승인 대기" detail="v16 검증 결과 확인" badge="1건" /><Queue icon="◌" title="Q&A 답변 대기" detail="예측 결과 카테고리" badge="1건" /></div><div className="admin-mini-chart"><span style={{ height: "38%" }} /><span style={{ height: "62%" }} /><span style={{ height: "46%" }} /><span style={{ height: "78%" }} /><span style={{ height: "55%" }} /><span style={{ height: "83%" }} /><span style={{ height: "68%" }} /></div></Section>
+      <Section title="최근 감사 이벤트" action={<span className="admin-linkish">전체 보기 ›</span>}><ul className="admin-timeline">{data.audit.map((item) => <li key={item.time}><i /><time>{item.time}</time><strong>{item.action}</strong><span>{item.actor}</span><Chip tone="green">{item.result}</Chip></li>)}</ul></Section>
+    </div>
+  </>;
+}
+
+function Queue({ icon, title, detail, badge }) { return <div className="admin-queue"><Icon>{icon}</Icon><div><strong>{title}</strong><span>{detail}</span></div><Chip>{badge}</Chip></div>; }
+
+function Users({ data, actorRole, onAction }) {
+  const [dialog, setDialog] = useState(null);
+  const [roleFilter, setRoleFilter] = useState("전체 역할");
+  const filtered = roleFilter === "전체 역할" ? data.users : data.users.filter((user) => user.role === roleFilter);
+  const selected = dialog || data.users[0];
+  const confirmRole = () => { onAction({ type: "change_role", userId: selected.id, nextRole: "ADMIN_READER" }); setDialog(null); };
+  return <><div className="admin-page-title"><div><p className="admin-eyebrow">UI-ADMIN-02</p><h1>사용자 · 권한</h1><span>비식별 fixture 사용자만 표시합니다.</span></div>{canDo(actorRole, "change_role") && <Button kind="primary" onClick={() => setDialog(data.users[0])}>역할 변경</Button>}</div>
+    <div className="admin-filter-row"><input aria-label="사용자 검색" placeholder="비식별 사용자 검색" /><select aria-label="역할 필터" value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)}><option>전체 역할</option><option>ADMIN_OPERATOR</option><option>MODEL_APPROVER</option><option>ADMIN_READER</option></select><span>총 {filtered.length}명</span></div>
+    <Section title="사용자 목록" className="admin-table-panel"><table><thead><tr><th>사용자</th><th>역할</th><th>상태</th><th>권한 범위</th><th>최근 변경</th><th>작업</th></tr></thead><tbody>{filtered.map((user) => <tr key={user.id}><td><strong>{user.name}</strong><small>{user.id}</small></td><td><Chip tone={user.role === "MODEL_APPROVER" ? "purple" : "blue"}>{user.role}</Chip></td><td><span className="admin-status-dot">● {user.status}</span></td><td>{user.scope}</td><td>{user.updated}</td><td>{canDo(actorRole, "change_role") && <Button onClick={() => setDialog(user)}>역할 변경</Button>}</td></tr>)}</tbody></table></Section>
+    <Section title="선택 사용자 상세" className="admin-detail-strip"><div><b>{data.users[0].name}</b><span>{data.users[0].id}</span></div><div><small>현재 역할</small><Chip tone="green">SUPER_ADMIN 보호 정책</Chip></div><p>마지막 SUPER_ADMIN 역할은 이 fixture에서 변경할 수 없습니다.</p></Section>
+    {dialog && <Dialog title="역할 변경 확인" onClose={() => setDialog(null)}><p><b>{selected.name}</b>의 역할을 조회자로 변경할까요?</p><p className="admin-dialog-note">이 동작은 callback만 전송하며 실제 권한은 변경하지 않습니다.</p><div className="admin-dialog-actions"><Button onClick={() => setDialog(null)}>취소</Button><Button kind="primary" onClick={confirmRole}>변경 확인</Button></div></Dialog>}</>;
+}
+
+function Export({ data, actorRole, onAction }) {
+  return <><div className="admin-page-title"><div><p className="admin-eyebrow">UI-ADMIN-03</p><h1>데이터 · Export</h1><span>원본 데이터는 브라우저에서 만들지 않습니다.</span></div>{canDo(actorRole, "export_request") && <Button kind="primary" onClick={() => onAction({ type: "export_request", exportType: "station_availability" })}>Export 요청</Button>}</div>
+    <div className="admin-stat-grid"><StatCard label="Curated 상태" value="정상" note="fixture 배치 기준" icon="✓" tone="green" /><StatCard label="Coverage" value="98.7%" note="비운영 fixture" icon="◔" /><StatCard label="격리 항목" value="3건" note="검토 필요" icon="!" tone="orange" /><StatCard label="최근 배치" value="21:15" note="데이터 기준 시각" icon="◷" /></div>
+    <div className="admin-dashboard-grid"><Section title="제한 Export 요청" action={<span className="admin-filter-hint">상태 · 전체</span>} className="admin-tall-panel"><ExportTable exports={data.exports} /></Section><Section title="요청 상세"><div className="admin-request-detail"><Chip tone="green">완료</Chip><dl><dt>작업 ID</dt><dd>EXP-240821-04</dd><dt>정책</dt><dd>민감 필드 제외 fixture</dd><dt>파일 형식</dt><dd>CSV (sample)</dd><dt>행 수</dt><dd>12,480</dd></dl><p>실제 파일 생성·다운로드는 후속 API 통합 범위입니다.</p></div></Section></div></>;
+}
+
+function ExportTable({ exports }) { return <table><thead><tr><th>작업 ID</th><th>데이터 유형</th><th>요청자</th><th>상태</th><th>진행률</th></tr></thead><tbody>{exports.map((item) => <tr key={item.id}><td>{item.id}</td><td>{item.type}</td><td>{item.requester}</td><td><Chip tone={item.state === "완료" ? "green" : item.state === "대기" ? "gray" : "blue"}>{item.state}</Chip></td><td><div className="admin-progress"><i style={{ width: `${item.progress}%` }} /><span>{item.progress}%</span></div></td></tr>)}</tbody></table>; }
+
+function Audit({ data }) { return <><div className="admin-page-title"><div><p className="admin-eyebrow">UI-ADMIN-04</p><h1>감사 로그</h1><span>비식별 행위 데이터만 보여 주는 fixture입니다.</span></div></div><div className="admin-filter-row"><select aria-label="기간 필터"><option>최근 7일</option></select><select aria-label="행위 필터"><option>전체 행위</option></select><select aria-label="결과 필터"><option>전체 결과</option></select><input aria-label="감사 로그 검색" placeholder="행위, 대상 검색" /></div><div className="admin-stat-grid"><StatCard label="오늘 로그" value="1,238" note="fixture 집계" icon="◫" /><StatCard label="실패 이벤트" value="0건" note="표시용 수치" icon="!" tone="coral" /><StatCard label="권한 변경" value="3건" note="비식별 이벤트" icon="♙" tone="purple" /><StatCard label="Export 관련" value="12건" note="요청 포함" icon="⇩" /></div><div className="admin-dashboard-grid"><Section title="정규화 감사 로그" className="admin-tall-panel"><AuditTable audit={data.audit} /></Section><Section title="안전한 표시 원칙"><div className="admin-safe-list"><p>✓ IP 원문을 표시하지 않습니다.</p><p>✓ 이메일·OAuth 값은 표시하지 않습니다.</p><p>✓ Q&A 본문을 표시하지 않습니다.</p><p>✓ 대상은 비식별 문자열입니다.</p></div></Section></div></>;
+}
+
+function AuditTable({ audit }) { return <table><thead><tr><th>시각</th><th>행위</th><th>사용자 역할</th><th>대상</th><th>결과</th></tr></thead><tbody>{audit.map((item) => <tr key={item.time}><td>{item.time}</td><td><strong>{item.action}</strong></td><td>{item.actor}</td><td>{item.target}</td><td><Chip tone="green">{item.result}</Chip></td></tr>)}</tbody></table>; }
+
+function ModelOps({ data, actorRole, onAction }) { const model = data.models[1]; return <><div className="admin-page-title"><div><p className="admin-eyebrow">UI-ADMIN-05</p><h1>ModelOps</h1><span>실제 모델 실행·배포 없이 검토 흐름만 표현합니다.</span></div>{canDo(actorRole, "activate_model") && <Button kind="primary" onClick={() => onAction({ type: "activate_model", version: "v16" })}>활성화</Button>}</div><div className="admin-stat-grid"><StatCard label="등록 모델" value="3" note="fixture version" icon="◇" /><StatCard label="검증 대기" value="1" note="VALIDATED 전" icon="◷" tone="orange" /><StatCard label="현재 ACTIVE" value="v17" note="fixture 상태" icon="✓" tone="green" /></div><div className="admin-dashboard-grid"><Section title="모델 성능 비교" className="admin-tall-panel"><div className="admin-model-bars">{data.models.map((item, index) => <div key={item.version}><b>{item.version}</b><i style={{ height: `${Number(item.accuracy) * 100}%` }} className={index === 0 ? "active" : ""} /><span>{item.accuracy}</span></div>)}</div><div className="admin-model-flow"><Chip tone="gray">DRAFT</Chip><span>→</span><Chip>VALIDATED</Chip><span>→</span><Chip tone="purple">APPROVED</Chip><span>→</span><Chip tone="green">ACTIVE</Chip></div></Section><Section title="검증 및 승인"><ul className="admin-checklist"><li>데이터 스키마 검증 <Chip tone="green">성공</Chip></li><li>성능 기준 충족 <Chip tone="green">성공</Chip></li><li>드리프트 확인 <Chip tone="green">성공</Chip></li></ul><div className="admin-action-row">{canDo(actorRole, "validate_model") && <Button onClick={() => onAction({ type: "validate_model", version: model.version })}>검증</Button>}{canDo(actorRole, "approve_model") && <Button kind="primary" onClick={() => onAction({ type: "approve_model", version: model.version })}>승인</Button>}{canDo(actorRole, "rollback_model") && <Button onClick={() => onAction({ type: "rollback_model", version: "v17" })}>롤백</Button>}</div></Section></div></>;
+}
+
+function Qna({ data, actorRole, onAction }) { const [status, setStatus] = useState("전체 상태"); const [selectedId, setSelectedId] = useState("Q-104"); const selected = data.qna.find((item) => item.id === selectedId) || data.qna[0]; const list = status === "전체 상태" ? data.qna : data.qna.filter((item) => item.state === status); return <><div className="admin-page-title"><div><p className="admin-eyebrow">UI-ADMIN-06</p><h1>Q&A 관리</h1><span>PRIVATE 문의 원문과 개인정보는 관리자 fixture에서 표시하지 않습니다.</span></div><Chip tone="orange">fixture · 답변 미전송</Chip></div><div className="admin-filter-row"><select aria-label="Q&A 상태 필터" value={status} onChange={(event) => setStatus(event.target.value)}><option>전체 상태</option><option>OPEN</option><option>ANSWERED</option><option>CLOSED</option><option>HIDDEN</option></select><select aria-label="공개 범위 필터"><option>전체 공개 범위</option><option>PUBLIC</option><option>PRIVATE</option></select></div><div className="admin-dashboard-grid"><Section title="문의 목록" className="admin-tall-panel"><table><thead><tr><th>분류</th><th>질문 제목</th><th>공개 범위</th><th>상태</th><th>최근 변경</th></tr></thead><tbody>{list.map((item) => <tr key={item.id} className={item.id === selected.id ? "is-selected" : ""} onClick={() => setSelectedId(item.id)}><td>{item.category}</td><td><button type="button" className="admin-table-link" onClick={() => setSelectedId(item.id)}>{item.title}</button></td><td><Chip tone={item.visibility === "PRIVATE" ? "purple" : "green"}>{item.visibility}</Chip></td><td><Chip tone={item.state === "OPEN" ? "orange" : "blue"}>{item.state}</Chip></td><td>{item.updated}</td></tr>)}</tbody></table></Section><Section title="문의 처리"><div className="admin-qna-detail"><Chip tone={selected.visibility === "PRIVATE" ? "purple" : "green"}>{selected.visibility}</Chip><h3>{selected.visibility === "PRIVATE" ? "비공개 문의" : selected.title}</h3><p>{selected.visibility === "PRIVATE" ? "원문은 숨김 처리되어 있습니다." : "fixture 문의 미리보기입니다. 실제 답변은 전송하지 않습니다."}</p><div className="admin-action-row">{canDo(actorRole, "answer_qna") && <Button kind="primary" onClick={() => onAction({ type: "answer_qna", questionId: selected.id })}>답변 보내기</Button>}{canDo(actorRole, "change_qna_state") && <Button onClick={() => onAction({ type: "change_qna_state", questionId: selected.id, nextState: "CLOSED" })}>종료</Button>}{canDo(actorRole, "hide_qna") && <Button onClick={() => onAction({ type: "hide_qna", questionId: selected.id, nextState: "HIDDEN" })}>숨김</Button>}</div></div></Section></div></>;
+}
+
+function Dialog({ title, children, onClose }) { return <div className="admin-dialog-backdrop" role="presentation"><section className="admin-dialog" role="dialog" aria-modal="true" aria-label={title}><button type="button" className="admin-dialog-close" aria-label="닫기" onClick={onClose}>×</button><h2>{title}</h2>{children}</section></div>; }
+
+export function AdminPage({ menuId, actorRole, fixtureData = fixture, onAction = () => {} }) {
+  const pages = { dashboard: <Dashboard data={fixtureData} />, users: <Users data={fixtureData} actorRole={actorRole} onAction={onAction} />, export: <Export data={fixtureData} actorRole={actorRole} onAction={onAction} />, audit: <Audit data={fixtureData} />, modelops: <ModelOps data={fixtureData} actorRole={actorRole} onAction={onAction} />, qna: <Qna data={fixtureData} actorRole={actorRole} onAction={onAction} /> };
+  return <div className="admin-page">{pages[menuId] || pages.dashboard}</div>;
+}
