@@ -206,7 +206,12 @@ export default function MainPage({ onNavigate }) {
       })[0];
       setSelectedStationInfo({ stationId: defaultCandidate.stationId, stationName: defaultCandidate.stationName });
       selectCandidateWeather(defaultCandidate);
-    } catch {
+    } catch (error) {
+      if (error?.message === "AUTH_REQUIRED") {
+        savePendingPrediction(input, routePlaces);
+        window.location.assign("/login?login=expired");
+        return;
+      }
       setApiPredictionResult(null);
     } finally {
       setPredictLoading(false);
