@@ -1,8 +1,4 @@
-# Q&A API page
+# Q&A fixture page
 
-`QnaPage` keeps the existing `/#qna` route and visual structure while consuming the fixed `/api/v1/qna/questions` contract.
-
-- Public/mine list scope, search, category, status, and server pagination
-- Question detail and authenticated creation
-- Explicit loading, empty, error, and login-required states
-- Cookie credentials and the existing `/api/v1/auth/csrf` contract for creation
+`QnaPage` is a local, fixture-backed interaction prototype rendered at `/#qna`.
+It provides list search/filtering, question-scope tabs, pagination state, keyboard-usable cards, detail viewing, and an in-memory create flow. It does not call an API or persist submitted questions.

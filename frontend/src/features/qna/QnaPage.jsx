@@ -1,30 +1,35 @@
 import { useCallback, useEffect, useState } from "react";
 import AppHeader from "../../shared/AppHeader";
+import * as qnaApi from "./api/qnaApi";
 import QnaPagination from "./components/QnaPagination";
 import QnaQuestionDetail from "./components/QnaQuestionDetail";
 import QnaQuestionForm from "./components/QnaQuestionForm";
 import QnaQuestionList from "./components/QnaQuestionList";
 import QnaSearchFilters from "./components/QnaSearchFilters";
-import * as qnaApi from "./qnaApi";
 import "./QnaPage.css";
 
 const PAGE_SIZE = 10;
 
-function QnaStatePanel({ kind, message, onRetry }) {
-  const isLoginRequired = kind === "login";
+function ListState({ kind, message }) {
+  if (kind === "auth-required") {
+    return (
+      <section className="qna-list" aria-label="질문 목록">
+        <p className="qna-empty" role="alert">
+          {message || "로그인이 필요합니다."} <a href="/login">로그인하기</a>
+        </p>
+      </section>
+    );
+  }
+
   return (
-    <section className={`qna-state qna-state-${kind}`} aria-live="polite" role={kind === "error" ? "alert" : "status"}>
-      <span aria-hidden="true" />
-      <h2>{isLoginRequired ? "로그인이 필요합니다" : kind === "loading" ? "질문을 불러오고 있습니다" : "질문을 불러오지 못했습니다"}</h2>
-      <p>{message}</p>
-      {isLoginRequired ? <a href="/login">로그인하기</a> : onRetry ? <button type="button" onClick={onRetry}>다시 시도</button> : null}
+    <section className="qna-list" aria-label="질문 목록">
+      <p className="qna-empty" role={kind === "error" ? "alert" : "status"}>{message}</p>
     </section>
   );
 }
 
 export default function QnaPage({ onNavigate }) {
   const [questions, setQuestions] = useState([]);
-  const [total, setTotal] = useState(0);
   const [view, setView] = useState("list");
   const [selectedQuestion, setSelectedQuestion] = useState(null);
   const [query, setQuery] = useState("");
@@ -35,34 +40,33 @@ export default function QnaPage({ onNavigate }) {
   const [page, setPage] = useState(1);
   const [listState, setListState] = useState("loading");
   const [listMessage, setListMessage] = useState("");
-  const [reloadKey, setReloadKey] = useState(0);
   const [detailState, setDetailState] = useState("idle");
   const [detailMessage, setDetailMessage] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (view !== "list") return undefined;
+
     const controller = new AbortController();
     setListState("loading");
     setListMessage("");
 
-    qnaApi.fetchQuestions({
+    qnaApi.listQuestions({
       scope: tab === "mine" ? "MINE" : "PUBLIC",
       category,
       status: answerStatus,
       query: submittedQuery,
-      page,
+      page: page - 1,
       size: PAGE_SIZE,
       signal: controller.signal,
     }).then((response) => {
-      setQuestions(response.items);
-      setTotal(response.total);
+      setQuestions(response.items || []);
       setListState("ready");
     }).catch((error) => {
       if (error.name === "AbortError") return;
       setQuestions([]);
-      setTotal(0);
-      setListState(error.status === 401 ? "login" : "error");
-      setListMessage(error.message || "잠시 후 다시 시도해 주세요.");
+      setListState(error.status === 401 ? "auth-required" : "error");
+      setListMessage(error.message || "질문을 불러오지 못했습니다.");
     });
 
     return () => controller.abort();
@@ -73,18 +77,36 @@ export default function QnaPage({ onNavigate }) {
     setPage(1);
   };
 
+  const returnToList = useCallback(() => {
+    setSelectedQuestion(null);
+    setDetailState("idle");
+    setDetailMessage("");
+    setView("list");
+  }, []);
+
   const openQuestion = useCallback(async (question) => {
     setSelectedQuestion(question);
-    setView("detail");
     setDetailState("loading");
     setDetailMessage("");
+    setView("detail");
+
     try {
-      const detail = await qnaApi.fetchQuestion(question.id);
+      const detail = await qnaApi.getQuestion(question.id);
       setSelectedQuestion(detail);
       setDetailState("ready");
     } catch (error) {
-      setDetailState(error.status === 401 ? "login" : "error");
-      setDetailMessage(error.message || "질문 상세를 불러오지 못했습니다.");
+      if (error.status === 404) {
+        setSelectedQuestion(null);
+        setDetailState("not-found");
+        setDetailMessage("볼 수 없거나 삭제된 질문입니다");
+      } else if (error.status === 401) {
+        setSelectedQuestion(null);
+        setDetailState("auth-required");
+        setDetailMessage(error.message || "로그인이 필요합니다.");
+      } else {
+        setDetailState("error");
+        setDetailMessage(error.message || "질문 상세를 불러오지 못했습니다.");
+      }
     }
   }, []);
 
@@ -96,60 +118,79 @@ export default function QnaPage({ onNavigate }) {
     setReloadKey((current) => current + 1);
   };
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const updateQuestion = async (question) => {
+    const updated = await qnaApi.updateQuestion(selectedQuestion.id, question);
+    setSelectedQuestion(updated || { ...selectedQuestion, ...question });
+    setDetailState("ready");
+    setView("detail");
+  };
+
+  const deleteQuestion = async (question) => {
+    try {
+      await qnaApi.deleteQuestion(question.id);
+      setTab("mine");
+      setPage(1);
+      setSelectedQuestion(null);
+      setView("list");
+      setReloadKey((current) => current + 1);
+    } catch (error) {
+      setDetailMessage(error.message || "질문을 삭제하지 못했습니다.");
+      setDetailState(error.status === 404 ? "not-found" : "error");
+      if (error.status === 404) setSelectedQuestion(null);
+    }
+  };
+
   let listContent;
   if (listState === "loading") {
-    listContent = <QnaStatePanel kind="loading" message="잠시만 기다려 주세요." />;
-  } else if (listState === "login") {
-    listContent = <QnaStatePanel kind="login" message={listMessage} />;
+    listContent = <ListState kind="loading" message="질문을 불러오는 중입니다" />;
+  } else if (listState === "auth-required") {
+    listContent = <ListState kind="auth-required" message={listMessage} />;
   } else if (listState === "error") {
-    listContent = <QnaStatePanel kind="error" message={listMessage} onRetry={() => setReloadKey((current) => current + 1)} />;
+    listContent = <ListState kind="error" message={listMessage} />;
   } else {
-    listContent = <><QnaQuestionList questions={questions} onSelect={openQuestion} /><QnaPagination page={page} totalPages={totalPages} onChange={setPage} /></>;
+    listContent = <><QnaQuestionList questions={questions} onSelect={openQuestion} /><QnaPagination page={page} onChange={setPage} /></>;
   }
 
-  return (
-    <div className="qna-shell">
-      <AppHeader activeRoute="qna" onNavigate={onNavigate} />
-      <main className="qna-content">
-        {view === "create" ? (
-          <QnaQuestionForm onCancel={() => setView("list")} onCreate={createQuestion} />
-        ) : view === "detail" ? (
-          detailState === "ready" && selectedQuestion ? (
-            <QnaQuestionDetail question={selectedQuestion} onBack={() => setView("list")} />
-          ) : (
-            <div className="qna-detail-state">
-              <button className="qna-back" type="button" onClick={() => setView("list")}>목록으로</button>
-              <QnaStatePanel
-                kind={detailState === "login" ? "login" : detailState === "error" ? "error" : "loading"}
-                message={detailMessage || "질문 상세를 확인하고 있습니다."}
-                onRetry={detailState === "error" && selectedQuestion ? () => openQuestion(selectedQuestion) : undefined}
-              />
-            </div>
-          )
-        ) : (
-          <>
-            <section className="qna-title-row">
-              <div><h1>Q&amp;A</h1><p>서비스 이용과 예측 결과에 관해 궁금한 점을 확인하세요.</p></div>
-              <button className="qna-write" type="button" onClick={() => setView("create")}><span aria-hidden="true" />질문 작성</button>
-            </section>
-            <QnaSearchFilters
-              query={query}
-              category={category}
-              answerStatus={answerStatus}
-              onQueryChange={setQuery}
-              onCategoryChange={(value) => changeFilter(setCategory, value)}
-              onAnswerStatusChange={(value) => changeFilter(setAnswerStatus, value)}
-              onSubmit={(event) => { event.preventDefault(); setSubmittedQuery(query.trim()); setPage(1); }}
-            />
-            <div className="qna-tabs" role="tablist" aria-label="질문 범위">
-              <button role="tab" aria-selected={tab === "all"} className={tab === "all" ? "active" : ""} type="button" onClick={() => changeFilter(setTab, "all")}>전체 질문</button>
-              <button role="tab" aria-selected={tab === "mine"} className={tab === "mine" ? "active" : ""} type="button" onClick={() => changeFilter(setTab, "mine")}>내 질문</button>
-            </div>
-            {listContent}
-          </>
-        )}
-      </main>
-    </div>
-  );
+  let content;
+  if (view === "create") {
+    content = <QnaQuestionForm onCancel={returnToList} onCreate={createQuestion} />;
+  } else if (view === "edit" && selectedQuestion) {
+    content = <QnaQuestionForm initialQuestion={selectedQuestion} onCancel={() => setView("detail")} onUpdate={updateQuestion} />;
+  } else if (view === "detail") {
+    content = (
+      <QnaQuestionDetail
+        question={detailState === "ready" ? selectedQuestion : null}
+        loading={detailState === "loading"}
+        errorMessage={detailState !== "loading" && detailState !== "ready" ? detailMessage : ""}
+        onBack={returnToList}
+        onEdit={(question) => { setSelectedQuestion(question); setView("edit"); }}
+        onDelete={deleteQuestion}
+      />
+    );
+  } else {
+    content = (
+      <>
+        <section className="qna-title-row">
+          <div><h1>Q&amp;A</h1><p>서비스 이용과 예측 결과에 관해 궁금한 점을 확인하세요.</p></div>
+          <button className="qna-write" type="button" onClick={() => setView("create")}><span aria-hidden="true" />질문 작성</button>
+        </section>
+        <QnaSearchFilters
+          query={query}
+          category={category}
+          answerStatus={answerStatus}
+          onQueryChange={setQuery}
+          onCategoryChange={(value) => changeFilter(setCategory, value)}
+          onAnswerStatusChange={(value) => changeFilter(setAnswerStatus, value)}
+          onSubmit={(event) => { event.preventDefault(); setSubmittedQuery(query.trim()); setPage(1); }}
+        />
+        <div className="qna-tabs" role="tablist" aria-label="질문 범위">
+          <button role="tab" aria-selected={tab === "all"} className={tab === "all" ? "active" : ""} type="button" onClick={() => changeFilter(setTab, "all")}>전체 질문</button>
+          <button role="tab" aria-selected={tab === "mine"} className={tab === "mine" ? "active" : ""} type="button" onClick={() => changeFilter(setTab, "mine")}>내 질문</button>
+        </div>
+        {listContent}
+      </>
+    );
+  }
+
+  return <div className="qna-shell"><AppHeader activeRoute="qna" onNavigate={onNavigate} /><main className="qna-content">{content}</main></div>;
 }
