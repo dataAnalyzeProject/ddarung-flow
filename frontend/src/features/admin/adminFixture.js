@@ -61,6 +61,11 @@ export const fixture = {
     { id: "Q-104", category: "예측 결과", title: "추천 결과의 기준이 궁금합니다", visibility: "PUBLIC", state: "OPEN", updated: "21:16" },
     { id: "Q-103", category: "이용 방법", title: "도착 예정 시간을 바꾸고 싶어요", visibility: "PUBLIC", state: "ANSWERED", updated: "20:44" },
     { id: "Q-102", category: "계정", title: "비공개 문의가 있습니다", visibility: "PRIVATE", state: "OPEN", updated: "19:25" },
+    { id: "Q-101", category: "데이터", title: "정거장 정보 갱신 시점은 언제인가요", visibility: "PUBLIC", state: "CLOSED", updated: "18:50" },
+    { id: "Q-100", category: "이용 방법", title: "추천 정거장 수를 바꿀 수 있나요", visibility: "PUBLIC", state: "ANSWERED", updated: "17:32" },
+    { id: "Q-099", category: "예측 결과", title: "예측 실패 안내가 표시됩니다", visibility: "PUBLIC", state: "CLOSED", updated: "16:13" },
+    { id: "Q-098", category: "계정", title: "문의 내역 공개 범위를 확인하고 싶습니다", visibility: "PRIVATE", state: "HIDDEN", updated: "15:28" },
+    { id: "Q-097", category: "기타", title: "서비스 개선 의견을 남깁니다", visibility: "PUBLIC", state: "OPEN", updated: "14:41" },
   ],
 };
 

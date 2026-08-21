@@ -40,6 +40,12 @@ test("private question text is protected and only super admin can hide", () => {
   expect(screen.getByRole("button", { name: "숨김" })).toBeInTheDocument();
 });
 
+test("qna overview keeps eight fixture rows and the state transition guide", () => {
+  renderPage("qna", "ADMIN_READER");
+  expect(screen.getByText("문의 목록 · 8건")).toBeInTheDocument();
+  expect(screen.getByText(/OPEN.*ANSWERED.*CLOSED/)).toBeInTheDocument();
+});
+
 test("approver may approve model but has no qna page", () => {
   const onAction = renderPage("modelops", "MODEL_APPROVER");
   fireEvent.click(screen.getByRole("button", { name: "승인" }));
