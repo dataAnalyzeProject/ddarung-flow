@@ -260,10 +260,13 @@ public class KakaoMapClient {
             if (!coordinates.isArray()) continue;
             for (JsonNode coordinate : coordinates) {
                 if (!coordinate.isArray() || coordinate.size() < 2 || !coordinate.get(0).isNumber() || !coordinate.get(1).isNumber()) continue;
-                target.add(new MapApiDtos.RoutePointDto(
-                    coordinate.get(1).decimalValue(),
-                    coordinate.get(0).decimalValue()
-                ));
+                BigDecimal longitude = coordinate.get(0).decimalValue();
+                BigDecimal latitude = coordinate.get(1).decimalValue();
+                if (latitude.compareTo(BigDecimal.valueOf(-90)) < 0
+                    || latitude.compareTo(BigDecimal.valueOf(90)) > 0
+                    || longitude.compareTo(BigDecimal.valueOf(-180)) < 0
+                    || longitude.compareTo(BigDecimal.valueOf(180)) > 0) continue;
+                target.add(new MapApiDtos.RoutePointDto(latitude, longitude));
             }
         }
     }

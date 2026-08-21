@@ -140,7 +140,7 @@ describe("시안 6 메인 로그인 통합", () => {
       origin: "서울숲",
       destination: "성수역",
       travelMode: "대중교통",
-      directMinutes: 15,
+      directMinutes: null,
       requiredBikeCount: 3,
     });
 
@@ -168,6 +168,9 @@ describe("시안 6 메인 로그인 통합", () => {
     expect(screen.getByText((_, node) => node?.textContent === "예상시간을 20분으로 확인했습니다.")).toBeInTheDocument();
     expect(screen.getByText(/따릉이 사용자 · kakao/)).toBeInTheDocument();
     await waitFor(() => expect(window.location.search).toBe(""));
+
+    fireEvent.change(screen.getByPlaceholderText("출발지를 입력하세요"), { target: { value: "서울역 1번 출구" } });
+    expect(screen.queryByText((_, node) => node?.textContent === "예상시간을 20분으로 확인했습니다.")).not.toBeInTheDocument();
   });
 
   test("OAuth 성공 후에는 저장한 장소 좌표로 바로 예측을 요청한다", async () => {

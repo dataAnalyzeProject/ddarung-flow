@@ -115,7 +115,11 @@ export default function MainPage({ onNavigate }) {
   }, [apiPredictionResult, arrivalWeather, input, routePlaces, selectedStationInfo, weatherRequest]);
 
   const updateInput = (key, value) => {
-    setInput((current) => ({ ...current, [key]: value }));
+    setInput((current) => ({
+      ...current,
+      [key]: value,
+      ...((key === "origin" || key === "destination" || key === "travelMode") && { directMinutes: null }),
+    }));
     if (key === "origin" || key === "destination") {
       setRoutePlaces((current) => ({ ...current, [key]: null }));
       setApiPredictionResult(null);
@@ -126,9 +130,15 @@ export default function MainPage({ onNavigate }) {
     if (key === "origin" || key === "destination" || key === "travelMode") setTimeConfirmed(false);
   };
 
+  const updateRouteDuration = (minutes) => {
+    updateInput("directMinutes", minutes);
+    if (minutes == null) setTimeConfirmed(false);
+  };
+
   const selectPlace = (key, place) => {
-    setInput((current) => ({ ...current, [key]: place.name }));
+    setInput((current) => ({ ...current, [key]: place.name, directMinutes: null }));
     setRoutePlaces((current) => ({ ...current, [key]: place }));
+    setTimeConfirmed(false);
   };
 
   const loadArrivalWeather = async (request) => {
@@ -315,7 +325,7 @@ export default function MainPage({ onNavigate }) {
             destinationText={input.destination}
             travelMode={input.travelMode}
             selectedPlaces={routePlaces}
-            onDurationChange={(minutes) => updateInput("directMinutes", minutes)}
+            onDurationChange={updateRouteDuration}
             onRouteCalculated={() => setTimeConfirmed(true)}
             fallbackImage={routeMap}
             canViewStations={authState === "authenticated"}
@@ -335,7 +345,7 @@ export default function MainPage({ onNavigate }) {
             destinationText={input.destination}
             travelMode={input.travelMode}
             selectedPlaces={routePlaces}
-            onDurationChange={(minutes) => updateInput("directMinutes", minutes)}
+            onDurationChange={updateRouteDuration}
             onRouteCalculated={() => setTimeConfirmed(true)}
             fallbackImage={routeMap}
             canViewStations={authState === "authenticated"}

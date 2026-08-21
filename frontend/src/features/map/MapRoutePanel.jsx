@@ -44,6 +44,7 @@ export default function MapRoutePanel({
   const [stationLocations, setStationLocations] = useState(null);
   const [stationLoadState, setStationLoadState] = useState("idle");
   const stationRequestRef = useRef(0);
+  const routeRequestRef = useRef(0);
 
   const mode = MODE_MAP[travelMode] || "WALK";
   const fallbackScale = Number((1 + (5 - mapLevel) * 0.1).toFixed(2));
@@ -93,7 +94,10 @@ export default function MapRoutePanel({
     adapterRef.current?.setRoutePath?.(route?.pathPoints || []);
   }, [route, sdkStatus]);
   useEffect(() => {
+    routeRequestRef.current += 1;
     setRoute(null);
+    setRouteState("idle");
+    setMessage("");
   }, [selected.origin, selected.destination, travelMode]);
   useEffect(() => {
     if (!adapterRef.current) return;
@@ -134,7 +138,14 @@ export default function MapRoutePanel({
   };
 
   const requestRoute = async () => {
-    if (!selected.origin || !selected.destination) return setMessage("출발지와 목적지를 검색 결과에서 선택해 주세요.");
+    if (!selected.origin || !selected.destination) {
+      onDurationChange?.(null);
+      return setMessage("출발지와 목적지를 검색 결과에서 선택해 주세요.");
+    }
+    const requestId = routeRequestRef.current + 1;
+    routeRequestRef.current = requestId;
+    setRoute(null);
+    onDurationChange?.(null);
     setRouteState("loading");
     setMessage("");
     try {
@@ -145,12 +156,15 @@ export default function MapRoutePanel({
         destinationLongitude: selected.destination.longitude,
         travelMode: mode,
       });
+      if (routeRequestRef.current !== requestId) return;
       setRoute({ ...result, arrivalAt: formatArrival(result.durationSeconds) });
       onDurationChange?.(Math.max(1, Math.ceil(result.durationSeconds / 60)));
       onRouteCalculated?.();
       setRouteState("success");
     } catch (error) {
+      if (routeRequestRef.current !== requestId) return;
       setRoute(null);
+      onDurationChange?.(null);
       setRouteState("error");
       setMessage(error.message === "INVALID_ROUTE_REQUEST" ? "경로 요청 조건을 확인해 주세요." : "경로 제공자를 사용할 수 없습니다.");
     }
