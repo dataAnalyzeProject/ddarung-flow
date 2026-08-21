@@ -15,7 +15,7 @@ test("operator sends export callback without confirming success", () => {
 
 test("role change dialog can cancel and protects last super admin", () => {
   const onAction = renderPage("users", "SUPER_ADMIN");
-  fireEvent.click(screen.getByRole("button", { name: "역할 변경" }));
+  fireEvent.click(screen.getAllByRole("button", { name: "역할 변경" })[0]);
   fireEvent.click(screen.getByRole("button", { name: "취소" }));
   expect(onAction).not.toHaveBeenCalled();
   fireEvent.click(screen.getAllByRole("button", { name: "역할 변경" })[1]);
