@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { AdminPage } from "./AdminPages";
 
 const renderPage = (menuId, actorRole, onAction = jest.fn()) => {
@@ -43,9 +43,10 @@ test("private question text is protected and only super admin can hide", () => {
 test("qna overview keeps eight fixture rows and the state transition guide", () => {
   renderPage("qna", "ADMIN_READER");
   expect(screen.getByText("문의 목록 · 8건")).toBeInTheDocument();
-  expect(screen.getByText("OPEN")).toBeInTheDocument();
-  expect(screen.getByText("ANSWERED")).toBeInTheDocument();
-  expect(screen.getByText("CLOSED")).toBeInTheDocument();
+  const guide = screen.getByText("상태 전이 가이드").closest("section");
+  expect(within(guide).getByText("OPEN")).toBeInTheDocument();
+  expect(within(guide).getByText("ANSWERED")).toBeInTheDocument();
+  expect(within(guide).getByText("CLOSED")).toBeInTheDocument();
 });
 
 test("approver may approve model but has no qna page", () => {
