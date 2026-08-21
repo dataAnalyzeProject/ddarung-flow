@@ -115,7 +115,11 @@ export default function MainPage({ onNavigate }) {
   }, [apiPredictionResult, arrivalWeather, input, routePlaces, selectedStationInfo, weatherRequest]);
 
   const updateInput = (key, value) => {
-    setInput((current) => ({ ...current, [key]: value }));
+    setInput((current) => ({
+      ...current,
+      [key]: value,
+      ...((key === "origin" || key === "destination" || key === "travelMode") && { directMinutes: null }),
+    }));
     if (key === "origin" || key === "destination") {
       setRoutePlaces((current) => ({ ...current, [key]: null }));
       setApiPredictionResult(null);
@@ -132,8 +136,9 @@ export default function MainPage({ onNavigate }) {
   };
 
   const selectPlace = (key, place) => {
-    setInput((current) => ({ ...current, [key]: place.name }));
+    setInput((current) => ({ ...current, [key]: place.name, directMinutes: null }));
     setRoutePlaces((current) => ({ ...current, [key]: place }));
+    setTimeConfirmed(false);
   };
 
   const loadArrivalWeather = async (request) => {

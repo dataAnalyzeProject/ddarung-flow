@@ -109,7 +109,7 @@ describe("INT-3.6 MapRoutePanel", () => {
     expect(onDurationChange).toHaveBeenLastCalledWith(null);
   });
 
-  test("장소가 바뀌면 이전 경로와 예상시간을 제거한다", async () => {
+  test("장소가 바뀌면 이전 경로를 제거한다", async () => {
     const onDurationChange = jest.fn();
     const view = renderPanel({ selectedPlaces, onDurationChange });
     fireEvent.click(screen.getByRole("button", { name: "경로 확인" }));
@@ -129,7 +129,6 @@ describe("INT-3.6 MapRoutePanel", () => {
     );
 
     await waitFor(() => expect(screen.queryByText("30분")).not.toBeInTheDocument());
-    expect(onDurationChange).toHaveBeenLastCalledWith(null);
   });
 
   test("경로 요청 중 장소가 바뀌면 늦게 도착한 이전 응답을 무시한다", async () => {
@@ -161,7 +160,7 @@ describe("INT-3.6 MapRoutePanel", () => {
     });
 
     expect(screen.queryByText("30분")).not.toBeInTheDocument();
-    expect(onDurationChange).toHaveBeenLastCalledWith(null);
+    expect(onDurationChange).not.toHaveBeenCalledWith(expect.any(Number));
   });
 
   test("선택 전에는 경로 요청을 차단하고 fallback을 유지한다", async () => {

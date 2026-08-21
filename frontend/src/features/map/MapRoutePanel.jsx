@@ -98,9 +98,6 @@ export default function MapRoutePanel({
     setRoute(null);
     setRouteState("idle");
     setMessage("");
-    onDurationChange?.(null);
-    // Route results belong to the selected places and mode at request time.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected.origin, selected.destination, travelMode]);
   useEffect(() => {
     if (!adapterRef.current) return;
