@@ -1,5 +1,7 @@
 package com.ddarungflow.qna;
 
+import com.ddarungflow.qna.controller.QnaController;
+import com.ddarungflow.qna.dto.QnaDtos;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ddarungflow.dto.PrincipalDetails;
 import com.ddarungflow.entity.Users;
@@ -158,6 +160,17 @@ class QnaControllerTest {
     @DisplayName("404: 미인증 사용자가 PRIVATE 질문 단건 조회 시 404 숨김 처리 및 고정 오류 JSON을 반환한다")
     void testPrivate404ForUnauthenticated() throws Exception {
         mockMvc.perform(get("/api/v1/qna/questions/" + privateQuestionUserA.getPublicId()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("QNA_NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("해당 질문을 찾을 수 없습니다."))
+                .andExpect(jsonPath("$.timestamp").exists());
+    }
+
+    @Test
+    @DisplayName("404: 타인 사용자(USER B)가 PRIVATE 질문 단건 조회 시 404 존재 은닉 처리 및 QNA_NOT_FOUND 반환")
+    void testPrivate404ForUserB() throws Exception {
+        mockMvc.perform(get("/api/v1/qna/questions/" + privateQuestionUserA.getPublicId())
+                        .with(withUser(authUserB)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("QNA_NOT_FOUND"))
                 .andExpect(jsonPath("$.message").value("해당 질문을 찾을 수 없습니다."))

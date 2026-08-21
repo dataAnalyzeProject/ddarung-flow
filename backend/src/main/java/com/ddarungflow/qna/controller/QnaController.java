@@ -1,5 +1,7 @@
-package com.ddarungflow.qna;
+package com.ddarungflow.qna.controller;
 
+import com.ddarungflow.qna.*;
+import com.ddarungflow.qna.dto.QnaDtos;
 import com.ddarungflow.dto.PrincipalDetails;
 import com.ddarungflow.entity.Users;
 import jakarta.validation.Valid;

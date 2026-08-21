@@ -1,20 +1,20 @@
 package com.ddarungflow.qna;
 
+import com.ddarungflow.qna.dto.QnaDtos;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.http.HttpStatus;
 
-import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.ddarungflow.qna.QnaService.QnaException;
-import org.springframework.http.HttpStatus;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -120,7 +120,7 @@ class QnaServiceTest {
     }
 
     @Test
-    @DisplayName("getForViewer: HIDDEN 질문은 404를 반환하고, PRIVATE 질문은 비로그인시 404, 타인 시 403을 반환한다")
+    @DisplayName("getForViewer: HIDDEN 질문은 404를 반환하고, PRIVATE 질문은 비로그인 및 타인(User B) 조회 시 404 존재 은닉 처리된다")
     void getForViewerVisibilityAndStatusRules() {
         // HIDDEN -> 404
         assertThatThrownBy(() -> qnaService.getForViewer(hiddenQuestionUserA.getPublicId(), userA))
@@ -132,10 +132,15 @@ class QnaServiceTest {
                 .isInstanceOf(QnaException.class)
                 .hasMessage("해당 질문을 찾을 수 없습니다.");
 
-        // PRIVATE, 타 유저 -> 403
+        // PRIVATE, 타 유저 (User B) -> 404 (존재 은닉)
         assertThatThrownBy(() -> qnaService.getForViewer(privateQuestionUserA.getPublicId(), userB))
                 .isInstanceOf(QnaException.class)
-                .hasMessage("해당 질문에 대한 접근 권한이 없습니다.");
+                .satisfies(ex -> {
+                    QnaException qe = (QnaException) ex;
+                    assertThat(qe.getStatus()).isEqualTo(HttpStatus.NOT_FOUND);
+                    assertThat(qe.getErrorCode()).isEqualTo("QNA_NOT_FOUND");
+                    assertThat(qe.getMessage()).isEqualTo("해당 질문을 찾을 수 없습니다.");
+                });
 
         // PRIVATE, 본인 유저 -> 정상 반환
         QnaQuestion fetched = qnaService.getForViewer(privateQuestionUserA.getPublicId(), userA);

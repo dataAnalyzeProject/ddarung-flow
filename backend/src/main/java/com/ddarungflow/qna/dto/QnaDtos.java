@@ -1,5 +1,9 @@
-package com.ddarungflow.qna;
+package com.ddarungflow.qna.dto;
 
+import com.ddarungflow.qna.QnaCategory;
+import com.ddarungflow.qna.QnaQuestion;
+import com.ddarungflow.qna.QnaStatus;
+import com.ddarungflow.qna.QnaVisibility;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;

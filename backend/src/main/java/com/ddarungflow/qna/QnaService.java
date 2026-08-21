@@ -1,5 +1,6 @@
 package com.ddarungflow.qna;
 
+import com.ddarungflow.qna.dto.QnaDtos;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -88,11 +89,8 @@ public class QnaService {
         }
 
         if (question.getVisibility() == QnaVisibility.PRIVATE) {
-            if (actorUserId == null) {
+            if (actorUserId == null || !question.getAuthorUserId().equals(actorUserId)) {
                 throw new QnaException(HttpStatus.NOT_FOUND, "QNA_NOT_FOUND", "해당 질문을 찾을 수 없습니다.");
-            }
-            if (!question.getAuthorUserId().equals(actorUserId)) {
-                throw new QnaException(HttpStatus.FORBIDDEN, "QNA_FORBIDDEN", "해당 질문에 대한 접근 권한이 없습니다.");
             }
         }
 
