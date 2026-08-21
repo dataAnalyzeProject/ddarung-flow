@@ -184,6 +184,68 @@ class KakaoMapClientTest {
     }
 
     @Test
+    @DisplayName("경로 좌표는 WGS84 위도와 경도 범위 안의 값만 유지한다")
+    void filtersRoutePointsOutsideWgs84Range() {
+        String jsonBody = """
+            {
+              "status": "OK",
+              "route": {
+                "properties": { "totalDistance": 820, "totalTime": 640 },
+                "legs": [{ "steps": [{ "path": { "points": [
+                  [126.9000, 37.5500], [181.0000, 37.5500], [126.9000, 91.0000],
+                  [-180.0000, -90.0000], [180.0000, 90.0000]
+                ] } }] }]
+              }
+            }
+            """;
+
+        @SuppressWarnings("unchecked")
+        HttpResponse<String> response = mock(HttpResponse.class);
+        when(response.statusCode()).thenReturn(200);
+        when(response.body()).thenReturn(jsonBody);
+        KakaoMapClient client = new KakaoMapClient("https://dapi.kakao.com", "test-key", request -> response);
+
+        MapApiDtos.RouteResultDto route = client.fetchRoute(
+            new BigDecimal("37.5500"), new BigDecimal("126.9000"),
+            new BigDecimal("37.5556"), new BigDecimal("126.9106"), "WALK"
+        ).orElseThrow();
+
+        assertThat(route.pathPoints()).hasSize(3);
+        assertThat(route.pathPoints()).extracting(MapApiDtos.RoutePointDto::latitude)
+            .usingElementComparator(BigDecimal::compareTo)
+            .containsExactly(new BigDecimal("37.5500"), new BigDecimal("-90.0000"), new BigDecimal("90.0000"));
+    }
+
+    @Test
+    @DisplayName("모든 경로 좌표가 WGS84 범위 밖이면 빈 배열을 반환한다")
+    void returnsEmptyPathWhenAllRoutePointsAreOutsideWgs84Range() {
+        String jsonBody = """
+            {
+              "status": "OK",
+              "route": {
+                "properties": { "totalDistance": 820, "totalTime": 640 },
+                "legs": [{ "steps": [{ "path": { "points": [
+                  [180.0001, 37.5500], [126.9000, -90.0001]
+                ] } }] }]
+              }
+            }
+            """;
+
+        @SuppressWarnings("unchecked")
+        HttpResponse<String> response = mock(HttpResponse.class);
+        when(response.statusCode()).thenReturn(200);
+        when(response.body()).thenReturn(jsonBody);
+        KakaoMapClient client = new KakaoMapClient("https://dapi.kakao.com", "test-key", request -> response);
+
+        MapApiDtos.RouteResultDto route = client.fetchRoute(
+            new BigDecimal("37.5500"), new BigDecimal("126.9000"),
+            new BigDecimal("37.5556"), new BigDecimal("126.9106"), "WALK"
+        ).orElseThrow();
+
+        assertThat(route.pathPoints()).isEmpty();
+    }
+
+    @Test
     @DisplayName("convertsTransitRouteDistanceAndDuration: TRANSIT fake 응답의 거리 4200m, 시간 1080초를 올바르게 변환한다")
     void convertsTransitRouteDistanceAndDuration() {
         String jsonBody = """

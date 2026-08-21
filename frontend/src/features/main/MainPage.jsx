@@ -125,6 +125,11 @@ export default function MainPage({ onNavigate }) {
     if (key === "origin" || key === "destination" || key === "travelMode") setTimeConfirmed(false);
   };
 
+  const updateRouteDuration = (minutes) => {
+    updateInput("directMinutes", minutes);
+    if (minutes == null) setTimeConfirmed(false);
+  };
+
   const selectPlace = (key, place) => {
     setInput((current) => ({ ...current, [key]: place.name }));
     setRoutePlaces((current) => ({ ...current, [key]: place }));
@@ -314,7 +319,7 @@ export default function MainPage({ onNavigate }) {
             destinationText={input.destination}
             travelMode={input.travelMode}
             selectedPlaces={routePlaces}
-            onDurationChange={(minutes) => updateInput("directMinutes", minutes)}
+            onDurationChange={updateRouteDuration}
             onRouteCalculated={() => setTimeConfirmed(true)}
             fallbackImage={routeMap}
             canViewStations={authState === "authenticated"}
@@ -334,7 +339,7 @@ export default function MainPage({ onNavigate }) {
             destinationText={input.destination}
             travelMode={input.travelMode}
             selectedPlaces={routePlaces}
-            onDurationChange={(minutes) => updateInput("directMinutes", minutes)}
+            onDurationChange={updateRouteDuration}
             onRouteCalculated={() => setTimeConfirmed(true)}
             fallbackImage={routeMap}
             canViewStations={authState === "authenticated"}

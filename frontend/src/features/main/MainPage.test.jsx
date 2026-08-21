@@ -140,7 +140,7 @@ describe("시안 6 메인 로그인 통합", () => {
       origin: "서울숲",
       destination: "성수역",
       travelMode: "대중교통",
-      directMinutes: 15,
+      directMinutes: null,
       requiredBikeCount: 3,
     });
 
