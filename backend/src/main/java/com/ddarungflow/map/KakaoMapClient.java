@@ -230,7 +230,7 @@ public class KakaoMapClient {
                 distanceMeters,
                 durationSeconds,
                 travelMode,
-                extractPathPoints(selectedRoute, publicTransit)
+                extractPathPoints(selectedRoute)
             ));
         } catch (Exception e) {
             return java.util.Optional.empty();
@@ -242,13 +242,17 @@ public class KakaoMapClient {
         return (int) Math.round((distanceMeters / 80.0) * 60.0);
     }
 
-    private List<MapApiDtos.RoutePointDto> extractPathPoints(JsonNode route, boolean publicTransit) {
+    private List<MapApiDtos.RoutePointDto> extractPathPoints(JsonNode route) {
         List<MapApiDtos.RoutePointDto> points = new ArrayList<>();
         if (route == null || route.isMissingNode()) return points;
-        if (publicTransit) {
-            appendStepPoints(route.path("steps"), points);
+        // Prefer legs[].steps (walk/drive shape, and how real public-transit responses
+        // are known to nest theirs too); fall back to a flat steps array for shapes
+        // that place steps directly on the route.
+        JsonNode legs = route.path("legs");
+        if (legs.isArray() && legs.size() > 0) {
+            for (JsonNode leg : legs) appendStepPoints(leg.path("steps"), points);
         } else {
-            for (JsonNode leg : route.path("legs")) appendStepPoints(leg.path("steps"), points);
+            appendStepPoints(route.path("steps"), points);
         }
         return points;
     }

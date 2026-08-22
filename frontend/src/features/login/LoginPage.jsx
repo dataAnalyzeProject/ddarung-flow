@@ -113,7 +113,10 @@ export default function LoginPage({ initialStatus, mockOutcome, initialPredictio
   const [isPredicted, setIsPredicted] = useState(false);
 
   useEffect(() => {
-    if (initialPredictionInput) savePendingPrediction(initialPredictionInput);
+    if (initialPredictionInput) {
+      // routePlaces가 없으면 이미 저장돼 있던 좌표를 덮어쓰지 않고 그대로 유지한다.
+      savePendingPrediction(initialPredictionInput, loadPendingPrediction()?.routePlaces);
+    }
     setPredictionData(loadPendingPrediction());
     if (initialStatus) return;
 
