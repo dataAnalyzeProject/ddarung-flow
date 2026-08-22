@@ -7,6 +7,7 @@ import {
   airQualityPartialNullFixture,
   airQualityUnavailableFixture,
 } from "./data/airQualityMock";
+import { ridingGuideStateFixtures } from "./data/ridingGuideFixture";
 
 describe("라이딩 가이드 화면", () => {
   test("선택한 대여소명과 고정 안내 데이터를 표시한다", () => {
@@ -283,5 +284,119 @@ describe("라이딩 가이드 대기질 상태", () => {
     expect(khaiSummary).not.toHaveTextContent("63");
     expect(khaiSummary).not.toHaveTextContent("보통");
     expect(khaiSummary).toHaveTextContent("-");
+  });
+});
+
+describe("라이딩 가이드 카드 분리 (FE-4.6)", () => {
+  test.each(["success", "loading", "empty", "error", "stale"])(
+    "%s 상태 fixture로 화면 전체가 정상 렌더링된다",
+    (stateName) => {
+      const fixture = ridingGuideStateFixtures[stateName];
+      render(
+        <RidingGuidePage
+          stationName="성수역 3번 출구"
+          onBack={jest.fn()}
+          candidate={fixture.candidate}
+          arrivalWeather={fixture.arrivalWeather}
+          isWeatherLoading={fixture.isWeatherLoading}
+          airQuality={fixture.airQuality}
+          isAirQualityLoading={fixture.isAirQualityLoading}
+        />
+      );
+
+      expect(screen.getByRole("heading", { name: "종합 라이딩 가이드" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "대여 예측 요약" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "주의사항" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "도착지 날씨" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "도착지 대기질" })).toBeInTheDocument();
+      expect(screen.getByLabelText("데이터 상태")).toBeInTheDocument();
+    }
+  );
+
+  test("empty fixture에서 날씨·대기질 카드가 안내 메시지를 보여도 다른 카드는 유지된다", () => {
+    const fixture = ridingGuideStateFixtures.empty;
+    render(
+      <RidingGuidePage
+        stationName="성수역 3번 출구"
+        onBack={jest.fn()}
+        candidate={fixture.candidate}
+        arrivalWeather={fixture.arrivalWeather}
+        isWeatherLoading={fixture.isWeatherLoading}
+        airQuality={fixture.airQuality}
+        isAirQualityLoading={fixture.isAirQualityLoading}
+      />
+    );
+
+    const weatherCard = screen.getByRole("heading", { name: "도착지 날씨" }).closest("section");
+    expect(within(weatherCard).getByText("도착 예정시간의 날씨 예보가 없습니다.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "종합 라이딩 가이드" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "대여 예측 요약" })).toBeInTheDocument();
+  });
+
+  test("error fixture에서 날씨·대기질 카드가 조회 불가 메시지를 보여도 다른 카드는 유지된다", () => {
+    const fixture = ridingGuideStateFixtures.error;
+    render(
+      <RidingGuidePage
+        stationName="성수역 3번 출구"
+        onBack={jest.fn()}
+        candidate={fixture.candidate}
+        arrivalWeather={fixture.arrivalWeather}
+        isWeatherLoading={fixture.isWeatherLoading}
+        airQuality={fixture.airQuality}
+        isAirQualityLoading={fixture.isAirQualityLoading}
+      />
+    );
+
+    const weatherCard = screen.getByRole("heading", { name: "도착지 날씨" }).closest("section");
+    expect(within(weatherCard).getByText("날씨 예보를 불러오지 못했습니다.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "종합 라이딩 가이드" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "주의사항" })).toBeInTheDocument();
+  });
+
+  test("stale fixture에서 날씨·대기질·재고 카드 모두 지연 안내를 표시한다", () => {
+    const fixture = ridingGuideStateFixtures.stale;
+    render(
+      <RidingGuidePage
+        stationName="성수역 3번 출구"
+        onBack={jest.fn()}
+        candidate={fixture.candidate}
+        arrivalWeather={fixture.arrivalWeather}
+        isWeatherLoading={fixture.isWeatherLoading}
+        airQuality={fixture.airQuality}
+        isAirQualityLoading={fixture.isAirQualityLoading}
+      />
+    );
+
+    expect(screen.getByText("날씨 발표가 지연되어 직전 발표 값을 표시합니다.")).toBeInTheDocument();
+    expect(screen.getByText("측정값 갱신이 지연되고 있어요.")).toBeInTheDocument();
+    expect(screen.getByText(/재고 정보가 지연되고 있어요/)).toBeInTheDocument();
+  });
+
+  test("loading fixture에서는 날씨·대기질 카드에 불러오는 중 안내가 표시된다", () => {
+    const fixture = ridingGuideStateFixtures.loading;
+    render(
+      <RidingGuidePage
+        stationName="성수역 3번 출구"
+        onBack={jest.fn()}
+        candidate={fixture.candidate}
+        arrivalWeather={fixture.arrivalWeather}
+        isWeatherLoading={fixture.isWeatherLoading}
+        airQuality={fixture.airQuality}
+        isAirQualityLoading={fixture.isAirQualityLoading}
+      />
+    );
+
+    expect(screen.getByText("도착지 날씨를 불러오는 중이에요.")).toBeInTheDocument();
+    expect(screen.getByText("대기질 정보를 불러오는 중이에요.")).toBeInTheDocument();
+  });
+
+  test("OverallGuideCard와 RidingGuideHeader의 복귀 콜백은 동일한 onBack을 각각 호출한다", () => {
+    const onBack = jest.fn();
+    render(<RidingGuidePage stationName="성수역 3번 출구" onBack={onBack} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "대여 예측으로 돌아가기" }));
+    fireEvent.click(screen.getByRole("button", { name: "경로 다시 보기" }));
+
+    expect(onBack).toHaveBeenCalledTimes(2);
   });
 });
