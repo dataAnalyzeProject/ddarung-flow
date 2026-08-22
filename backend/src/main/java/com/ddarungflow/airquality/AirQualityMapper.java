@@ -251,9 +251,19 @@ public final class AirQualityMapper {
     }
 
     private static Optional<RawMeasurementPoint> findPointByStation(List<RawMeasurementPoint> points, String stationName) {
-        return points.stream()
+        Optional<RawMeasurementPoint> namedPoint = points.stream()
                 .filter(p -> Objects.equals(p.stationName(), stationName))
                 .findFirst();
+        if (namedPoint.isPresent()) {
+            return namedPoint;
+        }
+
+        // AirKorea's station-specific endpoint returns one item without stationName.
+        if (points.size() == 1 && points.get(0).stationName() == null) {
+            return Optional.of(points.get(0));
+        }
+
+        return Optional.empty();
     }
 
     private static boolean isAllPollutantsMissing(RawMeasurementPoint point) {
