@@ -6,7 +6,7 @@ AIRFLOW-OPS-3.2는 승인된 `main`의 Airflow(postgres, scheduler, dag-processo
 
 - 담당자: 김선호
 - 비용: OCI Console에서 `Always Free-eligible` 또는 예상 청구액 0원 확인 후에만 진행
-- 노출: Airflow UI/API(host `8280` → 컨테이너 내부 `8080`)는 서버 loopback(`127.0.0.1`)에만 bind. 신규 public ingress·nginx route·NSG 규칙 없음. 접속은 SSH 터널로만. host `8080`은 기존 `crawling-backend`가 이미 쓰고 있어 재사용하지 않는다(2026-08-21 `docker ps`로 실측 확인).
+- 노출: 컨테이너는 여전히 host `8280`(→ 컨테이너 내부 `8080`) `127.0.0.1`에만 bind. host `8080`은 기존 `crawling-backend`가 이미 쓰고 있어 재사용하지 않는다(2026-08-21 `docker ps`로 실측 확인). **(2026-08-22 DEC-015로 변경)** host nginx가 `https://shdomain.kro.kr/airflow/` 경로로 이 loopback 포트를 프록시한다 — 기존 도메인·TLS 인증서를 재사용하며 신규 DNS·인증서·NSG 규칙은 없다(기존 TCP 80/443만 사용). 접근은 Airflow 자체 로그인 화면(Simple Auth Manager)으로 제한한다. SSH 터널은 더 이상 유일한 접근 경로가 아니며, 아래 "DEC-015 host nginx 경로 노출" 절차 참조.
 - secret: `AIRFLOW_JWT_SECRET`, `SEOUL_OPEN_API_KEY`, `KMA_SERVICE_KEY`, SSH 키는 GitHub `oci-airflow` **Environment**의 Secrets에만 존재. Git·Notion·PR·채팅에 넣지 않음. `staging`(`oci-staging`)과 별도 Environment로 분리한다 — 나중에 승인 게이트를 Airflow 쪽에만 걸 수 있게 하기 위함.
 - 트리거: `workflow_dispatch` 수동만. `staging`처럼 main 머지마다 자동 재배포하지 않는다 — CHG-092 미승인 단계에서 불필요한 재배포를 만들지 않기 위함.
 - schedule: 배포 전후 모두 DAG는 `schedule=None`(수동 실행 전용)을 유지. 워크플로우가 배포 직전·직후 모두 `grep`으로 강제 확인하고, 바뀐 게 감지되면 배포를 실패시킨다. 이 값을 바꾸는 건 `CHG-092` 승인 뒤 별도 PR로만 한다.
@@ -61,6 +61,46 @@ KMA_NY=127
 - `SEOUL_OPEN_API_KEY`, `KMA_SERVICE_KEY`: 조장이 발급받은 실제 값
 
 이 값들은 채팅이나 캡처에 남기지 않습니다.
+
+## DEC-015 host nginx 경로 노출 (최초 1회, 수동)
+
+`https://shdomain.kro.kr/airflow/`로 붙이는 nginx 변경은 이 저장소가 아니라 서버의 `/etc/nginx/sites-available/crawling-project`(staging과 공유하는 같은 파일)에 한다. 코드가 아니므로 CD 워크플로우가 이 변경을 만들지 않는다 — 항상 수동으로, 아래 순서로만 한다.
+
+1. 먼저 이 PR(`AIRFLOW__API__BASE_URL`, `--proxy-headers`)이 배포되어 있어야 한다. nginx를 먼저 켜면 api-server가 잘못된 링크를 생성한다.
+2. 현재 파일을 반드시 백업한다. 백업이 이미 있으면 덮어쓰지 말고 중단한다(staging 변경과 충돌 여부부터 확인).
+   ```bash
+   sudo test ! -e /etc/nginx/sites-available/crawling-project.pre-airflow
+   sudo cp -a /etc/nginx/sites-available/crawling-project /etc/nginx/sites-available/crawling-project.pre-airflow
+   ```
+3. `server { listen 443 ssl; server_name shdomain.kro.kr; ... }` 블록 안에 다음 `location`을 추가한다(기존 location 블록들과 충돌하지 않는 것을 먼저 확인한다 — `/airflow/`로 시작하는 기존 규칙이 없어야 한다).
+   ```nginx
+   location /airflow/ {
+       proxy_pass http://127.0.0.1:8280;
+       proxy_set_header Host $http_host;
+       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+       proxy_set_header X-Forwarded-Proto $scheme;
+       proxy_redirect off;
+       proxy_http_version 1.1;
+   }
+   ```
+4. 반드시 `nginx -t`가 통과한 뒤에만 reload한다. 실패하면 reload하지 말고 즉시 백업본으로 되돌린다.
+   ```bash
+   sudo nginx -t
+   sudo systemctl reload nginx
+   ```
+   ```bash
+   # 실패 시 즉시 복원
+   sudo cp -a /etc/nginx/sites-available/crawling-project.pre-airflow /etc/nginx/sites-available/crawling-project
+   sudo nginx -t
+   ```
+5. 확인.
+   ```bash
+   curl -sS -o /dev/null -w '%{http_code}\n' https://shdomain.kro.kr/
+   curl -sS -o /dev/null -w '%{http_code}\n' https://shdomain.kro.kr/airflow/
+   ```
+   첫 줄이 여전히 200(기존 크롤링·staging 서비스 무영향 확인)이고 둘째 줄이 Airflow 로그인 화면(200 또는 302)이면 성공이다.
+
+이 nginx 변경은 기존 crawling·staging 서비스와 같은 프로세스(host nginx)를 reload하므로, 실패 시 원본 즉시 복원 절차를 반드시 지킨다.
 
 ## 배포 실행
 

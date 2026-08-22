@@ -23,6 +23,9 @@ x-airflow-common: &airflow-common
     # 컴포넌트 간 내부 API 인증에 쓰는 서명 키다. 배포마다 새로 생성하고
     # Git에는 절대 커밋하지 않는다(.env/.env.oci에만 존재).
     AIRFLOW__API_AUTH__JWT_SECRET: "${AIRFLOW_JWT_SECRET:?set AIRFLOW_JWT_SECRET in .env - generate with python -c 'import secrets; print(secrets.token_hex(32))'}"
+    # DEC-015: OCI에서는 host nginx가 이 경로 뒤에서 프록시하므로 api-server가
+    # 그 경로를 알아야 올바른 링크를 생성한다. 로컬 개발은 기본값(루트) 그대로.
+    AIRFLOW__API__BASE_URL: ${AIRFLOW_API_BASE_URL:-http://localhost:8080}
     PYTHONPATH: /opt/airflow
     PIPELINE_FIXTURE_DIR: /opt/airflow/pipeline/tests/fixtures
     RAW_ROOT_DIR: /opt/airflow/data/raw
