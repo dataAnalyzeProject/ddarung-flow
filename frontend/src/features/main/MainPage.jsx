@@ -297,6 +297,7 @@ export default function MainPage({ onNavigate }) {
             routeDurationMinutes={timeConfirmed ? input.directMinutes : null}
           />
           <MapRoutePanel
+            key="map-route-panel"
             originText={input.origin}
             destinationText={input.destination}
             travelMode={input.travelMode}
@@ -317,6 +318,7 @@ export default function MainPage({ onNavigate }) {
       ) : (
         <section className="main-dashboard main-dashboard-empty">
           <MapRoutePanel
+            key="map-route-panel"
             originText={input.origin}
             destinationText={input.destination}
             travelMode={input.travelMode}
