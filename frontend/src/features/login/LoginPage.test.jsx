@@ -88,6 +88,13 @@ describe('LoginPage 핵심 테스트', () => {
         window.history.pushState({}, '', '/');
     });
 
+    test('세션 만료 복귀 주소에서 만료 안내를 표시한다', () => {
+        window.history.pushState({}, '', '/?login=expired');
+        render(<LoginPage />);
+        expect(screen.getByText(/로그인 만료/i)).toBeInTheDocument();
+        window.history.pushState({}, '', '/');
+    });
+
     test('FAILED 상태에서 실패 안내 메시지가 표시되고 소셜 버튼으로 다시 시도할 수 있다', () => {
         render(<LoginPage initialStatus={LOGIN_STATUS.FAILED} />);
         expect(screen.getByText(/로그인에 실패했습니다/i)).toBeInTheDocument();

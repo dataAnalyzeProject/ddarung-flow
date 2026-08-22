@@ -220,6 +220,7 @@ jobs:
             printf 'INVENTORY_REFRESHER_IMAGE=%s/inventory-refresher:%s\n' "$image_base" "$DEPLOY_SHA"
             printf 'REACT_APP_API_BASE_URL=%s\n' "$STAGING_PUBLIC_URL"
             printf 'DEPLOYED_COMMIT=%s\n' "$DEPLOY_SHA"
+            printf 'SWAGGER_ENABLED=true\n'
             printf 'OCI_OBJECT_NAMESPACE=nrzeviuvbcrd\n'
             printf 'MODEL_BUCKET=ddarung-flow-bucket\n'
             printf 'MODEL_OBJECT_KEY=models/data-3.1/2f2ece729fd4b03954212d2fcc2ece4cd07110c947fae1dfc0c7ba29cde34db9/model_winner.joblib\n'

@@ -191,12 +191,14 @@ describe("시안 6 메인 로그인 통합", () => {
     render(<MainPage />);
 
     await screen.findByDisplayValue("천마산역");
+    expect(fetchRouteCandidates).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "대여 가능성 예측" }));
     await waitFor(() => expect(fetchRouteCandidates).toHaveBeenCalledWith(expect.objectContaining({
       originLatitude: 37.658,
       destinationLongitude: 127.124,
       travelMode: "PUBLIC_TRANSIT",
     })));
+    expect(fetchRouteCandidates).toHaveBeenCalledTimes(1);
   });
 
   test("로그인 사용자가 실제 장소를 선택하지 않고 예측하면 알림 패널을 표시하지 않는다", async () => {

@@ -207,7 +207,12 @@ export default function MainPage({ onNavigate }) {
       })[0];
       setSelectedStationInfo({ stationId: defaultCandidate.stationId, stationName: defaultCandidate.stationName });
       selectCandidateWeather(defaultCandidate);
-    } catch {
+    } catch (error) {
+      if (error?.message === "AUTH_REQUIRED") {
+        savePendingPrediction(input, routePlaces);
+        window.location.assign("/login?login=expired");
+        return;
+      }
       setApiPredictionResult(null);
     } finally {
       setPredictLoading(false);
@@ -297,6 +302,17 @@ export default function MainPage({ onNavigate }) {
     );
   }
 
+  const mapRoutePanelProps = {
+    originText: input.origin,
+    destinationText: input.destination,
+    travelMode: input.travelMode,
+    selectedPlaces: routePlaces,
+    onDurationChange: updateRouteDuration,
+    onRouteCalculated: () => setTimeConfirmed(true),
+    fallbackImage: routeMap,
+    canViewStations: authState === "authenticated",
+  };
+
   return (
     <main className="main-shell">
       <AppHeader
@@ -322,16 +338,7 @@ export default function MainPage({ onNavigate }) {
             onViewGuide={openRidingGuideFor}
             routeDurationMinutes={timeConfirmed ? input.directMinutes : null}
           />
-          <MapRoutePanel
-            originText={input.origin}
-            destinationText={input.destination}
-            travelMode={input.travelMode}
-            selectedPlaces={routePlaces}
-            onDurationChange={updateRouteDuration}
-            onRouteCalculated={() => setTimeConfirmed(true)}
-            fallbackImage={routeMap}
-            canViewStations={authState === "authenticated"}
-          />
+          <MapRoutePanel key="map-route-panel" {...mapRoutePanelProps} />
           <PredictionSummaryPanel
             candidates={apiPredictionResult.candidates}
             selectedStationId={selectedStationInfo?.stationId}
@@ -342,16 +349,7 @@ export default function MainPage({ onNavigate }) {
         </section>
       ) : (
         <section className="main-dashboard main-dashboard-empty">
-          <MapRoutePanel
-            originText={input.origin}
-            destinationText={input.destination}
-            travelMode={input.travelMode}
-            selectedPlaces={routePlaces}
-            onDurationChange={updateRouteDuration}
-            onRouteCalculated={() => setTimeConfirmed(true)}
-            fallbackImage={routeMap}
-            canViewStations={authState === "authenticated"}
-          />
+          <MapRoutePanel key="map-route-panel" {...mapRoutePanelProps} />
         </section>
       )}
 
