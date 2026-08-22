@@ -245,7 +245,7 @@ jobs:
 
           airflow_healthy=false
           for attempt in $(seq 1 18); do
-            health_code=$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/api/v2/monitor/health || true)
+            health_code=$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8280/api/v2/monitor/health || true)
             if [ "$health_code" = 200 ]; then
               airflow_healthy=true
               break
