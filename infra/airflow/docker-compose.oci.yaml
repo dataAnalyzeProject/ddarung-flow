@@ -1,0 +1,17 @@
+services:
+  # UI/API는 127.0.0.1에만 bind한다. 신규 공개 ingress·nginx route는 만들지
+  # 않으며 접속은 SSH 터널로만 한다(staging의 PostgreSQL과 동일한 원칙).
+  airflow-api-server:
+    ports: !override ["127.0.0.1:8080:8080"]
+
+  airflow-scheduler:
+    environment:
+      BIKE_INVENTORY_SOURCE: api
+      WEATHER_SOURCE: api
+      RAW_STORAGE_MODE: oci
+
+  airflow-dag-processor:
+    environment:
+      BIKE_INVENTORY_SOURCE: api
+      WEATHER_SOURCE: api
+      RAW_STORAGE_MODE: oci
