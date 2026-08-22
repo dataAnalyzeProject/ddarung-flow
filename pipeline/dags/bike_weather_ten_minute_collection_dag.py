@@ -3,12 +3,20 @@
 기존 개발용 bike_weather_raw_curated DAG와 완전히 분리된 별도 DAG다.
 이 DAG는 다음을 하지 않는다.
 
-- 자동 스케줄 실행 (schedule=None을 유지한다)
 - Raw payload 저장, OCI object 생성, PostgreSQL 적재, 모델 결과 게시
 - 승인되지 않은 시간당 집계 규칙의 계산
 
-자동 수집 활성화는 CHG-092의 자동 수집 명시 APPROVED와 시간당 집계 규칙
-승인이 모두 기록된 뒤 stage-2에서 별도로 결정한다.
+기본 상태는 schedule=None(수동 실행 전용)이다. CHG-092 자동 수집 명시
+APPROVED와 시간당 집계 규칙 승인이 모두 기록되기 전까지는 항상 이 상태여야
+한다.
+
+예외: DEC-014(조장 승인, 2026-08-22)에 따라 CHG-092가 요구하는 "재현
+가능한 운영 증거"(지연 cycle 스킵, 재시도, catchup 비활성이 실제
+스케줄러에서 동작하는지)를 확보하기 위해 PILOT_SCHEDULE_EXPIRES_AT까지
+24시간 한정으로만 스케줄을 켠다. 이 파일럿도 저장·OCI·PostgreSQL을 여전히
+호출하지 않는다. 파일럿 종료 시각 이후에는 schedule=None으로 되돌리는
+별도 PR이 반드시 필요하다 — 이 파일이 그 상태로 남아 있는 것 자체가
+승인이 아니다.
 """
 
 import os
@@ -43,6 +51,12 @@ PAGE_SIZE_LIMIT = 1000
 # 다만 구현은 stage-2 범위이므로 이 DAG는 계산하지 않고 경계만 선언한다.
 HOURLY_AGGREGATION_APPROVAL = "RULE_APPROVED_IMPLEMENTATION_DEFERRED"
 
+# DEC-014 24시간 재현성 파일럿(조장 승인 2026-08-22). 이 상수와 아래
+# schedule 값이 어긋나면 test_ten_minute_collection_dag.py가 실패한다.
+PILOT_SCHEDULE_DECISION = "DEC-014"
+PILOT_TEN_MINUTE_CRON = "*/10 * * * *"
+PILOT_SCHEDULE_EXPIRES_AT = datetime(2026, 8, 23, 7, 20, tzinfo=SEOUL_TZ)
+
 
 def _logical_time():
     # 실행할 때마다 현재 시각을 쓰지 않고 Airflow 논리시각을 사용해 재현성을 유지한다.
@@ -69,11 +83,11 @@ def _require_api_source(variable_name):
 
 @dag(
     dag_id="bike_weather_ten_minute_collection",
-    schedule=None,
+    schedule="*/10 * * * *",  # PILOT_TEN_MINUTE_CRON — DEC-014, revert by PILOT_SCHEDULE_EXPIRES_AT
     start_date=datetime(2026, 8, 16, tzinfo=SEOUL_TZ),
     catchup=False,
     max_active_runs=1,
-    tags=["ddarung-flow", "ten-minute", "manual-only", "stage-1"],
+    tags=["ddarung-flow", "ten-minute", "stage-2-pilot", "dec-014"],
 )
 def bike_weather_ten_minute_collection():
     @task(

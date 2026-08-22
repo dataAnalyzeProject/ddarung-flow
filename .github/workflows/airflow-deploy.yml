@@ -11,6 +11,14 @@ on:
         description: Full 40-character main commit SHA to deploy
         required: true
         type: string
+      pilot_confirmation:
+        description: >-
+          Leave empty for a normal manual-only deploy (schedule=None required).
+          Only for the DEC-014 24h CHG-092 pilot: type PILOT_DEC-014_2026-08-22
+          exactly to allow the single pre-approved pilot schedule.
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -92,6 +100,7 @@ jobs:
     environment: oci-airflow
     env:
       DEPLOY_SHA: ${{ inputs.commit_sha }}
+      PILOT_CONFIRMATION: ${{ inputs.pilot_confirmation }}
       OCI_REGISTRY: ${{ vars.OCI_REGISTRY }}
       OCI_NAMESPACE: ${{ vars.OCI_NAMESPACE }}
       OCI_REPOSITORY: ${{ vars.OCI_REPOSITORY }}
@@ -131,11 +140,21 @@ jobs:
           test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
           git merge-base --is-ancestor "$DEPLOY_SHA" origin/main
 
-      - name: Verify DAG schedule remains manual-only
+      - name: Verify DAG schedule is manual-only or the exact approved DEC-014 pilot value
         shell: bash
         run: |
           set -euo pipefail
-          grep -q "schedule=None" pipeline/dags/bike_weather_ten_minute_collection_dag.py
+          DAG_FILE=pipeline/dags/bike_weather_ten_minute_collection_dag.py
+          if [ -z "$PILOT_CONFIRMATION" ]; then
+            grep -q "schedule=None" "$DAG_FILE"
+          elif [ "$PILOT_CONFIRMATION" = "PILOT_DEC-014_2026-08-22" ]; then
+            grep -q 'schedule="\*/10 \* \* \* \*"' "$DAG_FILE"
+            grep -q 'PILOT_SCHEDULE_DECISION = "DEC-014"' "$DAG_FILE"
+            grep -q "PILOT_SCHEDULE_EXPIRES_AT" "$DAG_FILE"
+          else
+            echo "Unrecognized pilot_confirmation value; refusing to deploy." >&2
+            exit 1
+          fi
 
       - name: Configure verified SSH access
         shell: bash
@@ -211,7 +230,7 @@ jobs:
           set -euo pipefail
           target="$SSH_USER@$SSH_HOST"
           ssh -i "$HOME/.ssh/id_airflow" -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" \
-            "REMOTE_AIRFLOW_DIR='$REMOTE_AIRFLOW_DIR' bash -s" <<'REMOTE'
+            "REMOTE_AIRFLOW_DIR='$REMOTE_AIRFLOW_DIR' PILOT_CONFIRMATION='$PILOT_CONFIRMATION' bash -s" <<'REMOTE'
           set -euo pipefail
           cd "$REMOTE_AIRFLOW_DIR/infra/airflow"
           test -f .env
@@ -257,13 +276,23 @@ jobs:
             false
           fi
 
-          dag_schedule=$(grep -o "schedule=None" pipeline/dags/bike_weather_ten_minute_collection_dag.py || true)
-          if [ "$dag_schedule" != "schedule=None" ]; then
-            echo "DAG schedule changed from None on the deployed source; refusing to leave this running." >&2
-            false
+          if [ -z "$PILOT_CONFIRMATION" ]; then
+            dag_schedule=$(grep -o "schedule=None" pipeline/dags/bike_weather_ten_minute_collection_dag.py || true)
+            if [ "$dag_schedule" != "schedule=None" ]; then
+              echo "DAG schedule changed from None on the deployed source; refusing to leave this running." >&2
+              false
+            fi
+            schedule_summary="schedule=None confirmed"
+          else
+            dag_schedule=$(grep -o 'schedule="\*/10 \* \* \* \*"' pipeline/dags/bike_weather_ten_minute_collection_dag.py || true)
+            if [ -z "$dag_schedule" ]; then
+              echo "Pilot confirmation given but the approved pilot schedule literal is not on the deployed source; refusing to leave this running." >&2
+              false
+            fi
+            schedule_summary="DEC-014 pilot schedule (*/10 * * * *) confirmed, must be reverted to schedule=None by PILOT_SCHEDULE_EXPIRES_AT"
           fi
 
           trap - ERR
           docker compose --env-file .env --env-file secrets.env --env-file release.env "${compose_files[@]}" ps
-          echo "Airflow OCI deploy passed: health=200, schedule=None confirmed."
+          echo "Airflow OCI deploy passed: health=200, $schedule_summary."
           REMOTE
