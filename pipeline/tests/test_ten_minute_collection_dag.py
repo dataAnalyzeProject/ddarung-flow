@@ -91,22 +91,12 @@ def test_dag_id_is_separate_from_the_development_dag(tree):
     assert f'dag_id="{EXPECTED_DAG_ID}"' not in existing
 
 
-def test_schedule_is_manual_only_or_the_exact_dec_014_pilot_value(tree, source):
-    """기본은 schedule=None. DEC-014 파일럿 기간에 한해서만 정확히 하나의
-    승인된 cron 값(*/10 * * * *)으로 예외를 허용하며, 그 외 값은 전부
-    거부한다(임의의 cron으로 몰래 바꾸는 것을 막는다)."""
+def test_automatic_scheduling_is_disabled(tree):
     kwargs = _decorator_kwargs(_dag_function(tree), "dag")
-    schedule = ast.literal_eval(kwargs["schedule"])
 
+    assert ast.literal_eval(kwargs["schedule"]) is None
     assert ast.literal_eval(kwargs["catchup"]) is False
     assert ast.literal_eval(kwargs["max_active_runs"]) == 1
-
-    if schedule is None:
-        return
-
-    assert schedule == "*/10 * * * *"
-    assert 'PILOT_SCHEDULE_DECISION = "DEC-014"' in source
-    assert "PILOT_SCHEDULE_EXPIRES_AT" in source
 
 
 def test_task_ids_match_the_approved_boundary(tree):
