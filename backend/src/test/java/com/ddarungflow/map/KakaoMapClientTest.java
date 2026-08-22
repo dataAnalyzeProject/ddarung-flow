@@ -175,7 +175,7 @@ class KakaoMapClientTest {
         assertThat(routeOpt.get().durationSeconds()).isEqualTo(640);
         assertThat(routeOpt.get().travelMode()).isEqualTo("WALK");
         assertThat(routeOpt.get().pathPoints()).containsExactly(
-            new MapApiDtos.RoutePointDto(new BigDecimal("37.5500"), new BigDecimal("126.9000")),
+            new MapApiDtos.RoutePointDto(new BigDecimal("37.55"), new BigDecimal("126.9")),
             new MapApiDtos.RoutePointDto(new BigDecimal("37.5556"), new BigDecimal("126.9106"))
         );
         assertThat(requestReference.get().uri().toString())
@@ -227,7 +227,7 @@ class KakaoMapClientTest {
         assertThat(routeOpt.get().durationSeconds()).isEqualTo(900);
         assertThat(routeOpt.get().travelMode()).isEqualTo("PUBLIC_TRANSIT");
         assertThat(routeOpt.get().pathPoints()).containsExactly(
-            new MapApiDtos.RoutePointDto(new BigDecimal("37.5500"), new BigDecimal("126.9000")),
+            new MapApiDtos.RoutePointDto(new BigDecimal("37.55"), new BigDecimal("126.9")),
             new MapApiDtos.RoutePointDto(new BigDecimal("37.5556"), new BigDecimal("126.9106"))
         );
         assertThat(requestReference.get().uri().toString())
