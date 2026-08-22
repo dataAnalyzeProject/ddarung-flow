@@ -18,6 +18,7 @@ export const AIR_QUALITY_STATUS_LABEL = {
 export const airQualityNormalFixture = {
   status: "NORMAL",
   measurementStation: "천호 측정소",
+  measurementStationDistanceMeters: 420,
   measuredAt: "2026-08-14T10:00:00",
   collectedAt: "2026-08-14T10:03:00",
   khai: { value: 63, grade: "MODERATE" },

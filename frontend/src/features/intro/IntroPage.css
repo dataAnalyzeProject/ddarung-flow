@@ -49,8 +49,8 @@
 .intro-river{position:absolute;right:0;bottom:0;left:0;height:24%;background:repeating-linear-gradient(177deg,#d0efff 0 4px,#edfaff 5px 9px)}
 .intro-bridge{position:absolute;z-index:2;right:0;bottom:21%;left:4%;height:24px;border-top:5px solid #b0d5ec;border-bottom:4px solid #b9daed;background:repeating-linear-gradient(90deg,transparent 0 125px,#b9d9ea 126px 134px)}
 .intro-route{position:absolute;z-index:4;top:6%;right:3%;width:77%;height:45%;overflow:visible}
-.intro-route path{fill:none;stroke:#83c1ff;stroke-width:2;stroke-dasharray:6 7}
-.intro-route circle{fill:#fff;stroke:#83c1ff;stroke-width:4}
+.intro-route-guide,.intro-route-line{fill:none;stroke:#83c1ff;stroke-width:2;stroke-dasharray:6 7}
+.intro-route>g[mask] circle{fill:#fff;stroke:#83c1ff;stroke-width:4}
 .intro-route-pin{position:absolute;z-index:5;width:48px;height:55px;color:#62a3f6;filter:drop-shadow(0 4px 4px #4c87c533)}
 .intro-route-pin svg{width:100%;height:100%;fill:#65a6f6;color:#65a6f6;stroke:#fff}
 .pin-a{left:33%;top:22%}
@@ -71,8 +71,6 @@
 .intro-page :focus-visible{outline:3px solid #72b5ff;outline-offset:3px}
 @keyframes intro-countdown{to{transform:scaleX(0)}
 }
-@media(prefers-reduced-motion:reduce){.intro-progress span{animation:none}
-}
 @media(max-width:1099.98px){.intro-header{padding:0 15px}
 .intro-brand img{width:135px}
 .intro-header nav{gap:18px}
@@ -82,6 +80,10 @@
 .intro-hero{min-height:630px;display:block;padding-top:70px}
 .intro-copy{max-width:620px}
 .intro-scene{right:-18px;bottom:0;left:30%;opacity:.72}
+.intro-destination-forecast>p{right:2%}
+.intro-station-count.station-best{right:2%}
+.intro-station-count.station-second{right:22%}
+.intro-station-count.station-third{right:23%}
 .intro-feature-grid{grid-template-columns:1fr;margin-top:18px}
 .intro-feature-grid article{height:auto;min-height:130px}
 .intro-auto-copy{position:relative;z-index:9}
@@ -96,6 +98,95 @@
 .intro-primary,.intro-secondary{width:100%}
 .intro-points{flex-direction:column;gap:10px}
 .intro-scene{top:42%;left:0}
+.intro-destination-forecast>p{top:0}
+.intro-station-count{min-width:126px;padding-right:8px}
+.intro-station-count.station-best{right:1%;top:18%}
+.intro-station-count.station-second{right:26%;top:2%}
+.intro-station-count.station-third{right:29%;top:31%}
+.intro-station-count em{right:2px}
 .intro-bike{right:5%;width:280px}
 .feature-icon{width:74px;height:74px}
+}
+
+/* UI-INTRO-MOTION-01: the header and completion behavior stay static. */
+.intro-copy h1,.intro-copy>p:not(.intro-auto-copy),.intro-points,.intro-auto-copy{animation:intro-copy-in .35s cubic-bezier(.22,.8,.3,1) both}
+.intro-copy h1 span::first-letter{color:inherit}
+.intro-scene{animation:intro-scene-in .35s ease-out both}
+.intro-cloud{--intro-cloud-scale:1;animation:intro-cloud-in .35s ease-out both,intro-cloud-drift 14s ease-in-out 3s infinite alternate}
+.intro-cloud.cloud-b{--intro-cloud-scale:.8;transform:scale(var(--intro-cloud-scale))}
+.intro-route-guide{opacity:.26}
+.intro-route-mask{fill:none;stroke:#fff;stroke-width:14;stroke-linecap:round;stroke-dasharray:1;stroke-dashoffset:1;animation:intro-route-draw 1.2s cubic-bezier(.22,.8,.3,1) .55s both}
+.intro-moving-bike{fill:none;stroke:#70b819;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;opacity:0;animation:intro-bike-route 1.45s cubic-bezier(.22,.8,.3,1) .75s both}
+.intro-moving-bike circle{fill:#f6fbff;stroke:#70b819;stroke-width:4}
+.intro-route-pin{opacity:0}
+.intro-route-pin.pin-a{animation:intro-pin-in .35s cubic-bezier(.22,.8,.3,1) .35s both,intro-pin-subdue .35s cubic-bezier(.22,.8,.3,1) 1.85s both}
+.intro-route-pin.pin-a:before,.intro-route-pin.pin-b:before{position:absolute;left:50%;top:48%;width:42px;height:42px;margin:-21px;border:2px solid #65a6f6;border-radius:50%;opacity:0;content:""}
+.intro-route-pin.pin-a:before{animation:intro-origin-pulse .35s cubic-bezier(.22,.8,.3,1) .42s both}
+.intro-route-pin.pin-b{animation:intro-destination-in .4s cubic-bezier(.22,.8,.3,1) 1.85s both}
+.intro-route-pin.pin-b:before{animation:intro-destination-glow .4s cubic-bezier(.22,.8,.3,1) 1.9s both}
+.intro-destination-focus{position:absolute;z-index:4;right:10.55%;top:17%;width:94px;height:94px;border:1px solid #0878ee4d;border-radius:50%;opacity:0;transform:scale(.74);animation:intro-destination-focus-in .5s cubic-bezier(.22,.8,.3,1) 1.75s both}
+.intro-destination-focus:before,.intro-destination-focus:after{position:absolute;inset:11px;border:1px solid #00a96c66;border-radius:inherit;content:""}
+.intro-destination-focus:after{inset:25px;background:#effff9b3;border:0}
+.intro-destination-forecast{position:absolute;z-index:9;inset:0;pointer-events:none}
+.intro-destination-forecast>p{position:absolute;right:1.5%;top:1.5%;margin:0;padding:9px 13px;border:1px solid #d6e8f8;border-radius:12px;background:#fffffff2;box-shadow:0 7px 18px #164c7512;opacity:0;transform:translateY(6px);animation:intro-forecast-title-in .35s cubic-bezier(.22,.8,.3,1) 1.82s both}
+.intro-destination-forecast>p strong,.intro-destination-forecast>p span{display:block;white-space:nowrap}
+.intro-destination-forecast>p strong{font-size:12px;letter-spacing:-.03em}
+.intro-destination-forecast>p span{margin-top:3px;color:#6b7d94;font-size:9px}
+.intro-station-count{position:absolute;min-width:142px;height:46px;padding:7px 11px 7px 31px;border:1px solid #d5e5f2;border-radius:13px;background:#fffffff2;box-shadow:0 8px 18px #1739581a;opacity:0;transform:translateY(7px) scale(.97);animation:intro-station-in .35s cubic-bezier(.22,.8,.3,1) both}
+.intro-station-count .station-dot{position:absolute;left:11px;top:50%;width:10px;height:10px;margin-top:-5px;border:3px solid #d8eaf8;border-radius:50%;background:#438fdb}
+.intro-station-count small,.intro-station-count strong{display:block;white-space:nowrap}
+.intro-station-count small{color:#677b91;font-size:8px;font-weight:700}
+.intro-station-count strong{margin-top:2px;color:#153756;font-size:12px;letter-spacing:-.02em}
+.intro-station-count em{position:absolute;right:-7px;top:-8px;padding:3px 7px;border-radius:9px;background:#00a96c;color:#fff;font-size:8px;font-style:normal;font-weight:900;letter-spacing:-.03em;opacity:0;transform:translateY(3px);animation:intro-recommend-in .3s cubic-bezier(.22,.8,.3,1) 2.55s both}
+.intro-station-count.station-best{right:1.7%;top:18%;animation-delay:1.95s}
+.intro-station-count.station-second{right:18.5%;top:4.5%;animation-delay:2.15s}
+.intro-station-count.station-third{right:19.5%;top:29%;animation-delay:2.35s}
+.intro-station-count.station-best:after{position:absolute;inset:-3px;border:2px solid #00a96c;border-radius:15px;box-shadow:0 0 0 5px #00a96c14;opacity:0;content:"";animation:intro-best-station-in .35s cubic-bezier(.22,.8,.3,1) 2.55s both}
+.intro-station-count.station-best .station-dot{border-color:#d4f2e8;background:#00a96c}
+.intro-bike{opacity:0;transform-origin:80% 30%;animation:intro-arrival-bike-in .4s cubic-bezier(.22,.8,.3,1) 1.85s both}
+.intro-feature-grid article{opacity:0;transform:translateY(10px);animation:intro-card-in .2s cubic-bezier(.22,.8,.3,1) both}
+.intro-feature-grid article:nth-child(1){animation-delay:2.65s}
+.intro-feature-grid article:nth-child(2){animation-delay:2.85s}
+.intro-feature-grid article:nth-child(3){animation-delay:3s}
+
+@keyframes intro-scene-in{from{opacity:.12;transform:translateY(5px)}to{opacity:1;transform:none}}
+@keyframes intro-copy-in{from{opacity:.18;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes intro-cloud-in{from{opacity:.1}to{opacity:.58}}
+@keyframes intro-cloud-drift{from{transform:translateX(0) scale(var(--intro-cloud-scale))}to{transform:translateX(12px) scale(var(--intro-cloud-scale))}}
+@keyframes intro-route-draw{to{stroke-dashoffset:0}}
+@keyframes intro-pin-in{from{opacity:0;transform:translateY(12px) scale(.92)}to{opacity:1;transform:none}}
+@keyframes intro-pin-subdue{to{opacity:.65;filter:grayscale(.15)}}
+@keyframes intro-origin-pulse{0%{opacity:0;transform:scale(.78)}55%{opacity:.35;transform:scale(1)}100%{opacity:0;transform:scale(1.12)}}
+@keyframes intro-destination-in{from{opacity:0;transform:translateY(12px) scale(.92)}to{opacity:1;transform:none}}
+@keyframes intro-destination-glow{0%{opacity:0;transform:scale(.78)}60%{opacity:.36;transform:scale(1)}100%{opacity:0;transform:scale(1.12)}}
+@keyframes intro-destination-focus-in{from{opacity:0;transform:scale(.74)}to{opacity:1;transform:scale(1)}}
+@keyframes intro-forecast-title-in{to{opacity:1;transform:none}}
+@keyframes intro-station-in{to{opacity:1;transform:none}}
+@keyframes intro-best-station-in{to{opacity:1}}
+@keyframes intro-recommend-in{to{opacity:1;transform:none}}
+@keyframes intro-bike-route{0%{opacity:0;transform:translate(40px,210px) scale(.55)}7%{opacity:1}28%{transform:translate(220px,166px) scale(.62)}50%{transform:translate(370px,73px) scale(.68)}72%{transform:translate(540px,126px) scale(.74)}92%{opacity:1;transform:translate(690px,102px) scale(.8)}100%{opacity:0;transform:translate(758px,62px) scale(.82)}}
+@keyframes intro-arrival-bike-in{from{opacity:0;transform:translate(96px,-125px) scale(.32)}to{opacity:1;transform:none}}
+@keyframes intro-card-in{to{opacity:1;transform:none}}
+
+@media(prefers-reduced-motion:reduce){
+.intro-copy h1,.intro-copy>p:not(.intro-auto-copy),.intro-points,.intro-auto-copy,.intro-scene,.intro-cloud,.intro-route-pin,.intro-destination-focus,.intro-destination-forecast>p,.intro-station-count,.intro-station-count em,.intro-station-count.station-best:after,.intro-bike,.intro-feature-grid article{animation:none;opacity:1;transform:none}
+.intro-route-pin:before{display:none}
+.intro-moving-bike{display:none;animation:none}
+.intro-route-mask{animation:none;stroke-dashoffset:0}
+.intro-cloud{opacity:.58}
+.intro-progress span{animation:none;transform:scaleX(0)}
+}
+@media(max-width:1099.98px){
+.intro-destination-forecast>p{right:2%}
+.intro-station-count.station-best{right:2%}
+.intro-station-count.station-second{right:22%}
+.intro-station-count.station-third{right:23%}
+}
+@media(max-width:720px){
+.intro-destination-forecast>p{top:0}
+.intro-station-count{min-width:126px;padding-right:8px}
+.intro-station-count.station-best{right:1%;top:18%}
+.intro-station-count.station-second{right:26%;top:2%}
+.intro-station-count.station-third{right:29%;top:31%}
+.intro-station-count em{right:2px}
 }

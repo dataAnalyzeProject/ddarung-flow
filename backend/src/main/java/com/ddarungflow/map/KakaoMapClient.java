@@ -182,9 +182,11 @@ public class KakaoMapClient {
             boolean publicTransit = "TRANSIT".equalsIgnoreCase(travelMode)
                 || "PUBLIC_TRANSIT".equalsIgnoreCase(travelMode);
             JsonNode routeProperties;
+            JsonNode selectedRoute;
             if (publicTransit) {
                 JsonNode routes = root.path("routes");
                 routeProperties = null;
+                selectedRoute = null;
                 if (routes.isArray()) {
                     for (JsonNode route : routes) {
                         JsonNode candidate = route.path("properties");
@@ -198,11 +200,13 @@ public class KakaoMapClient {
                         if (routeProperties == null
                             || candidateDuration.asInt() < routeProperties.path("totalTime").asInt()) {
                             routeProperties = candidate;
+                            selectedRoute = route;
                         }
                     }
                 }
             } else {
-                routeProperties = root.path("route").path("properties");
+                selectedRoute = root.path("route");
+                routeProperties = selectedRoute.path("properties");
             }
 
             if (routeProperties == null) {
@@ -222,7 +226,12 @@ public class KakaoMapClient {
                 return java.util.Optional.empty();
             }
 
-            return java.util.Optional.of(new MapApiDtos.RouteResultDto(distanceMeters, durationSeconds, travelMode));
+            return java.util.Optional.of(new MapApiDtos.RouteResultDto(
+                distanceMeters,
+                durationSeconds,
+                travelMode,
+                extractPathPoints(selectedRoute, publicTransit)
+            ));
         } catch (Exception e) {
             return java.util.Optional.empty();
         }
@@ -231,6 +240,35 @@ public class KakaoMapClient {
     public int calculateWalkDurationSeconds(double distanceMeters) {
         // Assume average walk speed of 80m/min -> convert to seconds
         return (int) Math.round((distanceMeters / 80.0) * 60.0);
+    }
+
+    private List<MapApiDtos.RoutePointDto> extractPathPoints(JsonNode route, boolean publicTransit) {
+        List<MapApiDtos.RoutePointDto> points = new ArrayList<>();
+        if (route == null || route.isMissingNode()) return points;
+        if (publicTransit) {
+            appendStepPoints(route.path("steps"), points);
+        } else {
+            for (JsonNode leg : route.path("legs")) appendStepPoints(leg.path("steps"), points);
+        }
+        return points;
+    }
+
+    private void appendStepPoints(JsonNode steps, List<MapApiDtos.RoutePointDto> target) {
+        if (!steps.isArray()) return;
+        for (JsonNode step : steps) {
+            JsonNode coordinates = step.path("path").path("points");
+            if (!coordinates.isArray()) continue;
+            for (JsonNode coordinate : coordinates) {
+                if (!coordinate.isArray() || coordinate.size() < 2 || !coordinate.get(0).isNumber() || !coordinate.get(1).isNumber()) continue;
+                BigDecimal longitude = coordinate.get(0).decimalValue();
+                BigDecimal latitude = coordinate.get(1).decimalValue();
+                if (latitude.compareTo(BigDecimal.valueOf(-90)) < 0
+                    || latitude.compareTo(BigDecimal.valueOf(90)) > 0
+                    || longitude.compareTo(BigDecimal.valueOf(-180)) < 0
+                    || longitude.compareTo(BigDecimal.valueOf(180)) > 0) continue;
+                target.add(new MapApiDtos.RoutePointDto(latitude, longitude));
+            }
+        }
     }
 
     public static class ProviderException extends RuntimeException {

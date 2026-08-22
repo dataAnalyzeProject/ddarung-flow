@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import MapRoutePanel, { formatArrival, locationErrorMessage } from "./MapRoutePanel";
 import { createKakaoMapAdapter, estimateRoute, loadKakaoMapSdk } from "./kakaoMapApi";
 import { fetchStationDetail, fetchStationLocations } from "./stationApi";
@@ -30,7 +30,7 @@ describe("INT-3.6 MapRoutePanel", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     loadKakaoMapSdk.mockRejectedValue(new Error("KAKAO_MAP_KEY_MISSING"));
-    estimateRoute.mockResolvedValue({ distanceMeters: 1784, durationSeconds: 1759, travelMode: "WALK" });
+    estimateRoute.mockResolvedValue({ distanceMeters: 1784, durationSeconds: 1759, travelMode: "WALK", pathPoints: [{ latitude: 37.55, longitude: 126.97 }, { latitude: 37.56, longitude: 126.98 }] });
     fetchStationLocations.mockResolvedValue([{ stationId: "station-1", name: "성수역 3번 출구", latitude: 37.544, longitude: 127.056 }]);
     fetchStationDetail.mockResolvedValue({ stationId: "station-1", name: "성수역 3번 출구", latitude: 37.544, longitude: 127.056, availableBikeCount: 8, collectedAt: "2026-08-14T10:32:00+09:00", inventoryStatus: "NORMAL" });
   });
@@ -41,13 +41,126 @@ describe("INT-3.6 MapRoutePanel", () => {
     else process.env.REACT_APP_KAKAO_MAP_APP_KEY = originalMapAppKey;
   });
 
-  test("두 장소가 선택되면 경로와 예상시간을 자동 계산한다", async () => {
+  test("경로 확인을 누르면 선택한 이동수단의 경로와 예상시간을 계산한다", async () => {
     const onDurationChange = jest.fn();
     renderPanel({ selectedPlaces, onDurationChange });
+    fireEvent.click(screen.getByRole("button", { name: "경로 확인" }));
     await waitFor(() => expect(estimateRoute).toHaveBeenCalledWith(expect.objectContaining({ travelMode: "WALK" })));
     expect(await screen.findByText("1,784m")).toBeInTheDocument();
     expect(screen.getByText("30분")).toBeInTheDocument();
     expect(onDurationChange).toHaveBeenCalledWith(30);
+  });
+
+  test("경로 확인 버튼은 선택된 장소의 경로를 다시 계산한다", async () => {
+    renderPanel({ selectedPlaces });
+    fireEvent.click(screen.getByRole("button", { name: "경로 확인" }));
+    await waitFor(() => expect(estimateRoute).toHaveBeenCalledTimes(1));
+    await screen.findByText("1,784m");
+
+    fireEvent.click(screen.getByRole("button", { name: "경로 확인" }));
+    await waitFor(() => expect(estimateRoute).toHaveBeenCalledTimes(2));
+  });
+
+  test("경로 좌표를 지도 adapter에 전달한다", async () => {
+    process.env.REACT_APP_KAKAO_MAP_APP_KEY = "test-key";
+    const adapter = { setCenter: jest.fn(), setLevel: jest.fn(), setMapType: jest.fn(), setPoints: jest.fn(), setRoutePath: jest.fn(), setStations: jest.fn(), showStationOverlay: jest.fn() };
+    createKakaoMapAdapter.mockReturnValue(adapter);
+    loadKakaoMapSdk.mockResolvedValue({});
+    renderPanel({ selectedPlaces });
+
+    fireEvent.click(screen.getByRole("button", { name: "경로 확인" }));
+
+    await waitFor(() => expect(adapter.setRoutePath).toHaveBeenLastCalledWith([
+      { latitude: 37.55, longitude: 126.97 }, { latitude: 37.56, longitude: 126.98 },
+    ]));
+  });
+
+  test("경로 제공자 실패 시 오류 메시지를 표시한다", async () => {
+    estimateRoute.mockRejectedValue(new Error("ROUTE_PROVIDER_ERROR"));
+    const onDurationChange = jest.fn();
+    renderPanel({ selectedPlaces, onDurationChange });
+
+    fireEvent.click(screen.getByRole("button", { name: "경로 확인" }));
+
+    expect(await screen.findByText("경로 제공자를 사용할 수 없습니다.")).toBeInTheDocument();
+    expect(onDurationChange).toHaveBeenLastCalledWith(null);
+  });
+
+  test("성공한 경로를 다시 요청하다 실패하면 이전 경로와 예상시간을 제거한다", async () => {
+    const onDurationChange = jest.fn();
+    estimateRoute
+      .mockResolvedValueOnce({
+        distanceMeters: 1784,
+        durationSeconds: 1759,
+        travelMode: "WALK",
+        pathPoints: [{ latitude: 37.55, longitude: 126.97 }],
+      })
+      .mockRejectedValueOnce(new Error("ROUTE_PROVIDER_ERROR"));
+    renderPanel({ selectedPlaces, onDurationChange });
+
+    fireEvent.click(screen.getByRole("button", { name: "경로 확인" }));
+    expect(await screen.findByText("30분")).toBeInTheDocument();
+    expect(onDurationChange).toHaveBeenLastCalledWith(30);
+
+    fireEvent.click(screen.getByRole("button", { name: "경로 확인" }));
+
+    expect(await screen.findByText("경로 제공자를 사용할 수 없습니다.")).toBeInTheDocument();
+    expect(screen.queryByText("30분")).not.toBeInTheDocument();
+    expect(onDurationChange).toHaveBeenLastCalledWith(null);
+  });
+
+  test("장소가 바뀌면 이전 경로를 제거한다", async () => {
+    const onDurationChange = jest.fn();
+    const view = renderPanel({ selectedPlaces, onDurationChange });
+    fireEvent.click(screen.getByRole("button", { name: "경로 확인" }));
+    expect(await screen.findByText("30분")).toBeInTheDocument();
+
+    view.rerender(
+      <MapRoutePanel
+        travelMode="도보"
+        selectedPlaces={{
+          ...selectedPlaces,
+          destination: { ...selectedPlaces.destination, placeId: "d2", name: "광화문" },
+        }}
+        onDurationChange={onDurationChange}
+        fallbackImage="fallback.png"
+        canViewStations
+      />
+    );
+
+    await waitFor(() => expect(screen.queryByText("30분")).not.toBeInTheDocument());
+  });
+
+  test("경로 요청 중 장소가 바뀌면 늦게 도착한 이전 응답을 무시한다", async () => {
+    let resolveRoute;
+    estimateRoute.mockReturnValue(new Promise((resolve) => { resolveRoute = resolve; }));
+    const onDurationChange = jest.fn();
+    const view = renderPanel({ selectedPlaces, onDurationChange });
+    fireEvent.click(screen.getByRole("button", { name: "경로 확인" }));
+
+    view.rerender(
+      <MapRoutePanel
+        travelMode="도보"
+        selectedPlaces={{
+          ...selectedPlaces,
+          destination: { ...selectedPlaces.destination, placeId: "d2", name: "광화문" },
+        }}
+        onDurationChange={onDurationChange}
+        fallbackImage="fallback.png"
+        canViewStations
+      />
+    );
+    await act(async () => {
+      resolveRoute({
+        distanceMeters: 1784,
+        durationSeconds: 1759,
+        travelMode: "WALK",
+        pathPoints: [{ latitude: 37.55, longitude: 126.97 }],
+      });
+    });
+
+    expect(screen.queryByText("30분")).not.toBeInTheDocument();
+    expect(onDurationChange).not.toHaveBeenCalledWith(expect.any(Number));
   });
 
   test("선택 전에는 경로 요청을 차단하고 fallback을 유지한다", async () => {

@@ -36,11 +36,15 @@ function loadSavedPredictionResult() {
   }
 }
 
-// RidingGuidePage(FE-4.5)는 measurementStation을 표시용 문자열로 렌더링하므로
-// 백엔드의 { name, distanceMeters } 객체에서 name만 꺼내 전달한다.
+// RidingGuidePage는 measurementStation을 표시용 문자열로, 거리는 별도 필드로 렌더링하므로
+// 백엔드의 { name, distanceMeters } 객체를 두 필드로 나눠 전달한다.
 function adaptAirQualityResponse(response) {
   if (!response) return null;
-  return { ...response, measurementStation: response.measurementStation?.name ?? null };
+  return {
+    ...response,
+    measurementStation: response.measurementStation?.name ?? null,
+    measurementStationDistanceMeters: response.measurementStation?.distanceMeters ?? null,
+  };
 }
 
 export default function MainPage({ onNavigate }) {
@@ -73,7 +77,10 @@ export default function MainPage({ onNavigate }) {
         setUser(auth.user);
         setAuthState("authenticated");
         if (loginResult === "success" && pendingInput) {
-          setInput({ ...EMPTY_INPUT, ...pendingInput });
+          const { routePlaces: savedPlaces, ...savedInput } = pendingInput;
+          setInput({ ...EMPTY_INPUT, ...savedInput });
+          setRoutePlaces(savedPlaces || { origin: null, destination: null });
+          setTimeConfirmed(Number(savedInput.directMinutes) > 0);
         }
       })
       .catch(() => {
@@ -108,7 +115,11 @@ export default function MainPage({ onNavigate }) {
   }, [apiPredictionResult, arrivalWeather, input, routePlaces, selectedStationInfo, weatherRequest]);
 
   const updateInput = (key, value) => {
-    setInput((current) => ({ ...current, [key]: value }));
+    setInput((current) => ({
+      ...current,
+      [key]: value,
+      ...((key === "origin" || key === "destination" || key === "travelMode") && { directMinutes: null }),
+    }));
     if (key === "origin" || key === "destination") {
       setRoutePlaces((current) => ({ ...current, [key]: null }));
       setApiPredictionResult(null);
@@ -116,12 +127,18 @@ export default function MainPage({ onNavigate }) {
       setWeatherRequest(null);
       sessionStorage.removeItem(PREDICTION_RESULT_KEY);
     }
-    if (key === "directMinutes") setTimeConfirmed(false);
+    if (key === "origin" || key === "destination" || key === "travelMode") setTimeConfirmed(false);
+  };
+
+  const updateRouteDuration = (minutes) => {
+    updateInput("directMinutes", minutes);
+    if (minutes == null) setTimeConfirmed(false);
   };
 
   const selectPlace = (key, place) => {
-    setInput((current) => ({ ...current, [key]: place.name }));
+    setInput((current) => ({ ...current, [key]: place.name, directMinutes: null }));
     setRoutePlaces((current) => ({ ...current, [key]: place }));
+    setTimeConfirmed(false);
   };
 
   const loadArrivalWeather = async (request) => {
@@ -151,7 +168,7 @@ export default function MainPage({ onNavigate }) {
 
   const handlePredict = async () => {
     if (authState !== "authenticated") {
-      savePendingPrediction(input);
+      savePendingPrediction(input, routePlaces);
       setLoginPromptOpen(true);
       return;
     }
@@ -189,7 +206,12 @@ export default function MainPage({ onNavigate }) {
       })[0];
       setSelectedStationInfo({ stationId: defaultCandidate.stationId, stationName: defaultCandidate.stationName });
       selectCandidateWeather(defaultCandidate);
-    } catch {
+    } catch (error) {
+      if (error?.message === "AUTH_REQUIRED") {
+        savePendingPrediction(input, routePlaces);
+        window.location.assign("/login?login=expired");
+        return;
+      }
       setApiPredictionResult(null);
     } finally {
       setPredictLoading(false);
@@ -206,6 +228,9 @@ export default function MainPage({ onNavigate }) {
 
   const openRidingGuideFor = (candidate) => {
     setSelectedStationInfo({ stationId: candidate.stationId, stationName: candidate.stationName });
+    if (candidate.stationId !== selectedStationInfo?.stationId) {
+      selectCandidateWeather(candidate);
+    }
     setRidingGuideOpen(true);
   };
   const closeRidingGuide = () => setRidingGuideOpen(false);
@@ -241,7 +266,7 @@ export default function MainPage({ onNavigate }) {
     };
   }, [ridingGuideOpen, selectedStationInfo]);
 
-  const saveInputBeforeLogin = () => savePendingPrediction(input);
+  const saveInputBeforeLogin = () => savePendingPrediction(input, routePlaces);
 
   const handleLogout = async () => {
     setAuthState("logging-out");
@@ -259,9 +284,15 @@ export default function MainPage({ onNavigate }) {
   };
 
   if (ridingGuideOpen && selectedStationInfo) {
+    const selectedCandidate = apiPredictionResult?.candidates?.find(
+      (item) => item.stationId === selectedStationInfo.stationId
+    ) || null;
     return (
       <RidingGuidePage
         stationName={selectedStationInfo.stationName}
+        candidate={selectedCandidate}
+        arrivalWeather={arrivalWeather}
+        isWeatherLoading={weatherLoading}
         airQuality={guideAirQuality}
         isAirQualityLoading={guideAirQualityLoading}
         onBack={closeRidingGuide}
@@ -280,7 +311,7 @@ export default function MainPage({ onNavigate }) {
         user={user}
       />
 
-      <MainSearchForm serviceData={serviceData} input={input} onInputChange={updateInput} onPlaceSelect={selectPlace} onConfirmTime={() => setTimeConfirmed(true)} onPredict={handlePredict} />
+      <MainSearchForm serviceData={serviceData} input={input} onInputChange={updateInput} onPlaceSelect={selectPlace} onPredict={handlePredict} />
 
       {timeConfirmed && <p className="main-time-notice">예상시간을 <strong>{input.directMinutes || "이동수단 기준"}{input.directMinutes ? "분" : ""}</strong>으로 확인했습니다.</p>}
       {predictLoading && <p className="main-time-notice" role="status">예측 결과를 불러오는 중입니다…</p>}
@@ -292,13 +323,15 @@ export default function MainPage({ onNavigate }) {
             selectedStationId={selectedStationInfo?.stationId}
             onSelect={handleSelectStation}
             onViewGuide={openRidingGuideFor}
+            routeDurationMinutes={timeConfirmed ? input.directMinutes : null}
           />
           <MapRoutePanel
             originText={input.origin}
             destinationText={input.destination}
             travelMode={input.travelMode}
             selectedPlaces={routePlaces}
-            onDurationChange={(minutes) => updateInput("directMinutes", minutes)}
+            onDurationChange={updateRouteDuration}
+            onRouteCalculated={() => setTimeConfirmed(true)}
             fallbackImage={routeMap}
             canViewStations={authState === "authenticated"}
           />
@@ -317,7 +350,8 @@ export default function MainPage({ onNavigate }) {
             destinationText={input.destination}
             travelMode={input.travelMode}
             selectedPlaces={routePlaces}
-            onDurationChange={(minutes) => updateInput("directMinutes", minutes)}
+            onDurationChange={updateRouteDuration}
+            onRouteCalculated={() => setTimeConfirmed(true)}
             fallbackImage={routeMap}
             canViewStations={authState === "authenticated"}
           />

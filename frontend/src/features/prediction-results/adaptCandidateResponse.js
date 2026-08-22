@@ -30,6 +30,7 @@ export function adaptCandidateResponse(candidateDtos, { requestedAt, requiredBik
       collectedAt: dto.inventoryCollectedAt,
       inventoryStatus: dto.inventoryStatus,
     },
+    requiredBikeCount: dto.requiredBikeCount,
     predictionGeneratedAt: dto.generatedAt,
     predictionExpiresAt: dto.expiresAt,
     predictionStatus: dto.predictionStatus,

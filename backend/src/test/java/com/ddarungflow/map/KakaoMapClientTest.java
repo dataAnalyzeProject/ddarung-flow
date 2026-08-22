@@ -148,7 +148,8 @@ class KakaoMapClientTest {
                 "properties": {
                   "totalDistance": 820,
                   "totalTime": 640
-                }
+                },
+                "legs": [{ "steps": [{ "path": { "points": [[126.9000, 37.5500], [126.9106, 37.5556]] } }] }]
               }
             }
             """;
@@ -173,8 +174,75 @@ class KakaoMapClientTest {
         assertThat(routeOpt.get().distanceMeters()).isEqualTo(820);
         assertThat(routeOpt.get().durationSeconds()).isEqualTo(640);
         assertThat(routeOpt.get().travelMode()).isEqualTo("WALK");
+        assertThat(routeOpt.get().pathPoints()).hasSize(2);
+        assertThat(routeOpt.get().pathPoints().get(0).latitude()).isEqualByComparingTo("37.5500");
+        assertThat(routeOpt.get().pathPoints().get(0).longitude()).isEqualByComparingTo("126.9000");
+        assertThat(routeOpt.get().pathPoints().get(1).latitude()).isEqualByComparingTo("37.5556");
+        assertThat(routeOpt.get().pathPoints().get(1).longitude()).isEqualByComparingTo("126.9106");
         assertThat(requestReference.get().uri().toString())
             .contains("/v2/routing/walk?start_x=126.9000&start_y=37.5500&end_x=126.9106&end_y=37.5556");
+    }
+
+    @Test
+    @DisplayName("경로 좌표는 WGS84 위도와 경도 범위 안의 값만 유지한다")
+    void filtersRoutePointsOutsideWgs84Range() {
+        String jsonBody = """
+            {
+              "status": "OK",
+              "route": {
+                "properties": { "totalDistance": 820, "totalTime": 640 },
+                "legs": [{ "steps": [{ "path": { "points": [
+                  [126.9000, 37.5500], [181.0000, 37.5500], [126.9000, 91.0000],
+                  [-180.0000, -90.0000], [180.0000, 90.0000]
+                ] } }] }]
+              }
+            }
+            """;
+
+        @SuppressWarnings("unchecked")
+        HttpResponse<String> response = mock(HttpResponse.class);
+        when(response.statusCode()).thenReturn(200);
+        when(response.body()).thenReturn(jsonBody);
+        KakaoMapClient client = new KakaoMapClient("https://dapi.kakao.com", "test-key", request -> response);
+
+        MapApiDtos.RouteResultDto route = client.fetchRoute(
+            new BigDecimal("37.5500"), new BigDecimal("126.9000"),
+            new BigDecimal("37.5556"), new BigDecimal("126.9106"), "WALK"
+        ).orElseThrow();
+
+        assertThat(route.pathPoints()).hasSize(3);
+        assertThat(route.pathPoints()).extracting(MapApiDtos.RoutePointDto::latitude)
+            .usingElementComparator(BigDecimal::compareTo)
+            .containsExactly(new BigDecimal("37.5500"), new BigDecimal("-90.0000"), new BigDecimal("90.0000"));
+    }
+
+    @Test
+    @DisplayName("모든 경로 좌표가 WGS84 범위 밖이면 빈 배열을 반환한다")
+    void returnsEmptyPathWhenAllRoutePointsAreOutsideWgs84Range() {
+        String jsonBody = """
+            {
+              "status": "OK",
+              "route": {
+                "properties": { "totalDistance": 820, "totalTime": 640 },
+                "legs": [{ "steps": [{ "path": { "points": [
+                  [180.0001, 37.5500], [126.9000, -90.0001]
+                ] } }] }]
+              }
+            }
+            """;
+
+        @SuppressWarnings("unchecked")
+        HttpResponse<String> response = mock(HttpResponse.class);
+        when(response.statusCode()).thenReturn(200);
+        when(response.body()).thenReturn(jsonBody);
+        KakaoMapClient client = new KakaoMapClient("https://dapi.kakao.com", "test-key", request -> response);
+
+        MapApiDtos.RouteResultDto route = client.fetchRoute(
+            new BigDecimal("37.5500"), new BigDecimal("126.9000"),
+            new BigDecimal("37.5556"), new BigDecimal("126.9106"), "WALK"
+        ).orElseThrow();
+
+        assertThat(route.pathPoints()).isEmpty();
     }
 
     @Test
@@ -194,7 +262,8 @@ class KakaoMapClientTest {
                   "properties": {
                     "totalDistance": 5200,
                     "totalTime": 900
-                  }
+                  },
+                  "steps": [{ "path": { "points": [[126.9000, 37.5500], [126.9106, 37.5556]] } }]
                 }
               ]
             }
@@ -220,6 +289,11 @@ class KakaoMapClientTest {
         assertThat(routeOpt.get().distanceMeters()).isEqualTo(5200);
         assertThat(routeOpt.get().durationSeconds()).isEqualTo(900);
         assertThat(routeOpt.get().travelMode()).isEqualTo("PUBLIC_TRANSIT");
+        assertThat(routeOpt.get().pathPoints()).hasSize(2);
+        assertThat(routeOpt.get().pathPoints().get(0).latitude()).isEqualByComparingTo("37.5500");
+        assertThat(routeOpt.get().pathPoints().get(0).longitude()).isEqualByComparingTo("126.9000");
+        assertThat(routeOpt.get().pathPoints().get(1).latitude()).isEqualByComparingTo("37.5556");
+        assertThat(routeOpt.get().pathPoints().get(1).longitude()).isEqualByComparingTo("126.9106");
         assertThat(requestReference.get().uri().toString())
             .contains("/v2/routing/publictraffic?start_x=126.9000&start_y=37.5500&end_x=126.9106&end_y=37.5556");
     }
