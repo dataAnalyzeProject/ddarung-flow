@@ -1,10 +1,12 @@
 import GuideIcon from "./GuideIcon";
+import { weatherFixtureFallback } from "./ArrivalWeatherCard";
 import { formatClockTime } from "../data/ridingGuideFormatters";
 
-export default function DataStatusFooter({ candidate = null, weather, airQuality, isAirQualityLoading = false }) {
+export default function DataStatusFooter({ candidate = null, weather, airQuality = null, isAirQualityLoading = false }) {
+  const resolvedWeather = weather || weatherFixtureFallback;
   const dataStateOk = !(candidate && ["MISSING", "UNAVAILABLE"].includes(candidate.predictionStatus))
-    && weather.status !== "UNAVAILABLE";
-  const weatherIssuedTime = formatClockTime(weather.issuedAt);
+    && resolvedWeather.status !== "UNAVAILABLE";
+  const weatherIssuedTime = formatClockTime(resolvedWeather.issuedAt);
   const predictionUpdatedTime = candidate?.predictionGeneratedAt ? formatClockTime(candidate.predictionGeneratedAt) : null;
   const airQualityMeasuredTime = formatClockTime(airQuality?.measuredAt);
 

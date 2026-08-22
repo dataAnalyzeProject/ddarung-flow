@@ -8,6 +8,9 @@ import {
   airQualityUnavailableFixture,
 } from "./data/airQualityMock";
 import { ridingGuideStateFixtures } from "./data/ridingGuideFixture";
+import ArrivalWeatherCard from "./components/ArrivalWeatherCard";
+import DataStatusFooter from "./components/DataStatusFooter";
+import PredictionSummaryCard from "./components/PredictionSummaryCard";
 
 describe("라이딩 가이드 화면", () => {
   test("선택한 대여소명과 고정 안내 데이터를 표시한다", () => {
@@ -398,5 +401,34 @@ describe("라이딩 가이드 카드 분리 (FE-4.6)", () => {
     fireEvent.click(screen.getByRole("button", { name: "경로 다시 보기" }));
 
     expect(onBack).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("라이딩 가이드 카드 방어 렌더링 회귀 테스트", () => {
+  test("ArrivalWeatherCard는 weather prop이 없어도 크래시 없이 기본값으로 렌더링된다", () => {
+    render(<ArrivalWeatherCard weather={null} />);
+
+    expect(screen.getByRole("heading", { name: "도착지 날씨" })).toBeInTheDocument();
+    expect(screen.getByText("24°C")).toBeInTheDocument();
+  });
+
+  test("DataStatusFooter는 weather prop이 없어도 크래시 없이 기본값으로 렌더링된다", () => {
+    render(<DataStatusFooter weather={null} airQuality={null} />);
+
+    expect(screen.getByLabelText("데이터 상태")).toBeInTheDocument();
+    expect(screen.getByText("10:00")).toBeInTheDocument();
+  });
+
+  test("PredictionSummaryCard는 requiredBikeCount가 0이어도 대수를 포함한 문장을 표시한다", () => {
+    const candidate = {
+      requiredBikeCount: 0,
+      selectedProbability: 0.42,
+      availabilityLevel: "MEDIUM",
+      predictionStatus: "NORMAL",
+      currentInventory: { availableBikeCount: 3, inventoryStatus: "NORMAL" },
+    };
+    render(<PredictionSummaryCard candidate={candidate} />);
+
+    expect(screen.getByText(/0대 이상 빌릴 수 있을 확률이 42%/)).toBeInTheDocument();
   });
 });

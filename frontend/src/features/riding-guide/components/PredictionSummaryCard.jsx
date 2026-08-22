@@ -22,7 +22,8 @@ export function buildPredictionNarrative(candidate) {
   const arrivalTime = formatClockTime(candidate.arrivalAt);
   const targetTime = formatClockTime(candidate.predictionTargetAt);
 
-  const probabilitySentence = count && percent
+  const hasCount = count !== null && count !== undefined;
+  const probabilitySentence = hasCount && percent
     ? `${count}대 이상 빌릴 수 있을 확률이 ${percent}${levelLabel ? `(${levelLabel})` : ""}예요.`
     : percent
       ? `선택 수량 기준 확률이 ${percent}${levelLabel ? `(${levelLabel})` : ""}예요.`
