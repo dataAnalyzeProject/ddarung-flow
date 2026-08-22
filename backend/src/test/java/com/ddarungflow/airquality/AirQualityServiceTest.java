@@ -132,6 +132,39 @@ class AirQualityServiceTest {
     }
 
     @Test
+    @DisplayName("같은 거리 측정소는 이름 오름차순으로 선택한다")
+    void selectsNameAscendingStationWhenDistancesAreEqual() {
+        String tieCatalog = """
+            {
+              "response": {
+                "header": { "resultCode": "00", "resultMsg": "NORMAL_CODE" },
+                "body": {
+                  "items": [
+                    { "stationName": "나측정소", "item": "PM10, PM2.5, O3", "dmX": "37.5556488", "dmY": "126.91062927" },
+                    { "stationName": "가측정소", "item": "PM10, PM2.5, O3", "dmX": "37.5556488", "dmY": "126.91062927" }
+                  ]
+                }
+              }
+            }
+            """;
+        AirKoreaClient client = new AirKoreaClient(properties(), req -> {
+            @SuppressWarnings("unchecked")
+            java.net.http.HttpResponse<String> res = Mockito.mock(java.net.http.HttpResponse.class);
+            Mockito.when(res.statusCode()).thenReturn(200);
+            Mockito.when(res.body()).thenReturn(tieCatalog);
+            return res;
+        });
+        AirQualityService service = new AirQualityService(Mockito.mock(StationRepository.class), client);
+
+        Optional<AirQualityService.NearestMeasurementStation> nearest =
+                service.selectNearestMeasurementStation(new BigDecimal("37.5556488"), new BigDecimal("126.91062927"));
+
+        assertTrue(nearest.isPresent());
+        assertEquals("가측정소", nearest.get().stationName());
+        assertEquals(0, nearest.get().distanceMeters());
+    }
+
+    @Test
     @DisplayName("측정소 catalog가 완전히 비어 있으면 UNAVAILABLE 응답, measurementStation은 null")
     void emptyCatalogReturnsUnavailableWithNullMeasurementStation() {
         StationRepository repository = Mockito.mock(StationRepository.class);
