@@ -11,15 +11,22 @@ services:
     command: api-server --proxy-headers
     environment:
       AIRFLOW__API__BASE_URL: https://shdomain.kro.kr/airflow
+      # base_url이 붙으면 api-server의 모든 라우트(/execution/ 포함)가 이 경로
+      # 아래로 옮겨간다. scheduler/dag-processor가 내부 통신에 쓰는
+      # EXECUTION_API_SERVER_URL도 반드시 같은 prefix를 써야 한다 - 안 그러면
+      # 태스크가 상태 보고를 못 해 전부 실패한다(2026-08-22 실제 발생·확인됨).
+      AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-api-server:8080/airflow/execution/
 
   airflow-scheduler:
     environment:
       BIKE_INVENTORY_SOURCE: api
       WEATHER_SOURCE: api
       RAW_STORAGE_MODE: oci
+      AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-api-server:8080/airflow/execution/
 
   airflow-dag-processor:
     environment:
       BIKE_INVENTORY_SOURCE: api
       WEATHER_SOURCE: api
       RAW_STORAGE_MODE: oci
+      AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-api-server:8080/airflow/execution/
