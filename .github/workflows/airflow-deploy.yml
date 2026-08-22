@@ -282,8 +282,11 @@ jobs:
           test -f "$deployed_dag_file"
 
           if [ -z "$PILOT_CONFIRMATION" ]; then
-            dag_schedule=$(grep -o "schedule=None" "$deployed_dag_file" || true)
-            if [ "$dag_schedule" != "schedule=None" ]; then
+            # grep -q only checks presence, not match count - the DAG's
+            # docstring/comments are allowed to mention "schedule=None" more
+            # than once (2026-08-22: an exact-string-equality version of this
+            # check broke here when the docstring said it 4 times).
+            if ! grep -q "schedule=None," "$deployed_dag_file"; then
               echo "DAG schedule changed from None on the deployed source; refusing to leave this running." >&2
               false
             fi
