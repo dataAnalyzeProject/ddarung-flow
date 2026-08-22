@@ -48,8 +48,11 @@ public class PrincipalDetails implements UserDetails, OAuth2User {
     // --- UserDetails 구현 메소드 ---
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        // 권한 세팅 (필요시 users.getRole() 형태로 확장 가능)
-        return Collections.singletonList(new SimpleGrantedAuthority("ROLE_USER"));
+        return Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + getEffectiveRole().name()));
+    }
+
+    public com.ddarungflow.entity.UserRole getEffectiveRole() {
+        return users.getRole().effectiveRole();
     }
 
     @Override

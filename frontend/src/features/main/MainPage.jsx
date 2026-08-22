@@ -26,6 +26,7 @@ const EMPTY_INPUT = {
 
 const TRAVEL_MODE_TO_API = { "도보": "WALK", "대중교통": "PUBLIC_TRANSIT" };
 const PREDICTION_RESULT_KEY = "ddarung.mainPredictionResult.v1";
+const ADMIN_ROLE_VALUES = new Set(["ADMIN_READER", "ADMIN_OPERATOR", "MODEL_APPROVER", "SUPER_ADMIN"]);
 
 function loadSavedPredictionResult() {
   try {
@@ -316,6 +317,7 @@ export default function MainPage({ onNavigate }) {
     <main className="main-shell">
       <AppHeader
         authState={authState}
+        canEnterAdmin={ADMIN_ROLE_VALUES.has(user?.role)}
         onNavigate={onNavigate}
         onBeforeLogin={saveInputBeforeLogin}
         onLogout={handleLogout}

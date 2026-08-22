@@ -69,6 +69,7 @@ class LoginControllerSecurityTest {
                 .andExpect(jsonPath("$.user.userId").value(user.getPublicId().toString()))
                 .andExpect(jsonPath("$.user.displayName").value("따릉이 사용자"))
                 .andExpect(jsonPath("$.user.provider").value("google"))
+                .andExpect(jsonPath("$.user.role").value("USER"))
                 .andExpect(jsonPath("$.user.email").doesNotExist())
                 .andExpect(jsonPath("$.email").doesNotExist());
     }
