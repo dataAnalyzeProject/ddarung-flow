@@ -103,26 +103,46 @@ export default function IntroPage({ onComplete, storage = window.localStorage })
       <div className="intro-content">
         <section className="intro-hero" aria-labelledby="intro-title">
           <div className="intro-copy">
-            <h1 id="intro-title">도착할 때<br /><span><em>따릉이</em>를 빌릴 수 있을까요?</span></h1>
-            <p>목적지 도착 시점의 대여 가능성을 미리 확인하세요.</p>
+            <h1 id="intro-title">출발하기 전에,<br /><span>도착지 <em>따릉이</em>부터 볼까요?</span></h1>
+            <p>도착할 시간에 몇 대가 남아 있을지 미리 알려드려요.</p>
             <div className="intro-actions">
               <button className="intro-primary" type="button" onClick={completeIntro}><IntroIcon name="chart" />대여 가능성 예측 시작하기</button>
               <a className="intro-secondary" href="#intro-features" onClick={showFeatures}><IntroIcon name="book" />서비스 이용 방법</a>
             </div>
             <ul className="intro-points" aria-label="서비스 특징">
-              <li><i className="green" />실시간 따릉이 정보</li>
-              <li><i className="blue" />도착시간 예측</li>
-              <li><i className="orange" />맞춤 이동 가이드</li>
+              <li><i className="green" />도착지 주변 대여소</li>
+              <li><i className="blue" />도착시간 예상 대수</li>
+              <li><i className="orange" />여유 있는 곳 추천</li>
             </ul>
             <p className="intro-auto-copy" aria-live="polite">5초 후 자동으로 대여 예측을 시작합니다.</p>
           </div>
 
-          <div className="intro-scene" aria-label="서울 도심과 따릉이 이동 경로 일러스트">
+          <div className="intro-scene" aria-label="출발지에서 도착지까지 이동하고 주변 대여소의 예상 자전거 수를 비교하는 일러스트">
             <span className="intro-cloud cloud-a" aria-hidden="true" /><span className="intro-cloud cloud-b" aria-hidden="true" />
             <div className="intro-buildings" aria-hidden="true">{Array.from({ length: 18 }, (_, index) => <i key={index} />)}</div>
             <span className="intro-mountain" aria-hidden="true" /><span className="intro-tower" aria-hidden="true" /><span className="intro-river" aria-hidden="true" /><span className="intro-bridge" aria-hidden="true" />
-            <svg className="intro-route" aria-hidden="true" viewBox="0 0 800 260"><path d="M40 210C165 140 185 215 290 92S448 104 540 126s85 83 220-65" /><circle cx="45" cy="207" r="8" /><circle cx="291" cy="91" r="8" /><circle cx="758" cy="62" r="8" /></svg>
+            <svg className="intro-route" aria-hidden="true" viewBox="0 0 800 260">
+              <defs>
+                <mask id="introRouteReveal"><path className="intro-route-mask" pathLength="1" d="M40 210C165 140 185 215 290 92S448 104 540 126s85 83 220-65" /></mask>
+              </defs>
+              <path className="intro-route-guide" d="M40 210C165 140 185 215 290 92S448 104 540 126s85 83 220-65" />
+              <g mask="url(#introRouteReveal)">
+                <path className="intro-route-line" d="M40 210C165 140 185 215 290 92S448 104 540 126s85 83 220-65" />
+                <circle cx="45" cy="207" r="8" /><circle cx="291" cy="91" r="8" /><circle cx="758" cy="62" r="8" />
+              </g>
+              <g className="intro-moving-bike">
+                <circle cx="-17" cy="0" r="12" /><circle cx="17" cy="0" r="12" />
+                <path d="M-17 0-4-16 7 0h-24l13-16h18L17 0M-6-20h12M14-16l-4-10h9" />
+              </g>
+            </svg>
             <span className="intro-route-pin pin-a" aria-hidden="true"><IntroIcon name="pin" /></span><span className="intro-route-pin pin-b" aria-hidden="true"><IntroIcon name="pin" /></span>
+            <span className="intro-destination-focus" aria-hidden="true" />
+            <div className="intro-destination-forecast" role="group" aria-label="도착 예상 시간 기준 주변 대여소의 예상 자전거 수">
+              <p><strong>도착지 주변</strong><span>도착 예상 시간 기준</span></p>
+              <div className="intro-station-count station-best"><span className="station-dot" /><small>서울숲 입구</small><strong>예상 7대</strong><em>추천</em></div>
+              <div className="intro-station-count station-second"><span className="station-dot" /><small>뚝섬역 2번 출구</small><strong>예상 5대</strong></div>
+              <div className="intro-station-count station-third"><span className="station-dot" /><small>성수대교 북단</small><strong>예상 3대</strong></div>
+            </div>
             <IntroBicycle />
           </div>
         </section>

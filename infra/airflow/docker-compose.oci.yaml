@@ -1,0 +1,20 @@
+services:
+  # UI/API는 127.0.0.1에만 bind한다. 신규 공개 ingress·nginx route는 만들지
+  # 않으며 접속은 SSH 터널로만 한다(staging의 PostgreSQL과 동일한 원칙).
+  # host 8080은 기존 crawling-backend가 이미 쓰고 있어(OCI-STAGING-RUNBOOK.md의
+  # "기존 loopback port 3000/5000/8080 재사용 금지" 규칙과 동일 서버에서 실측
+  # 확인됨) 8280으로 bind한다. 컨테이너 내부 포트는 8080 그대로 유지.
+  airflow-api-server:
+    ports: !override ["127.0.0.1:8280:8080"]
+
+  airflow-scheduler:
+    environment:
+      BIKE_INVENTORY_SOURCE: api
+      WEATHER_SOURCE: api
+      RAW_STORAGE_MODE: oci
+
+  airflow-dag-processor:
+    environment:
+      BIKE_INVENTORY_SOURCE: api
+      WEATHER_SOURCE: api
+      RAW_STORAGE_MODE: oci

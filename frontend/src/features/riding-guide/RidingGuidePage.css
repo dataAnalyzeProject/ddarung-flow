@@ -157,23 +157,18 @@
   padding: 3px clamp(7px, .55vw, 10px);
 }
 
-.guide-rating-ring,
-.guide-percent-ring {
+.guide-rating-ring {
   position: relative;
   flex: 0 0 auto;
   display: grid;
   place-items: center;
   border-radius: 50%;
   background: conic-gradient(var(--guide-green) 0 87%, #deeee6 87% 100%);
-}
-
-.guide-rating-ring {
   width: clamp(92px, 6.45vw, 122px);
   height: clamp(92px, 6.45vw, 122px);
 }
 
-.guide-rating-ring::after,
-.guide-percent-ring::after {
+.guide-rating-ring::after {
   position: absolute;
   border-radius: 50%;
   background: #fff;
@@ -297,15 +292,10 @@
   font-size: clamp(9px, .68vw, 13px);
 }
 
-.guide-route-back,
-.guide-station-link,
-.guide-transit button {
+.guide-route-back {
   border-radius: 7px;
   font-weight: 800;
   cursor: pointer;
-}
-
-.guide-route-back {
   min-height: clamp(40px, 2.65vw, 50px);
   display: flex;
   align-items: center;
@@ -756,83 +746,78 @@
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-rows: minmax(0, 43fr) minmax(0, 30fr) minmax(0, 27fr);
+  grid-template-rows: minmax(0, 55fr) minmax(0, 45fr);
   gap: clamp(8px, .7vw, 13px);
 }
 
 .guide-summary,
-.guide-warnings,
-.guide-transit {
+.guide-warnings {
   padding: clamp(12px, 1.05vw, 19px) clamp(13px, 1.05vw, 19px);
 }
 
 .guide-summary {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
-.guide-summary-body {
-  min-height: 0;
-  display: flex;
-  align-items: center;
-  gap: clamp(18px, 1.8vw, 33px);
-  padding: 4px 5px;
-}
-
-.guide-percent-ring {
-  width: clamp(84px, 5.75vw, 108px);
-  height: clamp(84px, 5.75vw, 108px);
-}
-
-.guide-percent-ring::after {
-  inset: clamp(6px, .45vw, 8px);
-}
-
-.guide-percent-ring strong {
-  position: relative;
-  z-index: 1;
-  font-size: clamp(26px, 1.9vw, 36px);
-}
-
-.guide-percent-ring strong small {
-  font-size: .5em;
-}
-
-.guide-summary-body p {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: clamp(4px, .37vw, 7px);
+.guide-summary-narrative {
+  margin: clamp(8px, .8vw, 14px) 0;
   color: #405575;
-  font-size: clamp(10px, .74vw, 14px);
+  font-size: clamp(11px, .8vw, 15px);
+  line-height: 1.55;
 }
 
-.guide-summary-body p b {
+.guide-summary-evidence {
+  min-height: 0;
+}
+
+.guide-summary-meta {
+  margin: 0 0 6px;
+  color: #52647f;
+  font-size: clamp(9px, .68vw, 12px);
+  line-height: 1.5;
+}
+
+.guide-summary-toggle {
+  width: 100%;
+  padding: 5px 0;
+  margin-bottom: 4px;
+  border: 0;
+  background: transparent;
+  color: var(--guide-blue);
+  font-size: clamp(9px, .68vw, 12px);
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.guide-summary-detail {
+  max-height: 108px;
+  margin: 0 0 6px;
+  padding: 4px 0;
+  overflow-y: auto;
+  border-top: 1px solid #e1e6ec;
+  border-bottom: 1px solid #e1e6ec;
+}
+
+.guide-summary-detail > div {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  padding: 2px 0;
+  font-size: clamp(9px, .67vw, 12px);
+}
+
+.guide-summary-detail dt {
+  color: #56677f;
+}
+
+.guide-summary-detail dd {
+  margin: 0;
+  font-weight: 700;
+}
+
+.guide-summary-detail > div.current dd {
   color: var(--guide-green);
-  font-size: clamp(14px, 1.03vw, 19px);
-}
-
-.guide-summary-body p strong {
-  color: var(--guide-green);
-}
-
-.guide-station-link {
-  min-height: clamp(36px, 2.25vw, 43px);
-  padding: 0 14px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border: 1px solid #176be0;
-  color: var(--guide-navy);
-  font-size: clamp(10px, .76vw, 14px);
-  text-decoration: none;
-}
-
-.guide-station-link span,
-.guide-transit button span {
-  font-size: 2em;
-  font-weight: 300;
-  line-height: .5;
 }
 
 .guide-warnings ul {
@@ -864,61 +849,6 @@
   border-radius: 50%;
   background-size: 7px 7px;
   mask: radial-gradient(circle, transparent 0 20%, #000 21% 63%, transparent 64%);
-}
-
-.guide-transit {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  grid-template-columns: 1fr;
-  align-items: center;
-}
-
-.guide-transit-copy {
-  display: flex;
-  align-items: center;
-  gap: clamp(9px, .9vw, 16px);
-}
-
-.guide-transit-copy > span {
-  width: clamp(43px, 3vw, 56px);
-  height: clamp(43px, 3vw, 56px);
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: #edf5ff;
-  color: #1267dc;
-}
-
-.guide-transit-copy .guide-icon {
-  width: 55%;
-  height: 55%;
-}
-
-.guide-transit-copy p {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  color: #455b79;
-  font-size: clamp(9px, .69vw, 13px);
-}
-
-.guide-transit-copy small {
-  font-size: .95em;
-}
-
-.guide-transit button {
-  width: calc(100% - clamp(55px, 4vw, 75px));
-  min-height: clamp(35px, 2.2vw, 42px);
-  margin: clamp(-40px, -2.25vw, -35px) 0 0 auto;
-  padding: 0 13px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border: 0;
-  background: linear-gradient(90deg, #063172, #031d4b);
-  color: #fff;
-  font-size: clamp(10px, .72vw, 13px);
 }
 
 .guide-status {
@@ -1039,8 +969,7 @@
   .guide-weather,
   .guide-air,
   .guide-summary,
-  .guide-warnings,
-  .guide-transit {
+  .guide-warnings {
     min-height: auto;
   }
 
@@ -1064,8 +993,7 @@
   }
 
   .guide-summary,
-  .guide-warnings,
-  .guide-transit {
+  .guide-warnings {
     min-height: 190px;
   }
 
@@ -1082,27 +1010,10 @@
 /* Riding guide side column overlap fix */
 @media (min-width:780px) and (max-height:760px){
   .guide-side-column{
-    grid-template-rows:minmax(0,40fr) minmax(0,29fr) minmax(138px,31fr);
+    grid-template-rows:minmax(0,58fr) minmax(138px,42fr);
     align-content:start;
   }
   .guide-summary{
     row-gap:5px;
-  }
-  .guide-summary-body{
-    padding-top:0;
-    padding-bottom:0;
-  }
-  .guide-transit{
-    grid-template-rows:auto auto auto;
-    align-content:start;
-    row-gap:6px;
-  }
-  .guide-transit-copy{
-    min-height:43px;
-  }
-  .guide-transit button{
-    width:100%;
-    min-height:35px;
-    margin:2px 0 0;
   }
 }

@@ -7,6 +7,10 @@ import {
   airQualityPartialNullFixture,
   airQualityUnavailableFixture,
 } from "./data/airQualityMock";
+import { ridingGuideStateFixtures } from "./data/ridingGuideFixture";
+import ArrivalWeatherCard from "./components/ArrivalWeatherCard";
+import DataStatusFooter from "./components/DataStatusFooter";
+import PredictionSummaryCard from "./components/PredictionSummaryCard";
 
 describe("라이딩 가이드 화면", () => {
   test("선택한 대여소명과 고정 안내 데이터를 표시한다", () => {
@@ -112,13 +116,153 @@ describe("라이딩 가이드 대기질 상태", () => {
 
     expect(screen.getByText("87%")).toBeInTheDocument();
     expect(screen.getByText("추천해요.")).toBeInTheDocument();
-    expect(screen.getByText("매우 높음")).toBeInTheDocument();
+  });
+
+  test("측정소와의 거리 정보가 있으면 대기질 카드에 별도 행으로 표시한다", () => {
+    render(<RidingGuidePage airQuality={airQualityNormalFixture} onBack={jest.fn()} />);
+    const airCard = screen.getByRole("heading", { name: "도착지 대기질" }).closest("section");
+
+    expect(within(airCard).getByText("대여소와의 거리")).toBeInTheDocument();
+    expect(within(airCard).getByText("420m")).toBeInTheDocument();
+    expect(within(airCard).getByText("천호 측정소")).toBeInTheDocument();
+  });
+
+  test("거리 정보가 없으면 거리 행을 표시하지 않는다", () => {
+    render(<RidingGuidePage airQuality={airQualityDelayedFixture} onBack={jest.fn()} />);
+    const airCard = screen.getByRole("heading", { name: "도착지 대기질" }).closest("section");
+
+    expect(within(airCard).queryByText("대여소와의 거리")).not.toBeInTheDocument();
   });
 
   test("측정소 응답이 두 항목 모두 정상 등급이어도 통합대기환경지수 라벨에 등급명을 포함한다", () => {
     render(<RidingGuidePage airQuality={airQualityNormalFixture} onBack={jest.fn()} />);
 
     expect(screen.getByLabelText("통합대기환경지수 보통")).toBeInTheDocument();
+  });
+
+  test("실제 후보(candidate)가 있으면 고정 87% 대신 선택 수량 확률과 낮음·중간·높음 등급을 표시한다", () => {
+    const candidate = {
+      stationId: "ST-3",
+      stationName: "서울숲 남문",
+      arrivalAt: "2026-08-04T15:51:00+09:00",
+      predictionTargetAt: "2026-08-04T16:00:00+09:00",
+      targetOffsetMinutes: 9,
+      featureAsOf: "2026-08-04T15:00:00+09:00",
+      horizonMinutes: 60,
+      availabilityLevel: "LOW",
+      selectedProbability: 0.31,
+      probabilities: { atLeast1: 0.49, atLeast2: 0.31, atLeast3: 0.19, atLeast4: 0.11, atLeast5: 0.05 },
+      currentInventory: { availableBikeCount: 2, collectedAt: "2026-08-04T15:02:10+09:00", inventoryStatus: "NORMAL" },
+      predictionGeneratedAt: "2026-08-04T15:03:00+09:00",
+      predictionStatus: "NORMAL",
+      modelVersion: "availability-v1",
+      requiredBikeCount: 2,
+    };
+
+    render(<RidingGuidePage candidate={candidate} onBack={jest.fn()} />);
+
+    expect(screen.getByText("31%")).toBeInTheDocument();
+    expect(screen.queryByText("87%")).not.toBeInTheDocument();
+
+    const summaryCard = screen.getByRole("heading", { name: "대여 예측 요약" }).closest("section");
+    expect(within(summaryCard).getByText(/낮음/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "1~5대 누적확률 보기" }));
+    expect(screen.getByText("49%")).toBeInTheDocument();
+
+    const highlightedRow = screen.getByText("2대 이상").closest("div");
+    expect(highlightedRow).toHaveClass("current");
+    expect(screen.getByText("1대 이상").closest("div")).not.toHaveClass("current");
+  });
+
+  test("종합판정이 주의(LOW)이면 인트로 배지·요약 문구가 바뀐다", () => {
+    const lowCandidate = {
+      stationId: "ST-3",
+      availabilityLevel: "LOW",
+      selectedProbability: 0.31,
+      predictionStatus: "NORMAL",
+      currentInventory: {},
+    };
+
+    render(<RidingGuidePage candidate={lowCandidate} onBack={jest.fn()} />);
+
+    expect(screen.getByText("이용 시 주의")).toBeInTheDocument();
+    expect(screen.getByText("대여 가능성이나 날씨·대기질 상황을 확인하고 이용해주세요.")).toBeInTheDocument();
+  });
+
+  test("candidate가 없으면 고정 지표(87%·추천해요)와 안내 문구를 보여준다", () => {
+    render(<RidingGuidePage onBack={jest.fn()} />);
+
+    expect(screen.getByText("87%")).toBeInTheDocument();
+    expect(screen.getByText("추천해요.")).toBeInTheDocument();
+    expect(screen.getByText(/실제 예측을 실행하면/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "1~5대 누적확률 보기" })).not.toBeInTheDocument();
+  });
+
+  test("대여소 상세보기 링크는 더 이상 표시하지 않는다", () => {
+    render(<RidingGuidePage onBack={jest.fn()} />);
+
+    expect(screen.queryByRole("link", { name: /상세보기/ })).not.toBeInTheDocument();
+  });
+
+  test("대안 이동 카드는 더 이상 표시하지 않는다", () => {
+    render(<RidingGuidePage onBack={jest.fn()} />);
+
+    expect(screen.queryByRole("heading", { name: "대안 이동" })).not.toBeInTheDocument();
+  });
+
+  test("낮은 가용성이면 주의사항에 대체 대여소 확인 안내가 뜬다", () => {
+    const candidate = { availabilityLevel: "LOW", currentInventory: {} };
+    render(<RidingGuidePage candidate={candidate} onBack={jest.fn()} />);
+
+    expect(screen.getByText(/대여 가능성이 낮아요/)).toBeInTheDocument();
+  });
+
+  test("재고가 지연 상태면 주의사항에 지연 안내가 뜬다", () => {
+    const candidate = {
+      currentInventory: { availableBikeCount: 3, collectedAt: "2026-08-04T15:02:10+09:00", inventoryStatus: "DELAYED" },
+    };
+    render(<RidingGuidePage candidate={candidate} onBack={jest.fn()} />);
+
+    expect(screen.getByText(/재고 정보가 지연되고 있어요/)).toBeInTheDocument();
+  });
+
+  test("시간대별 예보에서 비가 시작되는 시각이 있으면 주의사항에 구체적으로 안내한다", () => {
+    const arrivalWeather = {
+      status: "NORMAL",
+      temperatureC: 22,
+      precipitationProbabilityPercent: 10,
+      precipitationType: "NONE",
+      skyStatus: "CLEAR",
+      rainGuidance: false,
+      hourlyForecasts: [
+        { forecastAt: "2026-08-04T15:00:00+09:00", temperatureC: 22, precipitationProbabilityPercent: 20, precipitationType: "NONE", skyStatus: "CLEAR" },
+        { forecastAt: "2026-08-04T17:00:00+09:00", temperatureC: 21, precipitationProbabilityPercent: 60, precipitationType: "RAIN", skyStatus: "OVERCAST" },
+      ],
+    };
+
+    render(<RidingGuidePage arrivalWeather={arrivalWeather} onBack={jest.fn()} />);
+
+    expect(screen.getByText("17시부터 강수확률 60%로 올라요.")).toBeInTheDocument();
+  });
+
+  test("도착지 날씨는 실제 arrivalWeather 값을 표시하고 비 가능성이 있으면 주의사항에 안내한다", () => {
+    const arrivalWeather = {
+      status: "NORMAL",
+      temperatureC: 30,
+      precipitationProbabilityPercent: 60,
+      precipitationType: "RAIN",
+      skyStatus: "OVERCAST",
+      rainGuidance: true,
+      hourlyForecasts: [],
+    };
+
+    render(<RidingGuidePage arrivalWeather={arrivalWeather} onBack={jest.fn()} />);
+    const weatherCard = screen.getByRole("heading", { name: "도착지 날씨" }).closest("section");
+
+    expect(within(weatherCard).getByText("30°C")).toBeInTheDocument();
+    expect(within(weatherCard).getByText("60%")).toBeInTheDocument();
+    expect(screen.getByText("도착 예정 시간대에 강수 가능성이 있어요.")).toBeInTheDocument();
   });
 
   test("DELAYED 상태에서는 종합 요약의 통합대기환경지수가 airQuality.khai 값(71)로 표시된다", () => {
@@ -143,5 +287,148 @@ describe("라이딩 가이드 대기질 상태", () => {
     expect(khaiSummary).not.toHaveTextContent("63");
     expect(khaiSummary).not.toHaveTextContent("보통");
     expect(khaiSummary).toHaveTextContent("-");
+  });
+});
+
+describe("라이딩 가이드 카드 분리 (FE-4.6)", () => {
+  test.each(["success", "loading", "empty", "error", "stale"])(
+    "%s 상태 fixture로 화면 전체가 정상 렌더링된다",
+    (stateName) => {
+      const fixture = ridingGuideStateFixtures[stateName];
+      render(
+        <RidingGuidePage
+          stationName="성수역 3번 출구"
+          onBack={jest.fn()}
+          candidate={fixture.candidate}
+          arrivalWeather={fixture.arrivalWeather}
+          isWeatherLoading={fixture.isWeatherLoading}
+          airQuality={fixture.airQuality}
+          isAirQualityLoading={fixture.isAirQualityLoading}
+        />
+      );
+
+      expect(screen.getByRole("heading", { name: "종합 라이딩 가이드" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "대여 예측 요약" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "주의사항" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "도착지 날씨" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "도착지 대기질" })).toBeInTheDocument();
+      expect(screen.getByLabelText("데이터 상태")).toBeInTheDocument();
+    }
+  );
+
+  test("empty fixture에서 날씨·대기질 카드가 안내 메시지를 보여도 다른 카드는 유지된다", () => {
+    const fixture = ridingGuideStateFixtures.empty;
+    render(
+      <RidingGuidePage
+        stationName="성수역 3번 출구"
+        onBack={jest.fn()}
+        candidate={fixture.candidate}
+        arrivalWeather={fixture.arrivalWeather}
+        isWeatherLoading={fixture.isWeatherLoading}
+        airQuality={fixture.airQuality}
+        isAirQualityLoading={fixture.isAirQualityLoading}
+      />
+    );
+
+    const weatherCard = screen.getByRole("heading", { name: "도착지 날씨" }).closest("section");
+    expect(within(weatherCard).getByText("도착 예정시간의 날씨 예보가 없습니다.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "종합 라이딩 가이드" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "대여 예측 요약" })).toBeInTheDocument();
+  });
+
+  test("error fixture에서 날씨·대기질 카드가 조회 불가 메시지를 보여도 다른 카드는 유지된다", () => {
+    const fixture = ridingGuideStateFixtures.error;
+    render(
+      <RidingGuidePage
+        stationName="성수역 3번 출구"
+        onBack={jest.fn()}
+        candidate={fixture.candidate}
+        arrivalWeather={fixture.arrivalWeather}
+        isWeatherLoading={fixture.isWeatherLoading}
+        airQuality={fixture.airQuality}
+        isAirQualityLoading={fixture.isAirQualityLoading}
+      />
+    );
+
+    const weatherCard = screen.getByRole("heading", { name: "도착지 날씨" }).closest("section");
+    expect(within(weatherCard).getByText("날씨 예보를 불러오지 못했습니다.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "종합 라이딩 가이드" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "주의사항" })).toBeInTheDocument();
+  });
+
+  test("stale fixture에서 날씨·대기질·재고 카드 모두 지연 안내를 표시한다", () => {
+    const fixture = ridingGuideStateFixtures.stale;
+    render(
+      <RidingGuidePage
+        stationName="성수역 3번 출구"
+        onBack={jest.fn()}
+        candidate={fixture.candidate}
+        arrivalWeather={fixture.arrivalWeather}
+        isWeatherLoading={fixture.isWeatherLoading}
+        airQuality={fixture.airQuality}
+        isAirQualityLoading={fixture.isAirQualityLoading}
+      />
+    );
+
+    expect(screen.getByText("날씨 발표가 지연되어 직전 발표 값을 표시합니다.")).toBeInTheDocument();
+    expect(screen.getByText("측정값 갱신이 지연되고 있어요.")).toBeInTheDocument();
+    expect(screen.getByText(/재고 정보가 지연되고 있어요/)).toBeInTheDocument();
+  });
+
+  test("loading fixture에서는 날씨·대기질 카드에 불러오는 중 안내가 표시된다", () => {
+    const fixture = ridingGuideStateFixtures.loading;
+    render(
+      <RidingGuidePage
+        stationName="성수역 3번 출구"
+        onBack={jest.fn()}
+        candidate={fixture.candidate}
+        arrivalWeather={fixture.arrivalWeather}
+        isWeatherLoading={fixture.isWeatherLoading}
+        airQuality={fixture.airQuality}
+        isAirQualityLoading={fixture.isAirQualityLoading}
+      />
+    );
+
+    expect(screen.getByText("도착지 날씨를 불러오는 중이에요.")).toBeInTheDocument();
+    expect(screen.getByText("대기질 정보를 불러오는 중이에요.")).toBeInTheDocument();
+  });
+
+  test("OverallGuideCard와 RidingGuideHeader의 복귀 콜백은 동일한 onBack을 각각 호출한다", () => {
+    const onBack = jest.fn();
+    render(<RidingGuidePage stationName="성수역 3번 출구" onBack={onBack} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "대여 예측으로 돌아가기" }));
+    fireEvent.click(screen.getByRole("button", { name: "경로 다시 보기" }));
+
+    expect(onBack).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("라이딩 가이드 카드 방어 렌더링 회귀 테스트", () => {
+  test("ArrivalWeatherCard는 weather prop이 없어도 크래시 없이 기본값으로 렌더링된다", () => {
+    render(<ArrivalWeatherCard weather={null} />);
+
+    expect(screen.getByRole("heading", { name: "도착지 날씨" })).toBeInTheDocument();
+    expect(screen.getByText("24°C")).toBeInTheDocument();
+  });
+
+  test("DataStatusFooter는 weather prop이 없어도 크래시 없이 기본값으로 렌더링된다", () => {
+    render(<DataStatusFooter weather={null} airQuality={null} />);
+
+    expect(screen.getByLabelText("데이터 상태")).toBeInTheDocument();
+    expect(screen.getByText("10:00")).toBeInTheDocument();
+  });
+
+  test("PredictionSummaryCard는 requiredBikeCount가 0이어도 대수를 포함한 문장을 표시한다", () => {
+    const candidate = {
+      requiredBikeCount: 0,
+      selectedProbability: 0.42,
+      availabilityLevel: "MEDIUM",
+      predictionStatus: "NORMAL",
+      currentInventory: { availableBikeCount: 3, inventoryStatus: "NORMAL" },
+    };
+    render(<PredictionSummaryCard candidate={candidate} />);
+
+    expect(screen.getByText(/0대 이상 빌릴 수 있을 확률이 42%/)).toBeInTheDocument();
   });
 });

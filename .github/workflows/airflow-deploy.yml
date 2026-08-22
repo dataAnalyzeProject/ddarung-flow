@@ -1,0 +1,303 @@
+name: Airflow OCI CD
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type DEPLOY_AIRFLOW to deploy Airflow to the non-production OCI host
+        required: true
+        type: string
+      commit_sha:
+        description: Full 40-character main commit SHA to deploy
+        required: true
+        type: string
+      pilot_confirmation:
+        description: >-
+          Leave empty for a normal manual-only deploy (schedule=None required).
+          Only for the DEC-014 24h CHG-092 pilot: type PILOT_DEC-014_2026-08-22
+          exactly to allow the single pre-approved pilot schedule.
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oci-airflow-deploy
+  cancel-in-progress: false
+
+jobs:
+  build-image:
+    name: build-and-push-airflow
+    if: inputs.confirmation == 'DEPLOY_AIRFLOW'
+    runs-on: ubuntu-latest
+    environment: oci-airflow
+    env:
+      DEPLOY_SHA: ${{ inputs.commit_sha }}
+      OCI_REGISTRY: ${{ vars.OCI_REGISTRY }}
+      OCI_NAMESPACE: ${{ vars.OCI_NAMESPACE }}
+      OCI_REPOSITORY: ${{ vars.OCI_REPOSITORY }}
+
+    steps:
+      - name: Check required image configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in OCI_REGISTRY OCI_NAMESPACE OCI_REPOSITORY; do
+            if [ -z "${!name:-}" ]; then
+              echo "Required Airflow image configuration is missing: $name" >&2
+              exit 1
+            fi
+          done
+          [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$OCI_REGISTRY" =~ ^[A-Za-z0-9.-]+$ ]]
+          [[ "$OCI_NAMESPACE" =~ ^[A-Za-z0-9_-]+$ ]]
+          [[ "$OCI_REPOSITORY" =~ ^[A-Za-z0-9._/-]+$ ]]
+
+      - name: Check out the approved commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+          fetch-depth: 0
+
+      - name: Verify commit belongs to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
+          git merge-base --is-ancestor "$DEPLOY_SHA" origin/main
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to OCIR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.OCI_REGISTRY }}
+          username: ${{ secrets.OCIR_USERNAME }}
+          password: ${{ secrets.OCIR_AUTH_TOKEN }}
+
+      - name: Build and push Airflow image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./infra/airflow/Dockerfile
+          build-args: |
+            AIRFLOW_VERSION=3.3.0
+          platforms: linux/arm64
+          push: true
+          tags: ${{ env.OCI_REGISTRY }}/${{ env.OCI_NAMESPACE }}/${{ env.OCI_REPOSITORY }}/airflow:${{ env.DEPLOY_SHA }}
+          cache-from: type=gha,scope=airflow
+          cache-to: type=gha,mode=max,scope=airflow
+
+  deploy:
+    name: deploy-oci-airflow
+    needs: build-image
+    if: inputs.confirmation == 'DEPLOY_AIRFLOW'
+    runs-on: ubuntu-latest
+    environment: oci-airflow
+    env:
+      DEPLOY_SHA: ${{ inputs.commit_sha }}
+      PILOT_CONFIRMATION: ${{ inputs.pilot_confirmation }}
+      OCI_REGISTRY: ${{ vars.OCI_REGISTRY }}
+      OCI_NAMESPACE: ${{ vars.OCI_NAMESPACE }}
+      OCI_REPOSITORY: ${{ vars.OCI_REPOSITORY }}
+      REMOTE_AIRFLOW_DIR: ${{ vars.REMOTE_AIRFLOW_DIR }}
+      DDARUNG_DATA_ROOT: ${{ vars.DDARUNG_DATA_ROOT }}
+      SSH_HOST: ${{ secrets.AIRFLOW_SSH_HOST }}
+      SSH_USER: ${{ secrets.AIRFLOW_SSH_USER }}
+
+    steps:
+      - name: Check required deployment configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in OCI_REGISTRY OCI_NAMESPACE OCI_REPOSITORY REMOTE_AIRFLOW_DIR DDARUNG_DATA_ROOT SSH_HOST SSH_USER; do
+            if [ -z "${!name:-}" ]; then
+              echo "Required Airflow deployment configuration is missing: $name" >&2
+              exit 1
+            fi
+          done
+          [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$REMOTE_AIRFLOW_DIR" =~ ^/[A-Za-z0-9._/-]+$ ]]
+          [[ "$DDARUNG_DATA_ROOT" =~ ^/[A-Za-z0-9._/-]+$ ]]
+          [[ "$SSH_HOST" =~ ^[A-Za-z0-9.-]+$ ]]
+          [[ "$SSH_USER" =~ ^[A-Za-z0-9._-]+$ ]]
+
+      - name: Check out the approved commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+          fetch-depth: 0
+
+      - name: Verify commit belongs to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
+          git merge-base --is-ancestor "$DEPLOY_SHA" origin/main
+
+      - name: Verify DAG schedule is manual-only or the exact approved DEC-014 pilot value
+        shell: bash
+        run: |
+          set -euo pipefail
+          DAG_FILE=pipeline/dags/bike_weather_ten_minute_collection_dag.py
+          if [ -z "$PILOT_CONFIRMATION" ]; then
+            grep -q "schedule=None" "$DAG_FILE"
+          elif [ "$PILOT_CONFIRMATION" = "PILOT_DEC-014_2026-08-22" ]; then
+            grep -q 'schedule="\*/10 \* \* \* \*"' "$DAG_FILE"
+            grep -q 'PILOT_SCHEDULE_DECISION = "DEC-014"' "$DAG_FILE"
+            grep -q "PILOT_SCHEDULE_EXPIRES_AT" "$DAG_FILE"
+          else
+            echo "Unrecognized pilot_confirmation value; refusing to deploy." >&2
+            exit 1
+          fi
+
+      - name: Configure verified SSH access
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.AIRFLOW_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.AIRFLOW_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_airflow"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_airflow" "$HOME/.ssh/known_hosts"
+          ssh-keygen -y -f "$HOME/.ssh/id_airflow" >/dev/null
+          ssh-keygen -F "$SSH_HOST" -f "$HOME/.ssh/known_hosts" >/dev/null
+
+      - name: Prepare immutable release files
+        shell: bash
+        env:
+          AIRFLOW_JWT_SECRET: ${{ secrets.AIRFLOW_JWT_SECRET }}
+          SEOUL_OPEN_API_KEY: ${{ secrets.SEOUL_OPEN_API_KEY }}
+          KMA_SERVICE_KEY: ${{ secrets.KMA_SERVICE_KEY }}
+          OCI_BUCKET_NAME: ${{ vars.OCI_BUCKET_NAME }}
+        run: |
+          set -euo pipefail
+          for name in AIRFLOW_JWT_SECRET SEOUL_OPEN_API_KEY KMA_SERVICE_KEY OCI_BUCKET_NAME; do
+            if [ -z "${!name:-}" ]; then
+              echo "Required Airflow secret/config is missing: $name" >&2
+              exit 1
+            fi
+          done
+
+          image_base="$OCI_REGISTRY/$OCI_NAMESPACE/$OCI_REPOSITORY"
+          {
+            printf 'DDARUNG_AIRFLOW_IMAGE=%s/airflow:%s\n' "$image_base" "$DEPLOY_SHA"
+            printf 'DEPLOYED_COMMIT=%s\n' "$DEPLOY_SHA"
+            printf 'DDARUNG_DATA_ROOT=%s\n' "$DDARUNG_DATA_ROOT"
+            printf 'BIKE_INVENTORY_SOURCE=api\n'
+            printf 'WEATHER_SOURCE=api\n'
+            printf 'RAW_STORAGE_MODE=oci\n'
+            printf 'OCI_AUTH_MODE=instance_principal\n'
+            printf 'OCI_BUCKET_NAME=%s\n' "$OCI_BUCKET_NAME"
+          } > release.candidate.env
+          umask 077
+          {
+            printf 'AIRFLOW_JWT_SECRET=%s\n' "$AIRFLOW_JWT_SECRET"
+            printf 'SEOUL_OPEN_API_KEY=%s\n' "$SEOUL_OPEN_API_KEY"
+            printf 'KMA_SERVICE_KEY=%s\n' "$KMA_SERVICE_KEY"
+          } > secrets.candidate.env
+          chmod 600 secrets.candidate.env
+
+      - name: Sync DAG/pipeline source and upload candidate release
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="$SSH_USER@$SSH_HOST"
+          ssh -i "$HOME/.ssh/id_airflow" -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" \
+            "REMOTE_AIRFLOW_DIR='$REMOTE_AIRFLOW_DIR' DEPLOY_SHA='$DEPLOY_SHA' bash -s" <<'REMOTE'
+          set -euo pipefail
+          if [ ! -d "$REMOTE_AIRFLOW_DIR/.git" ]; then
+            git clone --no-checkout https://github.com/dataAnalyzeProject/ddarung-flow.git "$REMOTE_AIRFLOW_DIR"
+          fi
+          cd "$REMOTE_AIRFLOW_DIR"
+          git fetch origin "$DEPLOY_SHA"
+          git checkout --detach "$DEPLOY_SHA"
+          test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
+          REMOTE
+          scp -i "$HOME/.ssh/id_airflow" -o BatchMode=yes -o StrictHostKeyChecking=yes release.candidate.env "$target:$REMOTE_AIRFLOW_DIR/infra/airflow/release.candidate.env"
+          scp -i "$HOME/.ssh/id_airflow" -o BatchMode=yes -o StrictHostKeyChecking=yes secrets.candidate.env "$target:$REMOTE_AIRFLOW_DIR/infra/airflow/secrets.candidate.env"
+
+      - name: Deploy and automatically roll back on failed health check
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="$SSH_USER@$SSH_HOST"
+          ssh -i "$HOME/.ssh/id_airflow" -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" \
+            "REMOTE_AIRFLOW_DIR='$REMOTE_AIRFLOW_DIR' PILOT_CONFIRMATION='$PILOT_CONFIRMATION' bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd "$REMOTE_AIRFLOW_DIR/infra/airflow"
+          test -f .env
+          chmod 600 .env release.candidate.env secrets.candidate.env
+
+          rollback() {
+            echo "Airflow deployment failed; restoring the previous release." >&2
+            if [ -f release.previous.env ] && [ -f secrets.previous.env ]; then
+              cp release.previous.env release.env
+              cp secrets.previous.env secrets.env
+              chmod 600 release.env secrets.env
+              docker compose --env-file .env --env-file secrets.env --env-file release.env -f docker-compose.yaml -f docker-compose.oci.yaml pull airflow-scheduler airflow-dag-processor airflow-api-server
+              docker compose --env-file .env --env-file secrets.env --env-file release.env -f docker-compose.yaml -f docker-compose.oci.yaml up -d --no-build --remove-orphans postgres airflow-scheduler airflow-dag-processor airflow-api-server
+            else
+              echo "No previous release exists for automatic rollback." >&2
+            fi
+          }
+          trap rollback ERR
+
+          if [ -f release.env ]; then cp release.env release.previous.env; fi
+          if [ -f secrets.env ]; then cp secrets.env secrets.previous.env; fi
+          mv release.candidate.env release.env
+          mv secrets.candidate.env secrets.env
+          chmod 600 release.env secrets.env
+
+          compose_files=(-f docker-compose.yaml -f docker-compose.oci.yaml)
+          docker compose --env-file .env --env-file secrets.env --env-file release.env "${compose_files[@]}" config --quiet
+          docker compose --env-file .env --env-file secrets.env --env-file release.env "${compose_files[@]}" pull airflow-scheduler airflow-dag-processor airflow-api-server
+          docker compose --env-file .env --env-file secrets.env --env-file release.env "${compose_files[@]}" run --rm -T airflow-init < /dev/null
+          docker compose --env-file .env --env-file secrets.env --env-file release.env "${compose_files[@]}" up -d --no-build --remove-orphans postgres airflow-scheduler airflow-dag-processor airflow-api-server
+
+          airflow_healthy=false
+          for attempt in $(seq 1 18); do
+            health_code=$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8280/api/v2/monitor/health || true)
+            if [ "$health_code" = 200 ]; then
+              airflow_healthy=true
+              break
+            fi
+            sleep 5
+          done
+          if [ "$airflow_healthy" != true ]; then
+            echo "Airflow api-server health check did not pass before timeout." >&2
+            false
+          fi
+
+          # cwd here is $REMOTE_AIRFLOW_DIR/infra/airflow, not the repo root -
+          # the DAG file lives two levels up.
+          deployed_dag_file="../../pipeline/dags/bike_weather_ten_minute_collection_dag.py"
+          test -f "$deployed_dag_file"
+
+          if [ -z "$PILOT_CONFIRMATION" ]; then
+            dag_schedule=$(grep -o "schedule=None" "$deployed_dag_file" || true)
+            if [ "$dag_schedule" != "schedule=None" ]; then
+              echo "DAG schedule changed from None on the deployed source; refusing to leave this running." >&2
+              false
+            fi
+            schedule_summary="schedule=None confirmed"
+          else
+            dag_schedule=$(grep -o 'schedule="\*/10 \* \* \* \*"' "$deployed_dag_file" || true)
+            if [ -z "$dag_schedule" ]; then
+              echo "Pilot confirmation given but the approved pilot schedule literal is not on the deployed source; refusing to leave this running." >&2
+              false
+            fi
+            schedule_summary="DEC-014 pilot schedule (*/10 * * * *) confirmed, must be reverted to schedule=None by PILOT_SCHEDULE_EXPIRES_AT"
+          fi
+
+          trap - ERR
+          docker compose --env-file .env --env-file secrets.env --env-file release.env "${compose_files[@]}" ps
+          echo "Airflow OCI deploy passed: health=200, $schedule_summary."
+          REMOTE

@@ -23,6 +23,7 @@ describe("adaptCandidateResponse", () => {
     expiresAt: "2026-08-15T11:00:00+09:00",
     predictionStatus: "NORMAL",
     modelVersion: "availability-v1",
+    requiredBikeCount: 2,
   };
 
   it("maps a backend candidate DTO into the PredictionResults candidate shape", () => {
@@ -43,6 +44,7 @@ describe("adaptCandidateResponse", () => {
       inventoryStatus: "NORMAL",
     });
     expect(candidate.predictionStatus).toBe("NORMAL");
+    expect(candidate.requiredBikeCount).toBe(2);
   });
 
   it("handles TOO_SOON candidates with null probability/probabilities", () => {
