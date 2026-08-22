@@ -26,6 +26,8 @@ import java.time.format.DateTimeFormatter;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.hamcrest.Matchers.containsString;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -144,5 +146,16 @@ class AirQualityControllerTest {
                 .andExpect(jsonPath("$.pm10.grade").value("GOOD"))
                 .andExpect(jsonPath("$.khai.value").value(55.0))
                 .andExpect(jsonPath("$.khai.grade").value("MODERATE"));
+    }
+
+    @Test
+    @DisplayName("OpenAPI는 대기질 endpoint의 세션 인증과 200·401·404 응답을 문서화한다")
+    void openApiDocumentsAirQualityAuthenticationAndResponses() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith("application/json"))
+                .andExpect(content().string(containsString("sessionCookie")))
+                .andExpect(content().string(containsString("\"401\"")))
+                .andExpect(content().string(containsString("\"404\"")));
     }
 }
