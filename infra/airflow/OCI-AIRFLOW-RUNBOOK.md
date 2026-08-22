@@ -83,6 +83,20 @@ GitHub 저장소 → Actions → `Airflow OCI CD` → `Run workflow`에서 다�
 
 > **알려진 문제(2026-08-22 실제 발생·수정됨)**: SSH heredoc으로 여러 명령을 한 번에 보내는 스크립트 중간에 `docker compose run`(`-T` 없이)이 있으면, 그 명령이 남은 heredoc의 stdin을 통째로 소비해버려 **그 뒤 명령이 하나도 실행되지 않고도 스크립트가 조용히 성공 종료**됩니다. 실제로 이 배포에서 `airflow-init` 실행 뒤 `up -d`·health check·schedule 재확인이 전부 건너뛰어졌는데 워크플로우는 SUCCESS로 표시됐습니다. 지금은 `run --rm -T airflow-init < /dev/null`로 고쳐져 있습니다 — 이 파일 안에 `docker compose ... run`이 새로 추가될 일이 있으면 항상 `-T`와 `< /dev/null`을 같이 씁니다.
 
+## DEC-014 24시간 재현성 파일럿 배포 (2026-08-22)
+
+CHG-092가 요구하는 "재현 가능한 운영 증거"(지연 cycle 스킵, 재시도, catchup 비활성이 실제 스케줄러에서 동작하는지)는 실제 스케줄이 켜져 있어야만 관찰 가능하다. 조장이 이 순환을 풀기 위해 기존 stage-1 DAG(저장 없음) 그대로 24시간만 스케줄을 켜는 제한 파일럿을 승인했다(DEC-014).
+
+기본 배포와 다른 점은 workflow_dispatch 입력 하나뿐이다.
+
+- `confirmation`: `DEPLOY_AIRFLOW`
+- `commit_sha`: 이 파일럿 커밋의 40자리 SHA
+- `pilot_confirmation`: `PILOT_DEC-014_2026-08-22` (정확히 이 문자열이어야 통과한다. 비워두면 평소처럼 `schedule=None`만 허용되고 이 파일럿 배포는 거부된다)
+
+배포 전·후 검증은 이 값이 채워졌을 때만 예외적으로 `schedule="*/10 * * * *"`(및 `PILOT_SCHEDULE_DECISION`/`PILOT_SCHEDULE_EXPIRES_AT` 상수 존재)를 요구하고, 그 외 어떤 cron 값도 거부한다. 다른 값을 몰래 배포할 수 없다.
+
+**되돌리기(필수, 2026-08-23T07:20 KST 이후)**: schedule을 다시 `None`으로 되돌리는 별도 PR을 만들고, `pilot_confirmation`을 비운 채로 workflow_dispatch를 재실행한다. 이 파일이 파일럿 상태로 남아 있는 것 자체는 승인이 아니다.
+
 ## 배포 뒤 확인 (선택)
 
 ```bash
