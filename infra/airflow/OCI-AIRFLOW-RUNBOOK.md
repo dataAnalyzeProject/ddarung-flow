@@ -81,6 +81,8 @@ GitHub 저장소 → Actions → `Airflow OCI CD` → `Run workflow`에서 다�
 8. 배포 뒤 DAG가 여전히 `schedule=None`인지 재확인 — 아니면 즉시 실패 처리
 9. 6~8 중 하나라도 실패하면 직전 release로 **자동 롤백**
 
+> **알려진 문제(2026-08-22 실제 발생·수정됨)**: SSH heredoc으로 여러 명령을 한 번에 보내는 스크립트 중간에 `docker compose run`(`-T` 없이)이 있으면, 그 명령이 남은 heredoc의 stdin을 통째로 소비해버려 **그 뒤 명령이 하나도 실행되지 않고도 스크립트가 조용히 성공 종료**됩니다. 실제로 이 배포에서 `airflow-init` 실행 뒤 `up -d`·health check·schedule 재확인이 전부 건너뛰어졌는데 워크플로우는 SUCCESS로 표시됐습니다. 지금은 `run --rm -T airflow-init < /dev/null`로 고쳐져 있습니다 — 이 파일 안에 `docker compose ... run`이 새로 추가될 일이 있으면 항상 `-T`와 `< /dev/null`을 같이 씁니다.
+
 ## 배포 뒤 확인 (선택)
 
 ```bash

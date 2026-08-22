@@ -240,7 +240,7 @@ jobs:
           compose_files=(-f docker-compose.yaml -f docker-compose.oci.yaml)
           docker compose --env-file .env --env-file secrets.env --env-file release.env "${compose_files[@]}" config --quiet
           docker compose --env-file .env --env-file secrets.env --env-file release.env "${compose_files[@]}" pull airflow-scheduler airflow-dag-processor airflow-api-server
-          docker compose --env-file .env --env-file secrets.env --env-file release.env "${compose_files[@]}" run --rm airflow-init
+          docker compose --env-file .env --env-file secrets.env --env-file release.env "${compose_files[@]}" run --rm -T airflow-init < /dev/null
           docker compose --env-file .env --env-file secrets.env --env-file release.env "${compose_files[@]}" up -d --no-build --remove-orphans postgres airflow-scheduler airflow-dag-processor airflow-api-server
 
           airflow_healthy=false
