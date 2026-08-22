@@ -66,6 +66,32 @@ class AirQualityMapperTest {
         }
         """;
 
+    private static final String SINGLE_MEASUREMENT_WITHOUT_STATION_NAME_FIXTURE = """
+        {
+          "response": {
+            "header": {
+              "resultCode": "00",
+              "resultMsg": "NORMAL_SERVICE"
+            },
+            "body": {
+              "items": [
+                {
+                  "dataTime": "2026-08-14 11:00",
+                  "pm10Value": "35",
+                  "pm25Value": "18",
+                  "o3Value": "0.042",
+                  "khaiValue": "62",
+                  "pm10Grade": "1",
+                  "pm25Grade": "2",
+                  "o3Grade": "2",
+                  "khaiGrade": "3"
+                }
+              ]
+            }
+          }
+        }
+        """;
+
     private static final String THREE_POLLUTANTS_HYPHEN_AND_NULL_FIXTURE = """
         {
           "response": {
@@ -194,6 +220,28 @@ class AirQualityMapperTest {
         assertEquals(62.0, result.khai().value());
         assertEquals(AirQualityGrade.BAD, result.khai().grade());
         assertEquals("3", result.khai().sourceGradeCode());
+    }
+
+    @Test
+    @DisplayName("측정소명 없는 단일 AirKorea 측정값 응답은 요청한 측정소의 값으로 정규화한다")
+    void testSingleMeasurementWithoutStationNameUsesRequestedStation() {
+        OffsetDateTime targetTime = OffsetDateTime.of(2026, 8, 14, 11, 30, 0, 0, KST);
+
+        AirQualityResult result = AirQualityMapper.mapFromJson(
+                "성동구",
+                targetTime,
+                null,
+                SINGLE_MEASUREMENT_WITHOUT_STATION_NAME_FIXTURE,
+                null,
+                false
+        );
+
+        assertEquals(AirQualityStatus.NORMAL, result.status());
+        assertEquals("성동구", result.stationName());
+        assertEquals(35.0, result.pm10().value());
+        assertEquals(18.0, result.pm25().value());
+        assertEquals(0.042, result.o3().value());
+        assertEquals(62.0, result.khai().value());
     }
 
     @Test
