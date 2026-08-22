@@ -7,7 +7,7 @@ import {
   airQualityMissingFixture,
   airQualityNormalFixture,
   airQualityUnavailableFixture,
-} from "./airQualityMock";
+} from "./airQualityMock.js";
 
 export const successCandidateFixture = {
   stationId: "ST-3",
