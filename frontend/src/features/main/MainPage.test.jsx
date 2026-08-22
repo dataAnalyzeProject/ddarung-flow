@@ -131,7 +131,7 @@ describe("시안 6 메인 로그인 통합", () => {
 
     fireEvent.change(screen.getByPlaceholderText("출발지를 입력하세요"), { target: { value: "서울숲" } });
     fireEvent.change(screen.getByPlaceholderText("목적지를 입력하세요"), { target: { value: "성수역" } });
-    fireEvent.change(screen.getByRole("spinbutton", { name: "예상시간" }), { target: { value: "25" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "필요 자전거 수" }), { target: { value: "3" } });
     fireEvent.click(screen.getByRole("button", { name: "대중교통" }));
     fireEvent.click(screen.getByRole("button", { name: "대여 가능성 예측" }));
 
@@ -140,8 +140,8 @@ describe("시안 6 메인 로그인 통합", () => {
       origin: "서울숲",
       destination: "성수역",
       travelMode: "대중교통",
-      directMinutes: 25,
-      requiredBikeCount: 1,
+      directMinutes: 15,
+      requiredBikeCount: 3,
     });
 
     expect(screen.getByRole("link", { name: "로그인하기" })).toHaveAttribute("href", "/login");
@@ -165,9 +165,35 @@ describe("시안 6 메인 로그인 통합", () => {
     await screen.findByDisplayValue("서울역");
     expect(screen.getByDisplayValue("서울역")).toBeInTheDocument();
     expect(screen.getByDisplayValue("광화문")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("20")).toBeInTheDocument();
+    expect(screen.queryByLabelText("계산된 예상시간")).not.toBeInTheDocument();
     expect(screen.getByText(/따릉이 사용자 · kakao/)).toBeInTheDocument();
     await waitFor(() => expect(window.location.search).toBe(""));
+  });
+
+  test("OAuth 성공 후에는 저장한 장소 좌표로 바로 예측을 요청한다", async () => {
+    savePendingPrediction(
+      { origin: "천마산역", destination: "천호역", travelMode: "대중교통", directMinutes: 45, requiredBikeCount: 1 },
+      {
+        origin: { name: "천마산역", latitude: 37.658, longitude: 127.285 },
+        destination: { name: "천호역", latitude: 37.539, longitude: 127.124 },
+      }
+    );
+    window.history.replaceState({}, "", "/?login=success");
+    getCurrentUser.mockResolvedValue({
+      authenticated: true,
+      user: { userId: "user-1", displayName: "따릉이 사용자", provider: "kakao" },
+    });
+    fetchRouteCandidates.mockResolvedValue([]);
+
+    render(<MainPage />);
+
+    await screen.findByDisplayValue("천마산역");
+    fireEvent.click(screen.getByRole("button", { name: "대여 가능성 예측" }));
+    await waitFor(() => expect(fetchRouteCandidates).toHaveBeenCalledWith(expect.objectContaining({
+      originLatitude: 37.658,
+      destinationLongitude: 127.124,
+      travelMode: "PUBLIC_TRANSIT",
+    })));
   });
 
   test("로그인 사용자가 실제 장소를 선택하지 않고 예측하면 알림 패널을 표시하지 않는다", async () => {

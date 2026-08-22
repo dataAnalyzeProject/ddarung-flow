@@ -45,7 +45,7 @@ function inventoryReferenceTime(candidates) {
   return collectedTimes.length ? collectedTimes.sort()[0] : null;
 }
 
-export default function StationRecommendationPanel({ candidates, selectedStationId, onSelect, onViewGuide }) {
+export default function StationRecommendationPanel({ candidates, selectedStationId, onSelect, onViewGuide, routeDurationMinutes }) {
   const [sortBy, setSortBy] = useState("probability");
   const [visibleCount, setVisibleCount] = useState(VISIBLE_STEP);
   const sortedCandidates = useMemo(() => sortCandidates(candidates, sortBy), [candidates, sortBy]);
@@ -62,6 +62,7 @@ export default function StationRecommendationPanel({ candidates, selectedStation
       <header className="main-section-head">
         <h2>추천 대여소</h2>
         <span>{referenceTime ? `현재 재고 기준 ${formatStationTime(referenceTime)}` : "재고 기준시각 없음"}</span>
+        <span className="main-station-route-time" aria-label="계산된 예상시간">{routeDurationMinutes ? `예상시간 약 ${routeDurationMinutes}분` : "예상시간 확인 전"}</span>
         <select aria-label="대여소 정렬" value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
           {SORT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
         </select>
