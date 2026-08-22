@@ -41,32 +41,34 @@ function WeatherUnavailableNotice({ weather }) {
 }
 
 export default function ArrivalWeatherCard({ weather, isLoading = false }) {
+  const resolvedWeather = weather || weatherFixtureFallback;
+
   return (
     <section className="guide-card guide-weather" aria-labelledby="arrival-weather-title">
       <h2 id="arrival-weather-title">도착지 날씨</h2>
       {isLoading ? (
         <WeatherLoading />
-      ) : weather.status === "MISSING" || weather.status === "UNAVAILABLE" ? (
-        <WeatherUnavailableNotice weather={weather} />
+      ) : resolvedWeather.status === "MISSING" || resolvedWeather.status === "UNAVAILABLE" ? (
+        <WeatherUnavailableNotice weather={resolvedWeather} />
       ) : (
         <div className="guide-weather-body">
           <div className="guide-weather-summary">
-            <div className="guide-sun" aria-label={weatherConditionText(weather)}><span /></div>
+            <div className="guide-sun" aria-label={weatherConditionText(resolvedWeather)}><span /></div>
             <div className="guide-temperature">
-              <strong>{weather.temperatureC === null || weather.temperatureC === undefined ? "-" : `${weather.temperatureC}°C`}</strong>
-              <span>{weatherConditionText(weather)}</span>
+              <strong>{resolvedWeather.temperatureC === null || resolvedWeather.temperatureC === undefined ? "-" : `${resolvedWeather.temperatureC}°C`}</strong>
+              <span>{weatherConditionText(resolvedWeather)}</span>
             </div>
           </div>
           <dl>
-            <div><dt><GuideIcon name="rain" />강수확률</dt><dd>{weather.precipitationProbabilityPercent === null || weather.precipitationProbabilityPercent === undefined ? "-" : `${weather.precipitationProbabilityPercent}%`}</dd></div>
-            <div><dt><GuideIcon name="umbrella" />강수형태</dt><dd>{PRECIP_TEXT[weather.precipitationType] || "강수 없음"}</dd></div>
-            <div><dt><GuideIcon name="air" />하늘상태</dt><dd>{SKY_TEXT[weather.skyStatus] || "-"}</dd></div>
-            <div><dt><GuideIcon name="warning" />강수 가능성 안내</dt><dd>{weather.rainGuidance ? "있음" : "없음"}</dd></div>
+            <div><dt><GuideIcon name="rain" />강수확률</dt><dd>{resolvedWeather.precipitationProbabilityPercent === null || resolvedWeather.precipitationProbabilityPercent === undefined ? "-" : `${resolvedWeather.precipitationProbabilityPercent}%`}</dd></div>
+            <div><dt><GuideIcon name="umbrella" />강수형태</dt><dd>{PRECIP_TEXT[resolvedWeather.precipitationType] || "강수 없음"}</dd></div>
+            <div><dt><GuideIcon name="air" />하늘상태</dt><dd>{SKY_TEXT[resolvedWeather.skyStatus] || "-"}</dd></div>
+            <div><dt><GuideIcon name="warning" />강수 가능성 안내</dt><dd>{resolvedWeather.rainGuidance ? "있음" : "없음"}</dd></div>
           </dl>
-          {weather.status === "DELAYED" && (
+          {resolvedWeather.status === "DELAYED" && (
             <p className="guide-air-delayed-note" role="status">
               <GuideIcon name="info" />
-              {weather.message || "날씨 발표가 지연되어 직전 발표 값을 표시합니다."}
+              {resolvedWeather.message || "날씨 발표가 지연되어 직전 발표 값을 표시합니다."}
             </p>
           )}
         </div>
