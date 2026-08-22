@@ -276,15 +276,20 @@ jobs:
             false
           fi
 
+          # cwd here is $REMOTE_AIRFLOW_DIR/infra/airflow, not the repo root -
+          # the DAG file lives two levels up.
+          deployed_dag_file="../../pipeline/dags/bike_weather_ten_minute_collection_dag.py"
+          test -f "$deployed_dag_file"
+
           if [ -z "$PILOT_CONFIRMATION" ]; then
-            dag_schedule=$(grep -o "schedule=None" pipeline/dags/bike_weather_ten_minute_collection_dag.py || true)
+            dag_schedule=$(grep -o "schedule=None" "$deployed_dag_file" || true)
             if [ "$dag_schedule" != "schedule=None" ]; then
               echo "DAG schedule changed from None on the deployed source; refusing to leave this running." >&2
               false
             fi
             schedule_summary="schedule=None confirmed"
           else
-            dag_schedule=$(grep -o 'schedule="\*/10 \* \* \* \*"' pipeline/dags/bike_weather_ten_minute_collection_dag.py || true)
+            dag_schedule=$(grep -o 'schedule="\*/10 \* \* \* \*"' "$deployed_dag_file" || true)
             if [ -z "$dag_schedule" ]; then
               echo "Pilot confirmation given but the approved pilot schedule literal is not on the deployed source; refusing to leave this running." >&2
               false
