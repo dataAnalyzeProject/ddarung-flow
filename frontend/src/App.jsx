@@ -6,6 +6,7 @@ import AlertsPage from './features/alerts/AlertsPage';
 import MyPage from './features/mypage/MyPage';
 import LoginPage from './features/login/LoginPage';
 import IntroPage from './features/intro/IntroPage';
+import AdminAccessGate from './features/admin/AdminAccessGate';
 import { hasSeenIntro } from './features/intro/introStorage';
 
 const HASH_ROUTES = ['qna', 'archive', 'alerts', 'mypage'];
@@ -29,6 +30,10 @@ function App() {
   }, []);
 
   const navigate = (nextRoute) => {
+    if (nextRoute === 'admin') {
+      window.location.assign('/admin');
+      return;
+    }
     const nextHash = HASH_ROUTES.includes(nextRoute) ? `#${nextRoute}` : '';
     window.history.pushState({}, '', `${window.location.pathname}${window.location.search}${nextHash}`);
     setRoute(nextRoute);
@@ -36,6 +41,10 @@ function App() {
 
   if (isLoginPath) {
     return <LoginPage />;
+  }
+
+  if (window.location.pathname === '/admin') {
+    return <AdminAccessGate />;
   }
 
   if (!introComplete) {
