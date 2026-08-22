@@ -6,7 +6,7 @@ AIRFLOW-OPS-3.2는 승인된 `main`의 Airflow(postgres, scheduler, dag-processo
 
 - 담당자: 김선호
 - 비용: OCI Console에서 `Always Free-eligible` 또는 예상 청구액 0원 확인 후에만 진행
-- 노출: Airflow UI/API(`8080`)는 서버 loopback(`127.0.0.1`)에만 bind. 신규 public ingress·nginx route·NSG 규칙 없음. 접속은 SSH 터널로만.
+- 노출: Airflow UI/API(host `8280` → 컨테이너 내부 `8080`)는 서버 loopback(`127.0.0.1`)에만 bind. 신규 public ingress·nginx route·NSG 규칙 없음. 접속은 SSH 터널로만. host `8080`은 기존 `crawling-backend`가 이미 쓰고 있어 재사용하지 않는다(2026-08-21 `docker ps`로 실측 확인).
 - secret: `AIRFLOW_JWT_SECRET`, `SEOUL_OPEN_API_KEY`, `KMA_SERVICE_KEY`, SSH 키는 GitHub `oci-airflow` **Environment**의 Secrets에만 존재. Git·Notion·PR·채팅에 넣지 않음. `staging`(`oci-staging`)과 별도 Environment로 분리한다 — 나중에 승인 게이트를 Airflow 쪽에만 걸 수 있게 하기 위함.
 - 트리거: `workflow_dispatch` 수동만. `staging`처럼 main 머지마다 자동 재배포하지 않는다 — CHG-092 미승인 단계에서 불필요한 재배포를 만들지 않기 위함.
 - schedule: 배포 전후 모두 DAG는 `schedule=None`(수동 실행 전용)을 유지. 워크플로우가 배포 직전·직후 모두 `grep`으로 강제 확인하고, 바뀐 게 감지되면 배포를 실패시킨다. 이 값을 바꾸는 건 `CHG-092` 승인 뒤 별도 PR로만 한다.
@@ -16,8 +16,8 @@ AIRFLOW-OPS-3.2는 승인된 `main`의 Airflow(postgres, scheduler, dag-processo
 
 1. 새 Compute를 생성하거나 기존 shape을 변경하지 않습니다.
 2. 기존 `crawling_server`(2 CPU, 11 GiB RAM) 위 `app`(staging)과 원래 크롤링 컨테이너가 모두 healthy인지 확인합니다.
-3. Airflow는 host의 `8080`을 씁니다. 배포 직전 `sudo ss -tlnp | grep 8080`으로 비어 있는지 확인합니다.
-4. 배포 직전 root disk 가용 공간이 8 GiB 미만이면 중단합니다.
+3. Airflow는 host의 `8280`을 씁니다(`8080`은 기존 `crawling-backend`가 사용 중이라 재사용하지 않음). 배포 직전 `sudo ss -tlnp | grep 8280`으로 비어 있는지 확인합니다.
+4. 배포 직전 root disk 가용 공간이 8 GiB 미만이면 중단합니다. (2026-08-21 실측: 45G 중 9.1G 가용, 80% 사용 — 여유가 크지 않으니 배포 직전 반드시 재확인)
 
 ## 체크포인트 B — 서버 준비 (최초 1회, 수동)
 
@@ -26,7 +26,7 @@ docker version
 docker compose version
 git --version
 df -h /
-sudo ss -tlnp | grep 8080 || echo "8080 free"
+sudo ss -tlnp | grep 8280 || echo "8280 free"
 mkdir -p /home/ubuntu/ddarung-flow-airflow-data/platform/raw
 chmod 700 /home/ubuntu/ddarung-flow-airflow-data
 ```
@@ -34,13 +34,13 @@ chmod 700 /home/ubuntu/ddarung-flow-airflow-data
 `/home/ubuntu/ddarung-flow-airflow`는 워크플로우가 최초 배포 때 자동으로 `git clone`합니다. 그 안의 `infra/airflow/.env`는 **최초 1회만 서버에서 직접** 만들고 `chmod 600`을 적용합니다(이후 배포는 이 파일을 건드리지 않습니다 — 시크릿이 아닌 서버 고정 설정만 담습니다).
 
 ```dotenv
-AIRFLOW_UID=1000
+AIRFLOW_UID=1001
 OCI_CONFIG_PROFILE=DDARUNG_AIRFLOW
 KMA_NX=60
 KMA_NY=127
 ```
 
-`AIRFLOW_UID`는 서버에서 `id -u`로 확인한 실제 값을 씁니다(보통 ubuntu 계정은 `1000`). `OCI_AUTH_MODE`, `OCI_BUCKET_NAME`, `RAW_STORAGE_MODE`, `BIKE_INVENTORY_SOURCE`, `WEATHER_SOURCE`, `AIRFLOW_JWT_SECRET`, `SEOUL_OPEN_API_KEY`, `KMA_SERVICE_KEY`는 **매 배포 때 워크플로우가 `release.env`/`secrets.env`로 전달**하므로 이 `.env`에는 넣지 않습니다.
+`AIRFLOW_UID`는 서버에서 `id -u`로 확인한 실제 값을 씁니다(2026-08-21 실측: `ubuntu` 계정 UID는 `1001`, 흔한 기본값 `1000`이 아니었음 — 서버마다 다를 수 있으니 매번 직접 확인). `OCI_AUTH_MODE`, `OCI_BUCKET_NAME`, `RAW_STORAGE_MODE`, `BIKE_INVENTORY_SOURCE`, `WEATHER_SOURCE`, `AIRFLOW_JWT_SECRET`, `SEOUL_OPEN_API_KEY`, `KMA_SERVICE_KEY`는 **매 배포 때 워크플로우가 `release.env`/`secrets.env`로 전달**하므로 이 `.env`에는 넣지 않습니다.
 
 ## 체크포인트 C — GitHub Environment 설정 (최초 1회)
 
@@ -77,15 +77,15 @@ GitHub 저장소 → Actions → `Airflow OCI CD` → `Run workflow`에서 다�
 4. 서버에 승인 커밋을 `git clone`(최초 1회) 또는 `git fetch`+`checkout --detach` — DAG/pipeline 코드는 이미지가 아니라 volume mount이므로 소스 자체가 서버에 있어야 합니다
 5. 서버의 기존 `.env` 존재·권한 확인, 새 `release.env`/`secrets.env` 전달(비밀값이 아닌 서버 `.env`는 최초 1회 설정 그대로 유지)
 6. `docker compose config` 검증 → `pull` → `airflow-init` 1회 실행(DB migrate) → `postgres`/`scheduler`/`dag-processor`/`api-server` 기동
-7. server-local `http://127.0.0.1:8080/api/v2/monitor/health` 확인
+7. server-local `http://127.0.0.1:8280/api/v2/monitor/health` 확인
 8. 배포 뒤 DAG가 여전히 `schedule=None`인지 재확인 — 아니면 즉시 실패 처리
 9. 6~8 중 하나라도 실패하면 직전 release로 **자동 롤백**
 
 ## 배포 뒤 확인 (선택)
 
 ```bash
-ssh -i <key> -L 8080:127.0.0.1:8080 <user>@<host>
-# 로컬 브라우저에서 http://127.0.0.1:8080
+ssh -i <key> -L 8280:127.0.0.1:8280 <user>@<host>
+# 로컬 브라우저에서 http://127.0.0.1:8280
 ```
 
 ```bash
