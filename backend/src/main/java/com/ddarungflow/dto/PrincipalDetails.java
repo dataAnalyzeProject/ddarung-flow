@@ -52,7 +52,7 @@ public class PrincipalDetails implements UserDetails, OAuth2User {
     }
 
     public com.ddarungflow.entity.UserRole getEffectiveRole() {
-        return users.getRole().effectiveRole();
+        return users.getRole();
     }
 
     @Override

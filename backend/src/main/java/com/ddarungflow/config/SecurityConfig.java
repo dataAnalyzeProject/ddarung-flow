@@ -89,9 +89,7 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.ignoringRequestMatchers("/api/v1/routes/estimate"))
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/v1/admin/**").hasAnyRole(
-                                "ADMIN_READER", "ADMIN_OPERATOR", "MODEL_APPROVER", "SUPER_ADMIN"
-                        )
+                        .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         .requestMatchers(
                                 "/",
                                 "/auth/**",

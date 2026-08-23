@@ -23,7 +23,8 @@ test.each([
   expect(screen.queryByText("운영 현황")).not.toBeInTheDocument();
 });
 
-test.each(["ADMIN_READER", "ADMIN_OPERATOR", "MODEL_APPROVER", "SUPER_ADMIN"])("renders the fixture only for %s", async (role) => {
+test("renders the fixture only for ADMIN", async () => {
+  const role = "ADMIN";
   getCurrentUser.mockResolvedValue({ authenticated: true, user: { role } });
   render(<AdminAccessGate />);
   expect(await screen.findByRole("heading", { name: "운영 현황" })).toBeInTheDocument();

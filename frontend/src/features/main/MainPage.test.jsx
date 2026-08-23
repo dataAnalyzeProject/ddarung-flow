@@ -231,7 +231,7 @@ describe("시안 6 메인 로그인 통합", () => {
   test("관리자 역할에만 관리자 콘솔 진입 버튼을 표시한다", async () => {
     getCurrentUser.mockResolvedValue({
       authenticated: true,
-      user: { userId: "admin-1", displayName: "관리자", provider: "kakao", role: "SUPER_ADMIN" },
+      user: { userId: "admin-1", displayName: "관리자", provider: "kakao", role: "ADMIN" },
     });
     const onNavigate = jest.fn();
     render(<MainPage onNavigate={onNavigate} />);
