@@ -1,9 +1,11 @@
 """10분 수집 운영 DAG (AIRFLOW-OPS-3.1 stage-1 골격, DEC-016 이후 stage-2 배선 진행 중).
 
 기존 개발용 bike_weather_raw_curated DAG와 완전히 분리된 별도 DAG다.
-CHG-092가 2026-08-22 DEC-016으로 자동 수집 시작을 명시 승인했고, 이 PR부터
-그 승인 범위 안에서 저장 배선을 순서대로 진행한다(1단계: Raw 저장).
-정제(curate)·Curated 저장·시간당 집계 실제 계산은 아직 다음 단계다.
+CHG-092가 2026-08-22 DEC-016으로 자동 수집 시작을 명시 승인했고, 승인 범위
+안에서 저장 배선을 순서대로 진행 중이다(1단계: Raw 저장 완료, 2단계: 정제
++ NOT_REPORTED 카운트 - 이 PR). Curated 저장(Parquet)과 시간당 집계 실제
+계산은 아직 다음 단계다. 정제 결과는 이 DAG 안에서만 쓰이고 아직 어디에도
+저장되지 않는다.
 
 기본 상태는 schedule=None(수동 실행 전용)이다. 저장 배선이 전부 검증되기
 전까지는 항상 이 상태를 유지한다 — 스케줄을 실제 주기로 바꾸는 것은 이
@@ -31,6 +33,11 @@ from pipeline.src.collectors.weather_collector import (
     collect_weather,
     latest_ultra_short_base_time,
     normalize_ultra_short_observation,
+)
+from pipeline.src.inventory_cleaning import (
+    count_not_reported_stations,
+    curate_live_inventory_rows,
+    load_station_master,
 )
 from pipeline.src.quality.raw_quality import validate_raw_quality
 from pipeline.src.storage.local_raw_store import write_raw_once
@@ -212,12 +219,44 @@ def bike_weather_ten_minute_collection():
         }
 
     @task(
+        task_id="curate_inventory",
+        retries=0,
+        execution_timeout=timedelta(minutes=5),
+        show_return_value_in_logs=False,
+    )
+    def curate_inventory_task(bike_raw, quality_result):
+        """DEC-012 규칙으로 재고를 정제하고 NOT_REPORTED 대여소 개수만 센다.
+
+        결과는 이 태스크 안에서만 존재하며 아직 어디에도 저장하지 않는다
+        (Curated 저장 배선은 다음 단계). bike_count=0으로 채우지 않고
+        품질 실패로도 취급하지 않는다 - downstream을 막지 않는다.
+        """
+        rows = bike_raw["payload"]["rentBikeStatus"]["row"]
+        curated, quarantine = curate_live_inventory_rows(
+            rows,
+            observed_at=bike_raw["observed_at"],
+            collected_at=bike_raw["collected_at"],
+        )
+        master_station_ids = load_station_master()
+        not_reported_count = count_not_reported_stations(
+            curated, quarantine, master_station_ids
+        )
+        return {
+            "observed_at": quality_result["observed_at"],
+            "curated_row_count": len(curated),
+            "quarantine_row_count": len(quarantine),
+            "not_reported_count": not_reported_count,
+            "master_station_count": len(master_station_ids),
+            "request_attempts": quality_result["request_attempts"],
+        }
+
+    @task(
         task_id="declare_hourly_aggregation_boundary",
         retries=0,
         execution_timeout=timedelta(minutes=5),
         show_return_value_in_logs=False,
     )
-    def declare_hourly_aggregation_boundary_task(quality_result):
+    def declare_hourly_aggregation_boundary_task(curate_result):
         """집계 경계를 선언만 하고 계산하지 않는다.
 
         DEC-010은 기준시각을 Asia/Seoul 정각으로, 선택 규칙을 정각 cycle
@@ -225,7 +264,7 @@ def bike_weather_ten_minute_collection():
         CHG-092의 나머지 게이트가 남아 있어 여기서 계산하지 않는다.
         """
         return {
-            "observed_at": quality_result["observed_at"],
+            "observed_at": curate_result["observed_at"],
             "upstream_quality_passed": True,
             "hourly_aggregation": HOURLY_AGGREGATION_APPROVAL,
             "aggregation_performed": False,
@@ -234,7 +273,10 @@ def bike_weather_ten_minute_collection():
                 "observation as-is; no averaging; no backfill on a missing cycle."
             ),
             "page_size_limit": PAGE_SIZE_LIMIT,
-            "request_attempts_this_run": quality_result["request_attempts"],
+            "request_attempts_this_run": curate_result["request_attempts"],
+            "not_reported_count": curate_result["not_reported_count"],
+            "curated_row_count": curate_result["curated_row_count"],
+            "quarantine_row_count": curate_result["quarantine_row_count"],
             "deferred_reason": (
                 "Aggregation implementation belongs to stage-2; CHG-092 still "
                 "blocks activation until the remaining gates are resolved."
@@ -245,7 +287,8 @@ def bike_weather_ten_minute_collection():
     bike_raw = collect_bike_inventory_task()
     weather_raw = collect_weather_task()
     quality_result = validate_raw_quality_task(bike_raw, weather_raw)
-    declare_hourly_aggregation_boundary_task(quality_result)
+    curate_result = curate_inventory_task(bike_raw, quality_result)
+    declare_hourly_aggregation_boundary_task(curate_result)
 
 
 bike_weather_ten_minute_collection()

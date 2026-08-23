@@ -11,9 +11,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 from pipeline.src.inventory_cleaning import (  # noqa: E402
     calculate_sha256,
     clean_inventory_dataset,
+    count_not_reported_stations,
     curate_live_inventory_rows,
     find_actual_csv_file,
     load_and_verify_manifest,
+    load_station_master,
 )
 
 
@@ -70,6 +72,28 @@ def test_live_inventory_is_independent_of_input_order():
     reverse = curate_live_inventory_rows([second, first], **arguments)
 
     assert forward == reverse
+
+
+def test_load_station_master_returns_the_committed_snapshot():
+    master = load_station_master()
+    assert len(master) > 2000
+    assert all(isinstance(station_id, str) for station_id in master)
+
+
+def test_not_reported_excludes_curated_and_quarantined_but_counts_the_rest():
+    master_ids = {"ST-1", "ST-2", "ST-3"}
+    curated = [{"station_id": "ST-1"}]
+    quarantine = [{"station_id": "ST-2"}]
+
+    assert count_not_reported_stations(curated, quarantine, master_ids) == 1
+
+
+def test_not_reported_is_zero_when_everyone_reports():
+    master_ids = {"ST-1", "ST-2"}
+    curated = [{"station_id": "ST-1"}]
+    quarantine = [{"station_id": "ST-2"}]
+
+    assert count_not_reported_stations(curated, quarantine, master_ids) == 0
 
 
 def test_manifest_loading_and_2023_rejection():

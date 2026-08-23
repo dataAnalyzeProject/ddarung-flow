@@ -16,10 +16,12 @@ EXISTING_DAG_PATH = (
 EXPECTED_DAG_ID = "bike_weather_ten_minute_collection"
 COLLECT_TASK_IDS = ("collect_bike_inventory", "collect_weather")
 QUALITY_TASK_ID = "validate_raw_quality"
+CURATE_TASK_ID = "curate_inventory"
 AGGREGATION_TASK_ID = "declare_hourly_aggregation_boundary"
 
-# DEC-016(CHG-092 최종 승인) 이후 stage-2 저장 배선의 1단계로 Raw 저장은
-# 허용됐다. Curated 저장·DB 적재·모델 게시는 아직 다음 단계이므로 계속 금지.
+# DEC-016(CHG-092 최종 승인) 이후 stage-2 저장 배선을 순서대로 진행 중이다.
+# 1단계(Raw 저장)·2단계(정제+NOT_REPORTED)는 허용됐다. Curated 저장(Parquet)·
+# DB 적재·모델 게시는 아직 다음 단계이므로 계속 금지.
 FORBIDDEN_IMPORT_FRAGMENTS = (
     "curated_snapshot_store",
     "training_data_loader",
@@ -30,7 +32,6 @@ FORBIDDEN_IMPORT_FRAGMENTS = (
     "model_registry",
 )
 FORBIDDEN_CALL_NAMES = (
-    "curate_live_inventory_rows",
     "write_curated_snapshot_once_local",
     "write_curated_snapshot_once_oci",
     "upload_model_artifact",
@@ -107,6 +108,7 @@ def test_task_ids_match_the_approved_boundary(tree):
     assert set(task_ids) == {
         *COLLECT_TASK_IDS,
         QUALITY_TASK_ID,
+        CURATE_TASK_ID,
         AGGREGATION_TASK_ID,
     }
 
@@ -139,10 +141,18 @@ def test_dependency_order_is_collect_then_quality_then_aggregation(tree):
         "collect_weather_task",
     }
 
-    # 집계 경계 태스크는 품질 태스크 결과만 인자로 받아야 한다.
+    # 정제 태스크는 bike 수집 결과와 품질 태스크 결과를 인자로 받아야 한다.
+    curate_inputs = calls["curate_inventory_task"]
+    assert len(curate_inputs) == 2
+    assert {bindings[name] for name in curate_inputs} == {
+        "collect_bike_inventory_task",
+        "validate_raw_quality_task",
+    }
+
+    # 집계 경계 태스크는 정제 태스크 결과만 인자로 받아야 한다.
     aggregation_inputs = calls["declare_hourly_aggregation_boundary_task"]
     assert len(aggregation_inputs) == 1
-    assert bindings[aggregation_inputs[0]] == "validate_raw_quality_task"
+    assert bindings[aggregation_inputs[0]] == "curate_inventory_task"
 
 
 def test_collection_failure_uses_the_approved_single_retry(tree):
@@ -250,3 +260,32 @@ def test_raw_storage_is_wired_for_both_collectors(tree, source):
     assert 'source="weather"' in existing
     assert "RAW_SOURCE_BIKE_INVENTORY = \"bike_inventory_10min\"" in source
     assert "RAW_SOURCE_WEATHER = \"weather_10min\"" in source
+
+
+def test_curation_and_not_reported_counting_is_wired(tree, source):
+    """2단계: 정제와 NOT_REPORTED 카운트가 실제로 배선돼 있어야 한다."""
+    assert (
+        "from pipeline.src.inventory_cleaning import" in source
+        and "curate_live_inventory_rows" in source
+        and "count_not_reported_stations" in source
+        and "load_station_master" in source
+    )
+
+    curate_function = next(
+        function
+        for function in _task_functions(_dag_function(tree))
+        if _task_id(function) == CURATE_TASK_ID
+    )
+    body = ast.unparse(curate_function)
+    assert "curate_live_inventory_rows(" in body
+    assert "load_station_master(" in body
+    assert "count_not_reported_stations(" in body
+    # 결과에 개수만 담고, 미보고 대여소를 위한 행을 새로 만들지 않는다.
+    assert "'not_reported_count':" in body
+
+    aggregation_function = next(
+        function
+        for function in _task_functions(_dag_function(tree))
+        if _task_id(function) == AGGREGATION_TASK_ID
+    )
+    assert "not_reported_count" in ast.unparse(aggregation_function)
