@@ -10,7 +10,9 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -93,6 +95,32 @@ class LoginControllerSecurityTest {
         mockMvc.perform(get("/oauth2/authorization/google"))
                 .andExpect(status().isFound())
                 .andExpect(header().string("Location", org.hamcrest.Matchers.containsString("prompt=select_account")));
+    }
+
+    @Test
+    void oauthCancellationReturnsToLoginPageWithCancellationNotice() throws Exception {
+        MvcResult start = mockMvc.perform(get("/oauth2/authorization/google"))
+                .andExpect(status().isFound())
+                .andReturn();
+
+        mockMvc.perform(get("/login/oauth2/code/google")
+                        .param("error", "access_denied")
+                        .session((MockHttpSession) start.getRequest().getSession(false)))
+                .andExpect(status().isFound())
+                .andExpect(redirectedUrl("http://localhost:3000/login?login=cancelled&code=AUTH_OAUTH_CANCELLED"));
+    }
+
+    @Test
+    void oauthFailureReturnsToLoginPageWithFailureNotice() throws Exception {
+        MvcResult start = mockMvc.perform(get("/oauth2/authorization/google"))
+                .andExpect(status().isFound())
+                .andReturn();
+
+        mockMvc.perform(get("/login/oauth2/code/google")
+                        .param("error", "server_error")
+                        .session((MockHttpSession) start.getRequest().getSession(false)))
+                .andExpect(status().isFound())
+                .andExpect(redirectedUrl("http://localhost:3000/login?login=failed&code=AUTH_OAUTH_FAILED"));
     }
 
     @Test

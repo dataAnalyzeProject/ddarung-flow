@@ -12,6 +12,7 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.core.OAuth2AuthorizationException;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.access.AccessDeniedHandler;
@@ -84,6 +85,22 @@ public class SecurityConfig {
         };
     }
 
+    private boolean isOAuthCancellation(Exception exception) {
+        if (exception instanceof OAuth2AuthenticationException oauthException
+                && "access_denied".equals(oauthException.getError().getErrorCode())) {
+            return true;
+        }
+        Throwable cause = exception.getCause();
+        while (cause != null) {
+            if (cause instanceof OAuth2AuthorizationException authorizationException
+                    && "access_denied".equals(authorizationException.getError().getErrorCode())) {
+                return true;
+            }
+            cause = cause.getCause();
+        }
+        return false;
+    }
+
     @Bean
     public SecurityFilterChain filterChain(
             HttpSecurity http,
@@ -127,13 +144,13 @@ public class SecurityConfig {
                             response.sendRedirect(redirectBase + "?login=success");
                         })
                         .failureHandler((request, response, exception) -> {
-                            boolean cancelled = exception instanceof OAuth2AuthenticationException oauthException
-                                    && "access_denied".equals(oauthException.getError().getErrorCode());
+                            boolean cancelled = "access_denied".equals(request.getParameter("error"))
+                                    || isOAuthCancellation(exception);
                             String result = cancelled
                                     ? "?login=cancelled&code=AUTH_OAUTH_CANCELLED"
                                     : "?login=failed&code=AUTH_OAUTH_FAILED";
                             String redirectBase = frontendUrl.endsWith("/") ? frontendUrl : frontendUrl + "/";
-                            response.sendRedirect(redirectBase + result);
+                            response.sendRedirect(redirectBase + "login" + result);
                         })
                 )
                 .formLogin(AbstractHttpConfigurer::disable)
