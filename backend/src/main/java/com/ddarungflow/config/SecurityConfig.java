@@ -12,6 +12,7 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.core.OAuth2AuthorizationException;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.access.AccessDeniedHandler;
@@ -54,8 +55,9 @@ public class SecurityConfig {
 
     private static final Pattern AIR_QUALITY_PATH = Pattern.compile("^/api/v1/stations/[^/]+/air-quality/?$");
     private static final Pattern ADMIN_API_PATH = Pattern.compile("^/api/v1/admin(?:/.*)?$");
+    private static final Pattern ROUTE_CANDIDATES_PATH = Pattern.compile("^/api/v1/routes/candidates/?$");
 
-    private void writeAdminError(HttpServletResponse response, int status, String code, String message) throws IOException {
+    private void writeApiError(HttpServletResponse response, int status, String code, String message) throws IOException {
         response.setStatus(status);
         response.setContentType("application/json");
         response.getWriter().write("{\"code\":\"" + code + "\",\"message\":\"" + message + "\"}");
@@ -71,12 +73,32 @@ public class SecurityConfig {
                 return;
             }
             if (ADMIN_API_PATH.matcher(request.getRequestURI()).matches()) {
-                writeAdminError(response, HttpServletResponse.SC_UNAUTHORIZED, "AUTH_REQUIRED", "로그인이 필요합니다.");
+                writeApiError(response, HttpServletResponse.SC_UNAUTHORIZED, "AUTH_REQUIRED", "로그인이 필요합니다.");
+                return;
+            }
+            if (ROUTE_CANDIDATES_PATH.matcher(request.getRequestURI()).matches()) {
+                writeApiError(response, HttpServletResponse.SC_UNAUTHORIZED, "AUTH_REQUIRED", "로그인이 필요합니다.");
                 return;
             }
             String redirectBase = frontendUrl.endsWith("/") ? frontendUrl : frontendUrl + "/";
             response.sendRedirect(redirectBase + "login");
         };
+    }
+
+    private boolean isOAuthCancellation(Exception exception) {
+        if (exception instanceof OAuth2AuthenticationException oauthException
+                && "access_denied".equals(oauthException.getError().getErrorCode())) {
+            return true;
+        }
+        Throwable cause = exception.getCause();
+        while (cause != null) {
+            if (cause instanceof OAuth2AuthorizationException authorizationException
+                    && "access_denied".equals(authorizationException.getError().getErrorCode())) {
+                return true;
+            }
+            cause = cause.getCause();
+        }
+        return false;
     }
 
     @Bean
@@ -122,13 +144,13 @@ public class SecurityConfig {
                             response.sendRedirect(redirectBase + "?login=success");
                         })
                         .failureHandler((request, response, exception) -> {
-                            boolean cancelled = exception instanceof OAuth2AuthenticationException oauthException
-                                    && "access_denied".equals(oauthException.getError().getErrorCode());
+                            boolean cancelled = "access_denied".equals(request.getParameter("error"))
+                                    || isOAuthCancellation(exception);
                             String result = cancelled
                                     ? "?login=cancelled&code=AUTH_OAUTH_CANCELLED"
                                     : "?login=failed&code=AUTH_OAUTH_FAILED";
                             String redirectBase = frontendUrl.endsWith("/") ? frontendUrl : frontendUrl + "/";
-                            response.sendRedirect(redirectBase + result);
+                            response.sendRedirect(redirectBase + "login" + result);
                         })
                 )
                 .formLogin(AbstractHttpConfigurer::disable)
@@ -146,7 +168,7 @@ public class SecurityConfig {
     private AccessDeniedHandler adminAccessDeniedHandler() {
         return (request, response, accessDeniedException) -> {
             if (ADMIN_API_PATH.matcher(request.getRequestURI()).matches()) {
-                writeAdminError(response, HttpServletResponse.SC_FORBIDDEN, "ADMIN_ACCESS_DENIED", "관리자 권한이 필요합니다.");
+                writeApiError(response, HttpServletResponse.SC_FORBIDDEN, "ADMIN_ACCESS_DENIED", "관리자 권한이 필요합니다.");
                 return;
             }
             response.sendError(HttpServletResponse.SC_FORBIDDEN);

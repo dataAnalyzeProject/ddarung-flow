@@ -24,6 +24,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -402,6 +403,17 @@ class MapControllerTest {
     }
 
     // 5. POST /api/v1/routes/candidates
+    @Test
+    @DisplayName("POST /api/v1/routes/candidates - 미인증 요청은 로그인 리다이렉트 대신 AUTH_REQUIRED 401을 반환")
+    void getRouteCandidatesUnauthenticatedReturnsApiAuthError() throws Exception {
+        mockMvc.perform(post("/api/v1/routes/candidates").with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().doesNotExist("Location"))
+                .andExpect(jsonPath("$.code").value("AUTH_REQUIRED"));
+    }
+
     @Test
     @DisplayName("POST /api/v1/routes/candidates - 정상 요청: 주변 후보 및 경로 조회")
     @WithMockUser
