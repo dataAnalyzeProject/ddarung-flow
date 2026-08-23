@@ -122,7 +122,7 @@ public class LoginController {
                         "userId", user.getPublicId().toString(),
                         "displayName", user.getDisplayName(),
                         "provider", user.getProvider(),
-                        "role", user.getRole().effectiveRole().name()
+                        "role", user.getRole().name()
                 )
         ));
     }

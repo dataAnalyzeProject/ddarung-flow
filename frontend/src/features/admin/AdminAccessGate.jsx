@@ -4,12 +4,7 @@ import AdminApp from "./AdminApp";
 import { ADMIN_ROLES } from "./adminFixture";
 import "./AdminAccessGate.css";
 
-const ADMIN_ROLE_VALUES = new Set([
-  ADMIN_ROLES.ADMIN_READER,
-  ADMIN_ROLES.ADMIN_OPERATOR,
-  ADMIN_ROLES.MODEL_APPROVER,
-  ADMIN_ROLES.SUPER_ADMIN,
-]);
+const ADMIN_ROLE_VALUES = new Set([ADMIN_ROLES.ADMIN]);
 
 function AccessState({ title, children, testId }) {
   return <main className="admin-access-gate" data-testid={testId} aria-live="polite">

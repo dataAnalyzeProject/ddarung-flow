@@ -3,7 +3,7 @@ import AdminShell from "./AdminShell";
 import { ADMIN_ROLES, canAccess, fixture } from "./adminFixture";
 import { AdminPage, AdminStatePanel } from "./AdminPages";
 
-export default function AdminApp({ actorRole = ADMIN_ROLES.SUPER_ADMIN, viewState = "success", activeMenuId = "dashboard", data = fixture, onAction = () => {} }) {
+export default function AdminApp({ actorRole = ADMIN_ROLES.ADMIN, viewState = "success", activeMenuId = "dashboard", data = fixture, onAction = () => {} }) {
   const [menuId, setMenuId] = useState(activeMenuId);
   const onMenu = (nextId) => {
     onAction({ type: "menu", menuId: nextId });

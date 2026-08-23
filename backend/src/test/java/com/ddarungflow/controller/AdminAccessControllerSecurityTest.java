@@ -13,8 +13,6 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.util.List;
-
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -51,24 +49,10 @@ class AdminAccessControllerSecurityTest {
     }
 
     @Test
-    void legacyAdminIsInterpretedAsSuperAdmin() throws Exception {
+    void adminCanVerifyAccess() throws Exception {
         mockMvc.perform(get("/api/v1/admin/access").with(authentication(authenticationFor(UserRole.ADMIN))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.role").value("SUPER_ADMIN"));
-    }
-
-    @Test
-    void everyCurrentAdminRoleCanVerifyAccess() throws Exception {
-        for (UserRole role : List.of(
-                UserRole.ADMIN_READER,
-                UserRole.ADMIN_OPERATOR,
-                UserRole.MODEL_APPROVER,
-                UserRole.SUPER_ADMIN
-        )) {
-            mockMvc.perform(get("/api/v1/admin/access").with(authentication(authenticationFor(role))))
-                    .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.role").value(role.name()));
-        }
+                .andExpect(jsonPath("$.role").value("ADMIN"));
     }
 
     private UsernamePasswordAuthenticationToken authenticationFor(UserRole role) {

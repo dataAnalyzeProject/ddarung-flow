@@ -1,8 +1,5 @@
 export const ADMIN_ROLES = {
-  ADMIN_READER: "ADMIN_READER",
-  ADMIN_OPERATOR: "ADMIN_OPERATOR",
-  MODEL_APPROVER: "MODEL_APPROVER",
-  SUPER_ADMIN: "SUPER_ADMIN",
+  ADMIN: "ADMIN",
   USER: "USER",
   ANONYMOUS: "ANONYMOUS",
 };
@@ -18,44 +15,31 @@ export const adminMenus = [
   { id: "qna", label: "Q&A 관리", icon: "◌" },
 ];
 
-export const menuAccess = {
-  dashboard: ["ADMIN_READER", "ADMIN_OPERATOR", "MODEL_APPROVER", "SUPER_ADMIN"],
-  users: ["ADMIN_READER", "ADMIN_OPERATOR", "MODEL_APPROVER", "SUPER_ADMIN"],
-  export: ["ADMIN_READER", "ADMIN_OPERATOR", "SUPER_ADMIN"],
-  audit: ["ADMIN_READER", "ADMIN_OPERATOR", "MODEL_APPROVER", "SUPER_ADMIN"],
-  modelops: ["ADMIN_READER", "ADMIN_OPERATOR", "MODEL_APPROVER", "SUPER_ADMIN"],
-  qna: ["ADMIN_READER", "ADMIN_OPERATOR", "SUPER_ADMIN"],
-};
-
-export const roleLabels = {
-  ADMIN_READER: "조회자",
-  ADMIN_OPERATOR: "운영자",
-  MODEL_APPROVER: "모델 승인자",
-  SUPER_ADMIN: "최고 관리자",
-};
+export const menuAccess = Object.fromEntries(adminMenus.map(({ id }) => [id, [ADMIN_ROLES.ADMIN]]));
+export const roleLabels = { ADMIN: "관리자" };
 
 export const fixture = {
   referenceTime: "2026.08.21 21:30 · fixture 기준",
   users: [
-    { id: "usr-101", name: "운영 담당 A", role: "ADMIN_OPERATOR", status: "활성", scope: "운영 · Export", updated: "21:04" },
-    { id: "usr-102", name: "분석 담당 B", role: "MODEL_APPROVER", status: "활성", scope: "모델 승인", updated: "20:51" },
-    { id: "usr-103", name: "조회 담당 C", role: "ADMIN_READER", status: "활성", scope: "조회 전용", updated: "18:20" },
+    { id: "usr-101", name: "운영 담당 A", role: "ADMIN", status: "활성", scope: "관리자 기능", updated: "21:04" },
+    { id: "usr-102", name: "관리 담당 B", role: "ADMIN", status: "활성", scope: "관리자 기능", updated: "20:51" },
+    { id: "usr-103", name: "관리 담당 C", role: "ADMIN", status: "활성", scope: "관리자 기능", updated: "18:20" },
   ],
   exports: [
-    { id: "EXP-240821-04", type: "정거장 가용성 집계", requester: "ADMIN_OPERATOR", state: "완료", progress: 100, time: "21:10" },
-    { id: "EXP-240821-03", type: "예측 결과 요약", requester: "ADMIN_OPERATOR", state: "진행 중", progress: 68, time: "20:42" },
-    { id: "EXP-240821-02", type: "Curated 품질 현황", requester: "SUPER_ADMIN", state: "대기", progress: 0, time: "19:25" },
+    { id: "EXP-240821-04", type: "정거장 가용성 집계", requester: "ADMIN", state: "완료", progress: 100, time: "21:10" },
+    { id: "EXP-240821-03", type: "예측 결과 요약", requester: "ADMIN", state: "진행 중", progress: 68, time: "20:42" },
+    { id: "EXP-240821-02", type: "Curated 품질 현황", requester: "ADMIN", state: "대기", progress: 0, time: "19:25" },
   ],
   audit: [
-    { time: "21:18:24", action: "MODEL_VALIDATE", actor: "ADMIN_OPERATOR", target: "모델 v17 검증", result: "성공" },
-    { time: "21:10:04", action: "DATA_EXPORT_REQUEST", actor: "ADMIN_OPERATOR", target: "정거장 가용성 집계", result: "성공" },
-    { time: "20:51:38", action: "MODEL_APPROVE", actor: "MODEL_APPROVER", target: "모델 v17 승인", result: "성공" },
-    { time: "19:25:13", action: "QNA_STATUS_CHANGE", actor: "ADMIN_OPERATOR", target: "문의 #Q-102 상태 변경", result: "성공" },
+    { time: "21:18:24", action: "MODEL_VALIDATE", actor: "ADMIN", target: "모델 v17 검증", result: "성공" },
+    { time: "21:10:04", action: "DATA_EXPORT_REQUEST", actor: "ADMIN", target: "정거장 가용성 집계", result: "성공" },
+    { time: "20:51:38", action: "MODEL_APPROVE", actor: "ADMIN", target: "모델 v17 승인", result: "성공" },
+    { time: "19:25:13", action: "QNA_STATUS_CHANGE", actor: "ADMIN", target: "문의 #Q-102 상태 변경", result: "성공" },
   ],
   models: [
-    { version: "v17", state: "ACTIVE", accuracy: "0.932", delay: "96ms", drift: "0.07", owner: "MODEL_APPROVER" },
-    { version: "v16", state: "APPROVED", accuracy: "0.901", delay: "118ms", drift: "0.11", owner: "MODEL_APPROVER" },
-    { version: "v15", state: "VALIDATED", accuracy: "0.872", delay: "142ms", drift: "0.18", owner: "ADMIN_OPERATOR" },
+    { version: "v17", state: "ACTIVE", accuracy: "0.932", delay: "96ms", drift: "0.07", owner: "ADMIN" },
+    { version: "v16", state: "APPROVED", accuracy: "0.901", delay: "118ms", drift: "0.11", owner: "ADMIN" },
+    { version: "v15", state: "VALIDATED", accuracy: "0.872", delay: "142ms", drift: "0.18", owner: "ADMIN" },
   ],
   qna: [
     { id: "Q-104", category: "예측 결과", title: "추천 결과의 기준이 궁금합니다", visibility: "PUBLIC", state: "OPEN", updated: "21:16" },
@@ -75,15 +59,9 @@ export function canAccess(role, menuId) {
 
 export function canDo(role, action) {
   const rules = {
-    export_request: ["ADMIN_OPERATOR", "SUPER_ADMIN"],
-    validate_model: ["ADMIN_OPERATOR", "SUPER_ADMIN"],
-    approve_model: ["MODEL_APPROVER", "SUPER_ADMIN"],
-    activate_model: ["SUPER_ADMIN"],
-    rollback_model: ["SUPER_ADMIN"],
-    answer_qna: ["ADMIN_OPERATOR", "SUPER_ADMIN"],
-    change_qna_state: ["ADMIN_OPERATOR", "SUPER_ADMIN"],
-    hide_qna: ["SUPER_ADMIN"],
-    change_role: ["SUPER_ADMIN"],
+    export_request: [ADMIN_ROLES.ADMIN], validate_model: [ADMIN_ROLES.ADMIN], approve_model: [ADMIN_ROLES.ADMIN],
+    activate_model: [ADMIN_ROLES.ADMIN], rollback_model: [ADMIN_ROLES.ADMIN], answer_qna: [ADMIN_ROLES.ADMIN],
+    change_qna_state: [ADMIN_ROLES.ADMIN], hide_qna: [ADMIN_ROLES.ADMIN], change_role: [ADMIN_ROLES.ADMIN],
   };
   return Boolean(rules[action]?.includes(role));
 }
