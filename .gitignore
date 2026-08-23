@@ -35,6 +35,10 @@ postgres-data/
 output/
 docs/model-design-direction-and-data-2.0-handoff.md
 
+# Local-only harness (AGENTS.md: never commit)
+.local-harness/
+AGENTS.md
+
 # 대용량 데이터셋 폴더 제외
 pipeline/데이터셋/
 pipeline/dataset/
