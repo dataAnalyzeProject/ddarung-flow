@@ -91,10 +91,12 @@ def test_dag_id_is_separate_from_the_development_dag(tree):
     assert f'dag_id="{EXPECTED_DAG_ID}"' not in existing
 
 
-def test_automatic_scheduling_is_disabled(tree):
+def test_schedule_matches_the_dec_017_approved_production_value(tree):
+    """DEC-017: 파일럿이 아니라 영구 상시 가동. 다른 cron 값으로 몰래
+    바뀌면 이 테스트가 실패해야 한다."""
     kwargs = _decorator_kwargs(_dag_function(tree), "dag")
 
-    assert ast.literal_eval(kwargs["schedule"]) is None
+    assert ast.literal_eval(kwargs["schedule"]) == "*/10 * * * *"
     assert ast.literal_eval(kwargs["catchup"]) is False
     assert ast.literal_eval(kwargs["max_active_runs"]) == 1
 

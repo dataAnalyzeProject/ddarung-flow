@@ -1,20 +1,17 @@
-"""10분 수집 운영 DAG (AIRFLOW-OPS-3.1 stage-1 골격, DEC-016 이후 stage-2 배선 진행 중).
+"""10분 자동 수집 DAG - DEC-016/DEC-017에 따라 상시 가동 중.
 
 기존 개발용 bike_weather_raw_curated DAG와 완전히 분리된 별도 DAG다.
-CHG-092가 2026-08-22 DEC-016으로 자동 수집 시작을 명시 승인했고, 승인 범위
-안에서 저장 배선을 순서대로 진행 중이다(1단계: Raw 저장, 2단계: 정제 +
-NOT_REPORTED 카운트, 3단계: Curated 저장(Parquet) + 시간당 대표값 태그 -
-이 PR). 정각(HH:00) cycle의 정규화 스냅샷을 그대로 시간당 대표값으로
+CHG-092가 2026-08-22 DEC-016으로 자동 수집 시작을 명시 승인했고, 그 범위
+안에서 저장 배선을 순서대로 마쳤다(1단계 Raw 저장, 2단계 정제+NOT_REPORTED,
+3단계 Curated 저장+시간당 대표값 태그 - 전부 OCI 실제 검증 완료). 이 PR의
+DEC-017로 4단계(스케줄 실제 주기 전환)를 적용해 schedule을 영구히
+"*/10 * * * *"로 바꾼다 - DEC-014 파일럿과 달리 시간 제한이 없다.
+
+정각(HH:00) cycle의 정규화 스냅샷은 평균 없이 그대로 시간당 대표값으로
 재사용한다(DEC-010/DEC-013) - 별도 집계 계산이나 별도 writer는 없다.
 
-기본 상태는 schedule=None(수동 실행 전용)이다. 저장 배선이 전부 검증되기
-전까지는 항상 이 상태를 유지한다 — 스케줄을 실제 주기로 바꾸는 것은 이
-단계들이 모두 끝난 뒤 별도 PR로만 한다.
-
-DEC-014(조장 승인, 2026-08-22)로 24시간 재현성 파일럿을 위해 스케줄을
-잠시 켰었다(2026-08-22 08:02~2026-08-23 이전, PR #126/#131 배포 이력
-참조). 파일럿에서 필요한 증거(정상 반복 실행, 재시도, 실패 시 downstream
-차단)를 모두 확보해 schedule=None으로 되돌렸다(PR #133/#134).
+남은 것은 5단계(lifecycle 삭제, dry-run 우선)뿐이다. 실제 삭제 실행은
+이 활성화와 별개로 조장의 추가 승인이 필요하다(정책 v1.2/CHG-092 5절).
 """
 
 import os
@@ -155,11 +152,11 @@ def _is_on_the_hour_seoul(observed_at_utc_iso):
 
 @dag(
     dag_id="bike_weather_ten_minute_collection",
-    schedule=None,
+    schedule="*/10 * * * *",  # DEC-017: 영구 상시 가동 (파일럿 아님, 종료 시각 없음)
     start_date=datetime(2026, 8, 16, tzinfo=SEOUL_TZ),
     catchup=False,
     max_active_runs=1,
-    tags=["ddarung-flow", "ten-minute", "manual-only", "stage-1"],
+    tags=["ddarung-flow", "ten-minute", "stage-2", "dec-017", "live"],
 )
 def bike_weather_ten_minute_collection():
     @task(
