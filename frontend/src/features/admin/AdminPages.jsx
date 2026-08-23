@@ -13,6 +13,16 @@ function StatCard({ label, value, note, icon, tone = "blue" }) {
   return <article className={`admin-stat-card ${tone}`}><div><p>{label}</p><strong>{value}</strong><small>{note}</small></div><Icon>{icon}</Icon></article>;
 }
 
+function MetricIcon({ type }) {
+  const paths = {
+    health: <><path d="M12 3.5 19 6v5.6c0 4.4-3 7.5-7 8.9-4-1.4-7-4.5-7-8.9V6l7-2.5Z" /><path d="m8.8 11.7 2.1 2.1 4.3-4.3" /></>,
+    freshness: <><circle cx="12" cy="12" r="7.5" /><path d="M12 7.7v4.7l3.2 1.8" /></>,
+    model: <><path d="m12 3.8 6.8 3.9v7.8L12 19.4l-6.8-3.9V7.7L12 3.8Z" /><path d="m5.4 7.8 6.6 3.8 6.6-3.8M12 11.6v7.5" /></>,
+    alert: <><path d="M12 4.1 20 18H4l8-13.9Z" /><path d="M12 9v4.2M12 15.9v.1" /></>,
+  };
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[type]}</g></svg>;
+}
+
 export function AdminStatePanel({ state }) {
   const content = {
     loading: ["불러오는 중", "fixture 화면을 준비하고 있습니다."],
@@ -29,7 +39,7 @@ function AuditTable({ audit }) {
 
 function Dashboard({ data }) {
   return <><div className="admin-page-title"><div><p className="admin-eyebrow">UI-ADMIN-01 · fixture only</p><h1>운영 현황</h1><span>실시간 운영 통계가 아닌 검토용 fixture입니다.</span></div><Chip tone="green">서비스 상태 · 정상</Chip></div>
-    <div className="admin-stat-grid"><StatCard label="서비스 상태" value="정상" note="fixture 표시 상태" icon="✓" tone="green" /><StatCard label="데이터 신선도" value="15분" note="최근 배치 fixture" icon="◷" /><StatCard label="활성 모델" value="v17" note="승인된 fixture 모델" icon="◇" /><StatCard label="최근 실패" value="0건" note="운영 사실이 아닌 fixture" icon="!" tone="coral" /></div>
+    <div className="admin-stat-grid"><StatCard label="서비스 상태" value="정상" note="fixture 표시 상태" icon={<MetricIcon type="health" />} tone="green" /><StatCard label="데이터 신선도" value="15분" note="최근 배치 fixture" icon={<MetricIcon type="freshness" />} /><StatCard label="활성 모델" value="v17" note="승인된 fixture 모델" icon={<MetricIcon type="model" />} /><StatCard label="최근 실패" value="0건" note="운영 사실이 아닌 fixture" icon={<MetricIcon type="alert" />} tone="coral" /></div>
     <div className="admin-dashboard-top"><Section title="fixture 운영 추이" action={<span className="admin-filter-hint">최근 7회 기준</span>} className="admin-trend-panel"><div className="admin-line-chart" aria-label="fixture 운영 추이 차트"><svg viewBox="0 0 700 190" role="img" aria-label="fixture 값 변화"><path d="M22 143 L126 105 L230 132 L334 73 L438 94 L542 51 L674 78" fill="none" stroke="#176eea" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" /><path d="M22 143 L126 105 L230 132 L334 73 L438 94 L542 51 L674 78 L674 178 L22 178 Z" fill="url(#admin-chart-fill)" /><defs><linearGradient id="admin-chart-fill" x1="0" x2="0" y1="0" y2="1"><stop stopColor="#277cf0" stopOpacity=".24" /><stop offset="1" stopColor="#277cf0" stopOpacity="0" /></linearGradient></defs></svg><div><span>08.15</span><span>08.16</span><span>08.17</span><span>08.18</span><span>08.19</span><span>08.20</span><span>08.21</span></div></div><p className="admin-chart-caption">운영 요청 128건 · 표시는 fixture이며 실시간 지표가 아닙니다.</p></Section>
       <Section title="운영 대기 항목" className="admin-pending-panel"><div className="admin-queue-list"><Queue icon="⇩" title="Export 요청 검토" detail="정거장 가용성 집계" badge="2건" /><Queue icon="◇" title="모델 승인 대기" detail="v16 검증 결과 확인" badge="1건" /><Queue icon="◌" title="Q&A 답변 대기" detail="예측 결과 카테고리" badge="1건" /></div></Section></div>
     <div className="admin-dashboard-bottom"><Section title="최근 감사 이벤트" action={<span className="admin-linkish">전체 보기 ›</span>}><AuditTable audit={data.audit} /></Section><Section title="운영 알림"><div className="admin-alert-list"><p><b>주의</b> 격리 항목 3건은 fixture 검토 대상입니다.</p><p><b>안내</b> Export는 callback만 전송합니다.</p><p><b>안내</b> 실제 운영 알림은 연결되지 않았습니다.</p></div></Section></div></>;
