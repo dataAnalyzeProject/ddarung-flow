@@ -16,12 +16,15 @@ EXISTING_DAG_PATH = (
 EXPECTED_DAG_ID = "bike_weather_ten_minute_collection"
 COLLECT_TASK_IDS = ("collect_bike_inventory", "collect_weather")
 QUALITY_TASK_ID = "validate_raw_quality"
+CURATE_TASK_ID = "curate_inventory"
 AGGREGATION_TASK_ID = "declare_hourly_aggregation_boundary"
 
-# 새 DAG가 직접 접근하면 안 되는 저장·게시 경계.
+# DEC-016(CHG-092 최종 승인) 이후 stage-2 저장 배선을 순서대로 진행 중이다.
+# 1단계(Raw 저장)·2단계(정제+NOT_REPORTED)는 허용됐다. Curated 저장(Parquet)·
+# DB 적재·모델 게시는 아직 다음 단계이므로 계속 금지.
 FORBIDDEN_IMPORT_FRAGMENTS = (
-    "storage",
-    "oci",
+    "curated_snapshot_store",
+    "training_data_loader",
     "psycopg",
     "sqlalchemy",
     "batch_inference",
@@ -29,8 +32,8 @@ FORBIDDEN_IMPORT_FRAGMENTS = (
     "model_registry",
 )
 FORBIDDEN_CALL_NAMES = (
-    "write_raw_once",
-    "write_raw_object_once",
+    "write_curated_snapshot_once_local",
+    "write_curated_snapshot_once_oci",
     "upload_model_artifact",
     "publish",
 )
@@ -91,22 +94,12 @@ def test_dag_id_is_separate_from_the_development_dag(tree):
     assert f'dag_id="{EXPECTED_DAG_ID}"' not in existing
 
 
-def test_schedule_is_manual_only_or_the_exact_dec_014_pilot_value(tree, source):
-    """기본은 schedule=None. DEC-014 파일럿 기간에 한해서만 정확히 하나의
-    승인된 cron 값(*/10 * * * *)으로 예외를 허용하며, 그 외 값은 전부
-    거부한다(임의의 cron으로 몰래 바꾸는 것을 막는다)."""
+def test_automatic_scheduling_is_disabled(tree):
     kwargs = _decorator_kwargs(_dag_function(tree), "dag")
-    schedule = ast.literal_eval(kwargs["schedule"])
 
+    assert ast.literal_eval(kwargs["schedule"]) is None
     assert ast.literal_eval(kwargs["catchup"]) is False
     assert ast.literal_eval(kwargs["max_active_runs"]) == 1
-
-    if schedule is None:
-        return
-
-    assert schedule == "*/10 * * * *"
-    assert 'PILOT_SCHEDULE_DECISION = "DEC-014"' in source
-    assert "PILOT_SCHEDULE_EXPIRES_AT" in source
 
 
 def test_task_ids_match_the_approved_boundary(tree):
@@ -115,6 +108,7 @@ def test_task_ids_match_the_approved_boundary(tree):
     assert set(task_ids) == {
         *COLLECT_TASK_IDS,
         QUALITY_TASK_ID,
+        CURATE_TASK_ID,
         AGGREGATION_TASK_ID,
     }
 
@@ -147,10 +141,18 @@ def test_dependency_order_is_collect_then_quality_then_aggregation(tree):
         "collect_weather_task",
     }
 
-    # 집계 경계 태스크는 품질 태스크 결과만 인자로 받아야 한다.
+    # 정제 태스크는 bike 수집 결과와 품질 태스크 결과를 인자로 받아야 한다.
+    curate_inputs = calls["curate_inventory_task"]
+    assert len(curate_inputs) == 2
+    assert {bindings[name] for name in curate_inputs} == {
+        "collect_bike_inventory_task",
+        "validate_raw_quality_task",
+    }
+
+    # 집계 경계 태스크는 정제 태스크 결과만 인자로 받아야 한다.
     aggregation_inputs = calls["declare_hourly_aggregation_boundary_task"]
     assert len(aggregation_inputs) == 1
-    assert bindings[aggregation_inputs[0]] == "validate_raw_quality_task"
+    assert bindings[aggregation_inputs[0]] == "curate_inventory_task"
 
 
 def test_collection_failure_uses_the_approved_single_retry(tree):
@@ -212,7 +214,9 @@ def test_no_daily_request_cap_is_asserted(source):
     assert "PAGE_SIZE_LIMIT = 1000" in source
 
 
-def test_no_raw_storage_oci_database_or_model_publishing_is_imported(tree, source):
+def test_curated_storage_database_and_model_publishing_are_not_imported(tree, source):
+    """DEC-016 stage-2 1단계(Raw 저장)만 배선됐다. 이후 단계(정제·Curated
+    저장·DB·모델 게시)는 아직 이 DAG에 들어오면 안 된다."""
     imported = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
@@ -230,5 +234,58 @@ def test_no_raw_storage_oci_database_or_model_publishing_is_imported(tree, sourc
     for call_name in FORBIDDEN_CALL_NAMES:
         assert call_name not in source, f"금지된 호출 발견: {call_name}"
 
-    # 저장 모드 분기가 남아 있으면 실제 Raw 저장 경로가 열린다.
-    assert "RAW_STORAGE_MODE" not in source
+
+def test_raw_storage_is_wired_for_both_collectors(tree, source):
+    """1단계: Raw 저장이 실제로 두 수집 태스크 모두에 배선돼 있어야 한다."""
+    assert "from pipeline.src.storage.local_raw_store import write_raw_once" in source
+    assert (
+        "from pipeline.src.storage.oci_raw_store import write_raw_object_once"
+        in source
+    )
+    assert "RAW_STORAGE_MODE" in source
+
+    for function in _task_functions(_dag_function(tree)):
+        if _task_id(function) not in COLLECT_TASK_IDS:
+            continue
+        body = ast.unparse(function)
+        assert "_write_raw(" in body, (
+            f"{_task_id(function)}가 Raw를 저장하지 않는다"
+        )
+        assert "'raw_result':" in body
+
+    # 10분 파이프라인은 기존 1시간짜리 개발용 DAG와 다른 source 이름을 써서
+    # 같은 버킷 안에서 두 파이프라인의 Raw 산출물이 섞이지 않게 한다.
+    existing = EXISTING_DAG_PATH.read_text(encoding="utf-8")
+    assert 'source="bike_inventory"' in existing
+    assert 'source="weather"' in existing
+    assert "RAW_SOURCE_BIKE_INVENTORY = \"bike_inventory_10min\"" in source
+    assert "RAW_SOURCE_WEATHER = \"weather_10min\"" in source
+
+
+def test_curation_and_not_reported_counting_is_wired(tree, source):
+    """2단계: 정제와 NOT_REPORTED 카운트가 실제로 배선돼 있어야 한다."""
+    assert (
+        "from pipeline.src.inventory_cleaning import" in source
+        and "curate_live_inventory_rows" in source
+        and "count_not_reported_stations" in source
+        and "load_station_master" in source
+    )
+
+    curate_function = next(
+        function
+        for function in _task_functions(_dag_function(tree))
+        if _task_id(function) == CURATE_TASK_ID
+    )
+    body = ast.unparse(curate_function)
+    assert "curate_live_inventory_rows(" in body
+    assert "load_station_master(" in body
+    assert "count_not_reported_stations(" in body
+    # 결과에 개수만 담고, 미보고 대여소를 위한 행을 새로 만들지 않는다.
+    assert "'not_reported_count':" in body
+
+    aggregation_function = next(
+        function
+        for function in _task_functions(_dag_function(tree))
+        if _task_id(function) == AGGREGATION_TASK_ID
+    )
+    assert "not_reported_count" in ast.unparse(aggregation_function)

@@ -121,7 +121,8 @@ public class LoginController {
                 "user", Map.of(
                         "userId", user.getPublicId().toString(),
                         "displayName", user.getDisplayName(),
-                        "provider", user.getProvider()
+                        "provider", user.getProvider(),
+                        "role", user.getRole().name()
                 )
         ));
     }

@@ -1,22 +1,20 @@
-"""10분 수집 운영을 준비하는 수동 실행 전용 DAG (AIRFLOW-OPS-3.1 stage-1).
+"""10분 수집 운영 DAG (AIRFLOW-OPS-3.1 stage-1 골격, DEC-016 이후 stage-2 배선 진행 중).
 
 기존 개발용 bike_weather_raw_curated DAG와 완전히 분리된 별도 DAG다.
-이 DAG는 다음을 하지 않는다.
+CHG-092가 2026-08-22 DEC-016으로 자동 수집 시작을 명시 승인했고, 승인 범위
+안에서 저장 배선을 순서대로 진행 중이다(1단계: Raw 저장 완료, 2단계: 정제
++ NOT_REPORTED 카운트 - 이 PR). Curated 저장(Parquet)과 시간당 집계 실제
+계산은 아직 다음 단계다. 정제 결과는 이 DAG 안에서만 쓰이고 아직 어디에도
+저장되지 않는다.
 
-- Raw payload 저장, OCI object 생성, PostgreSQL 적재, 모델 결과 게시
-- 승인되지 않은 시간당 집계 규칙의 계산
+기본 상태는 schedule=None(수동 실행 전용)이다. 저장 배선이 전부 검증되기
+전까지는 항상 이 상태를 유지한다 — 스케줄을 실제 주기로 바꾸는 것은 이
+단계들이 모두 끝난 뒤 별도 PR로만 한다.
 
-기본 상태는 schedule=None(수동 실행 전용)이다. CHG-092 자동 수집 명시
-APPROVED와 시간당 집계 규칙 승인이 모두 기록되기 전까지는 항상 이 상태여야
-한다.
-
-예외: DEC-014(조장 승인, 2026-08-22)에 따라 CHG-092가 요구하는 "재현
-가능한 운영 증거"(지연 cycle 스킵, 재시도, catchup 비활성이 실제
-스케줄러에서 동작하는지)를 확보하기 위해 PILOT_SCHEDULE_EXPIRES_AT까지
-24시간 한정으로만 스케줄을 켠다. 이 파일럿도 저장·OCI·PostgreSQL을 여전히
-호출하지 않는다. 파일럿 종료 시각 이후에는 schedule=None으로 되돌리는
-별도 PR이 반드시 필요하다 — 이 파일이 그 상태로 남아 있는 것 자체가
-승인이 아니다.
+DEC-014(조장 승인, 2026-08-22)로 24시간 재현성 파일럿을 위해 스케줄을
+잠시 켰었다(2026-08-22 08:02~2026-08-23 이전, PR #126/#131 배포 이력
+참조). 파일럿에서 필요한 증거(정상 반복 실행, 재시도, 실패 시 downstream
+차단)를 모두 확보해 schedule=None으로 되돌렸다(PR #133/#134).
 """
 
 import os
@@ -36,7 +34,14 @@ from pipeline.src.collectors.weather_collector import (
     latest_ultra_short_base_time,
     normalize_ultra_short_observation,
 )
+from pipeline.src.inventory_cleaning import (
+    count_not_reported_stations,
+    curate_live_inventory_rows,
+    load_station_master,
+)
 from pipeline.src.quality.raw_quality import validate_raw_quality
+from pipeline.src.storage.local_raw_store import write_raw_once
+from pipeline.src.storage.oci_raw_store import write_raw_object_once
 
 
 SEOUL_TZ = ZoneInfo("Asia/Seoul")
@@ -50,12 +55,6 @@ PAGE_SIZE_LIMIT = 1000
 # 시간당 집계 기준시각·선택 규칙은 DEC-010에서 정각 스냅샷 채택으로 확정됐다.
 # 다만 구현은 stage-2 범위이므로 이 DAG는 계산하지 않고 경계만 선언한다.
 HOURLY_AGGREGATION_APPROVAL = "RULE_APPROVED_IMPLEMENTATION_DEFERRED"
-
-# DEC-014 24시간 재현성 파일럿(조장 승인 2026-08-22). 이 상수와 아래
-# schedule 값이 어긋나면 test_ten_minute_collection_dag.py가 실패한다.
-PILOT_SCHEDULE_DECISION = "DEC-014"
-PILOT_TEN_MINUTE_CRON = "*/10 * * * *"
-PILOT_SCHEDULE_EXPIRES_AT = datetime(2026, 8, 23, 7, 20, tzinfo=SEOUL_TZ)
 
 
 def _logical_time():
@@ -81,13 +80,50 @@ def _require_api_source(variable_name):
     return mode
 
 
+# 기존 1시간짜리 개발용 bike_weather_raw_curated DAG는 "bike_inventory"·
+# "weather"라는 source 이름으로 같은 버킷/경로에 Raw를 쓴다. 10분 데이터를
+# 같은 이름으로 쓰면 두 파이프라인의 산출물이 한 폴더에 섞여 보관정책·용량
+# 추적이 헷갈리므로, 이 DAG 전용 source 이름을 따로 둔다.
+RAW_SOURCE_BIKE_INVENTORY = "bike_inventory_10min"
+RAW_SOURCE_WEATHER = "weather_10min"
+
+
+def _write_raw(source, observed_at, collected_at, payload):
+    """DATA-OPS-3.6/DEC-012에서 검증된 것과 같은 Raw 저장 경로를 쓴다.
+
+    RAW_STORAGE_MODE는 기존 bike_weather_raw_curated DAG와 같은 스위치이며,
+    OCI 배포 환경(docker-compose.oci.yaml)에는 이미 'oci'로 설정돼 있다.
+    """
+    mode = os.getenv("RAW_STORAGE_MODE", "local").lower()
+    if mode not in {"local", "oci", "both"}:
+        raise AirflowFailException("RAW_STORAGE_MODE must be 'local', 'oci', or 'both'")
+    result = {}
+    if mode in {"local", "both"}:
+        result["local"] = write_raw_once(
+            source=source,
+            observed_at=observed_at,
+            collected_at=collected_at,
+            payload=payload,
+            root_dir=os.getenv("RAW_ROOT_DIR", "/opt/airflow/data/raw"),
+        )
+    if mode in {"oci", "both"}:
+        result["oci"] = write_raw_object_once(
+            source=source,
+            observed_at=observed_at,
+            collected_at=collected_at,
+            payload=payload,
+            bucket_name=os.getenv("OCI_BUCKET_NAME", ""),
+        )
+    return result
+
+
 @dag(
     dag_id="bike_weather_ten_minute_collection",
-    schedule="*/10 * * * *",  # PILOT_TEN_MINUTE_CRON — DEC-014, revert by PILOT_SCHEDULE_EXPIRES_AT
+    schedule=None,
     start_date=datetime(2026, 8, 16, tzinfo=SEOUL_TZ),
     catchup=False,
     max_active_runs=1,
-    tags=["ddarung-flow", "ten-minute", "stage-2-pilot", "dec-014"],
+    tags=["ddarung-flow", "ten-minute", "manual-only", "stage-1"],
 )
 def bike_weather_ten_minute_collection():
     @task(
@@ -102,12 +138,18 @@ def bike_weather_ten_minute_collection():
         _require_api_source("BIKE_INVENTORY_SOURCE")
         client = SeoulBikeApiClient(os.getenv("SEOUL_OPEN_API_KEY", ""))
         result = collect_bike_inventory(client, collected_at)
-        # Raw payload는 저장하지 않는다. 품질 판정에 필요한 통합 응답만 넘긴다.
+        raw_result = _write_raw(
+            source=RAW_SOURCE_BIKE_INVENTORY,
+            observed_at=collected_at,
+            collected_at=collected_at,
+            payload={"pages": result["payloads"]},
+        )
         return {
             "payload": result["payload"],
             "observed_at": collected_at.isoformat(),
             "collected_at": result["collected_at"],
             "request_attempts": len(result["payloads"]),
+            "raw_result": raw_result,
         }
 
     @task(
@@ -133,11 +175,18 @@ def bike_weather_ten_minute_collection():
             collected_at=collected_at,
         )
         payload = normalize_ultra_short_observation(result["payload"], nx, ny)
+        raw_result = _write_raw(
+            source=RAW_SOURCE_WEATHER,
+            observed_at=payload["observed_at"],
+            collected_at=collected_at,
+            payload=payload,
+        )
         return {
             "payload": payload,
             "observed_at": payload["observed_at"],
             "collected_at": result["collected_at"],
             "request_attempts": 1,
+            "raw_result": raw_result,
         }
 
     @task(
@@ -170,12 +219,44 @@ def bike_weather_ten_minute_collection():
         }
 
     @task(
+        task_id="curate_inventory",
+        retries=0,
+        execution_timeout=timedelta(minutes=5),
+        show_return_value_in_logs=False,
+    )
+    def curate_inventory_task(bike_raw, quality_result):
+        """DEC-012 규칙으로 재고를 정제하고 NOT_REPORTED 대여소 개수만 센다.
+
+        결과는 이 태스크 안에서만 존재하며 아직 어디에도 저장하지 않는다
+        (Curated 저장 배선은 다음 단계). bike_count=0으로 채우지 않고
+        품질 실패로도 취급하지 않는다 - downstream을 막지 않는다.
+        """
+        rows = bike_raw["payload"]["rentBikeStatus"]["row"]
+        curated, quarantine = curate_live_inventory_rows(
+            rows,
+            observed_at=bike_raw["observed_at"],
+            collected_at=bike_raw["collected_at"],
+        )
+        master_station_ids = load_station_master()
+        not_reported_count = count_not_reported_stations(
+            curated, quarantine, master_station_ids
+        )
+        return {
+            "observed_at": quality_result["observed_at"],
+            "curated_row_count": len(curated),
+            "quarantine_row_count": len(quarantine),
+            "not_reported_count": not_reported_count,
+            "master_station_count": len(master_station_ids),
+            "request_attempts": quality_result["request_attempts"],
+        }
+
+    @task(
         task_id="declare_hourly_aggregation_boundary",
         retries=0,
         execution_timeout=timedelta(minutes=5),
         show_return_value_in_logs=False,
     )
-    def declare_hourly_aggregation_boundary_task(quality_result):
+    def declare_hourly_aggregation_boundary_task(curate_result):
         """집계 경계를 선언만 하고 계산하지 않는다.
 
         DEC-010은 기준시각을 Asia/Seoul 정각으로, 선택 규칙을 정각 cycle
@@ -183,7 +264,7 @@ def bike_weather_ten_minute_collection():
         CHG-092의 나머지 게이트가 남아 있어 여기서 계산하지 않는다.
         """
         return {
-            "observed_at": quality_result["observed_at"],
+            "observed_at": curate_result["observed_at"],
             "upstream_quality_passed": True,
             "hourly_aggregation": HOURLY_AGGREGATION_APPROVAL,
             "aggregation_performed": False,
@@ -192,7 +273,10 @@ def bike_weather_ten_minute_collection():
                 "observation as-is; no averaging; no backfill on a missing cycle."
             ),
             "page_size_limit": PAGE_SIZE_LIMIT,
-            "request_attempts_this_run": quality_result["request_attempts"],
+            "request_attempts_this_run": curate_result["request_attempts"],
+            "not_reported_count": curate_result["not_reported_count"],
+            "curated_row_count": curate_result["curated_row_count"],
+            "quarantine_row_count": curate_result["quarantine_row_count"],
             "deferred_reason": (
                 "Aggregation implementation belongs to stage-2; CHG-092 still "
                 "blocks activation until the remaining gates are resolved."
@@ -203,7 +287,8 @@ def bike_weather_ten_minute_collection():
     bike_raw = collect_bike_inventory_task()
     weather_raw = collect_weather_task()
     quality_result = validate_raw_quality_task(bike_raw, weather_raw)
-    declare_hourly_aggregation_boundary_task(quality_result)
+    curate_result = curate_inventory_task(bike_raw, quality_result)
+    declare_hourly_aggregation_boundary_task(curate_result)
 
 
 bike_weather_ten_minute_collection()

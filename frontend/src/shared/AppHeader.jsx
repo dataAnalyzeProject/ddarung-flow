@@ -4,6 +4,7 @@ import "./AppHeader.css";
 export default function AppHeader({
   activeRoute = "main",
   authState = "anonymous",
+  canEnterAdmin = false,
   onBeforeLogin,
   onHome,
   onLogout,
@@ -37,6 +38,7 @@ export default function AppHeader({
         {isAuthenticated ? (
           <>
             <span className="app-header-user">{user ? `${user.displayName} · ${user.provider}` : ""}</span>
+            {canEnterAdmin && <button className="app-header-admin" type="button" onClick={() => onNavigate?.("admin")}>관리자 콘솔</button>}
             <button
               aria-current={activeRoute === "mypage" ? "page" : undefined}
               className="app-header-account"

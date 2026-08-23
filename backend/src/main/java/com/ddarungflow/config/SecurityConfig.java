@@ -14,6 +14,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
+import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -21,6 +22,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.List;
 import java.util.regex.Pattern;
+import java.io.IOException;
 
 @Configuration
 @EnableWebSecurity
@@ -51,6 +53,13 @@ public class SecurityConfig {
     }
 
     private static final Pattern AIR_QUALITY_PATH = Pattern.compile("^/api/v1/stations/[^/]+/air-quality/?$");
+    private static final Pattern ADMIN_API_PATH = Pattern.compile("^/api/v1/admin(?:/.*)?$");
+
+    private void writeAdminError(HttpServletResponse response, int status, String code, String message) throws IOException {
+        response.setStatus(status);
+        response.setContentType("application/json");
+        response.getWriter().write("{\"code\":\"" + code + "\",\"message\":\"" + message + "\"}");
+    }
 
     private AuthenticationEntryPoint apiVsRedirectEntryPoint() {
         return (request, response, authException) -> {
@@ -59,6 +68,10 @@ public class SecurityConfig {
                 // Security re-processes, invoking this entry point a second time for "/error"
                 // (which doesn't match), overwriting the 401 with the redirect branch below.
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                return;
+            }
+            if (ADMIN_API_PATH.matcher(request.getRequestURI()).matches()) {
+                writeAdminError(response, HttpServletResponse.SC_UNAUTHORIZED, "AUTH_REQUIRED", "로그인이 필요합니다.");
                 return;
             }
             String redirectBase = frontendUrl.endsWith("/") ? frontendUrl : frontendUrl + "/";
@@ -76,6 +89,7 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.ignoringRequestMatchers("/api/v1/routes/estimate"))
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         .requestMatchers(
                                 "/",
                                 "/auth/**",
@@ -93,6 +107,7 @@ public class SecurityConfig {
                 )
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(apiVsRedirectEntryPoint())
+                        .accessDeniedHandler(adminAccessDeniedHandler())
                 )
                 .oauth2Login(oauth2 -> oauth2
                         .loginPage(frontendUrl + "/login")
@@ -126,5 +141,15 @@ public class SecurityConfig {
                 );
 
         return http.build();
+    }
+
+    private AccessDeniedHandler adminAccessDeniedHandler() {
+        return (request, response, accessDeniedException) -> {
+            if (ADMIN_API_PATH.matcher(request.getRequestURI()).matches()) {
+                writeAdminError(response, HttpServletResponse.SC_FORBIDDEN, "ADMIN_ACCESS_DENIED", "관리자 권한이 필요합니다.");
+                return;
+            }
+            response.sendError(HttpServletResponse.SC_FORBIDDEN);
+        };
     }
 }

@@ -38,6 +38,16 @@ test("shows the existing login page at the login URL", async () => {
   expect(await screen.findByTitle(/Kakao/i)).toBeInTheDocument();
 });
 
+test("does not render the admin fixture for a USER at the direct admin URL", async () => {
+  window.history.replaceState({}, "", "/admin");
+  getCurrentUser.mockResolvedValue({ authenticated: true, user: { role: "USER" } });
+
+  render(<App />);
+
+  expect(await screen.findByTestId("admin-access-forbidden")).toBeInTheDocument();
+  expect(screen.queryByText("운영 현황")).not.toBeInTheDocument();
+});
+
 test("shows the intro before the main page on the first visit", () => {
   window.history.replaceState({}, "", "/");
 

@@ -1,5 +1,7 @@
 package com.ddarungflow.service;
 
+import com.ddarungflow.dto.PrincipalDetails;
+import com.ddarungflow.entity.Users;
 import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
@@ -62,8 +64,12 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
                     : providerUserId);
         }
 
-        authService.saveOrUpdateOAuthUser(provider, providerUserId, displayName, email);
+        Users user = authService.saveOrUpdateOAuthUser(provider, providerUserId, displayName, email);
 
-        return oAuth2User;
+        String nameAttributeKey = userRequest.getClientRegistration()
+                .getProviderDetails()
+                .getUserInfoEndpoint()
+                .getUserNameAttributeName();
+        return new PrincipalDetails(user, attributes, nameAttributeKey);
     }
 }
