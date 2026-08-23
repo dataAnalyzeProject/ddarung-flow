@@ -68,10 +68,12 @@ class FakeModel:
     for the load_verified_model / main() round-trip tests."""
 
     classes_ = [0, 1, 2, 3, 4, 5]
+    received_rows: list = []
 
     def predict_proba(self, rows):
         # One fixed, valid 6-class distribution per row, regardless of input --
         # enough to exercise the tail-sum/grouping wiring deterministically.
+        FakeModel.received_rows = list(rows)
         return [[0.10, 0.15, 0.20, 0.20, 0.15, 0.20] for _ in rows]
 
 
@@ -201,10 +203,32 @@ class TestLoadCuratedSnapshot:
             run_module.load_curated_snapshot(client, "ns", "bucket", "curated/x.parquet")
 
 
+STATION_NUMBER_BY_ID = {"ST-1": 108, "ST-2": 205}
+
+
+class TestLoadStationNumberMapping:
+    def test_reads_csv_and_coerces_numbers(self, tmp_path):
+        csv_path = tmp_path / "mapping.csv"
+        csv_path.write_text("station_id,station_number\nST-1,108\nST-2,205\n", encoding="utf-8")
+
+        mapping = run_module.load_station_number_mapping(csv_path)
+
+        assert mapping == {"ST-1": 108, "ST-2": 205}
+
+    def test_raises_on_empty_file(self, tmp_path):
+        csv_path = tmp_path / "mapping.csv"
+        csv_path.write_text("station_id,station_number\n", encoding="utf-8")
+
+        with pytest.raises(RuntimeError, match="no usable rows"):
+            run_module.load_station_number_mapping(csv_path)
+
+
 class TestBuildStationInputs:
-    def test_skips_null_bike_count_and_maps_fields(self):
+    def test_skips_null_bike_count_and_unmapped_stations(self):
+        # ST-1/ST-2 are in STATION_NUMBER_BY_ID; ST-3 has a null bike_count (already
+        # excluded) and would also be unmapped, covering both skip reasons at once.
         frame = pd.DataFrame(CURATED_ROWS, columns=run_module.CURATED_SNAPSHOT_COLUMNS)
-        inputs = run_module.build_station_inputs(frame, "model-v1", "manifest-hash")
+        inputs = run_module.build_station_inputs(frame, "model-v1", "manifest-hash", STATION_NUMBER_BY_ID)
 
         assert [row["stationId"] for row in inputs] == ["ST-1", "ST-2"]
         assert inputs[0]["currentBikeCount"] == 5
@@ -212,10 +236,18 @@ class TestBuildStationInputs:
         assert inputs[0]["inputManifestHash"] == "manifest-hash"
         assert inputs[0]["featureAsOf"] == "2026-08-23T02:00:00+00:00"
 
+    def test_skips_stations_missing_from_mapping(self):
+        frame = pd.DataFrame(
+            [{**CURATED_ROWS[0], "station_id": "ST-UNKNOWN"}], columns=run_module.CURATED_SNAPSHOT_COLUMNS
+        )
+        inputs = run_module.build_station_inputs(frame, "model-v1", "manifest-hash", STATION_NUMBER_BY_ID)
+
+        assert inputs == []
+
 
 class TestMakePredictor:
-    def test_groups_by_five_and_computes_tail_sums(self):
-        predictor = run_module.make_predictor(_build_model_bundle())
+    def test_groups_by_five_translates_station_number_and_computes_tail_sums(self):
+        predictor = run_module.make_predictor(_build_model_bundle(), STATION_NUMBER_BY_ID)
         one_station_horizon_group = [
             {
                 "station_id": "ST-1",
@@ -238,9 +270,11 @@ class TestMakePredictor:
         assert len(result) == 5
         assert all(0.0 <= value <= 1.0 for value in result)
         assert result == sorted(result, reverse=True)
+        # The model must see the numeric station_number (108), never the raw "ST-1".
+        assert FakeModel.received_rows == [(108, 0, 9, 8, 0, 5, 60)]
 
     def test_rejects_incomplete_groups(self):
-        predictor = run_module.make_predictor(_build_model_bundle())
+        predictor = run_module.make_predictor(_build_model_bundle(), STATION_NUMBER_BY_ID)
         with pytest.raises(ValueError, match="groups of 5"):
             predictor([{"station_id": "ST-1"}] * 3)
 
@@ -273,6 +307,9 @@ class TestMainEndToEnd:
         client = FakeObjectStorageClient(objects=objects, list_pages=[(["curated/x.parquet"], None)])
         monkeypatch.setattr(run_module, "create_object_storage_client", lambda: client)
 
+        mapping_csv = tmp_path / "mapping.csv"
+        mapping_csv.write_text("station_id,station_number\nST-1,108\nST-2,205\n", encoding="utf-8")
+
         result_file = tmp_path / "batch-result.json"
         exit_code = run_module.main(
             [
@@ -282,6 +319,8 @@ class TestMainEndToEnd:
                 pointer_sha256,
                 "--bucket",
                 "test-bucket",
+                "--station-mapping-csv",
+                str(mapping_csv),
                 "--result-file",
                 str(result_file),
             ]
@@ -292,3 +331,34 @@ class TestMainEndToEnd:
         assert written["publishable"] is True
         # 2 stations (ST-3 skipped for null bike_count) x 4 horizons x 5 quantities.
         assert written["rowCount"] == 2 * 4 * 5
+
+    def test_skips_station_missing_from_mapping(self, tmp_path, monkeypatch):
+        objects, pointer_sha256 = _pointer_manifest_artifact_objects()
+        objects["curated/x.parquet"] = _curated_frame_bytes(CURATED_ROWS)
+        client = FakeObjectStorageClient(objects=objects, list_pages=[(["curated/x.parquet"], None)])
+        monkeypatch.setattr(run_module, "create_object_storage_client", lambda: client)
+
+        # Only ST-1 is mapped; ST-2 (has a real bike_count) must be dropped, not guessed.
+        mapping_csv = tmp_path / "mapping.csv"
+        mapping_csv.write_text("station_id,station_number\nST-1,108\n", encoding="utf-8")
+
+        result_file = tmp_path / "batch-result.json"
+        exit_code = run_module.main(
+            [
+                "--artifact-pointer",
+                "models/test/pointer.json",
+                "--artifact-pointer-sha256",
+                pointer_sha256,
+                "--bucket",
+                "test-bucket",
+                "--station-mapping-csv",
+                str(mapping_csv),
+                "--result-file",
+                str(result_file),
+            ]
+        )
+
+        assert exit_code == 0
+        written = json.loads(result_file.read_text(encoding="utf-8"))
+        assert written["rowCount"] == 1 * 4 * 5
+        assert {row["stationId"] for row in written["rows"]} == {"ST-1"}
