@@ -2,9 +2,16 @@ import argparse
 import gc
 import glob
 import hashlib
+import json
 import os
+from pathlib import Path
 
 import pandas as pd
+
+
+DEFAULT_STATION_MASTER_PATH = (
+    Path(__file__).resolve().parents[1] / "data" / "station_master.json"
+)
 
 
 APPROVED_MANIFEST_SHA256 = (
@@ -82,6 +89,34 @@ def curate_live_inventory_rows(rows, observed_at, collected_at):
             curated.append(row)
             seen.add(key)
     return curated, quarantine
+
+
+def load_station_master(path=None):
+    """DEC-012 NOT_REPORTED 판정의 기준이 되는 대여소 마스터 목록을 불러온다.
+
+    2026-08-23 실시간 재고 API 응답(2,734개 대여소)에서 캡처한 정적 스냅샷을
+    쓴다. 실시간 "대여소 정보" API는 이 프로젝트에 연동돼 있지 않으므로,
+    별도 collector를 새로 만들지 않고 이미 쓰는 재고 API의 결과로 마스터를
+    고정한다(조장 결정, 2026-08-23). 대여소 신설·폐쇄로 이 목록이 낡을 수
+    있으나 프로젝트 종료 시점까지는 허용 가능한 리스크로 판단했다.
+    """
+    master_path = Path(path) if path else DEFAULT_STATION_MASTER_PATH
+    with open(master_path, encoding="utf-8") as station_master_file:
+        rows = json.load(station_master_file)
+    return {row["station_id"] for row in rows}
+
+
+def count_not_reported_stations(curated_rows, quarantine_rows, master_station_ids):
+    """DEC-012: 마스터에는 있으나 이번 cycle 응답에 없는 대여소 개수만 센다.
+
+    행을 만들지 않고(bike_count=0으로 채우지 않음), 품질 실패로도 취급하지
+    않는다 — 이 함수는 카운트만 반환하며 downstream을 막지 않는다.
+    quarantine된 대여소도 "응답은 했다"는 뜻이므로 보고된 것으로 센다.
+    """
+    reported_ids = {row["station_id"] for row in curated_rows} | {
+        row["station_id"] for row in quarantine_rows
+    }
+    return len(master_station_ids - reported_ids)
 
 
 def calculate_sha256(file_path):
