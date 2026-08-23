@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import AppHeader from "../../shared/AppHeader";
+import { getCurrentUser, logout } from "../login/authApi";
 import * as qnaApi from "./api/qnaApi";
 import QnaPagination from "./components/QnaPagination";
 import QnaQuestionDetail from "./components/QnaQuestionDetail";
@@ -9,6 +10,7 @@ import QnaSearchFilters from "./components/QnaSearchFilters";
 import "./QnaPage.css";
 
 const PAGE_SIZE = 10;
+const ADMIN_ROLE_VALUES = new Set(["ADMIN"]);
 
 function ListState({ kind, message }) {
   if (kind === "auth-required") {
@@ -43,6 +45,32 @@ export default function QnaPage({ onNavigate }) {
   const [detailState, setDetailState] = useState("idle");
   const [detailMessage, setDetailMessage] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
+  const [authState, setAuthState] = useState("anonymous");
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    getCurrentUser()
+      .then((auth) => {
+        if (!auth.authenticated) {
+          setAuthState("anonymous");
+          return;
+        }
+        setUser(auth.user);
+        setAuthState("authenticated");
+      })
+      .catch(() => setAuthState("error"));
+  }, []);
+
+  const handleLogout = async () => {
+    setAuthState("logging-out");
+    try {
+      await logout();
+      setUser(null);
+      setAuthState("anonymous");
+    } catch {
+      setAuthState("authenticated");
+    }
+  };
 
   useEffect(() => {
     if (view !== "list") return undefined;
@@ -192,5 +220,17 @@ export default function QnaPage({ onNavigate }) {
     );
   }
 
-  return <div className="qna-shell"><AppHeader activeRoute="qna" onNavigate={onNavigate} /><main className="qna-content">{content}</main></div>;
+  return (
+    <div className="qna-shell">
+      <AppHeader
+        activeRoute="qna"
+        authState={authState}
+        canEnterAdmin={ADMIN_ROLE_VALUES.has(user?.role)}
+        onLogout={handleLogout}
+        onNavigate={onNavigate}
+        user={user}
+      />
+      <main className="qna-content">{content}</main>
+    </div>
+  );
 }

@@ -56,9 +56,11 @@ public class SecurityConfig {
     private static final Pattern AIR_QUALITY_PATH = Pattern.compile("^/api/v1/stations/[^/]+/air-quality/?$");
     private static final Pattern ADMIN_API_PATH = Pattern.compile("^/api/v1/admin(?:/.*)?$");
     private static final Pattern ROUTE_CANDIDATES_PATH = Pattern.compile("^/api/v1/routes/candidates/?$");
+    private static final Pattern QNA_API_PATH = Pattern.compile("^/api/v1/qna(?:/.*)?$");
 
     private void writeApiError(HttpServletResponse response, int status, String code, String message) throws IOException {
         response.setStatus(status);
+        response.setCharacterEncoding("UTF-8");
         response.setContentType("application/json");
         response.getWriter().write("{\"code\":\"" + code + "\",\"message\":\"" + message + "\"}");
     }
@@ -77,6 +79,10 @@ public class SecurityConfig {
                 return;
             }
             if (ROUTE_CANDIDATES_PATH.matcher(request.getRequestURI()).matches()) {
+                writeApiError(response, HttpServletResponse.SC_UNAUTHORIZED, "AUTH_REQUIRED", "로그인이 필요합니다.");
+                return;
+            }
+            if (QNA_API_PATH.matcher(request.getRequestURI()).matches()) {
                 writeApiError(response, HttpServletResponse.SC_UNAUTHORIZED, "AUTH_REQUIRED", "로그인이 필요합니다.");
                 return;
             }
