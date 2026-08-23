@@ -11,14 +11,6 @@ on:
         description: Full 40-character main commit SHA to deploy
         required: true
         type: string
-      pilot_confirmation:
-        description: >-
-          Leave empty for a normal manual-only deploy (schedule=None required).
-          Only for the DEC-014 24h CHG-092 pilot: type PILOT_DEC-014_2026-08-22
-          exactly to allow the single pre-approved pilot schedule.
-        required: false
-        type: string
-        default: ""
 
 permissions:
   contents: read
@@ -100,7 +92,6 @@ jobs:
     environment: oci-airflow
     env:
       DEPLOY_SHA: ${{ inputs.commit_sha }}
-      PILOT_CONFIRMATION: ${{ inputs.pilot_confirmation }}
       OCI_REGISTRY: ${{ vars.OCI_REGISTRY }}
       OCI_NAMESPACE: ${{ vars.OCI_NAMESPACE }}
       OCI_REPOSITORY: ${{ vars.OCI_REPOSITORY }}
@@ -140,21 +131,12 @@ jobs:
           test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
           git merge-base --is-ancestor "$DEPLOY_SHA" origin/main
 
-      - name: Verify DAG schedule is manual-only or the exact approved DEC-014 pilot value
+      - name: Verify DAG schedule matches the DEC-017 approved production value
         shell: bash
         run: |
           set -euo pipefail
           DAG_FILE=pipeline/dags/bike_weather_ten_minute_collection_dag.py
-          if [ -z "$PILOT_CONFIRMATION" ]; then
-            grep -q "schedule=None" "$DAG_FILE"
-          elif [ "$PILOT_CONFIRMATION" = "PILOT_DEC-014_2026-08-22" ]; then
-            grep -q 'schedule="\*/10 \* \* \* \*"' "$DAG_FILE"
-            grep -q 'PILOT_SCHEDULE_DECISION = "DEC-014"' "$DAG_FILE"
-            grep -q "PILOT_SCHEDULE_EXPIRES_AT" "$DAG_FILE"
-          else
-            echo "Unrecognized pilot_confirmation value; refusing to deploy." >&2
-            exit 1
-          fi
+          grep -q 'schedule="\*/10 \* \* \* \*",' "$DAG_FILE"
 
       - name: Configure verified SSH access
         shell: bash
@@ -230,7 +212,7 @@ jobs:
           set -euo pipefail
           target="$SSH_USER@$SSH_HOST"
           ssh -i "$HOME/.ssh/id_airflow" -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" \
-            "REMOTE_AIRFLOW_DIR='$REMOTE_AIRFLOW_DIR' PILOT_CONFIRMATION='$PILOT_CONFIRMATION' bash -s" <<'REMOTE'
+            "REMOTE_AIRFLOW_DIR='$REMOTE_AIRFLOW_DIR' bash -s" <<'REMOTE'
           set -euo pipefail
           cd "$REMOTE_AIRFLOW_DIR/infra/airflow"
           test -f .env
@@ -281,24 +263,16 @@ jobs:
           deployed_dag_file="../../pipeline/dags/bike_weather_ten_minute_collection_dag.py"
           test -f "$deployed_dag_file"
 
-          if [ -z "$PILOT_CONFIRMATION" ]; then
-            # grep -q only checks presence, not match count - the DAG's
-            # docstring/comments are allowed to mention "schedule=None" more
-            # than once (2026-08-22: an exact-string-equality version of this
-            # check broke here when the docstring said it 4 times).
-            if ! grep -q "schedule=None," "$deployed_dag_file"; then
-              echo "DAG schedule changed from None on the deployed source; refusing to leave this running." >&2
-              false
-            fi
-            schedule_summary="schedule=None confirmed"
-          else
-            dag_schedule=$(grep -o 'schedule="\*/10 \* \* \* \*"' "$deployed_dag_file" || true)
-            if [ -z "$dag_schedule" ]; then
-              echo "Pilot confirmation given but the approved pilot schedule literal is not on the deployed source; refusing to leave this running." >&2
-              false
-            fi
-            schedule_summary="DEC-014 pilot schedule (*/10 * * * *) confirmed, must be reverted to schedule=None by PILOT_SCHEDULE_EXPIRES_AT"
+          # grep -q only checks presence, not match count - the DAG's
+          # docstring/comments may mention the schedule literal in prose too
+          # (2026-08-22: an exact-string-equality version of this check broke
+          # when the docstring repeated "schedule=None" 4 times). Anchor on
+          # the trailing comma so only the actual decorator line matches.
+          if ! grep -q 'schedule="\*/10 \* \* \* \*",' "$deployed_dag_file"; then
+            echo "DAG schedule does not match the DEC-017 approved production value; refusing to leave this running." >&2
+            false
           fi
+          schedule_summary="DEC-017 production schedule (*/10 * * * *) confirmed"
 
           trap - ERR
           docker compose --env-file .env --env-file secrets.env --env-file release.env "${compose_files[@]}" ps
