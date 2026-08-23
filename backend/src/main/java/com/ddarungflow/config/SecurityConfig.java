@@ -108,7 +108,7 @@ public class SecurityConfig {
     ) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/v1/routes/estimate"))
+                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/v1/routes/estimate", "/api/v1/routes/candidates"))
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")

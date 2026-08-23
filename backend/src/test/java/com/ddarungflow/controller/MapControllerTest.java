@@ -439,6 +439,28 @@ class MapControllerTest {
     }
 
     @Test
+    @DisplayName("POST /api/v1/routes/candidates - CSRF 토큰 없이도 인증된 요청은 차단되지 않는다 (실제 브라우저 흐름 재현: 이 엔드포인트는 프론트가 CSRF 토큰을 보내지 않는다)")
+    @WithMockUser
+    void getRouteCandidatesWithoutCsrfTokenIsNotBlocked() throws Exception {
+        String jsonPayload = """
+            {
+                "originLatitude": 37.5500,
+                "originLongitude": 126.9000,
+                "destinationLatitude": 37.5556488,
+                "destinationLongitude": 126.91062927,
+                "travelMode": "WALK",
+                "minutesAhead": 60,
+                "requiredBikeCount": 1
+            }
+            """;
+
+        mockMvc.perform(post("/api/v1/routes/candidates")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(jsonPayload))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     @DisplayName("routeCandidatesReturnsExactlyFiveSortedCandidatesFromSix: 6개 이상의 후보 중 거리 오름차순으로 정확히 5개로 자른다")
     @WithMockUser
     void routeCandidatesReturnsExactlyFiveSortedCandidatesFromSix() throws Exception {
