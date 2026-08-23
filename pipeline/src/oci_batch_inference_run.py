@@ -12,9 +12,16 @@ that already exist and are already tested:
   - pipeline/src/batch_inference.py: run_batch_inference()
   - pipeline/src/storage/oci_raw_store.py + curated_snapshot_store.py: OCI client and
     the curated snapshot object layout
+
+It also bridges one real gap found only by running against real data: the curated
+snapshot identifies stations by station_id (e.g. "ST-10", the real-time collection
+API's own code), but the approved model was trained on the numeric station_number
+the backend's `stations` table already carries (e.g. 108). See
+load_station_number_mapping() and --station-mapping-csv.
 """
 
 import argparse
+import csv
 import hashlib
 import io
 import json
@@ -116,28 +123,63 @@ def load_curated_snapshot(object_storage, namespace, bucket, object_key):
     return frame
 
 
-def build_station_inputs(curated_frame, model_version, input_manifest_hash):
+def load_station_number_mapping(csv_path):
+    """Read the station_id -> station_number mapping exported from the backend
+    `stations` table (columns: station_id, station_number).
+
+    This mapping exists only in Postgres (backend/src/main/java/.../entity/Station.java),
+    not in OCI or the curated snapshot, so it must be supplied as a file. See
+    PREDICT-OPS-MVP-03's work order for the export query and why this mapping is
+    needed: the curated snapshot's station_id ("ST-10", the real-time collection
+    API's own identifier) differs from the numeric station_number the approved model
+    was trained on (the official Seoul bike station number).
+    """
+    mapping = {}
+    with open(csv_path, newline="", encoding="utf-8-sig") as handle:
+        for row in csv.DictReader(handle):
+            station_id = row["station_id"].strip()
+            station_number = row["station_number"].strip()
+            if station_id and station_number:
+                mapping[station_id] = int(station_number)
+    if not mapping:
+        raise RuntimeError(f"station mapping file {csv_path!r} produced no usable rows")
+    return mapping
+
+
+def build_station_inputs(curated_frame, model_version, input_manifest_hash, station_number_by_id):
     """Turn one curated snapshot DataFrame into the station_input dicts
-    run_batch_inference() requires. Stations with a null bike_count are skipped
-    (missing observation) rather than fed to the model as a fabricated value.
+    run_batch_inference() requires.
+
+    Skips a row (rather than fabricating a value) when:
+    - bike_count or observed_at is null (missing observation), or
+    - station_id has no entry in station_number_by_id (station master mapping gap,
+      e.g. a newly added station not yet exported into the mapping file) -- the
+      approved model has no numeric station_number to predict against for it.
     """
     inputs = []
+    skipped_unmapped = 0
     for _, row in curated_frame.iterrows():
         if pd.isna(row["bike_count"]) or pd.isna(row["observed_at"]):
             continue
+        station_id = str(row["station_id"])
+        if station_id not in station_number_by_id:
+            skipped_unmapped += 1
+            continue
         inputs.append(
             {
-                "stationId": str(row["station_id"]),
+                "stationId": station_id,
                 "featureAsOf": str(row["observed_at"]),
                 "currentBikeCount": int(row["bike_count"]),
                 "modelVersion": model_version,
                 "inputManifestHash": input_manifest_hash,
             }
         )
+    if skipped_unmapped:
+        print(f"warning: skipped {skipped_unmapped} station(s) with no station_number mapping", file=sys.stderr)
     return inputs
 
 
-def make_predictor(model_bundle):
+def make_predictor(model_bundle, station_number_by_id):
     """Wrap the joblib model to match run_batch_inference()'s predictor contract.
 
     batch_inference.py builds feature rows in (station, horizon)-major order with 5
@@ -154,6 +196,12 @@ def make_predictor(model_bundle):
     correction) violates the required non-increasing-by-quantity contract in about
     10% of groups, so enforce_quantity_monotonicity is applied per group here, same
     as that run did.
+
+    station_number_by_id translates each feature row's station_id (the curated
+    snapshot's string identifier, e.g. "ST-10") into the numeric station_number the
+    model was actually trained on (e.g. 108) -- see load_station_number_mapping().
+    build_station_inputs() already filters out any station_id missing from this
+    mapping, so every lookup here is expected to succeed.
     """
     model, _ = _model_parts(model_bundle)
 
@@ -166,7 +214,7 @@ def make_predictor(model_bundle):
             first = feature_rows[group_start]
             group_rows.append(
                 (
-                    first["station_id"],
+                    station_number_by_id[first["station_id"]],
                     first["day_of_week"],
                     first["hour_of_day"],
                     first["month"],
@@ -204,6 +252,14 @@ def main(argv=None):
     )
     parser.add_argument("--bucket", required=True)
     parser.add_argument("--namespace", required=False)
+    parser.add_argument(
+        "--station-mapping-csv",
+        required=True,
+        type=Path,
+        help="CSV with station_id,station_number columns, exported from the backend "
+        "stations table. The approved model predicts against station_number; the "
+        "curated snapshot only carries station_id.",
+    )
     parser.add_argument("--result-file", required=True, type=Path)
     args = parser.parse_args(argv)
 
@@ -213,14 +269,15 @@ def main(argv=None):
     model_bundle, pointer, _manifest = load_verified_model(
         object_storage, namespace, args.bucket, args.artifact_pointer, args.artifact_pointer_sha256
     )
+    station_number_by_id = load_station_number_mapping(args.station_mapping_csv)
 
     curated_key = args.curated_source or find_latest_curated_snapshot_key(object_storage, namespace, args.bucket)
     curated_frame = load_curated_snapshot(object_storage, namespace, args.bucket, curated_key)
 
     input_manifest_hash = hashlib.sha256(curated_key.encode("utf-8")).hexdigest()
-    station_inputs = build_station_inputs(curated_frame, pointer["model_version"], input_manifest_hash)
+    station_inputs = build_station_inputs(curated_frame, pointer["model_version"], input_manifest_hash, station_number_by_id)
 
-    result = run_batch_inference(station_inputs, predictor=make_predictor(model_bundle))
+    result = run_batch_inference(station_inputs, predictor=make_predictor(model_bundle, station_number_by_id))
 
     args.result_file.parent.mkdir(parents=True, exist_ok=True)
     with args.result_file.open("w", encoding="utf-8") as out:
