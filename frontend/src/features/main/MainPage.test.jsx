@@ -340,6 +340,20 @@ describe("시안 6 메인 로그인 통합", () => {
       });
     });
 
+    test("후보가 없으면 입력을 유지한 안내를 표시하고 날씨를 요청하지 않는다", async () => {
+      fetchRouteCandidates.mockResolvedValue([]);
+
+      await renderAndSelectPlaces();
+      fireEvent.click(screen.getByRole("button", { name: "대여 가능성 예측" }));
+
+      expect(await screen.findByText("주변에 추천할 대여소를 찾지 못했어요.")).toBeInTheDocument();
+      await waitFor(() => expect(screen.queryByText("예측 결과를 불러오는 중입니다…")).not.toBeInTheDocument());
+      expect(screen.getByPlaceholderText("출발지를 입력하세요")).toHaveValue("서울숲공원");
+      expect(screen.getByPlaceholderText("목적지를 입력하세요")).toHaveValue("서울숲공원");
+      expect(fetchArrivalWeather).not.toHaveBeenCalled();
+      expect(screen.queryByRole("heading", { name: "테스트 대여소" })).not.toBeInTheDocument();
+    });
+
     test("후보가 3곳을 넘으면 더 많은 대여소 보기로 나머지를 펼친다", async () => {
       const manyCandidates = Array.from({ length: 5 }, (_, index) => ({
         stationId: `ST-${index}`,
