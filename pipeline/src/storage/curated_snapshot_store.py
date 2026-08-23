@@ -6,6 +6,11 @@ DEC-013: 정규화 데이터는 Parquet(snappy)로 저장한다. Raw 대비 약 
 DEC-010에 따라 시간당 집계는 정각(HH:00) cycle의 정규화 스냅샷을 그대로
 채택하므로, 이 모듈의 writer를 정각 cycle에도 동일하게 재사용한다.
 별도의 집계 writer는 두지 않는다.
+
+station_id("ST-10" 등, 실시간 API 자체 코드)는 승인 모델이 학습한 숫자형
+station_number(예: 108, backend stations 테이블에만 존재)와 다르다.
+이 출력을 모델 입력으로 쓰려면 별도 station_id -> station_number 매핑이
+필요하다(PREDICT-OPS-MVP-03에서 실제 OCI 데이터로 재현·확인됨).
 """
 
 import io
