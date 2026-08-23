@@ -2,10 +2,10 @@
 
 기존 개발용 bike_weather_raw_curated DAG와 완전히 분리된 별도 DAG다.
 CHG-092가 2026-08-22 DEC-016으로 자동 수집 시작을 명시 승인했고, 승인 범위
-안에서 저장 배선을 순서대로 진행 중이다(1단계: Raw 저장 완료, 2단계: 정제
-+ NOT_REPORTED 카운트 - 이 PR). Curated 저장(Parquet)과 시간당 집계 실제
-계산은 아직 다음 단계다. 정제 결과는 이 DAG 안에서만 쓰이고 아직 어디에도
-저장되지 않는다.
+안에서 저장 배선을 순서대로 진행 중이다(1단계: Raw 저장, 2단계: 정제 +
+NOT_REPORTED 카운트, 3단계: Curated 저장(Parquet) + 시간당 대표값 태그 -
+이 PR). 정각(HH:00) cycle의 정규화 스냅샷을 그대로 시간당 대표값으로
+재사용한다(DEC-010/DEC-013) - 별도 집계 계산이나 별도 writer는 없다.
 
 기본 상태는 schedule=None(수동 실행 전용)이다. 저장 배선이 전부 검증되기
 전까지는 항상 이 상태를 유지한다 — 스케줄을 실제 주기로 바꾸는 것은 이
@@ -40,6 +40,10 @@ from pipeline.src.inventory_cleaning import (
     load_station_master,
 )
 from pipeline.src.quality.raw_quality import validate_raw_quality
+from pipeline.src.storage.curated_snapshot_store import (
+    write_curated_snapshot_once_local,
+    write_curated_snapshot_once_oci,
+)
 from pipeline.src.storage.local_raw_store import write_raw_once
 from pipeline.src.storage.oci_raw_store import write_raw_object_once
 
@@ -53,8 +57,10 @@ COLLECT_RETRY_DELAY = timedelta(seconds=60)
 # 허용하는 것은 아니므로, 실패는 아래 COLLECT_RETRIES 규칙으로만 재시도한다.
 PAGE_SIZE_LIMIT = 1000
 # 시간당 집계 기준시각·선택 규칙은 DEC-010에서 정각 스냅샷 채택으로 확정됐다.
-# 다만 구현은 stage-2 범위이므로 이 DAG는 계산하지 않고 경계만 선언한다.
-HOURLY_AGGREGATION_APPROVAL = "RULE_APPROVED_IMPLEMENTATION_DEFERRED"
+# "계산"은 평균·중앙값을 구하는 게 아니라 정각 cycle의 정규화 스냅샷을
+# 그대로 재사용하는 것뿐이므로(DEC-013), 별도 계산 로직이나 별도 저장은
+# 없다 - is_hourly_representative 태그로 그 cycle이 정각이었음만 표시한다.
+HOURLY_AGGREGATION_APPROVAL = "RULE_APPROVED_IMPLEMENTED_VIA_CURATED_REUSE"
 
 
 def _logical_time():
@@ -115,6 +121,36 @@ def _write_raw(source, observed_at, collected_at, payload):
             bucket_name=os.getenv("OCI_BUCKET_NAME", ""),
         )
     return result
+
+
+def _write_curated(curated_rows, observed_at):
+    """DEC-013에서 검증된 것과 같은 Curated(Parquet) 저장 경로를 쓴다.
+
+    같은 RAW_STORAGE_MODE 스위치를 재사용한다 - Raw와 Curated 둘 다 "이번
+    stage-2 배선이 실제로 쓰는지"를 뜻하는 같은 on/off이기 때문이다.
+    """
+    mode = os.getenv("RAW_STORAGE_MODE", "local").lower()
+    result = {}
+    if mode in {"local", "both"}:
+        result["local"] = write_curated_snapshot_once_local(
+            curated_rows,
+            observed_at=observed_at,
+            root_dir=os.getenv("RAW_ROOT_DIR", "/opt/airflow/data/raw"),
+        )
+    if mode in {"oci", "both"}:
+        result["oci"] = write_curated_snapshot_once_oci(
+            curated_rows,
+            observed_at=observed_at,
+            bucket_name=os.getenv("OCI_BUCKET_NAME", ""),
+        )
+    return result
+
+
+def _is_on_the_hour_seoul(observed_at_utc_iso):
+    """DEC-010: Asia/Seoul 정각(HH:00:00) cycle만 시간당 대표값으로 채택한다."""
+    parsed = datetime.fromisoformat(observed_at_utc_iso.replace("Z", "+00:00"))
+    seoul_time = parsed.astimezone(SEOUL_TZ)
+    return seoul_time.minute == 0 and seoul_time.second == 0
 
 
 @dag(
@@ -227,9 +263,8 @@ def bike_weather_ten_minute_collection():
     def curate_inventory_task(bike_raw, quality_result):
         """DEC-012 규칙으로 재고를 정제하고 NOT_REPORTED 대여소 개수만 센다.
 
-        결과는 이 태스크 안에서만 존재하며 아직 어디에도 저장하지 않는다
-        (Curated 저장 배선은 다음 단계). bike_count=0으로 채우지 않고
-        품질 실패로도 취급하지 않는다 - downstream을 막지 않는다.
+        정제 직후 Curated(Parquet)로 저장한다(DEC-013). bike_count=0으로
+        채우지 않고 품질 실패로도 취급하지 않는다 - downstream을 막지 않는다.
         """
         rows = bike_raw["payload"]["rentBikeStatus"]["row"]
         curated, quarantine = curate_live_inventory_rows(
@@ -241,6 +276,10 @@ def bike_weather_ten_minute_collection():
         not_reported_count = count_not_reported_stations(
             curated, quarantine, master_station_ids
         )
+        # 파티션 경계(year/month/day)를 Raw 저장과 동일하게 Asia/Seoul 기준으로
+        # 맞추기 위해, curate_live_inventory_rows가 UTC Z로 바꾼 값이 아니라
+        # bike_raw의 원래(Seoul-오프셋) observed_at을 그대로 쓴다.
+        curated_result = _write_curated(curated, bike_raw["observed_at"])
         return {
             "observed_at": quality_result["observed_at"],
             "curated_row_count": len(curated),
@@ -248,6 +287,8 @@ def bike_weather_ten_minute_collection():
             "not_reported_count": not_reported_count,
             "master_station_count": len(master_station_ids),
             "request_attempts": quality_result["request_attempts"],
+            "curated_result": curated_result,
+            "is_hourly_representative": _is_on_the_hour_seoul(bike_raw["observed_at"]),
         }
 
     @task(
@@ -257,17 +298,19 @@ def bike_weather_ten_minute_collection():
         show_return_value_in_logs=False,
     )
     def declare_hourly_aggregation_boundary_task(curate_result):
-        """집계 경계를 선언만 하고 계산하지 않는다.
+        """DEC-010 시간당 집계 규칙을 적용한다.
 
-        DEC-010은 기준시각을 Asia/Seoul 정각으로, 선택 규칙을 정각 cycle
-        원본 관측 채택으로 확정했다. 그러나 구현은 stage-2 범위이며
-        CHG-092의 나머지 게이트가 남아 있어 여기서 계산하지 않는다.
+        기준시각은 Asia/Seoul 정각(HH:00:00)이고, 선택 규칙은 정각 cycle의
+        정규화 스냅샷을 평균 없이 그대로 채택하는 것이다(DEC-013 - 별도
+        writer 없이 curate_inventory_task가 이미 저장한 같은 Parquet을
+        재사용한다). 이 태스크는 그 cycle이 정각이었는지만 확인해 선언한다.
         """
         return {
             "observed_at": curate_result["observed_at"],
             "upstream_quality_passed": True,
+            "is_hourly_representative": curate_result["is_hourly_representative"],
             "hourly_aggregation": HOURLY_AGGREGATION_APPROVAL,
-            "aggregation_performed": False,
+            "aggregation_performed": curate_result["is_hourly_representative"],
             "approved_rule": (
                 "Asia/Seoul on-the-hour snapshot; adopt the HH:00 cycle "
                 "observation as-is; no averaging; no backfill on a missing cycle."
@@ -277,10 +320,6 @@ def bike_weather_ten_minute_collection():
             "not_reported_count": curate_result["not_reported_count"],
             "curated_row_count": curate_result["curated_row_count"],
             "quarantine_row_count": curate_result["quarantine_row_count"],
-            "deferred_reason": (
-                "Aggregation implementation belongs to stage-2; CHG-092 still "
-                "blocks activation until the remaining gates are resolved."
-            ),
         }
 
     # 함수 인자로 이전 결과를 넘겨 Airflow가 선행관계를 자동으로 구성하게 한다.

@@ -20,10 +20,9 @@ CURATE_TASK_ID = "curate_inventory"
 AGGREGATION_TASK_ID = "declare_hourly_aggregation_boundary"
 
 # DEC-016(CHG-092 최종 승인) 이후 stage-2 저장 배선을 순서대로 진행 중이다.
-# 1단계(Raw 저장)·2단계(정제+NOT_REPORTED)는 허용됐다. Curated 저장(Parquet)·
-# DB 적재·모델 게시는 아직 다음 단계이므로 계속 금지.
+# 1단계(Raw 저장)·2단계(정제+NOT_REPORTED)·3단계(Curated 저장+시간당 태그)는
+# 허용됐다. 훈련 로더·DB 적재·모델 게시는 아직 다음 단계이므로 계속 금지.
 FORBIDDEN_IMPORT_FRAGMENTS = (
-    "curated_snapshot_store",
     "training_data_loader",
     "psycopg",
     "sqlalchemy",
@@ -32,8 +31,6 @@ FORBIDDEN_IMPORT_FRAGMENTS = (
     "model_registry",
 )
 FORBIDDEN_CALL_NAMES = (
-    "write_curated_snapshot_once_local",
-    "write_curated_snapshot_once_oci",
     "upload_model_artifact",
     "publish",
 )
@@ -187,8 +184,9 @@ def test_quality_failure_blocks_downstream_tasks(tree):
     assert ast.literal_eval(_decorator_kwargs(quality_function, "task")["retries"]) == 0
 
 
-def test_hourly_aggregation_is_declared_but_not_computed(tree, source):
-    """DEC-010이 규칙을 확정했지만 구현은 stage-2 범위이므로 계산하지 않는다."""
+def test_hourly_aggregation_reuses_curated_snapshot_without_averaging(tree, source):
+    """DEC-010/DEC-013: 정각 cycle의 curated 스냅샷을 그대로 재사용하고,
+    평균·중앙값 등 별도 계산이나 별도 저장은 하지 않는다."""
     aggregation_function = next(
         function
         for function in _task_functions(_dag_function(tree))
@@ -197,14 +195,18 @@ def test_hourly_aggregation_is_declared_but_not_computed(tree, source):
     body = ast.unparse(aggregation_function)
 
     assert "HOURLY_AGGREGATION_APPROVAL" in body
-    assert "'aggregation_performed': False" in body
+    assert "'aggregation_performed': curate_result['is_hourly_representative']" in body
     assert (
-        'HOURLY_AGGREGATION_APPROVAL = "RULE_APPROVED_IMPLEMENTATION_DEFERRED"'
+        'HOURLY_AGGREGATION_APPROVAL = "RULE_APPROVED_IMPLEMENTED_VIA_CURATED_REUSE"'
         in source
     )
-    # 승인된 규칙을 문서화하되 계산 로직은 없어야 한다.
+    # 승인된 규칙을 문서화하되 평균·중앙값 계산이나 별도 writer는 없어야 한다.
     assert "on-the-hour snapshot" in body
     assert "no backfill" in body
+    assert "mean(" not in source and "median(" not in source
+    assert "write_curated_snapshot_once" not in body, (
+        "집계 경계 태스크가 별도로 저장하면 안 된다 - curate_inventory_task가 이미 저장했다"
+    )
 
 
 def test_no_daily_request_cap_is_asserted(source):
@@ -214,9 +216,9 @@ def test_no_daily_request_cap_is_asserted(source):
     assert "PAGE_SIZE_LIMIT = 1000" in source
 
 
-def test_curated_storage_database_and_model_publishing_are_not_imported(tree, source):
-    """DEC-016 stage-2 1단계(Raw 저장)만 배선됐다. 이후 단계(정제·Curated
-    저장·DB·모델 게시)는 아직 이 DAG에 들어오면 안 된다."""
+def test_training_database_and_model_publishing_are_not_imported(tree, source):
+    """DEC-016 stage-2 1~3단계(Raw·정제·Curated 저장)만 배선됐다. 훈련 로더·
+    DB·모델 게시는 아직 이 DAG에 들어오면 안 된다."""
     imported = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
@@ -289,3 +291,27 @@ def test_curation_and_not_reported_counting_is_wired(tree, source):
         if _task_id(function) == AGGREGATION_TASK_ID
     )
     assert "not_reported_count" in ast.unparse(aggregation_function)
+
+
+def test_curated_storage_is_wired_with_hourly_tagging(tree, source):
+    """3단계: 정제 직후 Curated(Parquet) 저장이 실제로 배선돼 있어야 하고,
+    정각 cycle인지 태그가 붙어야 한다."""
+    assert (
+        "from pipeline.src.storage.curated_snapshot_store import" in source
+        and "write_curated_snapshot_once_local" in source
+        and "write_curated_snapshot_once_oci" in source
+    )
+
+    curate_function = next(
+        function
+        for function in _task_functions(_dag_function(tree))
+        if _task_id(function) == CURATE_TASK_ID
+    )
+    body = ast.unparse(curate_function)
+    assert "_write_curated(" in body, "정제 태스크가 Curated를 저장하지 않는다"
+    assert "'curated_result':" in body
+    assert "_is_on_the_hour_seoul(" in body
+    assert "'is_hourly_representative':" in body
+
+    # Raw와 같은 RAW_STORAGE_MODE 스위치를 재사용해야 한다(새 env var 없음).
+    assert source.count("RAW_STORAGE_MODE") >= 2
