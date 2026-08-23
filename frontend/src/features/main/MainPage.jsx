@@ -56,6 +56,7 @@ export default function MainPage({ onNavigate }) {
   const [timeConfirmed, setTimeConfirmed] = useState(false);
   const [loginPromptOpen, setLoginPromptOpen] = useState(false);
   const [apiPredictionResult, setApiPredictionResult] = useState(null);
+  const [emptyCandidateResult, setEmptyCandidateResult] = useState(false);
   const [predictLoading, setPredictLoading] = useState(false);
   const [selectedStationInfo, setSelectedStationInfo] = useState(null);
   const [ridingGuideOpen, setRidingGuideOpen] = useState(false);
@@ -116,6 +117,7 @@ export default function MainPage({ onNavigate }) {
   }, [apiPredictionResult, arrivalWeather, input, routePlaces, selectedStationInfo, weatherRequest]);
 
   const updateInput = (key, value) => {
+    setEmptyCandidateResult(false);
     setInput((current) => ({
       ...current,
       [key]: value,
@@ -137,6 +139,7 @@ export default function MainPage({ onNavigate }) {
   };
 
   const selectPlace = (key, place) => {
+    setEmptyCandidateResult(false);
     setInput((current) => ({ ...current, [key]: place.name, directMinutes: null }));
     setRoutePlaces((current) => ({ ...current, [key]: place }));
     setTimeConfirmed(false);
@@ -175,6 +178,7 @@ export default function MainPage({ onNavigate }) {
     }
     setArrivalWeather(null);
     setWeatherRequest(null);
+    setEmptyCandidateResult(false);
 
     if (!routePlaces.origin || !routePlaces.destination) {
       setApiPredictionResult(null);
@@ -195,6 +199,8 @@ export default function MainPage({ onNavigate }) {
       const result = adaptCandidateResponse(candidates, { requestedAt, requiredBikeCount: input.requiredBikeCount });
       if (!result.candidates.length) {
         setApiPredictionResult(null);
+        setSelectedStationInfo(null);
+        setEmptyCandidateResult(true);
         return;
       }
       setApiPredictionResult(result);
@@ -214,6 +220,7 @@ export default function MainPage({ onNavigate }) {
         return;
       }
       setApiPredictionResult(null);
+      setEmptyCandidateResult(false);
     } finally {
       setPredictLoading(false);
     }
@@ -276,6 +283,7 @@ export default function MainPage({ onNavigate }) {
       setUser(null);
       setAuthState("anonymous");
       setApiPredictionResult(null);
+      setEmptyCandidateResult(false);
       setArrivalWeather(null);
       setWeatherRequest(null);
       sessionStorage.removeItem(PREDICTION_RESULT_KEY);
@@ -328,6 +336,12 @@ export default function MainPage({ onNavigate }) {
 
       {timeConfirmed && <p className="main-time-notice">예상시간을 <strong>{input.directMinutes || "이동수단 기준"}{input.directMinutes ? "분" : ""}</strong>으로 확인했습니다.</p>}
       {predictLoading && <p className="main-time-notice" role="status">예측 결과를 불러오는 중입니다…</p>}
+      {emptyCandidateResult && (
+        <section className="main-empty-result" role="status">
+          <strong>주변에 추천할 대여소를 찾지 못했어요.</strong>
+          <span>목적지나 이동수단을 바꿔 다시 확인해 주세요.</span>
+        </section>
+      )}
 
       {apiPredictionResult ? (
         <section className="main-dashboard">
