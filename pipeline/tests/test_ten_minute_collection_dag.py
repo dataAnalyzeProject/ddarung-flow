@@ -18,10 +18,11 @@ COLLECT_TASK_IDS = ("collect_bike_inventory", "collect_weather")
 QUALITY_TASK_ID = "validate_raw_quality"
 AGGREGATION_TASK_ID = "declare_hourly_aggregation_boundary"
 
-# 새 DAG가 직접 접근하면 안 되는 저장·게시 경계.
+# DEC-016(CHG-092 최종 승인) 이후 stage-2 저장 배선의 1단계로 Raw 저장은
+# 허용됐다. Curated 저장·DB 적재·모델 게시는 아직 다음 단계이므로 계속 금지.
 FORBIDDEN_IMPORT_FRAGMENTS = (
-    "storage",
-    "oci",
+    "curated_snapshot_store",
+    "training_data_loader",
     "psycopg",
     "sqlalchemy",
     "batch_inference",
@@ -29,8 +30,9 @@ FORBIDDEN_IMPORT_FRAGMENTS = (
     "model_registry",
 )
 FORBIDDEN_CALL_NAMES = (
-    "write_raw_once",
-    "write_raw_object_once",
+    "curate_live_inventory_rows",
+    "write_curated_snapshot_once_local",
+    "write_curated_snapshot_once_oci",
     "upload_model_artifact",
     "publish",
 )
@@ -202,7 +204,9 @@ def test_no_daily_request_cap_is_asserted(source):
     assert "PAGE_SIZE_LIMIT = 1000" in source
 
 
-def test_no_raw_storage_oci_database_or_model_publishing_is_imported(tree, source):
+def test_curated_storage_database_and_model_publishing_are_not_imported(tree, source):
+    """DEC-016 stage-2 1단계(Raw 저장)만 배선됐다. 이후 단계(정제·Curated
+    저장·DB·모델 게시)는 아직 이 DAG에 들어오면 안 된다."""
     imported = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
@@ -220,5 +224,29 @@ def test_no_raw_storage_oci_database_or_model_publishing_is_imported(tree, sourc
     for call_name in FORBIDDEN_CALL_NAMES:
         assert call_name not in source, f"금지된 호출 발견: {call_name}"
 
-    # 저장 모드 분기가 남아 있으면 실제 Raw 저장 경로가 열린다.
-    assert "RAW_STORAGE_MODE" not in source
+
+def test_raw_storage_is_wired_for_both_collectors(tree, source):
+    """1단계: Raw 저장이 실제로 두 수집 태스크 모두에 배선돼 있어야 한다."""
+    assert "from pipeline.src.storage.local_raw_store import write_raw_once" in source
+    assert (
+        "from pipeline.src.storage.oci_raw_store import write_raw_object_once"
+        in source
+    )
+    assert "RAW_STORAGE_MODE" in source
+
+    for function in _task_functions(_dag_function(tree)):
+        if _task_id(function) not in COLLECT_TASK_IDS:
+            continue
+        body = ast.unparse(function)
+        assert "_write_raw(" in body, (
+            f"{_task_id(function)}가 Raw를 저장하지 않는다"
+        )
+        assert "'raw_result':" in body
+
+    # 10분 파이프라인은 기존 1시간짜리 개발용 DAG와 다른 source 이름을 써서
+    # 같은 버킷 안에서 두 파이프라인의 Raw 산출물이 섞이지 않게 한다.
+    existing = EXISTING_DAG_PATH.read_text(encoding="utf-8")
+    assert 'source="bike_inventory"' in existing
+    assert 'source="weather"' in existing
+    assert "RAW_SOURCE_BIKE_INVENTORY = \"bike_inventory_10min\"" in source
+    assert "RAW_SOURCE_WEATHER = \"weather_10min\"" in source
