@@ -1,19 +1,18 @@
-"""10분 수집 운영을 준비하는 수동 실행 전용 DAG (AIRFLOW-OPS-3.1 stage-1).
+"""10분 수집 운영 DAG (AIRFLOW-OPS-3.1 stage-1 골격, DEC-016 이후 stage-2 배선 진행 중).
 
 기존 개발용 bike_weather_raw_curated DAG와 완전히 분리된 별도 DAG다.
-이 DAG는 다음을 하지 않는다.
+CHG-092가 2026-08-22 DEC-016으로 자동 수집 시작을 명시 승인했고, 이 PR부터
+그 승인 범위 안에서 저장 배선을 순서대로 진행한다(1단계: Raw 저장).
+정제(curate)·Curated 저장·시간당 집계 실제 계산은 아직 다음 단계다.
 
-- Raw payload 저장, OCI object 생성, PostgreSQL 적재, 모델 결과 게시
-- 승인되지 않은 시간당 집계 규칙의 계산
+기본 상태는 schedule=None(수동 실행 전용)이다. 저장 배선이 전부 검증되기
+전까지는 항상 이 상태를 유지한다 — 스케줄을 실제 주기로 바꾸는 것은 이
+단계들이 모두 끝난 뒤 별도 PR로만 한다.
 
-기본 상태는 schedule=None(수동 실행 전용)이다. CHG-092 자동 수집 명시
-APPROVED와 시간당 집계 규칙 승인이 모두 기록되기 전까지는 항상 이 상태여야
-한다.
-
-DEC-014(조장 승인, 2026-08-22)로 24시간 재현성 파일럿을 위해 이 값을
+DEC-014(조장 승인, 2026-08-22)로 24시간 재현성 파일럿을 위해 스케줄을
 잠시 켰었다(2026-08-22 08:02~2026-08-23 이전, PR #126/#131 배포 이력
 참조). 파일럿에서 필요한 증거(정상 반복 실행, 재시도, 실패 시 downstream
-차단)를 모두 확보해 이 PR로 schedule=None으로 되돌린다.
+차단)를 모두 확보해 schedule=None으로 되돌렸다(PR #133/#134).
 """
 
 import os
@@ -34,6 +33,8 @@ from pipeline.src.collectors.weather_collector import (
     normalize_ultra_short_observation,
 )
 from pipeline.src.quality.raw_quality import validate_raw_quality
+from pipeline.src.storage.local_raw_store import write_raw_once
+from pipeline.src.storage.oci_raw_store import write_raw_object_once
 
 
 SEOUL_TZ = ZoneInfo("Asia/Seoul")
@@ -72,6 +73,43 @@ def _require_api_source(variable_name):
     return mode
 
 
+# 기존 1시간짜리 개발용 bike_weather_raw_curated DAG는 "bike_inventory"·
+# "weather"라는 source 이름으로 같은 버킷/경로에 Raw를 쓴다. 10분 데이터를
+# 같은 이름으로 쓰면 두 파이프라인의 산출물이 한 폴더에 섞여 보관정책·용량
+# 추적이 헷갈리므로, 이 DAG 전용 source 이름을 따로 둔다.
+RAW_SOURCE_BIKE_INVENTORY = "bike_inventory_10min"
+RAW_SOURCE_WEATHER = "weather_10min"
+
+
+def _write_raw(source, observed_at, collected_at, payload):
+    """DATA-OPS-3.6/DEC-012에서 검증된 것과 같은 Raw 저장 경로를 쓴다.
+
+    RAW_STORAGE_MODE는 기존 bike_weather_raw_curated DAG와 같은 스위치이며,
+    OCI 배포 환경(docker-compose.oci.yaml)에는 이미 'oci'로 설정돼 있다.
+    """
+    mode = os.getenv("RAW_STORAGE_MODE", "local").lower()
+    if mode not in {"local", "oci", "both"}:
+        raise AirflowFailException("RAW_STORAGE_MODE must be 'local', 'oci', or 'both'")
+    result = {}
+    if mode in {"local", "both"}:
+        result["local"] = write_raw_once(
+            source=source,
+            observed_at=observed_at,
+            collected_at=collected_at,
+            payload=payload,
+            root_dir=os.getenv("RAW_ROOT_DIR", "/opt/airflow/data/raw"),
+        )
+    if mode in {"oci", "both"}:
+        result["oci"] = write_raw_object_once(
+            source=source,
+            observed_at=observed_at,
+            collected_at=collected_at,
+            payload=payload,
+            bucket_name=os.getenv("OCI_BUCKET_NAME", ""),
+        )
+    return result
+
+
 @dag(
     dag_id="bike_weather_ten_minute_collection",
     schedule=None,
@@ -93,12 +131,18 @@ def bike_weather_ten_minute_collection():
         _require_api_source("BIKE_INVENTORY_SOURCE")
         client = SeoulBikeApiClient(os.getenv("SEOUL_OPEN_API_KEY", ""))
         result = collect_bike_inventory(client, collected_at)
-        # Raw payload는 저장하지 않는다. 품질 판정에 필요한 통합 응답만 넘긴다.
+        raw_result = _write_raw(
+            source=RAW_SOURCE_BIKE_INVENTORY,
+            observed_at=collected_at,
+            collected_at=collected_at,
+            payload={"pages": result["payloads"]},
+        )
         return {
             "payload": result["payload"],
             "observed_at": collected_at.isoformat(),
             "collected_at": result["collected_at"],
             "request_attempts": len(result["payloads"]),
+            "raw_result": raw_result,
         }
 
     @task(
@@ -124,11 +168,18 @@ def bike_weather_ten_minute_collection():
             collected_at=collected_at,
         )
         payload = normalize_ultra_short_observation(result["payload"], nx, ny)
+        raw_result = _write_raw(
+            source=RAW_SOURCE_WEATHER,
+            observed_at=payload["observed_at"],
+            collected_at=collected_at,
+            payload=payload,
+        )
         return {
             "payload": payload,
             "observed_at": payload["observed_at"],
             "collected_at": result["collected_at"],
             "request_attempts": 1,
+            "raw_result": raw_result,
         }
 
     @task(
