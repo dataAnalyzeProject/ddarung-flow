@@ -385,14 +385,12 @@
    deliberate, three-column hierarchy of the approved visual draft. */
 @media (min-width:1501px) and (min-height:721px){
   .main-shell{
-    --main-header-height:70px;
     grid-template-rows:70px 212px minmax(0,1fr);
     padding-bottom:10px;
   }
-  .main-header{height:70px}
   .main-search{
     height:198px;
-    margin:1px 27px 13px;
+    margin:9px 27px 5px;
     padding:27px 28px;
     grid-template-columns:330px minmax(670px,1fr) 300px;
     gap:20px;
@@ -514,18 +512,16 @@
   .main-hero-scene{display:block;position:absolute;z-index:0;right:4px;bottom:0;width:110px;height:95px;object-fit:contain;object-position:right bottom;opacity:1;pointer-events:none}
 }
 
-/* Wide desktop keeps the city and bicycle decorative: controls stay in the
-   three content tracks while the native artwork sits below and left of CTA. */
+/* Wide desktop: keep the native illustration inside the hero card. */
 @media (min-width:1700px) and (min-height:721px){
-  .main-search{grid-template-columns:330px minmax(500px,1fr) 300px;gap:16px}
+  .main-search{grid-template-columns:330px minmax(500px,1fr) 300px 220px;gap:16px}
   .main-hero-scene{
-    right:248px;
+    right:10px;
     bottom:0;
     width:220px;
     height:190px;
     object-fit:contain;
     object-position:right bottom;
-    z-index:0;
   }
 }
 
@@ -538,290 +534,4 @@
     height:min(560px,calc(100vh - 300px));
     min-height:430px;
   }
-}
-
-/* Final desktop ownership: each PC-width band has one three-column hero.
-   The scene is decorative, so its native 220:190 ratio never consumes a
-   content track or sits under the CTA. */
-@media (min-width:1180px) and (max-width:1500px) and (min-height:721px){
-  .main-search{grid-template-columns:minmax(240px,.78fr) minmax(420px,1.52fr) minmax(190px,.72fr)}
-  .main-hero-scene{right:132px;bottom:0;width:140px;height:121px;object-fit:contain;object-position:right bottom}
-}
-
-@media (min-width:1501px) and (max-width:1699px) and (min-height:721px){
-  .main-search{grid-template-columns:330px minmax(620px,1fr) 280px;gap:16px}
-  .main-hero-scene{right:190px;bottom:0;width:140px;height:121px;object-fit:contain;object-position:right bottom}
-}
-
-@media (min-width:1700px) and (min-height:721px){
-  .main-search{grid-template-columns:330px minmax(600px,808px) minmax(440px,1fr);column-gap:32px}
-  .main-fields{width:100%;transform:translateX(56px)}
-  .main-actions{margin-left:32px;padding-left:18px;grid-template-columns:124px minmax(0,1fr) 250px}
-  .main-actions .main-submit{grid-column:3}
-  .main-hero-scene{right:252px;bottom:0;width:220px;height:190px;object-fit:contain;object-position:right bottom}
-}
-
-/* Generated panorama and controls: the artwork spans the full card below live inputs. */
-@media (min-width:1180px) and (min-height:721px){
-  .main-shell{grid-template-rows:70px 212px minmax(0,1fr)}
-  .main-search{height:198px;margin-top:9px;margin-bottom:5px}
-  .main-search{isolation:isolate;background:#eef8ff}
-  .main-search:after{z-index:0;opacity:.18}
-  .main-hero-scene{display:block;inset:0;z-index:0;width:100%;height:100%;object-fit:cover;object-position:center 72%;opacity:1}
-  .main-input-wrap .main-place-icon{position:absolute;right:13px;top:50%;z-index:1;width:19px;height:19px;object-fit:contain;transform:translateY(-50%);pointer-events:none}
-  .main-input-wrap:has(.main-place-icon) b{display:none}
-  .main-mode-buttons button>img{width:20px;height:20px;object-fit:contain;pointer-events:none}
-  .main-actions .main-submit>img{width:17px;height:17px;object-fit:contain;pointer-events:none}
-  .main-actions .main-submit>span{display:none}
-}
-
-@media (min-width:1700px) and (min-height:721px){
-  .main-hero-copy h1{font-size:29px;white-space:nowrap}
-  .main-actions{grid-template-columns:124px 24px 300px;justify-content:start}
-  .main-actions .main-submit{grid-column:3}
-}
-
-/* Keep the three initial recommendations and the expand action within the
-   visible desktop panel after the hero card height was increased. */
-@media (min-width:1180px) and (min-height:721px){
-  .main-station-panel{
-    height:min(640px,100%);
-    box-sizing:border-box;
-    align-self:start;
-    display:flex;
-    flex-direction:column;
-    min-height:0;
-  }
-  .main-map-panel{
-    height:min(640px,100%);
-    box-sizing:border-box;
-    align-self:start;
-  }
-  .main-side-panels{
-    height:min(640px,100%);
-    min-height:0;
-    align-self:start;
-    grid-template-rows:minmax(0,.88fr) minmax(0,1.04fr) minmax(0,1.08fr);
-  }
-  .main-side-panels>section{padding:0 18px 12px}
-  .main-side-panels h2{font-size:18px}
-  .main-success{min-height:122px;gap:20px}
-  .main-success-gauge{width:96px;height:96px;flex-basis:96px;font-size:25px!important}
-  .main-success p{gap:7px;font-size:11px;line-height:1.35}
-  .main-success p b{font-size:16px}
-  .main-success p span,.main-success p em{font-weight:600}
-  .main-chart{padding:5px 18px 9px}
-  .main-chart-column>strong,.main-chart-column>b{font-size:11px;font-weight:700}
-  .main-chart-track{width:24px}
-  .main-side-panels>section:nth-child(2){
-    grid-template-rows:44px minmax(0,1fr) auto;
-  }
-  .main-side-panels>section:nth-child(2) .main-chart{
-    height:auto;
-    min-height:0;
-    padding:3px 18px 0;
-  }
-  .main-side-panels>section:nth-child(2) .main-chart-column{
-    min-height:0;
-    grid-template-rows:14px minmax(0,1fr) 16px;
-    gap:3px;
-  }
-  .main-side-panels>section:nth-child(2) .main-chart-track{
-    width:20px;
-    height:auto;
-    min-height:0;
-  }
-  .main-side-panels>section:nth-child(2) .main-tip{
-    min-height:32px;
-    margin:4px 0 0;
-    padding:7px 11px;
-    color:#405873;
-    font-size:11px;
-    font-weight:600;
-    line-height:1.4;
-  }
-  .main-side-panels>section:last-child .main-weather{
-    min-height:98px;
-    grid-template-columns:78px minmax(90px,auto) minmax(0,1fr);
-    column-gap:16px;
-  }
-  .main-side-panels>section:last-child .main-weather-icon{width:78px;height:78px}
-  .main-side-panels>section:last-child .main-weather-temperature{font-size:30px}
-  .main-side-panels>section:last-child .main-weather-temperature small{font-size:13px}
-  .main-side-panels>section:last-child .main-weather dl{gap:9px;font-size:13px;font-weight:600}
-  .main-side-panels>section:last-child .main-tip{font-size:11px;font-weight:600;line-height:1.45}
-  .main-station-panel .main-station-list{
-    height:calc(100% - 106px);
-    box-sizing:border-box;
-    min-height:0;
-    flex:0 0 calc(100% - 106px);
-    display:grid;
-    grid-template-rows:repeat(3,minmax(0,1fr));
-    gap:6px;
-    overflow:hidden;
-    padding:6px 12px 0;
-  }
-  .main-station-panel .main-station{
-    height:auto!important;
-    min-height:0;
-    margin:0;
-    padding:11px 14px 10px 62px;
-    grid-template-columns:minmax(72px,1fr) minmax(100px,1.1fr) minmax(94px,1fr) 96px;
-    column-gap:12px;
-    align-items:center;
-  }
-  .main-station-panel .main-section-head select{
-    width:188px;
-    height:38px;
-    color:#183b66;
-    font-size:12px;
-    font-weight:700;
-  }
-  .main-station-panel .main-station:first-child{height:auto!important;margin:0}
-  .main-station-panel .main-more{
-    height:38px;
-    flex:0 0 38px;
-    margin:6px 12px 10px;
-  }
-  .main-station-panel .main-more::after{
-    display:inline-block;
-    width:8px;
-    height:8px;
-    margin:0 0 3px 9px;
-    border-right:2px solid #3f6288;
-    border-bottom:2px solid #3f6288;
-    vertical-align:middle;
-    transform:rotate(45deg);
-    content:"";
-  }
-  .main-station-panel .main-station-name{top:12px}
-  .main-station-panel .main-station-name h3{font-size:16px!important}
-  .main-station-panel .main-station-name small{
-    color:#496784;
-    font-size:11px;
-    font-weight:700;
-  }
-  .main-station-panel .main-station-stat small,
-  .main-station-panel .main-station-rate small{font-size:9px;font-weight:600}
-  .main-station-panel .main-rank{left:14px;top:14px;width:32px;height:32px;font-size:14px}
-  .main-station-panel .main-station-bookmark{
-    position:absolute;
-    z-index:2;
-    right:10px;
-    top:8px;
-    width:30px;
-    height:36px;
-    object-fit:contain;
-    pointer-events:none;
-  }
-  .main-station-panel .main-station-stat,
-  .main-station-panel .main-station-rate{
-    display:grid;
-    grid-template-rows:19px minmax(0,1fr);
-    align-self:center;
-    min-height:60px;
-    align-content:end;
-    gap:2px;
-    padding-right:0;
-    border-right:0;
-    transform:translateY(7px);
-  }
-  .main-station-panel .main-station-stat small,
-  .main-station-panel .main-station-rate small{font-size:11px;font-weight:700}
-  .main-station-panel .main-station-stat strong{align-self:end;font-size:24px;line-height:1.05}
-  .main-station-panel .main-station-stat strong i{font-size:13px}
-  .main-station-panel .main-station-rate em{align-self:end;font-size:12px;font-weight:800}
-  .main-station-panel .main-details{
-    width:108px;
-    height:44px;
-    justify-self:center;
-    align-self:center;
-    border-width:1.5px;
-    font-size:12px;
-    font-weight:800;
-    transform:translate(-10px,7px);
-  }
-
-  .main-station-modal-backdrop{
-    position:fixed;
-    z-index:190;
-    inset:0;
-    display:grid;
-    place-items:center;
-    padding:40px;
-    background:#071c4073;
-  }
-  .main-station-modal{
-    width:min(1120px,100%);
-    height:min(790px,100%);
-    display:grid;
-    grid-template-rows:74px minmax(0,1fr);
-    overflow:hidden;
-    border:1px solid #c9d8e6;
-    border-radius:14px;
-    background:#fff;
-    box-shadow:0 18px 48px #071c4052;
-  }
-  .main-station-modal header{
-    padding:0 22px;
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    border-bottom:1px solid #dce6ef;
-  }
-  .main-station-modal h2{margin:0;font-size:20px}
-  .main-station-modal header span{display:block;margin-top:5px;color:#667990;font-size:12px}
-  .main-station-modal header button{
-    min-width:64px;
-    height:34px;
-    border:1px solid #b9cbdd;
-    border-radius:7px;
-    background:#fff;
-    color:#173354;
-    font-weight:800;
-    cursor:pointer;
-  }
-  .main-station-modal-list{
-    min-height:0;
-    display:grid;
-    grid-auto-rows:144px;
-    gap:10px;
-    overflow:auto;
-    padding:14px;
-  }
-  .main-dashboard:has(.main-station-modal-backdrop){z-index:100}
-  .main-station-modal-list .main-station{
-    height:144px!important;
-    margin:0;
-    padding:14px 16px 12px 68px;
-    grid-template-columns:minmax(90px,1fr) minmax(130px,1.15fr) minmax(110px,1fr) 108px;
-    column-gap:16px;
-  }
-  .main-station-modal-list .main-station-name{left:68px;top:14px}
-  .main-station-modal-list .main-station-name h3{font-size:17px!important}
-  .main-station-modal-list .main-station-name small{
-    margin-top:3px;
-    color:#496784;
-    font-size:11px;
-    font-weight:700;
-  }
-  .main-station-modal-list .main-rank{left:16px;top:16px;width:34px;height:34px;font-size:15px}
-  .main-station-modal-list .main-station-bookmark{position:absolute;right:12px;top:10px;width:26px;height:32px;object-fit:contain;pointer-events:none}
-  .main-station-modal-list .main-station-stat,
-  .main-station-modal-list .main-station-rate{
-    display:grid;
-    grid-template-rows:19px minmax(0,1fr);
-    align-self:center;
-    min-height:60px;
-    gap:2px;
-    padding-right:0;
-    border-right:0;
-    transform:translateY(12px);
-  }
-  .main-station-modal-list .main-station-stat small,
-  .main-station-modal-list .main-station-rate small{font-size:11px;font-weight:700}
-  .main-station-modal-list .main-station-stat strong{align-self:end;font-size:24px;line-height:1.05}
-  .main-station-modal-list .main-station-stat strong i{font-size:13px}
-  .main-station-modal-list .main-station-rate em{align-self:end;font-size:12px;font-weight:800}
-  .main-station-modal-list .main-details{width:108px;height:44px;justify-self:center;align-self:center;border-width:1.5px;font-size:12px;font-weight:800}
 }
