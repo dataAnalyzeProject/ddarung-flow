@@ -825,3 +825,33 @@
   .main-station-modal-list .main-station-rate em{align-self:end;font-size:12px;font-weight:800}
   .main-station-modal-list .main-details{width:108px;height:44px;justify-self:center;align-self:center;border-width:1.5px;font-size:12px;font-weight:800}
 }
+
+/* Generated PNGs retain their native 1254px canvas without explicit sizing.
+   These controls must therefore be sized at every PC height, including a
+   720px browser viewport where the tall-desktop media query does not match. */
+@media (min-width:1180px){
+  .main-input-wrap .main-place-icon{
+    position:absolute;
+    right:13px;
+    top:50%;
+    z-index:1;
+    width:19px;
+    height:19px;
+    object-fit:contain;
+    transform:translateY(-50%);
+    pointer-events:none;
+  }
+  .main-input-wrap:has(.main-place-icon) b{display:none}
+  .main-mode-buttons button>img{
+    width:20px;
+    height:20px;
+    object-fit:contain;
+    pointer-events:none;
+  }
+  .main-actions .main-submit>img{
+    width:17px;
+    height:17px;
+    object-fit:contain;
+    pointer-events:none;
+  }
+}
