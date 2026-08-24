@@ -1,12 +1,13 @@
 package com.ddarungflow.audit;
 
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
+import org.springframework.data.repository.Repository;
 
 import java.util.List;
 
-@Repository
-public interface AuditEventRepository extends JpaRepository<AuditEvent, Long> {
+@org.springframework.stereotype.Repository
+public interface AuditEventRepository extends Repository<AuditEvent, Long> {
+
+    AuditEvent save(AuditEvent entity);
 
     List<AuditEvent> findByCorrelationId(String correlationId);
 
