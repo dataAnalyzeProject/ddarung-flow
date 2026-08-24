@@ -136,7 +136,6 @@ export default function PredictionSummaryPanel({ candidates, selectedStationId, 
           <p>
             <b>{hasProbability ? availabilityLabels[level] : statusText}</b>
             <span>{selectedCandidate?.stationName ?? "-"} 기준</span>
-            <span>모델 {selectedCandidate?.modelVersion ?? "-"}</span>
             <em>{hasProbability ? AVAILABILITY_TIP[level] : "다른 대여소나 이동 시간을 확인해 보세요."}</em>
           </p>
         </div>
