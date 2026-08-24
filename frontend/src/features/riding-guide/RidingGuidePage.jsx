@@ -23,6 +23,9 @@ export default function RidingGuidePage({
   isWeatherLoading = false,
   onBack,
   onNavigate,
+  authState,
+  user,
+  onLogout,
   airQuality = airQualityNormalFixture,
   isAirQualityLoading = false,
 }) {
@@ -40,7 +43,7 @@ export default function RidingGuidePage({
 
   return (
     <main className="riding-guide-shell">
-      <AppHeader onHome={onBack} onNavigate={onNavigate} />
+      <AppHeader authState={authState} user={user} onLogout={onLogout} onHome={onBack} onNavigate={onNavigate} />
 
       <div className="guide-page">
         <RidingGuideHeader

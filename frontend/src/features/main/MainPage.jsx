@@ -304,6 +304,9 @@ export default function MainPage({ onNavigate }) {
         isWeatherLoading={weatherLoading}
         airQuality={guideAirQuality}
         isAirQualityLoading={guideAirQualityLoading}
+        authState={authState}
+        user={user}
+        onLogout={handleLogout}
         onBack={closeRidingGuide}
         onNavigate={onNavigate}
       />

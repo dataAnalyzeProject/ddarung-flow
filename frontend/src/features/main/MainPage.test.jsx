@@ -460,6 +460,7 @@ describe("시안 6 메인 로그인 통합", () => {
         expect(await screen.findByRole("heading", { name: "테스트 대여소 라이딩 가이드" })).toBeInTheDocument();
         expect(fetchAirQuality).toHaveBeenCalledTimes(1);
         expect(fetchAirQuality).toHaveBeenCalledWith("ST-9");
+        expect(screen.getByRole("button", { name: "로그아웃" })).toBeInTheDocument();
         expect(await screen.findByText("강남구")).toBeInTheDocument();
         await waitFor(() => expect(screen.queryByText("대기질 정보를 불러오는 중이에요.")).not.toBeInTheDocument());
       });
