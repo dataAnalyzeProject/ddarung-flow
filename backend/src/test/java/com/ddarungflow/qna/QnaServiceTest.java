@@ -15,6 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -144,6 +145,43 @@ class QnaServiceTest {
             // then
             assertThat(hidden.getStatus()).isEqualTo(QnaStatus.HIDDEN);
         }
+
+        @Test
+        @DisplayName("숨김(HIDDEN) 처리된 질문 재수정 시도 시 예외 발생 및 거부")
+        void updateQuestion_HiddenQuestion_ThrowsException() {
+            // given
+            QnaQuestion question = QnaQuestion.builder()
+                    .authorId(1L)
+                    .title("숨겨진 질문")
+                    .content("내용")
+                    .status(QnaStatus.HIDDEN)
+                    .build();
+
+            given(questionRepository.findById(1L)).willReturn(Optional.of(question));
+
+            // when & then
+            assertThatThrownBy(() -> qnaService.updateQuestion(1L, 1L, "수정시도 제목", "수정시도 내용", QnaCategory.OTHER, QnaVisibility.PUBLIC, null))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("숨김 처리되거나 마감된 질문은 수정할 수 없습니다.");
+        }
+
+        @Test
+        @DisplayName("숨김(HIDDEN) 처리된 질문 상태 변경 시도 시 예외 발생 및 거부")
+        void changeQuestionStatus_HiddenQuestion_ThrowsException() {
+            // given
+            QnaQuestion question = QnaQuestion.builder()
+                    .title("숨겨진 질문")
+                    .content("내용")
+                    .status(QnaStatus.HIDDEN)
+                    .build();
+
+            given(questionRepository.findById(1L)).willReturn(Optional.of(question));
+
+            // when & then
+            assertThatThrownBy(() -> qnaService.changeQuestionStatus(1L, QnaStatus.PENDING))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("숨김 처리되거나 마감된 질문의 상태는 변경할 수 없습니다.");
+        }
     }
 
     @Nested
@@ -151,8 +189,8 @@ class QnaServiceTest {
     class AnswerStatusTests {
 
         @Test
-        @DisplayName("관리자 추가/중복 답변 작성 시 질문 상태가 ANSWERED로 설정됨")
-        void addAnswer_MultipleAnswers_SetsStatusAnswered() {
+        @DisplayName("첫 답변 등록 성공")
+        void addAnswer_FirstAnswer_Success() {
             // given
             QnaQuestion question = QnaQuestion.builder()
                     .title("질문")
@@ -161,22 +199,21 @@ class QnaServiceTest {
                     .build();
 
             given(questionRepository.findById(1L)).willReturn(Optional.of(question));
+            given(answerRepository.countByQuestionId(1L)).willReturn(0L);
             given(answerRepository.save(any(QnaAnswer.class))).willAnswer(invocation -> invocation.getArgument(0));
 
-            // when - 첫 번째 답변
-            qnaService.addAnswer(1L, 100L, "관리자1", "첫 번째 답변입니다.");
-            assertThat(question.getStatus()).isEqualTo(QnaStatus.ANSWERED);
-
-            // when - 두 번째 중복 답변
-            qnaService.addAnswer(1L, 101L, "관리자2", "추가 답변입니다.");
+            // when
+            QnaAnswer answer = qnaService.addAnswer(1L, 100L, "관리자1", "첫 답변입니다.");
 
             // then
+            assertThat(answer).isNotNull();
             assertThat(question.getStatus()).isEqualTo(QnaStatus.ANSWERED);
+            verify(answerRepository).save(any(QnaAnswer.class));
         }
 
         @Test
-        @DisplayName("다중 답변 중 1개 삭제 시 다른 답변이 남아있으면 ANSWERED 유지")
-        void deleteAnswer_MultipleAnswersRemain_StatusStaysAnswered() {
+        @DisplayName("이미 답변이 존재하는 질문에 두 번째 답변 추가 시 예외 발생 및 중복 거부")
+        void addAnswer_DuplicateAnswer_ThrowsExceptionAndRejects() {
             // given
             QnaQuestion question = QnaQuestion.builder()
                     .title("질문")
@@ -184,17 +221,35 @@ class QnaServiceTest {
                     .status(QnaStatus.ANSWERED)
                     .build();
 
-            QnaAnswer answer1 = QnaAnswer.builder().question(question).responderName("관리자1").content("답변1").build();
+            given(questionRepository.findById(1L)).willReturn(Optional.of(question));
+            given(answerRepository.countByQuestionId(1L)).willReturn(1L); // 답변 1건 이미 존재
 
-            given(answerRepository.findById(10L)).willReturn(Optional.of(answer1));
-            given(answerRepository.countByQuestionId(question.getId())).willReturn(1L); // 1개 남아있음
+            // when & then
+            assertThatThrownBy(() -> qnaService.addAnswer(1L, 101L, "관리자2", "두 번째 중복 답변 시도"))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("이미 답변이 등록된 질문입니다.");
 
-            // when
-            qnaService.deleteAnswer(10L);
+            verify(answerRepository, never()).save(any(QnaAnswer.class));
+        }
 
-            // then
-            verify(answerRepository).delete(answer1);
-            assertThat(question.getStatus()).isEqualTo(QnaStatus.ANSWERED);
+        @Test
+        @DisplayName("숨김(HIDDEN) 처리된 질문에 답변 등록 시도 시 예외 발생 및 거부")
+        void addAnswer_HiddenQuestion_ThrowsException() {
+            // given
+            QnaQuestion question = QnaQuestion.builder()
+                    .title("숨겨진 질문")
+                    .content("내용")
+                    .status(QnaStatus.HIDDEN)
+                    .build();
+
+            given(questionRepository.findById(1L)).willReturn(Optional.of(question));
+
+            // when & then
+            assertThatThrownBy(() -> qnaService.addAnswer(1L, 100L, "관리자", "답변 작성 시도"))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("숨김 처리되거나 마감된 질문에는 답변을 등록할 수 없습니다.");
+
+            verify(answerRepository, never()).save(any(QnaAnswer.class));
         }
 
         @Test

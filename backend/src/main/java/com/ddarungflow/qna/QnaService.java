@@ -65,6 +65,7 @@ public class QnaService {
         if (!question.isAuthor(requesterId)) {
             throw new SecurityException("작성자만 질문을 수정할 수 있습니다.");
         }
+        validateQuestionModifiable(question);
         question.update(title, content, category, visibility, secretPin);
         return question;
     }
@@ -73,6 +74,7 @@ public class QnaService {
     public QnaQuestion updateQuestion(Long id, String title, String content,
                                        QnaCategory category, QnaVisibility visibility, String secretPin) {
         QnaQuestion question = getQuestion(id);
+        validateQuestionModifiable(question);
         question.update(title, content, category, visibility, secretPin);
         return question;
     }
@@ -80,13 +82,20 @@ public class QnaService {
     @Transactional
     public QnaQuestion changeQuestionStatus(Long id, QnaStatus status) {
         QnaQuestion question = getQuestion(id);
+        if (question.getStatus() == QnaStatus.HIDDEN || question.getStatus() == QnaStatus.CLOSED) {
+            if (status != question.getStatus()) {
+                throw new IllegalStateException("숨김 처리되거나 마감된 질문의 상태는 변경할 수 없습니다.");
+            }
+        }
         question.changeStatus(status);
         return question;
     }
 
     @Transactional
     public QnaQuestion hideQuestion(Long id) {
-        return changeQuestionStatus(id, QnaStatus.HIDDEN);
+        QnaQuestion question = getQuestion(id);
+        question.changeStatus(QnaStatus.HIDDEN);
+        return question;
     }
 
     @Transactional
@@ -113,6 +122,15 @@ public class QnaService {
         }
 
         QnaQuestion question = getQuestion(questionId);
+
+        if (question.getStatus() == QnaStatus.HIDDEN || question.getStatus() == QnaStatus.CLOSED) {
+            throw new IllegalStateException("숨김 처리되거나 마감된 질문에는 답변을 등록할 수 없습니다.");
+        }
+
+        if (answerRepository.countByQuestionId(questionId) > 0) {
+            throw new IllegalStateException("이미 답변이 등록된 질문입니다.");
+        }
+
         QnaAnswer answer = QnaAnswer.builder()
                 .question(question)
                 .responderId(responderId)
@@ -137,6 +155,11 @@ public class QnaService {
         }
         QnaAnswer answer = answerRepository.findById(answerId)
                 .orElseThrow(() -> new IllegalArgumentException("답변을 찾을 수 없습니다. ID: " + answerId));
+
+        if (answer.getQuestion().getStatus() == QnaStatus.HIDDEN || answer.getQuestion().getStatus() == QnaStatus.CLOSED) {
+            throw new IllegalStateException("숨김 처리되거나 마감된 질문의 답변은 수정할 수 없습니다.");
+        }
+
         answer.updateContent(newContent);
         return answer;
     }
@@ -154,6 +177,12 @@ public class QnaService {
             question.changeStatus(QnaStatus.PENDING);
         } else {
             question.changeStatus(QnaStatus.ANSWERED);
+        }
+    }
+
+    private void validateQuestionModifiable(QnaQuestion question) {
+        if (question.getStatus() == QnaStatus.HIDDEN || question.getStatus() == QnaStatus.CLOSED) {
+            throw new IllegalStateException("숨김 처리되거나 마감된 질문은 수정할 수 없습니다.");
         }
     }
 }
