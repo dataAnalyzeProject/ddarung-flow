@@ -167,6 +167,19 @@ public class ModelRegistryService {
         return artifactRepository.save(artifact);
     }
 
+    @Transactional(readOnly = true)
+    public List<ModelArtifact> findAll() {
+        return artifactRepository.findAll();
+    }
+
+    @Transactional(readOnly = true)
+    public List<ModelEvaluation> findEvaluations(Long modelId) {
+        if (modelId == null || !artifactRepository.existsById(modelId)) {
+            throw new IllegalArgumentException("ModelArtifact not found with id: " + modelId);
+        }
+        return evaluationRepository.findAllByModelId(modelId);
+    }
+
     private static boolean isValidSha256(String hash) {
         return hash != null && hash.matches("^[0-9a-f]{64}$");
     }
