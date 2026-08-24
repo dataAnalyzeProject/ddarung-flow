@@ -8,6 +8,7 @@ import LoginPage from './features/login/LoginPage';
 import IntroPage from './features/intro/IntroPage';
 import AdminAccessGate from './features/admin/AdminAccessGate';
 import { hasSeenIntro } from './features/intro/introStorage';
+import { getCurrentUser, logout } from './features/login/authApi';
 
 const HASH_ROUTES = ['qna', 'archive', 'alerts', 'mypage'];
 
@@ -19,6 +20,8 @@ function routeFromHash() {
 function App() {
   const isLoginPath = window.location.pathname === '/login';
   const [route, setRoute] = useState(routeFromHash);
+  const [authState, setAuthState] = useState('loading');
+  const [user, setUser] = useState(null);
   const [introComplete, setIntroComplete] = useState(
     () => isLoginPath || hasSeenIntro()
   );
@@ -28,6 +31,35 @@ function App() {
     window.addEventListener('hashchange', syncRoute);
     return () => window.removeEventListener('hashchange', syncRoute);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    getCurrentUser()
+      .then((auth) => {
+        if (cancelled) return;
+        setUser(auth.authenticated ? auth.user : null);
+        setAuthState(auth.authenticated ? 'authenticated' : 'anonymous');
+      })
+      .catch(() => {
+        if (!cancelled) setAuthState('error');
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleLogout = async () => {
+    setAuthState('logging-out');
+    try {
+      await logout();
+      setUser(null);
+      setAuthState('anonymous');
+    } catch {
+      setAuthState('authenticated');
+    }
+  };
 
   const navigate = (nextRoute) => {
     if (nextRoute === 'admin') {
@@ -52,15 +84,15 @@ function App() {
   }
 
   if (route === 'qna') {
-    return <QnaPage onNavigate={navigate} />;
+    return <QnaPage authState={authState} user={user} onNavigate={navigate} onLogout={handleLogout} />;
   }
 
   if (route === 'archive') {
-    return <ArchivePage onNavigate={navigate} />;
+    return <ArchivePage authState={authState} user={user} onNavigate={navigate} onLogout={handleLogout} />;
   }
 
   if (route === 'alerts') {
-    return <AlertsPage onNavigate={navigate} />;
+    return <AlertsPage authState={authState} user={user} onNavigate={navigate} onLogout={handleLogout} />;
   }
 
   if (route === 'mypage') {
