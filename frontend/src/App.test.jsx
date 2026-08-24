@@ -11,6 +11,7 @@ jest.mock("./features/login/authApi", () => ({
 
 beforeEach(() => {
   window.localStorage.clear();
+  getCurrentUser.mockResolvedValue({ authenticated: false, user: null });
 });
 
 afterEach(() => {
@@ -48,13 +49,14 @@ test("does not render the admin fixture for a USER at the direct admin URL", asy
   expect(screen.queryByText("운영 현황")).not.toBeInTheDocument();
 });
 
-test("shows the intro before the main page on the first visit", () => {
+test("shows the intro before the main page on the first visit", async () => {
   window.history.replaceState({}, "", "/");
 
   render(<App />);
 
   expect(screen.getByRole("button", { name: "대여 가능성 예측 시작하기" })).toBeInTheDocument();
   expect(document.querySelector(".intro-page")).toBeInTheDocument();
+  await waitFor(() => expect(getCurrentUser).toHaveBeenCalledTimes(1));
 });
 
 test("moves to the main page without reloading after completing the intro", async () => {
@@ -132,6 +134,27 @@ test("opens the alerts page from the main menu and reflects the hash", async () 
 
   expect(window.location.hash).toBe("#alerts");
   expect(screen.getByRole("heading", { name: "알림" })).toBeInTheDocument();
+});
+
+test("shares the logged-in header state across Q&A, archive, and alerts", async () => {
+  window.history.replaceState({}, "", "/#qna");
+  window.localStorage.setItem(INTRO_SEEN_KEY, "true");
+  getCurrentUser.mockResolvedValue({
+    authenticated: true,
+    user: { displayName: "김따릉", provider: "kakao" },
+  });
+
+  render(<App />);
+
+  expect(await screen.findByRole("button", { name: "로그아웃" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "김따릉 · 내 계정" })).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "보관함" }));
+  expect(screen.getByRole("button", { name: "로그아웃" })).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "알림" }));
+  expect(screen.getByRole("button", { name: "로그아웃" })).toBeInTheDocument();
+  expect(getCurrentUser).toHaveBeenCalledTimes(1);
 });
 
 test("shows the mypage guest notice when navigating there while logged out", async () => {
