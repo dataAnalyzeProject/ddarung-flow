@@ -1,0 +1,154 @@
+package com.ddarungflow.payment;
+
+import com.ddarungflow.entity.Users;
+import com.ddarungflow.dto.PrincipalDetails;
+import org.springframework.http.ResponseEntity;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+
+import java.time.OffsetDateTime;
+import java.util.Optional;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+class SubscriptionServiceTest {
+    private final SubscriptionRepository subscriptions = mock(SubscriptionRepository.class);
+    private final PaymentRepository payments = mock(PaymentRepository.class);
+    private final PaymentEventRepository events = mock(PaymentEventRepository.class);
+    private final PaymentVerifier verifier = mock(PaymentVerifier.class);
+    private final SubscriptionService service = new SubscriptionService(subscriptions, payments, events, verifier);
+    private final Users user = Users.builder().provider("test").providerUserId("u1").displayName("tester").build();
+
+    @Test
+    void checkoutUsesServerDefinedMonthlyAmountAndDurationPlan() {
+        when(subscriptions.findFirstByUserOrderByEndsAtDesc(user)).thenReturn(Optional.empty());
+        when(payments.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var result = service.checkout(user, SubscriptionPlan.PREMIUM_MONTHLY_30D);
+
+        assertEquals("READY", result.get("status"));
+        assertEquals(2900, result.get("amount"));
+        assertEquals("KRW", result.get("currency"));
+        assertEquals("PREMIUM_MONTHLY_30D", result.get("planId"));
+    }
+
+    @Test
+    void activeSubscriberCannotCreateAnotherCheckout() {
+        when(subscriptions.findFirstByUserOrderByEndsAtDesc(user))
+                .thenReturn(Optional.of(new Subscription(user, SubscriptionPlan.PREMIUM_MONTHLY_30D, OffsetDateTime.now())));
+
+        var result = service.checkout(user, SubscriptionPlan.PREMIUM_YEARLY_365D);
+
+        assertEquals("SUBSCRIPTION_ALREADY_ACTIVE", result.get("code"));
+        verify(payments, never()).save(any());
+    }
+
+    @Test
+    void expiredSubscriberCanCheckoutAgain() {
+        when(subscriptions.findFirstByUserOrderByEndsAtDesc(user))
+                .thenReturn(Optional.of(new Subscription(user, SubscriptionPlan.PREMIUM_MONTHLY_30D, OffsetDateTime.now().minusDays(31))));
+        when(payments.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var result = service.checkout(user, SubscriptionPlan.PREMIUM_YEARLY_365D);
+
+        assertEquals("READY", result.get("status"));
+        assertEquals("PREMIUM_YEARLY_365D", result.get("planId"));
+        verify(payments).save(any(Payment.class));
+    }
+
+    @Test
+    void verifiedWebhookActivatesOnlyMatchingPayment() {
+        Payment payment = new Payment(user, "ddarung-order-1", SubscriptionPlan.PREMIUM_YEARLY_365D);
+        when(events.findByProviderAndEventId("TOSS", "event-1")).thenReturn(Optional.empty());
+        when(verifier.verify("key-1")).thenReturn(new VerifiedTossPayment("ddarung-order-1", "key-1", 29000, "KRW", "DONE"));
+        when(payments.findByOrderId("ddarung-order-1")).thenReturn(Optional.of(payment));
+
+        var result = service.processWebhook("event-1", "key-1");
+
+        assertEquals("ACTIVE", result.get("status"));
+        assertEquals(PaymentStatus.SUCCEEDED, payment.getStatus());
+        ArgumentCaptor<Subscription> subscription = ArgumentCaptor.forClass(Subscription.class);
+        verify(subscriptions).save(subscription.capture());
+        assertEquals(SubscriptionPlan.PREMIUM_YEARLY_365D, subscription.getValue().getPlan());
+        assertTrue(subscription.getValue().getEndsAt().isAfter(OffsetDateTime.now().plusDays(364)));
+    }
+
+    @Test
+    void mismatchedAmountDoesNotActivateSubscription() {
+        Payment payment = new Payment(user, "ddarung-order-2", SubscriptionPlan.PREMIUM_MONTHLY_30D);
+        when(events.findByProviderAndEventId("TOSS", "event-2")).thenReturn(Optional.empty());
+        when(verifier.verify("key-2")).thenReturn(new VerifiedTossPayment("ddarung-order-2", "key-2", 1, "KRW", "DONE"));
+        when(payments.findByOrderId("ddarung-order-2")).thenReturn(Optional.of(payment));
+
+        var result = service.processWebhook("event-2", "key-2");
+
+        assertEquals("PAYMENT_VERIFICATION_FAILED", result.get("code"));
+        verify(subscriptions, never()).save(any());
+        verify(events).save(any(PaymentEvent.class));
+    }
+
+    @Test
+    void duplicateWebhookDoesNotReverifyOrActivateAgain() {
+        when(events.findByProviderAndEventId("TOSS", "event-3"))
+                .thenReturn(Optional.of(new PaymentEvent("TOSS", "event-3", PaymentEventOutcome.ACTIVE)));
+
+        var result = service.processWebhook("event-3", "key-3");
+
+        assertEquals("ACTIVE", result.get("status"));
+        verifyNoInteractions(verifier);
+        verify(subscriptions, never()).save(any());
+    }
+
+    @Test
+    void failedWebhookReusesTheFirstVerificationFailure() {
+        when(events.findByProviderAndEventId("TOSS", "event-4"))
+                .thenReturn(Optional.of(new PaymentEvent("TOSS", "event-4", PaymentEventOutcome.VERIFICATION_FAILED)));
+
+        var result = service.processWebhook("event-4", "key-4");
+
+        assertEquals("PAYMENT_VERIFICATION_FAILED", result.get("code"));
+        verifyNoInteractions(verifier);
+        verify(events, never()).save(any());
+    }
+
+    @Test
+    void canceledTossPaymentDoesNotActivateSubscription() {
+        Payment payment = new Payment(user, "ddarung-order-3", SubscriptionPlan.PREMIUM_MONTHLY_30D);
+        when(events.findByProviderAndEventId("TOSS", "event-5")).thenReturn(Optional.empty());
+        when(verifier.verify("key-5")).thenReturn(new VerifiedTossPayment("ddarung-order-3", "key-5", 2900, "KRW", "CANCELED"));
+        when(payments.findByOrderId("ddarung-order-3")).thenReturn(Optional.of(payment));
+
+        var result = service.processWebhook("event-5", "key-5");
+
+        assertEquals("PAYMENT_VERIFICATION_FAILED", result.get("code"));
+        assertEquals(PaymentStatus.CANCELED, payment.getStatus());
+        verify(subscriptions, never()).save(any());
+    }
+
+    @Test
+    void webhookVerificationFailureIsExposedAsUnauthorized() {
+        SubscriptionService controllerService = mock(SubscriptionService.class);
+        PaymentController controller = new PaymentController(controllerService);
+        when(controllerService.processWebhook("event-6", "key-6"))
+                .thenReturn(java.util.Map.of("code", "PAYMENT_VERIFICATION_FAILED"));
+
+        ResponseEntity<?> response = controller.webhook(java.util.Map.of("eventId", "event-6", "paymentKey", "key-6"));
+
+        assertEquals(401, response.getStatusCode().value());
+    }
+
+    @Test
+    void productionCheckoutBlockIsExposedAsServiceUnavailable() {
+        SubscriptionService controllerService = mock(SubscriptionService.class);
+        PaymentController controller = new PaymentController(controllerService);
+        when(controllerService.checkout(user, SubscriptionPlan.PREMIUM_MONTHLY_30D))
+                .thenReturn(java.util.Map.of("code", "PAYMENT_NOT_ENABLED"));
+
+        ResponseEntity<?> response = controller.checkout(new PrincipalDetails(user), java.util.Map.of("planId", "PREMIUM_MONTHLY_30D"));
+
+        assertEquals(503, response.getStatusCode().value());
+    }
+}

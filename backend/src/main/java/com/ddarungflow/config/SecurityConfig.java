@@ -56,6 +56,7 @@ public class SecurityConfig {
     private static final Pattern AIR_QUALITY_PATH = Pattern.compile("^/api/v1/stations/[^/]+/air-quality/?$");
     private static final Pattern ADMIN_API_PATH = Pattern.compile("^/api/v1/admin(?:/.*)?$");
     private static final Pattern ROUTE_CANDIDATES_PATH = Pattern.compile("^/api/v1/routes/candidates/?$");
+    private static final Pattern PAYMENT_API_PATH = Pattern.compile("^/api/v1/(?:me/subscription|payments/checkout)/?$");
 
     private void writeApiError(HttpServletResponse response, int status, String code, String message) throws IOException {
         response.setStatus(status);
@@ -77,6 +78,10 @@ public class SecurityConfig {
                 return;
             }
             if (ROUTE_CANDIDATES_PATH.matcher(request.getRequestURI()).matches()) {
+                writeApiError(response, HttpServletResponse.SC_UNAUTHORIZED, "AUTH_REQUIRED", "로그인이 필요합니다.");
+                return;
+            }
+            if (PAYMENT_API_PATH.matcher(request.getRequestURI()).matches()) {
                 writeApiError(response, HttpServletResponse.SC_UNAUTHORIZED, "AUTH_REQUIRED", "로그인이 필요합니다.");
                 return;
             }
@@ -108,7 +113,7 @@ public class SecurityConfig {
     ) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/v1/routes/estimate", "/api/v1/routes/candidates"))
+                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/v1/routes/estimate", "/api/v1/routes/candidates", "/api/v1/payments/webhooks/toss"))
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
