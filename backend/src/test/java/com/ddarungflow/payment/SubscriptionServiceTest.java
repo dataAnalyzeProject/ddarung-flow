@@ -60,6 +60,20 @@ class SubscriptionServiceTest {
     }
 
     @Test
+    void subscriptionStatusIsIsolatedByUser() {
+        Users otherUser = Users.builder().provider("test").providerUserId("u2").displayName("other").build();
+        when(subscriptions.findFirstByUserOrderByEndsAtDesc(user))
+                .thenReturn(Optional.of(new Subscription(user, SubscriptionPlan.PREMIUM_MONTHLY_30D, OffsetDateTime.now())));
+        when(subscriptions.findFirstByUserOrderByEndsAtDesc(otherUser)).thenReturn(Optional.empty());
+
+        var ownerSubscription = service.current(user);
+        var otherSubscription = service.current(otherUser);
+
+        assertEquals("ACTIVE", ownerSubscription.get("status"));
+        assertEquals("FREE", otherSubscription.get("status"));
+    }
+
+    @Test
     void verifiedWebhookActivatesOnlyMatchingPayment() {
         Payment payment = new Payment(user, "ddarung-order-1", SubscriptionPlan.PREMIUM_YEARLY_365D);
         when(events.findByProviderAndEventId("TOSS", "event-1")).thenReturn(Optional.empty());
