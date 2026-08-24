@@ -327,7 +327,7 @@ describe("시안 6 메인 로그인 통합", () => {
       fireEvent.click(screen.getByRole("button", { name: "대여 가능성 예측" }));
 
       expect(await screen.findByRole("heading", { name: "테스트 대여소" })).toBeInTheDocument();
-      expect(screen.getByText("모델 availability-v1")).toBeInTheDocument();
+      expect(screen.queryByText("모델 availability-v1")).not.toBeInTheDocument();
       expect(fetchRouteCandidates).toHaveBeenCalledWith(
         expect.objectContaining({ originLatitude: 37.5, destinationLatitude: 37.5, requiredBikeCount: 1 })
       );
@@ -353,7 +353,7 @@ describe("시안 6 메인 로그인 통합", () => {
       expect(screen.queryByRole("heading", { name: "테스트 대여소" })).not.toBeInTheDocument();
     });
 
-    test("후보가 3곳을 넘으면 더 많은 대여소 보기로 나머지를 펼친다", async () => {
+    test("후보가 3곳을 넘으면 더 많은 대여소 보기에서 전체 목록을 연다", async () => {
       const manyCandidates = Array.from({ length: 5 }, (_, index) => ({
         stationId: `ST-${index}`,
         stationName: `대여소 ${index}`,

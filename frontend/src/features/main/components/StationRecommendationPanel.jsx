@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import bookmarkIcon from "../../../assets/main/recommendation-bookmark-icon-v1.png";
 
 const availabilityLabels = { HIGH: "높음", MEDIUM: "중간", LOW: "낮음" };
 
@@ -47,15 +48,49 @@ function inventoryReferenceTime(candidates) {
 
 export default function StationRecommendationPanel({ candidates, selectedStationId, onSelect, onViewGuide, routeDurationMinutes }) {
   const [sortBy, setSortBy] = useState("probability");
-  const [visibleCount, setVisibleCount] = useState(VISIBLE_STEP);
+  const [isListOpen, setIsListOpen] = useState(false);
   const sortedCandidates = useMemo(() => sortCandidates(candidates, sortBy), [candidates, sortBy]);
   const referenceTime = useMemo(() => inventoryReferenceTime(candidates), [candidates]);
-  const visibleCandidates = sortedCandidates.slice(0, visibleCount);
-  const hasMore = visibleCount < sortedCandidates.length;
+  const visibleCandidates = sortedCandidates.slice(0, VISIBLE_STEP);
+  const hasMore = sortedCandidates.length > VISIBLE_STEP;
 
   useEffect(() => {
-    setVisibleCount(VISIBLE_STEP);
-  }, [candidates]);
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") setIsListOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, []);
+
+  const renderStation = (candidate, index) => {
+    const selected = candidate.stationId === selectedStationId;
+    const level = candidate.availabilityLevel;
+    return (
+      <div aria-label={`${candidate.stationName} 대여소 카드`} className={`main-station ${selected ? "selected" : ""}`} key={candidate.stationId} role="group">
+        <button aria-label={`${candidate.stationName} 대여소 선택`} aria-pressed={selected} className="main-station-select" type="button" onClick={() => onSelect(candidate.stationId)} />
+        <b className="main-rank">{index + 1}</b>
+        <img aria-hidden="true" alt="" className="main-station-bookmark" src={bookmarkIcon} />
+        <span className="main-station-name">
+          <h3>{candidate.stationName}</h3>
+          {index === 0 && <em>추천</em>}
+          <small>{candidate.distanceMeters}m · 도보 {Math.round(candidate.durationSeconds / 60)}분</small>
+        </span>
+        <span className="main-station-stat">
+          <small>현재 자전거</small>
+          <strong>{candidate.currentInventory.availableBikeCount ?? "-"}<i>대</i></strong>
+        </span>
+        <span className="main-station-stat">
+          <small>예상 도착시각</small>
+          <strong>{formatStationTime(candidate.arrivalAt)}</strong>
+        </span>
+        <span className="main-station-rate">
+          <small>대여 가능성</small>
+          <em>{availabilityLabels[level] ?? "예측 불가"}</em>
+        </span>
+        <button aria-label={`${candidate.stationName} 상세보기`} className="main-details" type="button" onClick={() => onViewGuide(candidate)}>상세보기</button>
+      </div>
+    );
+  };
 
   return (
     <section className="main-station-panel" aria-label="추천 대여소 목록">
@@ -68,39 +103,28 @@ export default function StationRecommendationPanel({ candidates, selectedStation
         </select>
       </header>
       <div className="main-station-list">
-        {visibleCandidates.map((candidate, index) => {
-          const selected = candidate.stationId === selectedStationId;
-          const level = candidate.availabilityLevel;
-          return (
-            <div aria-label={`${candidate.stationName} 대여소 카드`} className={`main-station ${selected ? "selected" : ""}`} key={candidate.stationId} role="group">
-              <button aria-label={`${candidate.stationName} 대여소 선택`} aria-pressed={selected} className="main-station-select" type="button" onClick={() => onSelect(candidate.stationId)} />
-              <b className="main-rank">{index + 1}</b>
-              <span className="main-station-name">
-                <h3>{candidate.stationName}</h3>
-                {index === 0 && <em>추천</em>}
-                <small>{candidate.distanceMeters}m · 도보 {Math.round(candidate.durationSeconds / 60)}분</small>
-              </span>
-              <span className="main-station-stat">
-                <small>현재 자전거</small>
-                <strong>{candidate.currentInventory.availableBikeCount ?? "-"}<i>대</i></strong>
-              </span>
-              <span className="main-station-stat">
-                <small>예상 도착시각</small>
-                <strong>{formatStationTime(candidate.arrivalAt)}</strong>
-              </span>
-              <span className="main-station-rate">
-                <small>대여 가능성</small>
-                <em>{availabilityLabels[level] ?? "예측 불가"}</em>
-              </span>
-              <button aria-label={`${candidate.stationName} 상세보기`} className="main-details" type="button" onClick={() => onViewGuide(candidate)}>상세보기</button>
-            </div>
-          );
-        })}
+        {visibleCandidates.map(renderStation)}
       </div>
       {hasMore && (
-        <button className="main-more" type="button" onClick={() => setVisibleCount((count) => count + VISIBLE_STEP)}>
-          더 많은 대여소 보기⌄
+        <button className="main-more" type="button" onClick={() => setIsListOpen(true)}>
+          더 많은 대여소 보기
         </button>
+      )}
+      {isListOpen && (
+        <div className="main-station-modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setIsListOpen(false)} role="presentation">
+          <section aria-label="전체 추천 대여소" aria-modal="true" className="main-station-modal" role="dialog">
+            <header>
+              <div>
+                <h2>전체 추천 대여소</h2>
+                <span>{sortedCandidates.length}개 대여소를 대여 가능성 순으로 보여드립니다.</span>
+              </div>
+              <button aria-label="전체 추천 대여소 닫기" type="button" onClick={() => setIsListOpen(false)}>닫기</button>
+            </header>
+            <div className="main-station-modal-list">
+              {sortedCandidates.map(renderStation)}
+            </div>
+          </section>
+        </div>
       )}
     </section>
   );
