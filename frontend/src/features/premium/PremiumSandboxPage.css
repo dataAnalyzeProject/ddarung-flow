@@ -1,0 +1,199 @@
+/* ==========================================================================
+   EXP-FE-3.6-PREMIUM 프리미엄 구독 샌드박스 UI 전용 스타일 (Fluid Responsive)
+   - PC: 1440x900 기준 2열 Grid (최대 1440px)
+   - 모바일: 620px 이하 1열 세로 자동 전환
+   - 전역 CSS 오염 방지 (.premium-sandbox* 네임스페이스)
+   ========================================================================== */
+/* 1. 본문 최상위 컨테이너 */
+.premium-sandbox {
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 40px 27px;
+  background-color: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: #0f172a;
+  box-sizing: border-box;
+}
+/* 2. 상단 타이틀 영역 */
+.premium-sandbox__header-title {
+  margin-bottom: 20px;
+}
+.premium-sandbox__subtitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: #2563eb;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+.premium-sandbox__header-title h1 {
+  font-size: 28px;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0 0 8px 0;
+}
+.premium-sandbox__desc {
+  font-size: 14px;
+  color: #64748b;
+  margin: 0;
+}
+/* 3. 필수 공통 안전 배지 바 */
+.premium-sandbox__notice-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 28px;
+}
+.premium-sandbox__status-badge {
+  font-size: 12px;
+  font-weight: 700;
+  background-color: #dcfce7;
+  color: #15803d;
+  padding: 4px 10px;
+  border-radius: 6px;
+  text-transform: uppercase;
+}
+/* 4. 본문 2열 카드 영역 (PC: Grid 50:50) */
+.premium-sandbox__container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  align-items: start;
+}
+.premium-sandbox__card {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+}
+.premium-sandbox__card h2 {
+  font-size: 20px;
+  font-weight: 700;
+  color: #0f172a;
+  margin-top: 0;
+  margin-bottom: 6px;
+}
+.premium-sandbox__card-subtitle {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0 0 20px 0;
+}
+/* 상품 정보 박스 (파란색 왼쪽 보더) */
+.premium-sandbox__product-box,
+.premium-sandbox__sub-info {
+  background-color: #f8fafc;
+  border-left: 4px solid #2563eb;
+  padding: 16px 20px;
+  border-radius: 0 8px 8px 0;
+  margin-bottom: 24px;
+}
+.premium-sandbox__product-box h3,
+.premium-sandbox__sub-info h3 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 6px 0;
+}
+.premium-sandbox__product-box p,
+.premium-sandbox__sub-info p {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.5;
+}
+.premium-sandbox__subscription-details {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed #cbd5e1;
+}
+.premium-sandbox__subscription-details p {
+  font-size: 13px;
+  color: #334155;
+  font-weight: 600;
+}
+/* 액션 버튼 영역 */
+.premium-sandbox__action-area {
+  margin-top: auto;
+  width: 100%;
+}
+.premium-sandbox__action-area button {
+  width: 100%;
+  padding: 14px 20px;
+  background-color: #2563eb;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+.premium-sandbox__action-area button:hover:not(:disabled) {
+  background-color: #1d4ed8;
+}
+.premium-sandbox__action-area button:focus-visible {
+  outline: 3px solid #93c5fd;
+  outline-offset: 2px;
+}
+.premium-sandbox__action-area button:disabled {
+  background-color: #cbd5e1;
+  color: #64748b;
+  cursor: not-allowed;
+  opacity: 0.9;
+}
+/* 하단 힌트 문구 */
+.premium-sandbox__hint {
+  font-size: 12px;
+  color: #94a3b8;
+  margin: 14px 0 0 0;
+  line-height: 1.4;
+}
+/* 우측 카드: callback 관찰기 영역 */
+.premium-sandbox__callback-section {
+  margin-top: auto;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 16px;
+}
+.premium-sandbox__callback-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+  margin: 0 0 8px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.premium-sandbox__callback-counts {
+  background-color: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: #334155;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+/* 5. 모바일/소형 화면 (620px 이하) 1열 반응형 전환 */
+@media (max-width: 620px) {
+  .premium-sandbox {
+    padding: 20px 16px;
+  }
+  .premium-sandbox__container {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .premium-sandbox__card {
+    min-height: auto;
+    padding: 20px;
+  }
+}
