@@ -26,6 +26,13 @@ describe("라이딩 가이드 화면", () => {
     expect(screen.getByLabelText("데이터 상태")).toBeInTheDocument();
   });
 
+  test("전달받은 로그인 상태를 공통 헤더에 표시한다", () => {
+    render(<RidingGuidePage stationName="서울숲 남문" onBack={jest.fn()} authState="authenticated" user={{ displayName: "김따릉", provider: "kakao" }} onLogout={jest.fn()} />);
+
+    expect(screen.getByRole("button", { name: "김따릉 · 내 계정" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "로그아웃" })).toBeInTheDocument();
+  });
+
   test("상단 뒤로가기와 경로 다시 보기는 같은 복귀 콜백을 호출한다", () => {
     const onBack = jest.fn();
     render(<RidingGuidePage stationName="성수역 3번 출구" onBack={onBack} />);
