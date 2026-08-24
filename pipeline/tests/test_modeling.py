@@ -265,4 +265,3 @@ def test_inference_isolation_rejects_forbidden_features():
         bad_records[0][col] = 123
         with pytest.raises(ValueError, match="forbidden fields"):
             validate_records(bad_records)
-

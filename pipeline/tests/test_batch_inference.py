@@ -233,4 +233,3 @@ def test_trusted_predictor_normal_and_failure_modes(tmp_path):
     bad_predictor = build_trusted_predictor(artifact_path, real_sha, ["missing_col_xyz"])
     with pytest.raises(RuntimeError, match="missing required feature columns"):
         bad_predictor([{"current_bike_count": 5}])
-
