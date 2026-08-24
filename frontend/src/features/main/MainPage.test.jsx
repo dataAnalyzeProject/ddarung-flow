@@ -228,16 +228,15 @@ describe("시안 6 메인 로그인 통합", () => {
     expect(await screen.findByRole("link", { name: "로그인" })).toHaveAttribute("href", "/login");
   });
 
-  test("관리자 역할에만 관리자 콘솔 진입 버튼을 표시한다", async () => {
+  test("관리자 역할이어도 메인 헤더에는 관리자 콘솔 진입 버튼을 표시하지 않는다", async () => {
     getCurrentUser.mockResolvedValue({
       authenticated: true,
       user: { userId: "admin-1", displayName: "관리자", provider: "kakao", role: "ADMIN" },
     });
-    const onNavigate = jest.fn();
-    render(<MainPage onNavigate={onNavigate} />);
+    render(<MainPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "관리자 콘솔" }));
-    expect(onNavigate).toHaveBeenCalledWith("admin");
+    await screen.findByRole("button", { name: "로그아웃" });
+    expect(screen.queryByRole("button", { name: "관리자 콘솔" })).not.toBeInTheDocument();
   });
 
   test("지도 탭과 확대 축소 컨트롤은 상태를 왕복 변경한다", async () => {
