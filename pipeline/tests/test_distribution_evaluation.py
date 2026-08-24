@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 from sklearn.ensemble import HistGradientBoostingClassifier
 
+import pipeline.src.distribution_evaluation as distribution_evaluation
 from pipeline.src.distribution_evaluation import evaluate_distribution_model
 from pipeline.src.quantity_distribution import train_distribution_model
 
@@ -104,17 +105,11 @@ def test_fails_if_probability_out_of_bounds(test_records):
         evaluate_distribution_model(invalid_artifact, test_records)
 
 
-def test_fails_if_monotonicity_violated(test_records):
-    violating_artifact = {
-        "model": MonotonicityViolatingModel(),
-        "feature_columns": ["station_id", "day_of_week", "hour_of_day", "month", "is_weekend", "current_bike_count", "horizon_minutes"],
-        "bucket_definition": "0,1,2,3,4,5+",
-    }
-    # Note: Monotonicity holds by construction of tail_probabilities for valid probability distributions,
-    # but if predicted tail probabilities violate monotonicity, ValueError is raised.
-    # MonotonicityViolatingModel produces P(>=1)=1.0, P(>=5)=0.96 (which is valid tail probabilities).
-    # To cause tail_probabilities monotonicity violation, we test diff logic directly:
-    pass
+def test_fails_if_monotonicity_violated(trained_distribution_artifact, test_records, monkeypatch):
+    bad_tails = np.tile(np.array([0.80, 0.90, 0.60, 0.40, 0.20]), (len(test_records), 1))
+    monkeypatch.setattr(distribution_evaluation, "tail_probabilities", lambda _probabilities, _classes: bad_tails)
+    with pytest.raises(ValueError, match="monotonicity violation"):
+        distribution_evaluation.evaluate_distribution_model(trained_distribution_artifact, test_records)
 
 
 def test_fails_if_non_test_split_provided(trained_distribution_artifact, test_records):
