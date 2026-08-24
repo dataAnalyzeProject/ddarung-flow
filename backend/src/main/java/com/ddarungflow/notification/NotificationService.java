@@ -57,8 +57,8 @@ public class NotificationService {
             throw new IllegalArgumentException("필수 알림 정보가 누락되었습니다.");
         }
 
-        // 멱등성: 동일한 dedupKey 재요청 시 기존 알림 항목 반환 (행을 늘리지 않음)
-        Optional<InAppNotification> existing = inAppNotificationRepository.findByDedupKey(dedupKey);
+        // 멱등성: 동일한 사용자 및 동일한 dedupKey 재요청 시 기존 알림 항목 반환 (행을 늘리지 않음)
+        Optional<InAppNotification> existing = inAppNotificationRepository.findByUserIdAndDedupKey(userId, dedupKey);
         if (existing.isPresent()) {
             return existing.get();
         }

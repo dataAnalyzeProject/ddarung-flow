@@ -9,7 +9,7 @@ import java.util.Optional;
 @Repository
 public interface InAppNotificationRepository extends JpaRepository<InAppNotification, Long> {
 
-    Optional<InAppNotification> findByDedupKey(String dedupKey);
+    Optional<InAppNotification> findByUserIdAndDedupKey(Long userId, String dedupKey);
 
     List<InAppNotification> findByUserIdOrderByCreatedAtDesc(Long userId);
 

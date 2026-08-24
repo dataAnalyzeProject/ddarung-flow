@@ -13,8 +13,8 @@ import java.time.OffsetDateTime;
     name = "in_app_notifications",
     uniqueConstraints = {
         @UniqueConstraint(
-            name = "uk_in_app_notification_dedup",
-            columnNames = {"dedup_key"}
+            name = "uk_in_app_notification_user_dedup",
+            columnNames = {"user_id", "dedup_key"}
         )
     }
 )

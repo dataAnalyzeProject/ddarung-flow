@@ -31,11 +31,49 @@ class NotificationServiceTest {
     private NotificationService notificationService;
 
     @Nested
-    @DisplayName("인앱 알림 (InAppNotification) 멱등성 및 읽음 시각 보존 테스트")
+    @DisplayName("인앱 알림 (InAppNotification) 사용자별 격리, 멱등성 및 읽음 시각 보존 테스트")
     class InAppNotificationTests {
 
         @Test
-        @DisplayName("동일한 dedupKey 재요청 시 기존 알림 항목 반환하여 행을 늘리지 않음 (멱등성)")
+        @DisplayName("서로 다른 사용자 A, B가 동일한 dedupKey로 요청 시 각자 독립적인 알림이 생성됨")
+        void createInAppNotification_DifferentUsersSameDedupKey_CreatesIndependentNotifications() {
+            // given
+            Long userA = 100L;
+            Long userB = 200L;
+            String sharedDedupKey = "STATION-ALERT-KEY-01";
+
+            InAppNotification notifA = InAppNotification.builder()
+                    .userId(userA)
+                    .dedupKey(sharedDedupKey)
+                    .title("A 알림")
+                    .message("내용 A")
+                    .build();
+
+            InAppNotification notifB = InAppNotification.builder()
+                    .userId(userB)
+                    .dedupKey(sharedDedupKey)
+                    .title("B 알림")
+                    .message("내용 B")
+                    .build();
+
+            given(inAppNotificationRepository.findByUserIdAndDedupKey(userA, sharedDedupKey)).willReturn(Optional.empty());
+            given(inAppNotificationRepository.findByUserIdAndDedupKey(userB, sharedDedupKey)).willReturn(Optional.empty());
+            given(inAppNotificationRepository.save(any(InAppNotification.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+            // when
+            InAppNotification resultA = notificationService.createInAppNotification(userA, sharedDedupKey, "A 알림", "내용 A");
+            InAppNotification resultB = notificationService.createInAppNotification(userB, sharedDedupKey, "B 알림", "내용 B");
+
+            // then
+            assertThat(resultA.getUserId()).isEqualTo(userA);
+            assertThat(resultB.getUserId()).isEqualTo(userB);
+            assertThat(resultA.getDedupKey()).isEqualTo(sharedDedupKey);
+            assertThat(resultB.getDedupKey()).isEqualTo(sharedDedupKey);
+            assertThat(resultA).isNotEqualTo(resultB);
+        }
+
+        @Test
+        @DisplayName("동일한 사용자 및 동일한 dedupKey 재요청 시 기존 알림 항목 반환하여 행을 늘리지 않음 (멱등성)")
         void createInAppNotification_DuplicateDedupKey_ReturnsExisting() {
             // given
             Long userId = 1L;
@@ -47,7 +85,7 @@ class NotificationServiceTest {
                     .message("자전거 잔여 5대")
                     .build();
 
-            given(inAppNotificationRepository.findByDedupKey(dedupKey)).willReturn(Optional.of(existing));
+            given(inAppNotificationRepository.findByUserIdAndDedupKey(userId, dedupKey)).willReturn(Optional.of(existing));
 
             // when
             InAppNotification notification = notificationService.createInAppNotification(userId, dedupKey, "대여소 알림", "자전거 잔여 5대");
@@ -68,16 +106,16 @@ class NotificationServiceTest {
                     .dedupKey("KEY1")
                     .title("알림")
                     .message("내용")
-                    .readAt(initialReadAt) // 이미 2시간 전에 읽음
+                    .readAt(initialReadAt)
                     .build();
 
             given(inAppNotificationRepository.findByUserIdAndId(userId, 10L)).willReturn(Optional.of(notification));
 
-            // when - 새로운 시각으로 다시 읽음 요청
+            // when
             OffsetDateTime newTime = OffsetDateTime.now();
             InAppNotification result = notificationService.markNotificationAsRead(userId, 10L, newTime);
 
-            // then - 최초 readAt 시각이 변경되지 않고 유지됨
+            // then
             assertThat(result.getReadAt()).isEqualTo(initialReadAt);
         }
     }
@@ -97,7 +135,7 @@ class NotificationServiceTest {
                     .stationId(10L)
                     .conditionType("BIKE_LOW")
                     .threshold(3)
-                    .enabled(false) // 비활성화됨
+                    .enabled(false)
                     .build();
 
             given(alertRuleRepository.findByUserIdAndId(userId, ruleId)).willReturn(Optional.of(disabledRule));
