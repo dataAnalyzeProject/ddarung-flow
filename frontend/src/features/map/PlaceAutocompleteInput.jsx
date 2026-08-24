@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { searchPlaces } from "./kakaoMapApi";
 
-export default function PlaceAutocompleteInput({ iconSrc, label, value, placeholder, onChange, onSelect }) {
+export default function PlaceAutocompleteInput({ label, value, placeholder, onChange, onSelect }) {
   const [results, setResults] = useState([]);
   const [state, setState] = useState("idle");
   const [open, setOpen] = useState(false);
@@ -39,7 +39,7 @@ export default function PlaceAutocompleteInput({ iconSrc, label, value, placehol
       <span>{label}</span>
       <span className="main-input-wrap">
         <input value={value} onFocus={() => setOpen(true)} onChange={(event) => { setOpen(true); onChange(event.target.value); }} placeholder={placeholder} />
-        {iconSrc ? <img className="main-place-icon" src={iconSrc} alt="" aria-hidden="true" /> : <b aria-hidden="true" />}
+        <b aria-hidden="true" />
         {open && value.trim().length >= 2 && <section className="main-place-results" aria-label={`${label} 검색 결과`}>
           {state === "loading" && <small>검색 중</small>}
           {state === "empty" && <small>검색 결과가 없습니다.</small>}
