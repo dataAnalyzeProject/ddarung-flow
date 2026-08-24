@@ -50,7 +50,13 @@
 
 ---
 
-## 5. 조장 최종 확인용 아티팩트 및 해시 기록 위치
+## 5. 조장 최종 확인용 현행 아티팩트·근거
 
-- **Model Artifact SHA-256**: `2f2ece729fd4b03954212d2fcc2ece4cd07110c947fae1dfc0c7ba29cde34db9`
-- **Evaluation Records SHA-256**: `4920133bd39440472b90eec65babf7db7fafca353a9b8208519e7d0a79d79ae1`
+- **현행 모델 버전**: `data-3.3-inventory-distribution-2026-08-18`
+- **현행 Model Artifact SHA-256**: `ceeccca92448a42ceaa60bbd609b690f0f185bf0cbb6b7ca38255e2cf6259741`
+- **현행 모델 manifest**: [MODEL-5.1 model_manifest.json](https://drive.google.com/file/d/1UJwTae5OLIsKy3BfC0InWbo9F9VXO6qu/view)
+- **사후 재현 입력 manifest**: [MODEL-5.1_retro-input-manifest.json](https://drive.google.com/file/d/1nluNmoN8FW964aUxDIvvfeLONaAlpYwv/view), source SHA-256 `0e5ed94f13e732fa70799681c58cc74801b231e43c9e2d9edbd480c0bd80a182`
+- **20개 조합 사후 재현 평가**: [MODEL-5.1_retrospective-evaluation.json](https://drive.google.com/file/d/1Dp2imtrAKr1MdEmJRcgnf3cWsqDCTokd/view), 2,113,506행, 단조성 위반 0건
+- **실행로그·체크섬**: [MODEL-5.1_retro-execution-log.json](https://drive.google.com/file/d/1XolFqFiiVR59UQoLDiTT3BzjrGj0z1_i/view), [SHA256SUMS](https://drive.google.com/file/d/11DH9-3yWkEkdEkbyAlM0FM4H-eze_rhp/view)
+
+위 평가는 원본 학습 입력과 sealed-test 기록이 남아 있지 않아 새로 수행한 **사후 재현 평가**다. 조장 결정으로 DATA-5.1A의 현행 artifact 직접 실행·20개 조합·단조성 확인 근거로는 허용하되, sealed 평가 완료로 표기하지 않는다. 기존 `2f2ece…` artifact와 `492013…` evaluation hash는 이전 모델 기록으로 보존하며 현행 모델 근거로 사용하지 않는다.
