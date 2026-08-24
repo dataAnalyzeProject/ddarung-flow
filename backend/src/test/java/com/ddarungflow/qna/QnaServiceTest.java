@@ -175,6 +175,30 @@ class QnaServiceTest {
         }
 
         @Test
+        @DisplayName("다른 사용자는 PRIVATE 질문 상세를 볼 수 없음")
+        void getQuestionForViewer_OtherUsersPrivateQuestion_ThrowsNotFound() {
+            QnaQuestion question = QnaQuestion.builder()
+                    .authorId(1L).title("비공개 질문").content("내용")
+                    .visibility(QnaVisibility.PRIVATE).build();
+            given(questionRepository.findById(1L)).willReturn(Optional.of(question));
+
+            assertThatThrownBy(() -> qnaService.getQuestionForViewer(1L, 2L, false))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("QNA_NOT_FOUND");
+        }
+
+        @Test
+        @DisplayName("숨김 질문은 공개 목록에서 제외됨")
+        void listPublic_ExcludesHiddenQuestions() {
+            QnaQuestion publicQuestion = QnaQuestion.builder()
+                    .title("공개 질문").content("내용").visibility(QnaVisibility.PUBLIC).build();
+            given(questionRepository.findByVisibilityAndStatusNotOrderByCreatedAtDesc(QnaVisibility.PUBLIC, QnaStatus.HIDDEN))
+                    .willReturn(List.of(publicQuestion));
+
+            assertThat(qnaService.listPublic(null, null, null)).containsExactly(publicQuestion);
+        }
+
+        @Test
         @DisplayName("질문 숨김 처리 시 상태가 HIDDEN으로 변경됨")
         void hideQuestion_ChangesStatusToHidden() {
             // given

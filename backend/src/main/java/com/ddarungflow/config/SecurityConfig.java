@@ -45,7 +45,7 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(List.of(frontendUrl));
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
 
@@ -58,6 +58,7 @@ public class SecurityConfig {
     private static final Pattern ADMIN_API_PATH = Pattern.compile("^/api/v1/admin(?:/.*)?$");
     private static final Pattern ROUTE_CANDIDATES_PATH = Pattern.compile("^/api/v1/routes/candidates/?$");
     private static final Pattern PAYMENT_API_PATH = Pattern.compile("^/api/v1/(?:me/subscription|payments/checkout)/?$");
+    private static final Pattern QNA_API_PATH = Pattern.compile("^/api/v1/(admin/)?qna(?:/.*)?$");
 
     private void writeApiError(HttpServletResponse response, int status, String code, String message) throws IOException {
         response.setStatus(status);
@@ -74,7 +75,7 @@ public class SecurityConfig {
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                 return;
             }
-            if (ADMIN_API_PATH.matcher(request.getRequestURI()).matches()) {
+            if (ADMIN_API_PATH.matcher(request.getRequestURI()).matches() || QNA_API_PATH.matcher(request.getRequestURI()).matches()) {
                 writeApiError(response, HttpServletResponse.SC_UNAUTHORIZED, "AUTH_REQUIRED", "로그인이 필요합니다.");
                 return;
             }

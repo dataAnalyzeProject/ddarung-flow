@@ -5,6 +5,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -31,8 +32,19 @@ public class QnaService {
 
     public QnaQuestion getQuestion(Long id) {
         return questionRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("질문을 찾을 수 없습니다. ID: " + id));
+                .orElseThrow(() -> new IllegalArgumentException("QNA_NOT_FOUND"));
     }
+
+    public QnaQuestion getQuestionForViewer(Long id, Long viewerId, boolean admin) {
+        QnaQuestion question = getQuestion(id);
+        if (!admin && question.getVisibility() == QnaVisibility.PRIVATE && !question.isAuthor(viewerId)) throw new IllegalArgumentException("QNA_NOT_FOUND");
+        if (!admin && question.getStatus() == QnaStatus.HIDDEN) throw new IllegalArgumentException("QNA_NOT_FOUND");
+        return question;
+    }
+
+    public List<QnaQuestion> listPublic(String query, QnaCategory category, QnaStatus status) { return filter(questionRepository.findByVisibilityAndStatusNotOrderByCreatedAtDesc(QnaVisibility.PUBLIC, QnaStatus.HIDDEN), query, category, status); }
+    public List<QnaQuestion> listMine(Long authorId, String query, QnaCategory category, QnaStatus status) { return filter(questionRepository.findByAuthorIdOrderByCreatedAtDesc(authorId), query, category, status); }
+    private List<QnaQuestion> filter(List<QnaQuestion> source, String query, QnaCategory category, QnaStatus status) { String needle = query == null ? "" : query.toLowerCase(Locale.ROOT); return source.stream().filter(q -> category == null || q.getCategory() == category).filter(q -> status == null || q.getStatus() == status).filter(q -> needle.isBlank() || q.getTitle().toLowerCase(Locale.ROOT).contains(needle) || q.getContent().toLowerCase(Locale.ROOT).contains(needle)).toList(); }
 
     public List<QnaQuestion> getAllQuestions() {
         return questionRepository.findAllByOrderByCreatedAtDesc();

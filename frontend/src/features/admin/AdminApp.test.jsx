@@ -1,5 +1,12 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import AdminApp from "./AdminApp";
+import { listAdminQuestions } from "./qnaAdminApi";
+
+jest.mock("./qnaAdminApi", () => ({
+  listAdminQuestions: jest.fn(),
+  answerQuestion: jest.fn(),
+  hideQuestion: jest.fn(),
+}));
 
 test("menus call back and admin sees dashboard fixture", () => {
   const onAction = jest.fn();
@@ -22,7 +29,10 @@ test("user never receives admin fixture content", () => {
   expect(screen.queryByText("운영 현황")).not.toBeInTheDocument();
 });
 
-test("admin can view Q&A", () => {
+test("admin can view Q&A", async () => {
+  listAdminQuestions.mockResolvedValue({
+    items: [{ id: 1, title: "대여소 문의", body: "문의 내용", category: "USAGE", visibility: "PUBLIC", status: "PENDING", answers: [] }],
+  });
   render(<AdminApp actorRole="ADMIN" activeMenuId="qna" />);
-  expect(screen.getByRole("heading", { name: "Q&A 관리" })).toBeInTheDocument();
+  expect(await screen.findByRole("heading", { name: "Q&A 관리" })).toBeInTheDocument();
 });
