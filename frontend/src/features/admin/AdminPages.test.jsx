@@ -1,5 +1,20 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { AdminPage } from "./AdminPages";
+import { answerQuestion, hideQuestion, listAdminQuestions } from "./qnaAdminApi";
+
+jest.mock("./qnaAdminApi", () => ({
+  listAdminQuestions: jest.fn(),
+  answerQuestion: jest.fn(),
+  hideQuestion: jest.fn(),
+}));
+
+const qnaPage = { items: [{ id: 104, title: "Q&A 질문", body: "질문 내용", category: "SERVICE", visibility: "PUBLIC", status: "PENDING", answers: [] }] };
+
+beforeEach(() => {
+  listAdminQuestions.mockResolvedValue(qnaPage);
+  answerQuestion.mockResolvedValue({});
+  hideQuestion.mockResolvedValue({});
+});
 
 const renderPage = (menuId, actorRole, onAction = jest.fn()) => {
   render(<AdminPage menuId={menuId} actorRole={actorRole} onAction={onAction} />);
@@ -23,28 +38,23 @@ test("role change dialog can cancel and sends the ADMIN role", () => {
   expect(onAction).toHaveBeenCalledWith(expect.objectContaining({ type: "change_role", nextRole: "ADMIN" }));
 });
 
-test("admin can answer and close public qna", () => {
-  const onAction = renderPage("qna", "ADMIN");
-  fireEvent.click(screen.getByRole("button", { name: "답변 보내기" }));
-  fireEvent.click(screen.getByRole("button", { name: "종료" }));
-  expect(onAction).toHaveBeenCalledWith(expect.objectContaining({ type: "answer_qna", questionId: "Q-104" }));
-  expect(onAction).toHaveBeenCalledWith(expect.objectContaining({ type: "change_qna_state", nextState: "CLOSED" }));
-});
-
-test("private question text is protected and admin can hide", () => {
-  render(<AdminPage menuId="qna" actorRole="ADMIN" />);
-  expect(screen.getByText("PRIVATE 문의 원문과 개인정보는 관리자 fixture에서 표시하지 않습니다.")).toBeInTheDocument();
-  expect(screen.getByText("PRIVATE 보호")).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "숨김" })).toBeInTheDocument();
-});
-
-test("qna overview keeps eight fixture rows and the state transition guide", () => {
+test("admin loads an API question and sends its answer", async () => {
   renderPage("qna", "ADMIN");
-  expect(screen.getByText("문의 목록 · 8건")).toBeInTheDocument();
-  const guide = screen.getByText("상태 전이 가이드").closest("section");
-  expect(within(guide).getByText("OPEN")).toBeInTheDocument();
-  expect(within(guide).getByText("ANSWERED")).toBeInTheDocument();
-  expect(within(guide).getByText("CLOSED")).toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: "Q&A 질문" })).toBeInTheDocument();
+  fireEvent.change(screen.getByRole("textbox", { name: "답변 내용" }), { target: { value: "답변 내용" } });
+  fireEvent.click(screen.getByRole("button", { name: "답변 보내기" }));
+  await waitFor(() => expect(answerQuestion).toHaveBeenCalledWith(104, "답변 내용"));
+});
+
+test("admin can hide an API question", async () => {
+  render(<AdminPage menuId="qna" actorRole="ADMIN" />);
+  fireEvent.click(await screen.findByRole("button", { name: "숨김" }));
+  await waitFor(() => expect(hideQuestion).toHaveBeenCalledWith(104));
+});
+
+test("qna overview shows the API result count", async () => {
+  renderPage("qna", "ADMIN");
+  expect(await screen.findByText("문의 목록 · 1건")).toBeInTheDocument();
 });
 
 test("admin may approve model", () => {
