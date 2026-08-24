@@ -77,7 +77,32 @@ class QnaServiceTest {
         }
 
         @Test
-        @DisplayName("작성자가 아닌 사용자가 질문 수정 시 예외 발생")
+        @DisplayName("작성자 본인이 질문 수정 시 성공")
+        void updateQuestion_Author_Success() {
+            // given
+            QnaQuestion question = QnaQuestion.builder()
+                    .authorId(10L)
+                    .title("기존 제목")
+                    .content("기존 내용")
+                    .category(QnaCategory.OTHER)
+                    .visibility(QnaVisibility.PUBLIC)
+                    .build();
+
+            given(questionRepository.findById(1L)).willReturn(Optional.of(question));
+
+            // when
+            QnaQuestion updated = qnaService.updateQuestion(
+                    1L, 10L, "수정된 제목", "수정된 내용", QnaCategory.PAYMENT, QnaVisibility.PRIVATE, "1234");
+
+            // then
+            assertThat(updated.getTitle()).isEqualTo("수정된 제목");
+            assertThat(updated.getContent()).isEqualTo("수정된 내용");
+            assertThat(updated.getCategory()).isEqualTo(QnaCategory.PAYMENT);
+            assertThat(updated.getVisibility()).isEqualTo(QnaVisibility.PRIVATE);
+        }
+
+        @Test
+        @DisplayName("작성자가 아닌 사용자가 질문 수정 시 SecurityException 예외 발생")
         void updateQuestion_NonAuthor_ThrowsSecurityException() {
             // given
             QnaQuestion question = QnaQuestion.builder()
@@ -91,11 +116,31 @@ class QnaServiceTest {
             // when & then
             assertThatThrownBy(() -> qnaService.updateQuestion(1L, 999L, "새제목", "새내용", QnaCategory.OTHER, QnaVisibility.PUBLIC, null))
                     .isInstanceOf(SecurityException.class)
-                    .hasMessageContaining("작성자만");
+                    .hasMessageContaining("작성자만 질문을 수정할 수 있습니다.");
         }
 
         @Test
-        @DisplayName("작성자가 아닌 사용자가 질문 삭제 시 예외 발생")
+        @DisplayName("작성자 본인이 질문 삭제 시 성공")
+        void deleteQuestion_Author_Success() {
+            // given
+            QnaQuestion question = QnaQuestion.builder()
+                    .authorId(10L)
+                    .title("제목")
+                    .content("내용")
+                    .build();
+
+            given(questionRepository.findById(1L)).willReturn(Optional.of(question));
+
+            // when
+            qnaService.deleteQuestion(1L, 10L);
+
+            // then
+            verify(answerRepository).deleteByQuestionId(question.getId());
+            verify(questionRepository).delete(question);
+        }
+
+        @Test
+        @DisplayName("작성자가 아닌 사용자가 질문 삭제 시 SecurityException 예외 발생")
         void deleteQuestion_NonAuthor_ThrowsSecurityException() {
             // given
             QnaQuestion question = QnaQuestion.builder()
@@ -109,7 +154,9 @@ class QnaServiceTest {
             // when & then
             assertThatThrownBy(() -> qnaService.deleteQuestion(1L, 999L))
                     .isInstanceOf(SecurityException.class)
-                    .hasMessageContaining("작성자만");
+                    .hasMessageContaining("작성자만 질문을 삭제할 수 있습니다.");
+
+            verify(questionRepository, never()).delete(any(QnaQuestion.class));
         }
 
         @Test
@@ -147,7 +194,7 @@ class QnaServiceTest {
         }
 
         @Test
-        @DisplayName("숨김(HIDDEN) 처리된 질문 재수정 시도 시 예외 발생 및 거부")
+        @DisplayName("숨김(HIDDEN) 처리된 질문 재수정 시도 시 IllegalStateException 예외 발생 및 거부")
         void updateQuestion_HiddenQuestion_ThrowsException() {
             // given
             QnaQuestion question = QnaQuestion.builder()
@@ -166,7 +213,7 @@ class QnaServiceTest {
         }
 
         @Test
-        @DisplayName("숨김(HIDDEN) 처리된 질문 상태 변경 시도 시 예외 발생 및 거부")
+        @DisplayName("숨김(HIDDEN) 처리된 질문 상태 변경 시도 시 IllegalStateException 예외 발생 및 거부")
         void changeQuestionStatus_HiddenQuestion_ThrowsException() {
             // given
             QnaQuestion question = QnaQuestion.builder()
@@ -222,7 +269,7 @@ class QnaServiceTest {
                     .build();
 
             given(questionRepository.findById(1L)).willReturn(Optional.of(question));
-            given(answerRepository.countByQuestionId(1L)).willReturn(1L); // 답변 1건 이미 존재
+            given(answerRepository.countByQuestionId(1L)).willReturn(1L);
 
             // when & then
             assertThatThrownBy(() -> qnaService.addAnswer(1L, 101L, "관리자2", "두 번째 중복 답변 시도"))
@@ -265,7 +312,7 @@ class QnaServiceTest {
             QnaAnswer answer = QnaAnswer.builder().question(question).responderName("관리자").content("답변").build();
 
             given(answerRepository.findById(10L)).willReturn(Optional.of(answer));
-            given(answerRepository.countByQuestionId(question.getId())).willReturn(0L); // 0개 남음
+            given(answerRepository.countByQuestionId(question.getId())).willReturn(0L);
 
             // when
             qnaService.deleteAnswer(10L);

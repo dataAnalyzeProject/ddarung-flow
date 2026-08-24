@@ -71,15 +71,6 @@ public class QnaService {
     }
 
     @Transactional
-    public QnaQuestion updateQuestion(Long id, String title, String content,
-                                       QnaCategory category, QnaVisibility visibility, String secretPin) {
-        QnaQuestion question = getQuestion(id);
-        validateQuestionModifiable(question);
-        question.update(title, content, category, visibility, secretPin);
-        return question;
-    }
-
-    @Transactional
     public QnaQuestion changeQuestionStatus(Long id, QnaStatus status) {
         QnaQuestion question = getQuestion(id);
         if (question.getStatus() == QnaStatus.HIDDEN || question.getStatus() == QnaStatus.CLOSED) {
@@ -104,13 +95,6 @@ public class QnaService {
         if (!question.isAuthor(requesterId)) {
             throw new SecurityException("작성자만 질문을 삭제할 수 있습니다.");
         }
-        answerRepository.deleteByQuestionId(question.getId());
-        questionRepository.delete(question);
-    }
-
-    @Transactional
-    public void deleteQuestion(Long id) {
-        QnaQuestion question = getQuestion(id);
         answerRepository.deleteByQuestionId(question.getId());
         questionRepository.delete(question);
     }
