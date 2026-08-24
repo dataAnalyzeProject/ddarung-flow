@@ -11,7 +11,7 @@
 .intro-login svg{width:20px;height:20px;color:var(--blue)}
 .intro-content{min-height:calc(100vh - clamp(64px,4.3vw,80px));padding:0 clamp(28px,5vw,94px) clamp(26px,3vw,54px);display:grid;grid-template-rows:minmax(390px,1fr) auto;gap:clamp(17px,1.45vw,27px);background:linear-gradient(110deg,#fbfdff 0%,#f1f8ff 47%,#e7f5ff 100%)}
 .intro-hero{position:relative;min-width:0;display:grid;grid-template-columns:minmax(480px,42fr) minmax(0,58fr);align-items:center}
-.intro-copy{position:relative;z-index:5;align-self:center;padding-top:clamp(12px,1.8vw,34px)}
+.intro-copy{position:relative;z-index:5;align-self:center;padding-top:clamp(12px,1.8vw,34px);animation:intro-copy-in .45s cubic-bezier(.22,1,.36,1) both}
 .intro-copy h1{margin:0;font-size:clamp(42px,3.25vw,61px);line-height:1.35;letter-spacing:-.055em}
 .intro-copy h1 span{white-space:nowrap}
 .intro-copy h1 em{color:var(--green);font-style:normal}
@@ -29,13 +29,13 @@
 .intro-points i.blue{border-color:#d7e8ff;background:var(--blue)}
 .intro-points i.orange{border-color:#fff0cb;background:var(--orange)}
 .intro-auto-copy{margin:14px 0 0;color:#8290a5;font-size:10px}
-.intro-scene{position:absolute;z-index:1;top:0;right:calc(clamp(28px,5vw,94px) * -1);bottom:0;left:39%;overflow:hidden}
+.intro-scene{position:absolute;z-index:1;top:0;right:calc(clamp(28px,5vw,94px) * -1);bottom:0;left:39%;overflow:hidden;animation:intro-scene-in .5s ease-out both}
 .intro-cloud{position:absolute;width:150px;height:42px;border-radius:60px;background:#fff;opacity:.58}
 .intro-cloud:before,.intro-cloud:after{position:absolute;border-radius:50%;background:inherit;content:""}
 .intro-cloud:before{left:22px;top:-25px;width:62px;height:62px}
 .intro-cloud:after{right:15px;top:-15px;width:48px;height:48px}
-.cloud-a{left:19%;top:26%}
-.cloud-b{right:8%;top:15%;transform:scale(.8)}
+.cloud-a{left:19%;top:26%;animation:intro-cloud-a-drift 14s ease-in-out 3s infinite}
+.cloud-b{right:8%;top:15%;transform:scale(.8);animation:intro-cloud-b-drift 15s ease-in-out 3s infinite}
 .intro-buildings{position:absolute;right:3%;bottom:20%;left:14%;height:56%;display:flex;align-items:end;gap:7px;opacity:.68}
 .intro-buildings i{position:relative;flex:1;height:var(--height,38%);background:linear-gradient(90deg,#acd7f7,#e3f2ff 55%,#99cbed);clip-path:polygon(12% 10%,43% 10%,43% 0,58% 0,58% 10%,88% 10%,100% 100%,0 100%)}
 .intro-buildings i:after{position:absolute;inset:15px 5px 5px;background:repeating-linear-gradient(90deg,#f7fcff 0 2px,transparent 2px 8px),repeating-linear-gradient(#f7fcff 0 2px,transparent 2px 10px);content:""}
@@ -48,16 +48,19 @@
 .intro-tower:before{position:absolute;left:50%;top:35%;width:26px;height:9px;transform:translateX(-50%);border:2px solid #91b0ca;border-radius:50%;background:#fff;content:""}
 .intro-river{position:absolute;right:0;bottom:0;left:0;height:24%;background:repeating-linear-gradient(177deg,#d0efff 0 4px,#edfaff 5px 9px)}
 .intro-bridge{position:absolute;z-index:2;right:0;bottom:21%;left:4%;height:24px;border-top:5px solid #b0d5ec;border-bottom:4px solid #b9daed;background:repeating-linear-gradient(90deg,transparent 0 125px,#b9d9ea 126px 134px)}
-.intro-route{position:absolute;z-index:4;top:6%;right:3%;width:77%;height:45%;overflow:visible}
+.intro-route{position:absolute;z-index:4;top:6%;right:3%;width:77%;height:45%;overflow:visible;clip-path:inset(0 100% 0 0);animation:intro-route-reveal 1s cubic-bezier(.22,1,.36,1) .5s both}
 .intro-route-guide,.intro-route-line{fill:none;stroke:#83c1ff;stroke-width:2;stroke-dasharray:6 7}
 .intro-route>g[mask] circle{fill:#fff;stroke:#83c1ff;stroke-width:4}
-.intro-route-pin{position:absolute;z-index:5;width:48px;height:55px;color:#62a3f6;filter:drop-shadow(0 4px 4px #4c87c533)}
+.intro-route-pin{position:absolute;z-index:5;width:48px;height:55px;color:#62a3f6;filter:drop-shadow(0 4px 4px #4c87c533);animation:intro-pin-in .4s cubic-bezier(.22,1,.36,1) both}
 .intro-route-pin svg{width:100%;height:100%;fill:#65a6f6;color:#65a6f6;stroke:#fff}
-.pin-a{left:33%;top:22%}
-.pin-b{right:17%;top:30%}
-.intro-bike{position:absolute;z-index:6;right:15%;bottom:7%;width:clamp(250px,18.8vw,350px);height:auto;filter:drop-shadow(0 9px 4px #193a5d26)}
+.pin-a{left:33%;top:22%;animation-delay:1s}
+.pin-b{right:17%;top:30%;animation-delay:1.3s}
+.intro-bike{position:absolute;z-index:6;right:15%;bottom:7%;width:clamp(250px,18.8vw,350px);height:auto;filter:drop-shadow(0 9px 4px #193a5d26);animation:intro-bike-in 1s cubic-bezier(.22,1,.36,1) 1.5s both}
 .intro-feature-grid{position:relative;z-index:7;min-width:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(10px,.75vw,14px);outline:none}
-.intro-feature-grid article{height:clamp(132px,10vw,186px);padding:clamp(20px,1.65vw,31px);display:flex;align-items:center;gap:clamp(18px,1.45vw,27px);border:1px solid #d9e2eb;border-radius:16px;background:rgba(255,255,255,.94);box-shadow:0 5px 15px #1739580d}
+.intro-feature-grid article{height:clamp(132px,10vw,186px);padding:clamp(20px,1.65vw,31px);display:flex;align-items:center;gap:clamp(18px,1.45vw,27px);border:1px solid #d9e2eb;border-radius:16px;background:rgba(255,255,255,.94);box-shadow:0 5px 15px #1739580d;animation:intro-card-in .45s cubic-bezier(.22,1,.36,1) both}
+.intro-feature-grid article:nth-child(1){animation-delay:2s}
+.intro-feature-grid article:nth-child(2){animation-delay:2.22s}
+.intro-feature-grid article:nth-child(3){animation-delay:2.44s}
 .feature-icon{width:clamp(82px,6.55vw,122px);height:clamp(82px,6.55vw,122px);flex:0 0 auto;display:grid;place-items:center;border-radius:50%}
 .feature-icon svg{width:55%;height:55%}
 .feature-icon.green{background:#edf9f4;color:var(--green)}
@@ -69,7 +72,20 @@
 .intro-progress{position:fixed;z-index:20;right:0;bottom:0;left:0;height:3px;background:#dce9f6}
 .intro-progress span{display:block;width:100%;height:100%;background:linear-gradient(90deg,var(--green),var(--blue));transform-origin:left;animation:intro-countdown 5s linear forwards}
 .intro-page :focus-visible{outline:3px solid #72b5ff;outline-offset:3px}
+@keyframes intro-copy-in{from{opacity:0;transform:translate3d(0,12px,0)}to{opacity:1;transform:translate3d(0,0,0)}}
+@keyframes intro-scene-in{from{opacity:0}to{opacity:1}}
+@keyframes intro-route-reveal{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
+@keyframes intro-pin-in{from{opacity:0;transform:translate3d(0,12px,0) scale(.92)}to{opacity:1;transform:translate3d(0,0,0) scale(1)}}
+@keyframes intro-bike-in{from{opacity:0;transform:translate3d(-38px,20px,0)}to{opacity:1;transform:translate3d(0,0,0)}}
+@keyframes intro-card-in{from{opacity:0;transform:translate3d(0,10px,0)}to{opacity:1;transform:translate3d(0,0,0)}}
+@keyframes intro-cloud-a-drift{0%,100%{transform:translate3d(0,0,0)}50%{transform:translate3d(12px,-3px,0)}}
+@keyframes intro-cloud-b-drift{0%,100%{transform:scale(.8) translate3d(0,0,0)}50%{transform:scale(.8) translate3d(-10px,2px,0)}}
 @keyframes intro-countdown{to{transform:scaleX(0)}
+}
+@media(prefers-reduced-motion:reduce){.intro-copy,.intro-scene,.intro-route,.intro-route-pin,.intro-bike,.intro-feature-grid article,.intro-cloud,.intro-progress span{animation:none}
+.intro-copy,.intro-scene,.intro-route-pin,.intro-bike,.intro-feature-grid article,.cloud-a{opacity:1;transform:none}
+.intro-route{clip-path:none}
+.cloud-b{transform:scale(.8)}
 }
 @media(max-width:1099.98px){.intro-header{padding:0 15px}
 .intro-brand img{width:135px}
