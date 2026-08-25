@@ -14,6 +14,7 @@ public class SubscriptionService {
   private final PaymentRepository payments;
   private final PaymentEventRepository paymentEvents;
   private final PaymentVerifier paymentVerifier;
+  private final PaymentEnvironment paymentEnvironment;
   @Transactional public Map<String,Object> current(Users user) {
     return subscriptions.findFirstByUserOrderByEndsAtDesc(user).map(s -> {
       boolean active=s.isActive(OffsetDateTime.now());
@@ -21,11 +22,11 @@ public class SubscriptionService {
     }).orElseGet(() -> Map.of("status", "FREE"));
   }
   @Transactional public Map<String,Object> checkout(Users user, SubscriptionPlan plan) {
-    if ("production".equalsIgnoreCase(System.getenv("PAYMENT_MODE"))) return Map.of("code", "PAYMENT_NOT_ENABLED");
+    if (!paymentEnvironment.sandboxCheckoutEnabled()) return Map.of("code", "PAYMENT_NOT_ENABLED");
     Map<String,Object> current=current(user);
     if ("ACTIVE".equals(current.get("status"))) return Map.of("code", "SUBSCRIPTION_ALREADY_ACTIVE");
     Payment payment = payments.save(new Payment(user, "ddarung-" + UUID.randomUUID(), plan));
-    return Map.of("status", "READY", "orderId", payment.getOrderId(), "planId", plan.name(), "amount", payment.getAmount(), "currency", payment.getCurrency());
+    return Map.of("status", "READY", "orderId", payment.getOrderId(), "customerKey", "ddarung-" + user.getPublicId(), "planId", plan.name(), "amount", payment.getAmount(), "currency", payment.getCurrency());
   }
   @Transactional public Map<String,Object> processWebhook(String eventId, String paymentKey) {
     if (eventId == null || eventId.isBlank()) return Map.of("code", "PAYMENT_EVENT_INVALID");

@@ -7,6 +7,7 @@ import { fetchRouteCandidates } from "../map/candidatesApi";
 import { fetchAirQuality } from "../riding-guide/airQualityApi";
 import { fetchArrivalWeather } from "../weather/weatherApi";
 import { fetchSubscription, startCheckout } from "../premium/subscriptionApi";
+import { requestTossCheckout } from "../premium/tossCheckout";
 import { formatStationTime } from "./components/StationRecommendationPanel";
 
 jest.mock("../login/authApi", () => ({
@@ -27,6 +28,7 @@ jest.mock("../premium/subscriptionApi", () => ({
   fetchSubscription: jest.fn(),
   startCheckout: jest.fn(),
 }));
+jest.mock("../premium/tossCheckout", () => ({ requestTossCheckout: jest.fn() }));
 
 test("UTC 도착시각을 Asia/Seoul 시각으로 표시한다", () => {
   expect(formatStationTime("2026-08-17T07:35:00Z")).toBe("오후 4:35");
@@ -34,6 +36,7 @@ test("UTC 도착시각을 Asia/Seoul 시각으로 표시한다", () => {
 
 const PREDICTION_RESULT_KEY = "ddarung.mainPredictionResult.v1";
 const PENDING_GUIDE_KEY = "ddarung.pendingGuideOpen.v1";
+const PAYMENT_PROCESSING_KEY = "ddarung.paymentProcessing.v1";
 
 function savedPredictionCandidate(overrides = {}) {
   return {
@@ -521,6 +524,7 @@ describe("프리미엄 가이드 접근 통합", () => {
     getCurrentUser.mockResolvedValue({ authenticated: true, user: { displayName: "김따릉", provider: "kakao" } });
     fetchSubscription.mockResolvedValue({ status: "FREE" });
     startCheckout.mockResolvedValue({ status: "READY", orderId: "order-1", planId: "PREMIUM_MONTHLY_30D", amount: 2900, currency: "KRW" });
+    requestTossCheckout.mockResolvedValue(undefined);
     fetchAirQuality.mockResolvedValue({ status: "UNAVAILABLE" });
   });
 
@@ -605,6 +609,35 @@ describe("프리미엄 가이드 접근 통합", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(notice);
     expect(screen.getByRole("button", { name: "월간 선택" })).toBeEnabled();
     expect(screen.queryByText("결제 확인 중입니다.")).not.toBeInTheDocument();
+  });
+
+  test("결제창을 닫으면 FREE 안내와 재시도 버튼으로 돌아간다", async () => {
+    const candidate = restoreGuideCandidate();
+    render(<MainPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: `${candidate.stationName} 상세보기` }));
+    await screen.findByText("프리미엄 월간");
+    fireEvent.click(screen.getByRole("button", { name: "월간 선택" }));
+    await waitFor(() => expect(requestTossCheckout).toHaveBeenCalledTimes(1));
+
+    requestTossCheckout.mock.calls[0][1].onCancel();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("결제가 취소되었습니다. 다시 시도해 주세요.");
+    expect(screen.getByRole("button", { name: "월간 선택" })).toBeEnabled();
+    expect(screen.queryByText("결제 확인 중입니다.")).not.toBeInTheDocument();
+  });
+
+  test("성공 redirect는 webhook 구독 조회가 ACTIVE가 되기 전까지 확인 중으로 남는다", async () => {
+    restoreGuideCandidate();
+    window.history.replaceState({}, "", "/?payment=processing&paymentKey=masked&orderId=masked&amount=2900");
+    fetchSubscription.mockResolvedValue({ status: "FREE" });
+
+    render(<MainPage />);
+
+    expect(await screen.findByText("결제 확인 중입니다.")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /라이딩 가이드$/ })).not.toBeInTheDocument();
+    expect(sessionStorage.getItem(PAYMENT_PROCESSING_KEY)).toBe("1");
+    expect(window.location.search).toBe("");
   });
 
   test("구독 조회 실패 시 ACTIVE 가이드 대신 안전한 안내를 표시한다", async () => {

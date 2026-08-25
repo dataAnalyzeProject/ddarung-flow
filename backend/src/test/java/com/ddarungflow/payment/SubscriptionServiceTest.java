@@ -3,6 +3,7 @@ package com.ddarungflow.payment;
 import com.ddarungflow.entity.Users;
 import com.ddarungflow.dto.PrincipalDetails;
 import org.springframework.http.ResponseEntity;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -19,8 +20,15 @@ class SubscriptionServiceTest {
     private final PaymentRepository payments = mock(PaymentRepository.class);
     private final PaymentEventRepository events = mock(PaymentEventRepository.class);
     private final PaymentVerifier verifier = mock(PaymentVerifier.class);
-    private final SubscriptionService service = new SubscriptionService(subscriptions, payments, events, verifier);
+    private final SubscriptionService service = new SubscriptionService(
+        subscriptions, payments, events, verifier, new PaymentEnvironment("sandbox", "test_sk_sandbox")
+    );
     private final Users user = Users.builder().provider("test").providerUserId("u1").displayName("tester").build();
+
+    @BeforeEach
+    void initializeUserPublicId() {
+        user.prePersist();
+    }
 
     @Test
     void checkoutUsesServerDefinedMonthlyAmountAndDurationPlan() {
@@ -33,6 +41,7 @@ class SubscriptionServiceTest {
         assertEquals(2900, result.get("amount"));
         assertEquals("KRW", result.get("currency"));
         assertEquals("PREMIUM_MONTHLY_30D", result.get("planId"));
+        assertEquals("ddarung-" + user.getPublicId(), result.get("customerKey"));
     }
 
     @Test
@@ -164,5 +173,29 @@ class SubscriptionServiceTest {
         ResponseEntity<?> response = controller.checkout(new PrincipalDetails(user), java.util.Map.of("planId", "PREMIUM_MONTHLY_30D"));
 
         assertEquals(503, response.getStatusCode().value());
+    }
+
+    @Test
+    void checkoutIsBlockedWhenTheSandboxSecretIsUnavailable() {
+        SubscriptionService unavailable = new SubscriptionService(
+            subscriptions, payments, events, verifier, new PaymentEnvironment("sandbox", "")
+        );
+
+        var result = unavailable.checkout(user, SubscriptionPlan.PREMIUM_MONTHLY_30D);
+
+        assertEquals("PAYMENT_NOT_ENABLED", result.get("code"));
+        verify(payments, never()).save(any());
+    }
+
+    @Test
+    void checkoutIsBlockedInProductionEvenWhenAKeyExists() {
+        SubscriptionService production = new SubscriptionService(
+            subscriptions, payments, events, verifier, new PaymentEnvironment("production", "test_sk_sandbox")
+        );
+
+        var result = production.checkout(user, SubscriptionPlan.PREMIUM_MONTHLY_30D);
+
+        assertEquals("PAYMENT_NOT_ENABLED", result.get("code"));
+        verify(payments, never()).save(any());
     }
 }

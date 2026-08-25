@@ -17,6 +17,7 @@ import { fetchAirQuality } from "../riding-guide/airQualityApi";
 import { adaptArrivalWeather, fetchArrivalWeather } from "../weather/weatherApi";
 import PremiumGuideAccessPanel from "../premium/PremiumGuideAccessPanel";
 import { fetchSubscription, startCheckout } from "../premium/subscriptionApi";
+import { requestTossCheckout } from "../premium/tossCheckout";
 
 const EMPTY_INPUT = {
   origin: "",
@@ -29,6 +30,14 @@ const EMPTY_INPUT = {
 const TRAVEL_MODE_TO_API = { "도보": "WALK", "대중교통": "PUBLIC_TRANSIT" };
 const PREDICTION_RESULT_KEY = "ddarung.mainPredictionResult.v1";
 const PENDING_GUIDE_KEY = "ddarung.pendingGuideOpen.v1";
+const PAYMENT_FAILURE_MESSAGE_KEY = "ddarung.paymentFailureMessage.v1";
+const PAYMENT_PROCESSING_KEY = "ddarung.paymentProcessing.v1";
+
+function paymentFailureMessage(code) {
+  return code === "PAY_PROCESS_CANCELED"
+    ? "결제가 취소되었습니다. 다시 시도해 주세요."
+    : "결제를 완료하지 못했습니다. 다시 시도해 주세요.";
+}
 
 function loadSavedPredictionResult() {
   try {
@@ -99,6 +108,22 @@ export default function MainPage({ onNavigate }) {
   }, []);
 
   useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    if (query.get("payment") === "processing") {
+      sessionStorage.setItem(PENDING_GUIDE_KEY, "1");
+      sessionStorage.setItem(PAYMENT_PROCESSING_KEY, "1");
+      window.history.replaceState({}, "", window.location.pathname);
+      return;
+    }
+    if (query.get("payment") === "failed") {
+      sessionStorage.setItem(PENDING_GUIDE_KEY, "1");
+      sessionStorage.removeItem(PAYMENT_PROCESSING_KEY);
+      sessionStorage.setItem(PAYMENT_FAILURE_MESSAGE_KEY, paymentFailureMessage(query.get("code")));
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
+
+  useEffect(() => {
     if (
       authState === "authenticated" &&
       apiPredictionResult &&
@@ -113,7 +138,14 @@ export default function MainPage({ onNavigate }) {
       fetchSubscription()
         .then((subscription) => {
           if (!cancelled) {
-            setGuideAccessState(subscription.status === "ACTIVE" ? "ACTIVE" : subscription.status === "EXPIRED" ? "EXPIRED" : "FREE");
+            const paymentProcessing = sessionStorage.getItem(PAYMENT_PROCESSING_KEY) === "1";
+            if (subscription.status === "ACTIVE") sessionStorage.removeItem(PAYMENT_PROCESSING_KEY);
+            setGuideAccessState(subscription.status === "ACTIVE" ? "ACTIVE" : paymentProcessing ? "PROCESSING" : subscription.status === "EXPIRED" ? "EXPIRED" : "FREE");
+            const paymentFailure = sessionStorage.getItem(PAYMENT_FAILURE_MESSAGE_KEY);
+            if (paymentFailure) {
+              sessionStorage.removeItem(PAYMENT_FAILURE_MESSAGE_KEY);
+              setGuideAccessError(paymentFailure);
+            }
           }
         })
         .catch((error) => {
@@ -130,6 +162,21 @@ export default function MainPage({ onNavigate }) {
       };
     }
   }, [apiPredictionResult, authState, selectedStationInfo]);
+
+  useEffect(() => {
+    if (!ridingGuideOpen || guideAccessState !== "PROCESSING") return undefined;
+    const intervalId = window.setInterval(() => {
+      fetchSubscription()
+        .then((subscription) => {
+          if (subscription.status === "ACTIVE") {
+            sessionStorage.removeItem(PAYMENT_PROCESSING_KEY);
+            setGuideAccessState("ACTIVE");
+          }
+        })
+        .catch(() => {});
+    }, 2000);
+    return () => window.clearInterval(intervalId);
+  }, [guideAccessState, ridingGuideOpen]);
 
   useEffect(() => {
     const saved = loadSavedPredictionResult();
@@ -310,9 +357,19 @@ export default function MainPage({ onNavigate }) {
   const handleSelectPlan = async ({ planCode }) => {
     setGuideAccessError(null);
     setGuideAccessState("PROCESSING");
+    sessionStorage.setItem(PENDING_GUIDE_KEY, "1");
     try {
-      await startCheckout(planCode);
+      const checkout = await startCheckout(planCode);
+      await requestTossCheckout(checkout, {
+        onCancel: () => {
+          sessionStorage.removeItem(PENDING_GUIDE_KEY);
+          sessionStorage.removeItem(PAYMENT_PROCESSING_KEY);
+          setGuideAccessState("FREE");
+          setGuideAccessError("결제가 취소되었습니다. 다시 시도해 주세요.");
+        },
+      });
     } catch (error) {
+      sessionStorage.removeItem(PENDING_GUIDE_KEY);
       setGuideAccessState("FREE");
       setGuideAccessError(error.message === "PAYMENT_NOT_ENABLED" ? "현재 결제를 사용할 수 없습니다." : "결제 요청을 시작하지 못했습니다. 다시 시도해 주세요.");
     }
