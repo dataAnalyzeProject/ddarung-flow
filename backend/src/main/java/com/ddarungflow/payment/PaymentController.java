@@ -19,8 +19,13 @@ public class PaymentController {
       return ResponseEntity.ok(result);
     } catch (IllegalArgumentException ex) { return ResponseEntity.badRequest().body(Map.of("code", "PAYMENT_PLAN_INVALID")); }
   }
-  @PostMapping("/payments/webhooks/toss") public ResponseEntity<?> webhook(@RequestBody Map<String,String> request) {
-    Map<String,Object> result = subscriptions.processWebhook(request.get("eventId"), request.get("paymentKey"));
+  @PostMapping("/payments/webhooks/toss") public ResponseEntity<?> webhook(
+      @RequestHeader(value = "tosspayments-webhook-transmission-id", required = false) String eventId,
+      @RequestBody TossWebhookRequest request) {
+    if (!"PAYMENT_STATUS_CHANGED".equals(request.eventType()) || request.data() == null) {
+      return ResponseEntity.badRequest().body(Map.of("code", "PAYMENT_EVENT_INVALID"));
+    }
+    Map<String,Object> result = subscriptions.processWebhook(eventId, request.data().paymentKey());
     if ("PAYMENT_EVENT_INVALID".equals(result.get("code"))) return ResponseEntity.badRequest().body(result);
     if ("PAYMENT_VERIFICATION_FAILED".equals(result.get("code"))) return ResponseEntity.status(401).body(result);
     return ResponseEntity.ok(result);
