@@ -221,6 +221,8 @@ jobs:
             printf 'REACT_APP_API_BASE_URL=%s\n' "$STAGING_PUBLIC_URL"
             printf 'DEPLOYED_COMMIT=%s\n' "$DEPLOY_SHA"
             printf 'SWAGGER_ENABLED=true\n'
+            printf 'FLYWAY_BASELINE_ON_MIGRATE=true\n'
+            printf 'FLYWAY_BASELINE_VERSION=1\n'
             printf 'OCI_OBJECT_NAMESPACE=nrzeviuvbcrd\n'
             printf 'MODEL_BUCKET=ddarung-flow-bucket\n'
             printf 'MODEL_OBJECT_KEY=models/data-3.1/2f2ece729fd4b03954212d2fcc2ece4cd07110c947fae1dfc0c7ba29cde34db9/model_winner.joblib\n'
@@ -270,6 +272,7 @@ jobs:
 
           rollback() {
             echo "Staging deployment failed; restoring the previous release." >&2
+            docker compose --env-file .env --env-file oauth.env --env-file release.env "${compose_files[@]:-}" logs --tail=160 backend 2>&1 || true
             if [ -f release.previous.env ] && [ -f oauth.previous.env ] && [ -f docker-compose.previous.yaml ]; then
               cp release.previous.env release.env
               cp oauth.previous.env oauth.env
