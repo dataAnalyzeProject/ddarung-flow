@@ -46,7 +46,7 @@ public class NotificationService {
             throw new IllegalArgumentException("userId와 ruleId는 필수입니다.");
         }
         AlertRule rule = alertRuleRepository.findByUserIdAndId(userId, ruleId)
-                .orElseThrow(() -> new IllegalArgumentException("해당 사용자의 알림 규칙을 찾을 수 없습니다."));
+                .orElseThrow(NotificationNotFoundException::new);
         rule.updateEnabled(enabled);
         return rule;
     }
@@ -80,7 +80,7 @@ public class NotificationService {
         }
 
         AlertRule rule = alertRuleRepository.findByUserIdAndId(userId, ruleId)
-                .orElseThrow(() -> new IllegalArgumentException("해당 사용자의 알림 규칙을 찾을 수 없습니다."));
+                .orElseThrow(NotificationNotFoundException::new);
 
         // 비활성 규칙은 인앱 알림을 생성하지 않고 예외 발생
         if (!rule.isEnabled()) {
@@ -97,6 +97,15 @@ public class NotificationService {
         return inAppNotificationRepository.findByUserIdOrderByCreatedAtDesc(userId);
     }
 
+    public List<InAppNotification> getInAppNotifications(Long userId, boolean unreadOnly) {
+        if (userId == null) {
+            throw new IllegalArgumentException("userId는 필수입니다.");
+        }
+        return unreadOnly
+                ? inAppNotificationRepository.findByUserIdAndReadAtIsNullOrderByCreatedAtDesc(userId)
+                : getInAppNotifications(userId);
+    }
+
     @Transactional
     public InAppNotification markNotificationAsRead(Long userId, Long notificationId, OffsetDateTime readTime) {
         if (userId == null || notificationId == null) {
@@ -104,10 +113,19 @@ public class NotificationService {
         }
 
         InAppNotification notification = inAppNotificationRepository.findByUserIdAndId(userId, notificationId)
-                .orElseThrow(() -> new IllegalArgumentException("해당 사용자의 알림 항목을 찾을 수 없습니다."));
+                .orElseThrow(NotificationNotFoundException::new);
 
         // markAsRead 내부에서 최초 readAt 시각을 보존함
         notification.markAsRead(readTime != null ? readTime : OffsetDateTime.now());
         return notification;
+    }
+
+    @Transactional
+    public void markAllNotificationsAsRead(Long userId) {
+        getInAppNotifications(userId, true)
+                .forEach(notification -> notification.markAsRead(OffsetDateTime.now()));
+    }
+
+    public static class NotificationNotFoundException extends RuntimeException {
     }
 }

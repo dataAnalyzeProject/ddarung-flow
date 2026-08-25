@@ -62,8 +62,7 @@ class RetentionServiceTest {
 
             // B가 A의 즐겨찾기 삭제 시도 시 예외 발생
             assertThatThrownBy(() -> retentionService.deleteFavoriteStation(userB, 1L))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("찾을 수 없습니다");
+                    .isInstanceOf(RetentionService.RetentionNotFoundException.class);
         }
 
         @Test
@@ -128,14 +127,28 @@ class RetentionServiceTest {
 
             // when & then
             assertThatThrownBy(() -> retentionService.deleteSavedRoute(userB, 1L))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("찾을 수 없습니다");
+                    .isInstanceOf(RetentionService.RetentionNotFoundException.class);
         }
     }
 
     @Nested
     @DisplayName("예측 이력 (PredictionHistory) 테스트")
     class PredictionHistoryTests {
+
+        @Test
+        @DisplayName("30건이 있는 사용자가 새 이력을 저장하면 가장 오래된 본인 이력을 제거한다")
+        void recordPredictionHistory_RemovesOldestAtLimit() {
+            Long userId = 1L;
+            PredictionHistory oldest = PredictionHistory.builder().userId(userId).queryCondition("old").summaryResult("old").build();
+            given(predictionHistoryRepository.countByUserId(userId)).willReturn(30L);
+            given(predictionHistoryRepository.findFirstByUserIdOrderByQueriedAtAsc(userId)).willReturn(java.util.Optional.of(oldest));
+            given(predictionHistoryRepository.save(any(PredictionHistory.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+            retentionService.recordPredictionHistory(userId, "DIRECT", "추천 결과 1건");
+
+            verify(predictionHistoryRepository).delete(oldest);
+            verify(predictionHistoryRepository).save(any(PredictionHistory.class));
+        }
 
         @Test
         @DisplayName("예측 이력 31건 중 최신 30건만 반환")

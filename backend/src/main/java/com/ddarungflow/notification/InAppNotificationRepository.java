@@ -13,5 +13,7 @@ public interface InAppNotificationRepository extends JpaRepository<InAppNotifica
 
     List<InAppNotification> findByUserIdOrderByCreatedAtDesc(Long userId);
 
+    List<InAppNotification> findByUserIdAndReadAtIsNullOrderByCreatedAtDesc(Long userId);
+
     Optional<InAppNotification> findByUserIdAndId(Long userId, Long id);
 }

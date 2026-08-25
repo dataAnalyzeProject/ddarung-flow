@@ -1,29 +1,33 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import ArchivePage from "./ArchivePage";
 
-test("renders the saved stations tab by default", () => {
+const response = (body, status = 200) => ({ ok: status < 400, status, json: async () => body });
+
+beforeEach(() => { global.fetch = jest.fn(); });
+afterEach(() => { jest.restoreAllMocks(); });
+
+test("loads the logged-in user's archive data instead of fixtures", async () => {
+  global.fetch.mockResolvedValueOnce(response([{ id: 1, stationId: 10, stationName: "성수역 3번 출구" }]))
+    .mockResolvedValueOnce(response([{ id: 2, startStationName: "성수역", endStationName: "서울숲" }]))
+    .mockResolvedValueOnce(response([{ id: 3, queryCondition: "DIRECT", summaryResult: "추천 결과 1건" }]));
   render(<ArchivePage />);
-
-  expect(screen.getByRole("heading", { name: "내 보관함" })).toBeInTheDocument();
-  expect(screen.getByText("성수역 3번 출구")).toBeInTheDocument();
-  expect(screen.getByText("성수동 카페거리")).toBeInTheDocument();
-  expect(screen.getByRole("tab", { name: "저장 대여소", selected: true })).toBeInTheDocument();
-});
-
-test("switching to the routes tab shows the placeholder card", () => {
-  render(<ArchivePage />);
-
+  expect(await screen.findByText("성수역 3번 출구")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("tab", { name: "저장 경로" }));
-
-  expect(screen.getByText("저장 경로 준비 중")).toBeInTheDocument();
-  expect(screen.queryByText("성수역 3번 출구")).not.toBeInTheDocument();
+  expect(await screen.findByText("성수역 → 서울숲")).toBeInTheDocument();
 });
 
-test("removing a saved station updates the summary count", () => {
+test("shows an API failure message", async () => {
+  global.fetch.mockResolvedValueOnce(response({ code: "AUTH_REQUIRED" }, 401));
   render(<ArchivePage />);
+  expect(await screen.findByRole("alert")).toHaveTextContent("보관함을 불러오지 못했습니다.");
+});
 
-  fireEvent.click(screen.getAllByRole("button", { name: "삭제" })[0]);
-
-  expect(screen.queryByText("성수역 3번 출구")).not.toBeInTheDocument();
-  expect(screen.getByText("성수동 카페거리")).toBeInTheDocument();
+test("deleting a favorite uses the CSRF token then removes only that item", async () => {
+  global.fetch.mockResolvedValueOnce(response([{ id: 1, stationId: 10, stationName: "성수역" }]))
+    .mockResolvedValueOnce(response([])).mockResolvedValueOnce(response([]))
+    .mockResolvedValueOnce(response({ headerName: "X-CSRF-TOKEN", token: "csrf" })).mockResolvedValueOnce(response(null, 204));
+  render(<ArchivePage />);
+  fireEvent.click(await screen.findByRole("button", { name: "삭제" }));
+  await waitFor(() => expect(screen.queryByText("성수역")).not.toBeInTheDocument());
+  expect(global.fetch).toHaveBeenLastCalledWith("http://localhost:8080/api/v1/favorites/1", expect.objectContaining({ method: "DELETE" }));
 });
