@@ -54,14 +54,14 @@ jobs:
       OCI_REPOSITORY: ${{ vars.OCI_REPOSITORY }}
       STAGING_PUBLIC_URL: ${{ vars.STAGING_PUBLIC_URL }}
       KAKAO_MAP_APP_KEY: ${{ vars.KAKAO_MAP_APP_KEY }}
-      TOSS_CLIENT_KEY: ${{ secrets.TOSS_CLIENT_KEY }}
+      TOSS_PAYMENTS_CLIENT_KEY: ${{ secrets.TOSS_PAYMENTS_CLIENT_KEY }}
 
     steps:
       - name: Check required image configuration
         shell: bash
         run: |
           set -euo pipefail
-          for name in OCI_REGISTRY OCI_NAMESPACE OCI_REPOSITORY STAGING_PUBLIC_URL KAKAO_MAP_APP_KEY TOSS_CLIENT_KEY; do
+          for name in OCI_REGISTRY OCI_NAMESPACE OCI_REPOSITORY STAGING_PUBLIC_URL KAKAO_MAP_APP_KEY TOSS_PAYMENTS_CLIENT_KEY; do
             if [ -z "${!name:-}" ]; then
               echo "Required staging configuration is missing: $name" >&2
               exit 1
@@ -72,7 +72,7 @@ jobs:
           [[ "$OCI_NAMESPACE" =~ ^[A-Za-z0-9_-]+$ ]]
           [[ "$OCI_REPOSITORY" =~ ^[A-Za-z0-9._/-]+$ ]]
           [[ "$STAGING_PUBLIC_URL" =~ ^https://[A-Za-z0-9.:-]+$ ]]
-          [[ "$TOSS_CLIENT_KEY" == test_* ]]
+          [[ "$TOSS_PAYMENTS_CLIENT_KEY" == test_* ]]
 
       - name: Check out the successful main commit
         uses: actions/checkout@v6
@@ -109,7 +109,7 @@ jobs:
           build-args: |
             ${{ matrix.component == 'frontend' && format('REACT_APP_API_BASE_URL={0}', env.STAGING_PUBLIC_URL) || '' }}
             ${{ matrix.component == 'frontend' && format('REACT_APP_KAKAO_MAP_APP_KEY={0}', env.KAKAO_MAP_APP_KEY) || '' }}
-            ${{ matrix.component == 'frontend' && format('REACT_APP_TOSS_CLIENT_KEY={0}', env.TOSS_CLIENT_KEY) || '' }}
+            ${{ matrix.component == 'frontend' && format('REACT_APP_TOSS_PAYMENTS_CLIENT_KEY={0}', env.TOSS_PAYMENTS_CLIENT_KEY) || '' }}
           cache-from: type=gha,scope=staging-${{ matrix.component }}
           cache-to: type=gha,mode=max,scope=staging-${{ matrix.component }}
 
@@ -131,7 +131,7 @@ jobs:
       REMOTE_APP_DIR: ${{ vars.REMOTE_APP_DIR }}
       SSH_HOST: ${{ secrets.STAGING_SSH_HOST }}
       SSH_USER: ${{ secrets.STAGING_SSH_USER }}
-      TOSS_CLIENT_KEY: ${{ secrets.TOSS_CLIENT_KEY }}
+      TOSS_PAYMENTS_CLIENT_KEY: ${{ secrets.TOSS_PAYMENTS_CLIENT_KEY }}
 
     steps:
       - name: Check required deployment configuration
@@ -194,7 +194,7 @@ jobs:
           SEOUL_OPEN_API_KEY: ${{ secrets.SEOUL_OPEN_API_KEY }}
           NAVER_CLIENT_ID: ${{ vars.NAVER_CLIENT_ID }}
           NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
-          TOSS_SECRET_KEY: ${{ secrets.TOSS_SECRET_KEY }}
+          TOSS_PAYMENTS_SECRET_KEY: ${{ secrets.TOSS_PAYMENTS_SECRET_KEY }}
           MODEL_POINTER_KEY: ${{ vars.MODEL_POINTER_KEY }}
           MODEL_POINTER_SHA256: ${{ vars.MODEL_POINTER_SHA256 }}
         run: |
@@ -216,8 +216,8 @@ jobs:
               exit 1
             fi
           done
-          if [ -z "${TOSS_SECRET_KEY:-}" ] || [[ "$TOSS_SECRET_KEY" != test_* ]]; then
-            echo "Required Toss test configuration is missing or invalid: TOSS_SECRET_KEY" >&2
+          if [ -z "${TOSS_PAYMENTS_SECRET_KEY:-}" ] || [[ "$TOSS_PAYMENTS_SECRET_KEY" != test_* ]]; then
+            echo "Required Toss test configuration is missing or invalid: TOSS_PAYMENTS_SECRET_KEY" >&2
             exit 1
           fi
 
@@ -228,7 +228,7 @@ jobs:
             printf 'INFERENCE_IMAGE=%s/inference:%s\n' "$image_base" "$DEPLOY_SHA"
             printf 'INVENTORY_REFRESHER_IMAGE=%s/inventory-refresher:%s\n' "$image_base" "$DEPLOY_SHA"
             printf 'REACT_APP_API_BASE_URL=%s\n' "$STAGING_PUBLIC_URL"
-            printf 'REACT_APP_TOSS_CLIENT_KEY=%s\n' "$TOSS_CLIENT_KEY"
+            printf 'REACT_APP_TOSS_PAYMENTS_CLIENT_KEY=%s\n' "$TOSS_PAYMENTS_CLIENT_KEY"
             printf 'PAYMENT_MODE=sandbox\n'
             printf 'DEPLOYED_COMMIT=%s\n' "$DEPLOY_SHA"
             printf 'SWAGGER_ENABLED=true\n'
@@ -253,7 +253,7 @@ jobs:
             printf 'SEOUL_OPEN_API_KEY=%s\n' "$SEOUL_OPEN_API_KEY"
             printf 'NAVER_CLIENT_ID=%s\n' "$NAVER_CLIENT_ID"
             printf 'NAVER_CLIENT_SECRET=%s\n' "$NAVER_CLIENT_SECRET"
-            printf 'TOSS_SECRET_KEY=%s\n' "$TOSS_SECRET_KEY"
+            printf 'TOSS_PAYMENTS_SECRET_KEY=%s\n' "$TOSS_PAYMENTS_SECRET_KEY"
           } > oauth.candidate.env
           chmod 600 oauth.candidate.env
 

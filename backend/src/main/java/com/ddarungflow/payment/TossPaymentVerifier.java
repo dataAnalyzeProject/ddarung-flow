@@ -17,7 +17,7 @@ public class TossPaymentVerifier implements PaymentVerifier {
     private final String secretKey;
 
     public TossPaymentVerifier(RestClient.Builder builder, ObjectMapper objectMapper,
-                               @Value("${toss.secret-key:}") String secretKey,
+                               @Value("${TOSS_PAYMENTS_SECRET_KEY:}") String secretKey,
                                @Value("${toss.api-base-url:https://api.tosspayments.com}") String baseUrl) {
         this.client = builder.baseUrl(baseUrl).build();
         this.objectMapper = objectMapper;

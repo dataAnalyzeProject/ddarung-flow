@@ -1,16 +1,16 @@
 import { requestTossCheckout } from './tossCheckout';
 
 describe('requestTossCheckout', () => {
-  const originalKey = process.env.REACT_APP_TOSS_CLIENT_KEY;
+  const originalKey = process.env.REACT_APP_TOSS_PAYMENTS_CLIENT_KEY;
 
   afterEach(() => {
-    process.env.REACT_APP_TOSS_CLIENT_KEY = originalKey;
+    process.env.REACT_APP_TOSS_PAYMENTS_CLIENT_KEY = originalKey;
     delete window.TossPayments;
     document.querySelectorAll('script[src="https://js.tosspayments.com/v2/standard"]').forEach((node) => node.remove());
   });
 
   test('does not load the provider SDK without a test client key', async () => {
-    delete process.env.REACT_APP_TOSS_CLIENT_KEY;
+    delete process.env.REACT_APP_TOSS_PAYMENTS_CLIENT_KEY;
 
     await expect(requestTossCheckout({ orderId: 'order-123456', amount: 2900, currency: 'KRW' }))
       .rejects.toThrow('PAYMENT_NOT_ENABLED');
@@ -18,7 +18,7 @@ describe('requestTossCheckout', () => {
   });
 
   test('uses only the server checkout response when requesting payment', async () => {
-    process.env.REACT_APP_TOSS_CLIENT_KEY = 'test_ck_example';
+    process.env.REACT_APP_TOSS_PAYMENTS_CLIENT_KEY = 'test_ck_example';
     const requestPayment = jest.fn().mockResolvedValue(undefined);
     window.TossPayments = jest.fn(() => ({ payment: jest.fn(() => ({ requestPayment })) }));
 

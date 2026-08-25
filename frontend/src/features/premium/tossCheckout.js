@@ -21,7 +21,7 @@ function loadTossPayments() {
 }
 
 export async function requestTossCheckout(checkout) {
-  const clientKey = process.env.REACT_APP_TOSS_CLIENT_KEY;
+  const clientKey = process.env.REACT_APP_TOSS_PAYMENTS_CLIENT_KEY;
   if (!clientKey || !clientKey.startsWith('test_')) throw new Error('PAYMENT_NOT_ENABLED');
 
   const TossPayments = await loadTossPayments();

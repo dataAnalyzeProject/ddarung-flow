@@ -10,7 +10,7 @@ public class PaymentEnvironment {
 
     public PaymentEnvironment(
         @Value("${PAYMENT_MODE:}") String paymentMode,
-        @Value("${TOSS_SECRET_KEY:}") String tossSecretKey
+        @Value("${TOSS_PAYMENTS_SECRET_KEY:}") String tossSecretKey
     ) {
         this.paymentMode = paymentMode == null ? "" : paymentMode;
         this.tossSecretKey = tossSecretKey == null ? "" : tossSecretKey;
