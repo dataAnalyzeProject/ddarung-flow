@@ -540,47 +540,6 @@
   }
 }
 
-/* Final desktop ownership: each PC-width band has one three-column hero.
-   The scene is decorative, so its native 220:190 ratio never consumes a
-   content track or sits under the CTA. */
-@media (min-width:1180px) and (max-width:1500px) and (min-height:721px){
-  .main-search{grid-template-columns:minmax(240px,.78fr) minmax(420px,1.52fr) minmax(190px,.72fr)}
-  .main-hero-scene{right:132px;bottom:0;width:140px;height:121px;object-fit:contain;object-position:right bottom}
-}
-
-@media (min-width:1501px) and (max-width:1699px) and (min-height:721px){
-  .main-search{grid-template-columns:330px minmax(620px,1fr) 280px;gap:16px}
-  .main-hero-scene{right:190px;bottom:0;width:140px;height:121px;object-fit:contain;object-position:right bottom}
-}
-
-@media (min-width:1700px) and (min-height:721px){
-  .main-search{grid-template-columns:330px minmax(600px,808px) minmax(440px,1fr);column-gap:32px}
-  .main-fields{width:100%;transform:translateX(56px)}
-  .main-actions{margin-left:32px;padding-left:18px;grid-template-columns:124px minmax(0,1fr) 250px}
-  .main-actions .main-submit{grid-column:3}
-  .main-hero-scene{right:252px;bottom:0;width:220px;height:190px;object-fit:contain;object-position:right bottom}
-}
-
-/* Generated panorama and controls: the artwork spans the full card below live inputs. */
-@media (min-width:1180px) and (min-height:721px){
-  .main-shell{grid-template-rows:70px 212px minmax(0,1fr)}
-  .main-search{height:198px;margin-top:9px;margin-bottom:5px}
-  .main-search{isolation:isolate;background:#eef8ff}
-  .main-search:after{z-index:0;opacity:.18}
-  .main-hero-scene{display:block;inset:0;z-index:0;width:100%;height:100%;object-fit:cover;object-position:center 72%;opacity:1}
-  .main-input-wrap .main-place-icon{position:absolute;right:13px;top:50%;z-index:1;width:19px;height:19px;object-fit:contain;transform:translateY(-50%);pointer-events:none}
-  .main-input-wrap:has(.main-place-icon) b{display:none}
-  .main-mode-buttons button>img{width:20px;height:20px;object-fit:contain;pointer-events:none}
-  .main-actions .main-submit>img{width:17px;height:17px;object-fit:contain;pointer-events:none}
-  .main-actions .main-submit>span{display:none}
-}
-
-@media (min-width:1700px) and (min-height:721px){
-  .main-hero-copy h1{font-size:29px;white-space:nowrap}
-  .main-actions{grid-template-columns:124px 24px 300px;justify-content:start}
-  .main-actions .main-submit{grid-column:3}
-}
-
 /* Keep the three initial recommendations and the expand action within the
    visible desktop panel after the hero card height was increased. */
 @media (min-width:1180px) and (min-height:721px){
@@ -827,8 +786,53 @@
 }
 
 /* Generated PNGs retain their native 1254px canvas without explicit sizing.
-   These controls must therefore be sized at every PC height, including a
-   720px browser viewport where the tall-desktop media query does not match. */
+   Keep their intrinsic dimensions out of the layout at every viewport: a
+   windowed desktop can be narrower than the PC layout breakpoint. */
+.main-input-wrap .main-place-icon{
+  position:absolute;
+  right:13px;
+  top:50%;
+  z-index:1;
+  width:19px;
+  height:19px;
+  max-width:19px;
+  max-height:19px;
+  object-fit:contain;
+  transform:translateY(-50%);
+  pointer-events:none;
+}
+.main-input-wrap:has(.main-place-icon) b{display:none}
+.main-mode-buttons button>img{
+  display:block;
+  width:20px;
+  height:20px;
+  max-width:20px;
+  max-height:20px;
+  flex:0 0 20px;
+  object-fit:contain;
+  pointer-events:none;
+}
+.main-actions .main-submit>img{
+  display:block;
+  width:17px;
+  height:17px;
+  max-width:17px;
+  max-height:17px;
+  flex:0 0 17px;
+  object-fit:contain;
+  pointer-events:none;
+}
+.main-station-bookmark{
+  position:absolute;
+  right:10px;
+  top:8px;
+  width:18px;
+  height:22px;
+  max-width:18px;
+  max-height:22px;
+  object-fit:contain;
+  pointer-events:none;
+}
 @media (min-width:1180px){
   .main-input-wrap .main-place-icon{
     position:absolute;
@@ -854,4 +858,261 @@
     object-fit:contain;
     pointer-events:none;
   }
+}
+
+/* Canonical PC hero layout.  This intentionally comes after the historical
+   breakpoint rules so the panorama is a bounded card background and the
+   interactive controls retain the same geometry at every desktop height. */
+@media (min-width:1180px){
+  .main-shell{min-width:0;overflow-x:hidden}
+  .main-search{
+    isolation:isolate;
+    overflow:visible;
+    background:#eef8ff;
+  }
+  .main-search:after{z-index:0;opacity:.16}
+  .main-hero-scene{
+    display:block;
+    position:absolute;
+    inset:0;
+    z-index:0;
+    width:100%;
+    height:100%;
+    max-width:100%;
+    max-height:100%;
+    border-radius:inherit;
+    object-fit:cover;
+    object-position:center bottom;
+    pointer-events:none;
+  }
+  .main-hero-copy,.main-fields,.main-actions{z-index:1;min-width:0}
+  .main-fields{min-width:0}
+  .main-actions{
+    min-width:0;
+    margin-left:0;
+    padding-left:0;
+    grid-template-columns:124px minmax(0,1fr);
+    grid-template-rows:23px 70px;
+    gap:5px 12px;
+  }
+  .main-actions>span{grid-column:1/-1;grid-row:1;margin:0;align-self:end}
+  .main-mode-buttons{grid-column:1;grid-row:2}
+  .main-actions .main-submit{grid-column:2;grid-row:2;min-width:0}
+  .main-input-wrap .main-place-icon{
+    width:19px;
+    height:19px;
+    max-width:19px;
+    max-height:19px;
+  }
+  .main-mode-buttons button>img{
+    width:20px;
+    height:20px;
+    max-width:20px;
+    max-height:20px;
+    flex:0 0 20px;
+  }
+  .main-actions .main-submit>img{
+    width:17px;
+    height:17px;
+    max-width:17px;
+    max-height:17px;
+    flex:0 0 17px;
+  }
+}
+
+/* Compact desktop: retain every control in the 1280 x 720 working area. */
+@media (min-width:1180px) and (max-height:760px){
+  .main-search{
+    height:104px;
+    margin:5px 20px 3px;
+    padding:7px 16px;
+    grid-template-columns:minmax(205px,.76fr) minmax(0,1.58fr) minmax(228px,.86fr);
+    gap:8px;
+  }
+  .main-fields{grid-template-columns:minmax(104px,1fr) 16px minmax(104px,1fr) 122px;gap:0 4px}
+  .main-actions{grid-template-columns:88px minmax(116px,1fr);grid-template-rows:16px 45px;gap:3px 5px}
+  .main-mode-buttons{gap:4px}
+  .main-mode-buttons button{width:42px;height:45px;font-size:8px}
+  .main-actions .main-submit{height:37px;margin:4px 0;padding:0 5px;font-size:8px;white-space:nowrap}
+}
+
+/* Standard laptop desktop: use the reference card height while leaving the
+   dashboard enough vertical room for live results. */
+@media (min-width:1180px) and (max-width:1500px) and (min-height:761px){
+  .main-shell{grid-template-rows:60px 178px minmax(0,1fr)}
+  .main-search{
+    height:160px;
+    margin:7px 20px 5px;
+    padding:18px 22px;
+    grid-template-columns:minmax(250px,.8fr) minmax(0,1.55fr) minmax(240px,.78fr);
+    gap:12px;
+  }
+  .main-fields{grid-template-columns:minmax(135px,1fr) 20px minmax(135px,1fr) 150px;gap:0 6px}
+  .main-actions{grid-template-columns:104px minmax(142px,1fr);grid-template-rows:20px 56px;gap:5px 8px}
+  .main-mode-buttons{gap:5px}
+  .main-mode-buttons button{width:50px;height:56px}
+  .main-actions .main-submit{height:46px;margin:5px 0;font-size:10px}
+}
+
+/* Wide desktop: match the 198px reference hero without adding a fourth
+   content track for decorative art. */
+@media (min-width:1501px) and (min-height:761px){
+  .main-shell{grid-template-rows:70px 212px minmax(0,1fr)}
+  .main-search{
+    height:198px;
+    margin:9px 27px 5px;
+    padding:27px 28px;
+    grid-template-columns:330px minmax(600px,1fr) minmax(285px,.72fr);
+    gap:20px;
+  }
+  .main-fields{grid-template-columns:minmax(190px,1fr) 31px minmax(190px,1fr) 192px;gap:0 8px}
+  .main-actions{grid-template-columns:124px minmax(190px,1fr);grid-template-rows:23px 70px;gap:5px 12px}
+  .main-mode-buttons{gap:7px}
+  .main-mode-buttons button{width:58px;height:70px}
+  .main-actions .main-submit{height:54px;margin:8px 0;font-size:13px;white-space:nowrap}
+}
+
+/* Recommendation cards own a fixed title row and a visible data row.  This
+   replaces the earlier translated data cells that could be clipped by the
+   three-card list. */
+@media (min-width:1180px){
+  .main-station-panel{display:flex;flex-direction:column;height:100%;min-height:0}
+  .main-station-panel .main-section-head{flex:0 0 51px}
+  .main-station-panel .main-station-list{
+    height:auto;
+    min-height:0;
+    flex:1 1 auto;
+    display:grid;
+    grid-template-rows:repeat(3,minmax(0,1fr));
+    gap:6px;
+    overflow:hidden;
+    padding:6px 12px 0;
+  }
+  .main-station-panel .main-station{
+    height:auto!important;
+    min-height:0;
+    margin:0;
+    padding:12px 18px 12px 66px;
+    grid-template-columns:minmax(118px,1.15fr) minmax(116px,1fr) minmax(98px,.9fr) 108px;
+    grid-template-rows:34px minmax(0,1fr);
+    column-gap:12px;
+    align-items:end;
+  }
+  .main-station-panel .main-station-bookmark{
+    position:absolute;
+    z-index:2;
+    right:10px;
+    top:8px;
+    width:18px;
+    height:22px;
+    object-fit:contain;
+    pointer-events:none;
+  }
+  .main-station-panel .main-station-stat,
+  .main-station-panel .main-station-rate,
+  .main-station-panel .main-details{
+    position:relative;
+    z-index:2;
+    grid-row:2;
+    min-height:0;
+    align-self:end;
+    transform:none;
+  }
+  .main-station-panel .main-station-stat,
+  .main-station-panel .main-station-rate{display:grid;grid-template-rows:18px minmax(0,1fr);align-content:end;gap:2px}
+  .main-station-panel .main-station-stat small,
+  .main-station-panel .main-station-rate small{font-size:11px;font-weight:700}
+  .main-station-panel .main-station-stat strong{align-self:end;font-size:24px;line-height:1.05}
+  .main-station-panel .main-station-stat strong i{font-size:13px}
+  .main-station-panel .main-station-rate em{align-self:end;font-size:12px;font-weight:800}
+  .main-station-panel .main-details{width:108px;height:44px;justify-self:center;border-width:1.5px;font-size:12px;font-weight:800}
+  .main-station-panel .main-more{height:38px;flex:0 0 38px;margin:6px 12px 10px}
+}
+
+/* A 125% OS scale makes a 900px physical window fall in this CSS-height
+   band.  Keep the panorama readable instead of collapsing it to 104px. */
+@media (min-width:1180px) and (max-height:760px){
+  .main-shell{grid-template-rows:48px 160px minmax(0,1fr);padding-bottom:5px}
+  .main-header{height:48px}
+  .main-search{
+    height:144px;
+    margin:7px 20px 5px;
+    padding:14px 16px;
+  }
+  .main-hero-scene{transform:none;object-fit:contain;object-position:center center}
+  .main-hero-copy h1{font-size:23px;line-height:1.3}
+  .main-hero-copy p{margin-top:6px;font-size:9px}
+  .main-input-wrap input,.main-bike-count select{height:42px;font-size:10px}
+  .main-input-wrap .main-place-icon{right:12px}
+  .main-fields label>span:first-child,.main-actions>span{margin-bottom:5px;font-size:9px}
+  .main-fields>i{padding-bottom:12px}
+  .main-actions{grid-template-rows:18px 52px;gap:4px 6px}
+  .main-mode-buttons button{width:46px;height:52px;font-size:8px}
+  .main-actions .main-submit{height:42px;margin:5px 0;font-size:9px}
+  .main-station-panel .main-section-head{height:44px;flex-basis:44px}
+  .main-station-panel{height:100%;margin-top:0;align-self:stretch}
+  .main-station-panel .main-station-list{grid-template-rows:repeat(3,minmax(0,1fr));gap:5px;padding-top:5px}
+  .main-station-panel .main-station{padding-top:10px;padding-bottom:10px;grid-template-rows:30px minmax(0,1fr)}
+  .main-station-panel .main-more{height:32px;flex-basis:32px;margin-top:5px;margin-bottom:7px}
+}
+
+/* At a 1920px desktop, Chrome's 80% zoom keeps the horizontal three-column
+   geometry but shortens the header and search tracks.  Reproduce that vertical
+   density at 100% without CSS zoom: zoom expanded the document to 2400px and
+   caused a horizontal overflow instead of matching the reference. */
+@media (min-width:1750px) and (max-width:2000px) and (min-height:800px){
+  .main-shell{grid-template-rows:56px 170px minmax(0,1fr);padding-bottom:8px}
+  .main-header{height:56px}
+  .main-search{height:158px;margin:7px 22px 5px}
+  .main-dashboard{margin-left:22px;margin-right:22px}
+}
+
+/* A 1920px Windows display at 125% scaling exposes roughly 1536 x 720 CSS
+   pixels at Chrome 100%.  Reserve one compact row for the expand action so
+   the third recommendation is not clipped below the viewport. */
+@media (min-width:1501px) and (max-width:1600px) and (max-height:760px){
+  .main-shell{grid-template-rows:48px 154px minmax(0,1fr)}
+  .main-search{height:136px;margin-top:10px;margin-bottom:5px}
+  .main-actions{grid-template-columns:124px minmax(0,1fr)}
+  .main-mode-buttons{gap:6px}
+  .main-mode-buttons button{width:56px;white-space:nowrap}
+  .main-actions .main-submit{width:250px;justify-self:start}
+  .main-station-panel,
+  .main-map-panel,
+  .main-side-panels{height:calc(100% - 32px);margin-top:0;align-self:start}
+  .main-side-panels{grid-template-rows:136px 166px minmax(0,1fr)}
+  .main-side-panels>section:last-child .main-weather{min-height:74px;padding:2px 0}
+  .main-side-panels>section:last-child .main-weather-icon{width:64px;height:64px}
+  .main-side-panels>section:last-child .main-tip{margin:0;padding:6px 9px}
+  .main-station-panel .main-station-stat,
+  .main-station-panel .main-station-rate{border-right:0;padding-right:0}
+  .main-station-panel .main-station-bookmark{
+    right:12px;
+    top:8px;
+    width:26px;
+    height:34px;
+    max-width:26px;
+    max-height:34px;
+  }
+  .main-station-panel .main-section-head{height:40px;flex-basis:40px}
+  .main-station-panel .main-station-list{gap:4px;padding-top:4px}
+  .main-station-panel .main-more{height:28px;flex-basis:28px;margin:4px 12px 6px}
+}
+
+/* The main page is a desktop layout, but a windowed desktop can fall below
+   1180px.  Do not let its generated PNGs use their native 1254px canvas or
+   force a horizontal desktop canvas in that intermediate state. */
+@media (max-width:1179px){
+  .main-shell{min-width:0;overflow-x:hidden}
+  .main-search{
+    grid-template-columns:minmax(170px,.62fr) minmax(0,1.38fr) minmax(160px,.6fr);
+    gap:8px;
+  }
+  .main-fields{min-width:0;grid-template-columns:minmax(0,1fr) 16px minmax(0,1fr) 106px;gap:0 4px}
+  .main-actions{min-width:0;grid-template-columns:88px minmax(0,1fr);grid-template-rows:16px 45px;gap:3px 5px}
+  .main-actions>span{grid-column:1/-1;grid-row:1;margin:0;align-self:end}
+  .main-mode-buttons{grid-column:1;grid-row:2;gap:4px}
+  .main-mode-buttons button{width:42px;height:45px;font-size:8px}
+  .main-actions .main-submit{grid-column:2;grid-row:2;min-width:0;height:37px;margin:4px 0;padding:0 5px;font-size:8px;white-space:nowrap}
+  .main-hero-scene{display:none}
 }
