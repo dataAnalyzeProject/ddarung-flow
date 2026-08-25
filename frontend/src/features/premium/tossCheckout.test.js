@@ -17,22 +17,32 @@ describe('requestTossCheckout', () => {
     expect(document.querySelector('script[src="https://js.tosspayments.com/v2/standard"]')).not.toBeInTheDocument();
   });
 
-  test('uses only the server checkout response when requesting payment', async () => {
-    process.env.REACT_APP_TOSS_PAYMENTS_CLIENT_KEY = 'test_ck_example';
+  test('opens a payment window with the server checkout response', async () => {
+    process.env.REACT_APP_TOSS_PAYMENTS_CLIENT_KEY = 'test_gck_example';
     const requestPayment = jest.fn().mockResolvedValue(undefined);
-    window.TossPayments = jest.fn(() => ({ payment: jest.fn(() => ({ requestPayment })) }));
+    const on = jest.fn();
+    const renderPaymentWindow = jest.fn().mockResolvedValue({ on });
+    const widgets = { setAmount: jest.fn().mockResolvedValue(undefined), renderPaymentWindow, requestPayment };
+    window.TossPayments = jest.fn(() => ({ widgets: jest.fn(() => widgets) }));
 
     await requestTossCheckout({
       orderId: 'order-123456',
+      customerKey: 'ddarung-550e8400-e29b-41d4-a716-446655440000',
       planId: 'PREMIUM_MONTHLY_30D',
       amount: 2900,
       currency: 'KRW',
     });
 
-    expect(window.TossPayments).toHaveBeenCalledWith('test_ck_example');
+    expect(window.TossPayments).toHaveBeenCalledWith('test_gck_example');
+    expect(widgets.setAmount).toHaveBeenCalledWith({ value: 2900, currency: 'KRW' });
+    expect(renderPaymentWindow).toHaveBeenCalledWith();
+    expect(on).toHaveBeenCalledWith('paymentRequest', expect.any(Function));
+
+    await on.mock.calls[0][1]();
     expect(requestPayment).toHaveBeenCalledWith(expect.objectContaining({
       orderId: 'order-123456',
-      amount: { value: 2900, currency: 'KRW' },
+      successUrl: expect.stringContaining('payment=processing'),
+      failUrl: expect.stringContaining('payment=processing'),
     }));
   });
 });

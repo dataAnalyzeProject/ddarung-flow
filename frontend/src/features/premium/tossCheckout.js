@@ -25,16 +25,17 @@ export async function requestTossCheckout(checkout) {
   if (!clientKey || !clientKey.startsWith('test_')) throw new Error('PAYMENT_NOT_ENABLED');
 
   const TossPayments = await loadTossPayments();
-  const payment = TossPayments(clientKey).payment({ customerKey: checkout.orderId });
+  const widgets = TossPayments(clientKey).widgets({ customerKey: checkout.customerKey });
   const callbackUrl = new URL(window.location.href);
   callbackUrl.searchParams.set('payment', 'processing');
 
-  return payment.requestPayment({
-    method: 'CARD',
-    amount: { value: checkout.amount, currency: checkout.currency },
+  await widgets.setAmount({ value: checkout.amount, currency: checkout.currency });
+  const paymentWindow = await widgets.renderPaymentWindow();
+  paymentWindow.on('paymentRequest', () => widgets.requestPayment({
     orderId: checkout.orderId,
     orderName: checkout.planId === 'PREMIUM_YEARLY_365D' ? '따릉이 프리미엄 연간 가이드' : '따릉이 프리미엄 월간 가이드',
     successUrl: callbackUrl.toString(),
     failUrl: callbackUrl.toString(),
-  });
+  }));
+  return paymentWindow;
 }

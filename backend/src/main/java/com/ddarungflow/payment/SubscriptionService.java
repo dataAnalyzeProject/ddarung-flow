@@ -26,7 +26,7 @@ public class SubscriptionService {
     Map<String,Object> current=current(user);
     if ("ACTIVE".equals(current.get("status"))) return Map.of("code", "SUBSCRIPTION_ALREADY_ACTIVE");
     Payment payment = payments.save(new Payment(user, "ddarung-" + UUID.randomUUID(), plan));
-    return Map.of("status", "READY", "orderId", payment.getOrderId(), "planId", plan.name(), "amount", payment.getAmount(), "currency", payment.getCurrency());
+    return Map.of("status", "READY", "orderId", payment.getOrderId(), "customerKey", "ddarung-" + user.getPublicId(), "planId", plan.name(), "amount", payment.getAmount(), "currency", payment.getCurrency());
   }
   @Transactional public Map<String,Object> processWebhook(String eventId, String paymentKey) {
     if (eventId == null || eventId.isBlank()) return Map.of("code", "PAYMENT_EVENT_INVALID");

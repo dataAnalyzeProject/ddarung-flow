@@ -3,6 +3,7 @@ package com.ddarungflow.payment;
 import com.ddarungflow.entity.Users;
 import com.ddarungflow.dto.PrincipalDetails;
 import org.springframework.http.ResponseEntity;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -24,6 +25,11 @@ class SubscriptionServiceTest {
     );
     private final Users user = Users.builder().provider("test").providerUserId("u1").displayName("tester").build();
 
+    @BeforeEach
+    void initializeUserPublicId() {
+        user.prePersist();
+    }
+
     @Test
     void checkoutUsesServerDefinedMonthlyAmountAndDurationPlan() {
         when(subscriptions.findFirstByUserOrderByEndsAtDesc(user)).thenReturn(Optional.empty());
@@ -35,6 +41,7 @@ class SubscriptionServiceTest {
         assertEquals(2900, result.get("amount"));
         assertEquals("KRW", result.get("currency"));
         assertEquals("PREMIUM_MONTHLY_30D", result.get("planId"));
+        assertEquals("ddarung-" + user.getPublicId(), result.get("customerKey"));
     }
 
     @Test
