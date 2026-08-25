@@ -27,8 +27,10 @@ export const fixture = {
   ],
   exports: [
     { id: "EXP-240821-04", type: "정거장 가용성 집계", requester: "ADMIN", state: "완료", progress: 100, time: "21:10" },
-    { id: "EXP-240821-03", type: "예측 결과 요약", requester: "ADMIN", state: "진행 중", progress: 68, time: "20:42" },
+    { id: "EXP-240821-03", type: "예측 결과 요약", requester: "ADMIN", state: "생성 중", progress: 68, time: "20:42" },
     { id: "EXP-240821-02", type: "Curated 품질 현황", requester: "ADMIN", state: "대기", progress: 0, time: "19:25" },
+    { id: "EXP-240821-01", type: "오류 샘플", requester: "ADMIN", state: "실패", progress: 42, time: "18:20", reason: "fixture 생성 중 형식 검증에 실패했습니다." },
+    { id: "EXP-240820-09", type: "보관 기간 경과", requester: "ADMIN", state: "만료", progress: 100, time: "전일", reason: "다운로드 가능 기간이 지났습니다." },
   ],
   audit: [
     { time: "21:18:24", action: "MODEL_VALIDATE", actor: "ADMIN", target: "모델 v17 검증", result: "성공" },
