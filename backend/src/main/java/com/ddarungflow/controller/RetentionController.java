@@ -6,6 +6,9 @@ import com.ddarungflow.retention.FavoriteStation;
 import com.ddarungflow.retention.PredictionHistory;
 import com.ddarungflow.retention.RetentionService;
 import com.ddarungflow.retention.SavedRoute;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -34,6 +37,8 @@ public class RetentionController {
     }
 
     @PostMapping("/favorites")
+    @Operation(parameters = @Parameter(name = "X-CSRF-TOKEN", in = ParameterIn.HEADER, required = true,
+            description = "GET /api/v1/auth/csrf 응답의 headerName에 해당하는 CSRF 토큰"))
     public RetentionDtos.FavoriteResponse addFavorite(@AuthenticationPrincipal PrincipalDetails principal,
                                                        @RequestBody RetentionDtos.FavoriteRequest request) {
         FavoriteStation favorite = retentionService.addFavoriteStation(userId(principal), request.stationId(), request.stationName());
@@ -41,6 +46,8 @@ public class RetentionController {
     }
 
     @DeleteMapping("/favorites/{id}")
+    @Operation(parameters = @Parameter(name = "X-CSRF-TOKEN", in = ParameterIn.HEADER, required = true,
+            description = "GET /api/v1/auth/csrf 응답의 headerName에 해당하는 CSRF 토큰"))
     public ResponseEntity<Void> deleteFavorite(@AuthenticationPrincipal PrincipalDetails principal, @PathVariable Long id) {
         retentionService.deleteFavoriteStation(userId(principal), id);
         return ResponseEntity.noContent().build();
@@ -52,6 +59,8 @@ public class RetentionController {
     }
 
     @PostMapping("/saved-routes")
+    @Operation(parameters = @Parameter(name = "X-CSRF-TOKEN", in = ParameterIn.HEADER, required = true,
+            description = "GET /api/v1/auth/csrf 응답의 headerName에 해당하는 CSRF 토큰"))
     public RetentionDtos.SavedRouteResponse addSavedRoute(@AuthenticationPrincipal PrincipalDetails principal,
                                                            @RequestBody RetentionDtos.SavedRouteRequest request) {
         SavedRoute route = retentionService.addSavedRoute(userId(principal), request.name(), request.startStationId(),
@@ -60,6 +69,8 @@ public class RetentionController {
     }
 
     @DeleteMapping("/saved-routes/{id}")
+    @Operation(parameters = @Parameter(name = "X-CSRF-TOKEN", in = ParameterIn.HEADER, required = true,
+            description = "GET /api/v1/auth/csrf 응답의 headerName에 해당하는 CSRF 토큰"))
     public ResponseEntity<Void> deleteSavedRoute(@AuthenticationPrincipal PrincipalDetails principal, @PathVariable Long id) {
         retentionService.deleteSavedRoute(userId(principal), id);
         return ResponseEntity.noContent().build();
@@ -71,6 +82,8 @@ public class RetentionController {
     }
 
     @DeleteMapping("/prediction-histories/{id}")
+    @Operation(parameters = @Parameter(name = "X-CSRF-TOKEN", in = ParameterIn.HEADER, required = true,
+            description = "GET /api/v1/auth/csrf 응답의 headerName에 해당하는 CSRF 토큰"))
     public ResponseEntity<Void> deletePredictionHistory(@AuthenticationPrincipal PrincipalDetails principal, @PathVariable Long id) {
         retentionService.deletePredictionHistory(userId(principal), id);
         return ResponseEntity.noContent().build();

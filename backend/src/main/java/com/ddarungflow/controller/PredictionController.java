@@ -5,6 +5,9 @@ import com.ddarungflow.map.MapPredictionService;
 import com.ddarungflow.map.PredictionApiDtos;
 import com.ddarungflow.dto.PrincipalDetails;
 import com.ddarungflow.retention.RetentionService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -50,6 +53,12 @@ public class PredictionController {
     }
 
     @PostMapping("/direct")
+    @Operation(parameters = @Parameter(
+        name = "X-CSRF-TOKEN",
+        in = ParameterIn.HEADER,
+        required = true,
+        description = "GET /api/v1/auth/csrf 응답의 headerName에 해당하는 CSRF 토큰"
+    ))
     public ResponseEntity<List<PredictionApiDtos.CandidatePredictionResponseDto>> getDirectPredictions(
         @RequestBody PredictionApiDtos.PredictionDirectRequestDto request,
         @AuthenticationPrincipal PrincipalDetails principal
