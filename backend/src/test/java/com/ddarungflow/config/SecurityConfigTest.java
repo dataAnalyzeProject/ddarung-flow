@@ -25,8 +25,9 @@ class SecurityConfigTest {
     @Test
     void anonymousWebhookReachesControllerAndReturnsVerificationFailure() throws Exception {
         mockMvc.perform(post("/api/v1/payments/webhooks/toss")
+                        .header("tosspayments-webhook-transmission-id", UUID.randomUUID().toString())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"eventId\":\"" + UUID.randomUUID() + "\",\"paymentKey\":\"\"}"))
+                        .content("{\"eventType\":\"PAYMENT_STATUS_CHANGED\",\"data\":{\"paymentKey\":\"\"}}"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("PAYMENT_VERIFICATION_FAILED"));
     }

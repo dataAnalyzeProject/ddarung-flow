@@ -32,23 +32,33 @@ public class SubscriptionService {
     if (eventId == null || eventId.isBlank()) return Map.of("code", "PAYMENT_EVENT_INVALID");
     Optional<PaymentEvent> existing = paymentEvents.findByProviderAndEventId("TOSS", eventId);
     if (existing.isPresent()) return resultFor(existing.get().getOutcome());
-    final VerifiedTossPayment verified;
+    VerifiedTossPayment verified;
     try {
       verified = paymentVerifier.verify(paymentKey);
     } catch (RuntimeException ex) {
       return recordFailure(eventId);
     }
     Payment payment = payments.findByOrderId(verified.orderId()).orElse(null);
+    if (!matchesReadyPayment(payment, verified)) {
+      return recordFailure(eventId);
+    }
+    if ("IN_PROGRESS".equals(verified.status())) {
+      try {
+        paymentVerifier.confirm(paymentKey, payment.getOrderId(), payment.getAmount());
+        verified = paymentVerifier.verify(paymentKey);
+      } catch (RuntimeException ex) {
+        return recordFailure(eventId);
+      }
+    }
+    if (!matchesReadyPayment(payment, verified)) {
+      return recordFailure(eventId);
+    }
     if (!verified.isDone()) {
       if (payment != null && payment.getStatus() == PaymentStatus.READY) {
         payment.markProcessing();
         if ("CANCELED".equals(verified.status())) payment.markCanceled();
         else payment.markFailed();
       }
-      return recordFailure(eventId);
-    }
-    if (payment == null || payment.getStatus() != PaymentStatus.READY
-        || payment.getAmount() != verified.amount() || !payment.getCurrency().equals(verified.currency())) {
       return recordFailure(eventId);
     }
     payment.markProcessing();
@@ -60,6 +70,11 @@ public class SubscriptionService {
   private Map<String,Object> recordFailure(String eventId) {
     paymentEvents.save(new PaymentEvent("TOSS", eventId, PaymentEventOutcome.VERIFICATION_FAILED));
     return resultFor(PaymentEventOutcome.VERIFICATION_FAILED);
+  }
+  private boolean matchesReadyPayment(Payment payment, VerifiedTossPayment verified) {
+    return payment != null && payment.getStatus() == PaymentStatus.READY
+        && payment.getAmount() == verified.amount() && payment.getCurrency().equals(verified.currency())
+        && payment.getOrderId().equals(verified.orderId());
   }
   private Map<String,Object> resultFor(PaymentEventOutcome outcome) {
     return outcome == PaymentEventOutcome.ACTIVE ? Map.of("status", "ACTIVE") : Map.of("code", "PAYMENT_VERIFICATION_FAILED");

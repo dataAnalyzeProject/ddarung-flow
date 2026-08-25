@@ -100,6 +100,38 @@ class SubscriptionServiceTest {
     }
 
     @Test
+    void inProgressWebhookUsesServerSideConfirmationBeforeActivation() {
+        Payment payment = new Payment(user, "ddarung-order-confirm", SubscriptionPlan.PREMIUM_MONTHLY_30D);
+        when(events.findByProviderAndEventId("TOSS", "event-confirm")).thenReturn(Optional.empty());
+        when(verifier.verify("key-confirm"))
+                .thenReturn(new VerifiedTossPayment("ddarung-order-confirm", "key-confirm", 2900, "KRW", "IN_PROGRESS"))
+                .thenReturn(new VerifiedTossPayment("ddarung-order-confirm", "key-confirm", 2900, "KRW", "DONE"));
+        when(payments.findByOrderId("ddarung-order-confirm")).thenReturn(Optional.of(payment));
+
+        var result = service.processWebhook("event-confirm", "key-confirm");
+
+        assertEquals("ACTIVE", result.get("status"));
+        verify(verifier).confirm("key-confirm", "ddarung-order-confirm", 2900);
+        verify(verifier, times(2)).verify("key-confirm");
+        verify(subscriptions).save(any(Subscription.class));
+    }
+
+    @Test
+    void confirmationResultMustStillMatchTheStoredOrderBeforeActivation() {
+        Payment payment = new Payment(user, "ddarung-order-recheck", SubscriptionPlan.PREMIUM_MONTHLY_30D);
+        when(events.findByProviderAndEventId("TOSS", "event-recheck")).thenReturn(Optional.empty());
+        when(verifier.verify("key-recheck"))
+                .thenReturn(new VerifiedTossPayment("ddarung-order-recheck", "key-recheck", 2900, "KRW", "IN_PROGRESS"))
+                .thenReturn(new VerifiedTossPayment("ddarung-order-recheck", "key-recheck", 1, "KRW", "DONE"));
+        when(payments.findByOrderId("ddarung-order-recheck")).thenReturn(Optional.of(payment));
+
+        var result = service.processWebhook("event-recheck", "key-recheck");
+
+        assertEquals("PAYMENT_VERIFICATION_FAILED", result.get("code"));
+        verify(subscriptions, never()).save(any());
+    }
+
+    @Test
     void mismatchedAmountDoesNotActivateSubscription() {
         Payment payment = new Payment(user, "ddarung-order-2", SubscriptionPlan.PREMIUM_MONTHLY_30D);
         when(events.findByProviderAndEventId("TOSS", "event-2")).thenReturn(Optional.empty());
@@ -158,7 +190,7 @@ class SubscriptionServiceTest {
         when(controllerService.processWebhook("event-6", "key-6"))
                 .thenReturn(java.util.Map.of("code", "PAYMENT_VERIFICATION_FAILED"));
 
-        ResponseEntity<?> response = controller.webhook(java.util.Map.of("eventId", "event-6", "paymentKey", "key-6"));
+        ResponseEntity<?> response = controller.webhook("event-6", new TossWebhookRequest("PAYMENT_STATUS_CHANGED", new TossWebhookRequest.PaymentData("key-6")));
 
         assertEquals(401, response.getStatusCode().value());
     }

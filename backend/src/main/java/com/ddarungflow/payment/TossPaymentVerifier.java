@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -39,6 +40,19 @@ public class TossPaymentVerifier implements PaymentVerifier {
         } catch (Exception ex) {
             throw new IllegalStateException("invalid Toss payment response", ex);
         }
+    }
+
+    @Override
+    public void confirm(String paymentKey, String orderId, int amount) {
+        if (secretKey.isBlank() || paymentKey == null || paymentKey.isBlank()) {
+            throw new IllegalStateException("payment confirmation is not configured");
+        }
+        String authorization = "Basic " + Base64.getEncoder().encodeToString((secretKey + ":").getBytes(StandardCharsets.UTF_8));
+        client.post().uri("/v1/payments/confirm")
+                .header(HttpHeaders.AUTHORIZATION, authorization)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(java.util.Map.of("paymentKey", paymentKey, "orderId", orderId, "amount", amount))
+                .retrieve().toBodilessEntity();
     }
 
 }
