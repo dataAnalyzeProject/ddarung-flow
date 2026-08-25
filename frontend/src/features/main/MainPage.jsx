@@ -17,6 +17,7 @@ import { fetchAirQuality } from "../riding-guide/airQualityApi";
 import { adaptArrivalWeather, fetchArrivalWeather } from "../weather/weatherApi";
 import PremiumGuideAccessPanel from "../premium/PremiumGuideAccessPanel";
 import { fetchSubscription, startCheckout } from "../premium/subscriptionApi";
+import { requestTossCheckout } from "../premium/tossCheckout";
 
 const EMPTY_INPUT = {
   origin: "",
@@ -113,7 +114,8 @@ export default function MainPage({ onNavigate }) {
       fetchSubscription()
         .then((subscription) => {
           if (!cancelled) {
-            setGuideAccessState(subscription.status === "ACTIVE" ? "ACTIVE" : subscription.status === "EXPIRED" ? "EXPIRED" : "FREE");
+            const paymentProcessing = new URLSearchParams(window.location.search).get("payment") === "processing";
+            setGuideAccessState(paymentProcessing ? "PROCESSING" : subscription.status === "ACTIVE" ? "ACTIVE" : subscription.status === "EXPIRED" ? "EXPIRED" : "FREE");
           }
         })
         .catch((error) => {
@@ -310,9 +312,12 @@ export default function MainPage({ onNavigate }) {
   const handleSelectPlan = async ({ planCode }) => {
     setGuideAccessError(null);
     setGuideAccessState("PROCESSING");
+    sessionStorage.setItem(PENDING_GUIDE_KEY, "1");
     try {
-      await startCheckout(planCode);
+      const checkout = await startCheckout(planCode);
+      await requestTossCheckout(checkout);
     } catch (error) {
+      sessionStorage.removeItem(PENDING_GUIDE_KEY);
       setGuideAccessState("FREE");
       setGuideAccessError(error.message === "PAYMENT_NOT_ENABLED" ? "현재 결제를 사용할 수 없습니다." : "결제 요청을 시작하지 못했습니다. 다시 시도해 주세요.");
     }
