@@ -1,5 +1,6 @@
 package com.ddarungflow.qna;
 
+import com.ddarungflow.notification.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,6 +14,7 @@ public class QnaService {
 
     private final QnaQuestionRepository questionRepository;
     private final QnaAnswerRepository answerRepository;
+    private final NotificationService notificationService;
 
     @Transactional
     public QnaQuestion createQuestion(QnaQuestion question) {
@@ -124,6 +126,14 @@ public class QnaService {
 
         QnaAnswer savedAnswer = answerRepository.save(answer);
         question.changeStatus(QnaStatus.ANSWERED);
+
+        if (question.getAuthorId() != null && notificationService != null) {
+            String dedupKey = "qna-answered:" + questionId;
+            String title = "QNA_ANSWERED";
+            String message = "등록하신 문의에 답변이 완료되었습니다.";
+            notificationService.createInAppNotification(question.getAuthorId(), dedupKey, title, message);
+        }
+
         return savedAnswer;
     }
 

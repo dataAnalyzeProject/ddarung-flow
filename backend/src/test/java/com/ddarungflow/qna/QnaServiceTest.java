@@ -27,6 +27,9 @@ class QnaServiceTest {
     @Mock
     private QnaAnswerRepository answerRepository;
 
+    @Mock
+    private com.ddarungflow.notification.NotificationService notificationService;
+
     @InjectMocks
     private QnaService qnaService;
 
@@ -236,11 +239,12 @@ class QnaServiceTest {
     class AnswerStatusTests {
 
         @Test
-        @DisplayName("첫 답변 등록 성공")
-        void addAnswer_FirstAnswer_Success() {
+        @DisplayName("첫 답변 등록 성공 시 질문 작성자에게 QNA_ANSWERED 인앱 알림 정확히 1건 생성")
+        void addAnswer_FirstAnswer_Success_TriggersNotificationForAuthor() {
             // given
             QnaQuestion question = QnaQuestion.builder()
-                    .title("질문")
+                    .authorId(50L)
+                    .title("대여소 질문")
                     .content("내용")
                     .status(QnaStatus.PENDING)
                     .build();
@@ -256,6 +260,35 @@ class QnaServiceTest {
             assertThat(answer).isNotNull();
             assertThat(question.getStatus()).isEqualTo(QnaStatus.ANSWERED);
             verify(answerRepository).save(any(QnaAnswer.class));
+            verify(notificationService).createInAppNotification(
+                    org.mockito.ArgumentMatchers.eq(50L),
+                    org.mockito.ArgumentMatchers.eq("qna-answered:1"),
+                    org.mockito.ArgumentMatchers.eq("QNA_ANSWERED"),
+                    org.mockito.ArgumentMatchers.contains("답변이 완료되었습니다")
+            );
+        }
+
+        @Test
+        @DisplayName("작성자 정보가 없는(익명) 질문에 첫 답변 등록 시 알림을 생성하지 않음")
+        void addAnswer_FirstAnswer_NoAuthor_DoesNotTriggerNotification() {
+            // given
+            QnaQuestion question = QnaQuestion.builder()
+                    .authorId(null)
+                    .title("익명 질문")
+                    .content("내용")
+                    .status(QnaStatus.PENDING)
+                    .build();
+
+            given(questionRepository.findById(1L)).willReturn(Optional.of(question));
+            given(answerRepository.countByQuestionId(1L)).willReturn(0L);
+            given(answerRepository.save(any(QnaAnswer.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+            // when
+            QnaAnswer answer = qnaService.addAnswer(1L, 100L, "관리자1", "첫 답변입니다.");
+
+            // then
+            assertThat(answer).isNotNull();
+            verify(notificationService, never()).createInAppNotification(any(), any(), any(), any());
         }
 
         @Test
@@ -280,6 +313,50 @@ class QnaServiceTest {
         }
 
         @Test
+        @DisplayName("작성자 A / 다른 사용자 B / ADMIN fixture에서 수신자는 작성자 A뿐이고 dedupKey는 qna-answered:1이며 알림은 정확히 1건 생성됨")
+        void addAnswer_AuthorA_UserB_AdminFixture_NotifiesOnlyAuthorA() {
+            // given
+            Long authorAId = 101L;
+            Long userBId = 102L;
+            Long adminId = 999L;
+
+            QnaQuestion question = QnaQuestion.builder()
+                    .authorId(authorAId)
+                    .authorName("작성자A")
+                    .title("작성자A의 질문")
+                    .content("내용")
+                    .status(QnaStatus.PENDING)
+                    .build();
+
+            given(questionRepository.findById(1L)).willReturn(Optional.of(question));
+            given(answerRepository.countByQuestionId(1L)).willReturn(0L);
+            given(answerRepository.save(any(QnaAnswer.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+            // when
+            QnaAnswer answer = qnaService.addAnswer(1L, adminId, "관리자", "답변입니다.");
+
+            // then
+            assertThat(answer).isNotNull();
+            assertThat(question.getStatus()).isEqualTo(QnaStatus.ANSWERED);
+
+            // 작성자 A에게만 qna-answered:1로 1건 생성
+            verify(notificationService).createInAppNotification(
+                    org.mockito.ArgumentMatchers.eq(authorAId),
+                    org.mockito.ArgumentMatchers.eq("qna-answered:1"),
+                    org.mockito.ArgumentMatchers.eq("QNA_ANSWERED"),
+                    org.mockito.ArgumentMatchers.contains("답변이 완료되었습니다")
+            );
+
+            // 다른 사용자 B에게는 알림이 생성되지 않음
+            verify(notificationService, never()).createInAppNotification(
+                    org.mockito.ArgumentMatchers.eq(userBId),
+                    any(),
+                    any(),
+                    any()
+            );
+        }
+
+        @Test
         @DisplayName("숨김(HIDDEN) 처리된 질문에 답변 등록 시도 시 예외 발생 및 거부")
         void addAnswer_HiddenQuestion_ThrowsException() {
             // given
@@ -297,6 +374,28 @@ class QnaServiceTest {
                     .hasMessageContaining("숨김 처리되거나 마감된 질문에는 답변을 등록할 수 없습니다.");
 
             verify(answerRepository, never()).save(any(QnaAnswer.class));
+            verify(notificationService, never()).createInAppNotification(any(), any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("마감(CLOSED) 처리된 질문에 답변 등록 시도 시 예외 발생 및 거부")
+        void addAnswer_ClosedQuestion_ThrowsException() {
+            // given
+            QnaQuestion question = QnaQuestion.builder()
+                    .title("마감된 질문")
+                    .content("내용")
+                    .status(QnaStatus.CLOSED)
+                    .build();
+
+            given(questionRepository.findById(1L)).willReturn(Optional.of(question));
+
+            // when & then
+            assertThatThrownBy(() -> qnaService.addAnswer(1L, 100L, "관리자", "답변 작성 시도"))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("숨김 처리되거나 마감된 질문에는 답변을 등록할 수 없습니다.");
+
+            verify(answerRepository, never()).save(any(QnaAnswer.class));
+            verify(notificationService, never()).createInAppNotification(any(), any(), any(), any());
         }
 
         @Test
