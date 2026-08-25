@@ -52,6 +52,25 @@ test("admin can hide an API question", async () => {
   await waitFor(() => expect(hideQuestion).toHaveBeenCalledWith(104));
 });
 
+test("admin Q&A 목록에서 상세로 이동해 답변과 숨김 API를 호출한 뒤 목록으로 돌아간다", async () => {
+  renderPage("qna", "ADMIN");
+
+  fireEvent.click(await screen.findByRole("button", { name: "Q&A 질문" }));
+  expect(screen.getByRole("heading", { name: "관리자 / Q&A 관리 / 104" })).toBeInTheDocument();
+
+  fireEvent.change(screen.getByRole("textbox", { name: "답변 내용" }), { target: { value: "답변 내용" } });
+  fireEvent.click(screen.getByRole("button", { name: "답변 보내기" }));
+  await waitFor(() => expect(answerQuestion).toHaveBeenCalledWith(104, "답변 내용"));
+
+  fireEvent.click(screen.getByRole("button", { name: "목록으로 돌아가기" }));
+  expect(await screen.findByRole("button", { name: "Q&A 질문" })).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Q&A 질문" }));
+  fireEvent.click(screen.getByRole("button", { name: "숨김" }));
+  await waitFor(() => expect(hideQuestion).toHaveBeenCalledWith(104));
+  expect(await screen.findByRole("button", { name: "Q&A 질문" })).toBeInTheDocument();
+});
+
 test("qna overview shows the API result count", async () => {
   renderPage("qna", "ADMIN");
   expect(await screen.findByText("문의 목록 · 1건")).toBeInTheDocument();
