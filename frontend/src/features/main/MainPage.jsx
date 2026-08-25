@@ -15,6 +15,8 @@ import { adaptCandidateResponse } from "../prediction-results/adaptCandidateResp
 import RidingGuidePage from "../riding-guide/RidingGuidePage";
 import { fetchAirQuality } from "../riding-guide/airQualityApi";
 import { adaptArrivalWeather, fetchArrivalWeather } from "../weather/weatherApi";
+import PremiumGuideAccessPanel from "../premium/PremiumGuideAccessPanel";
+import { fetchSubscription, startCheckout } from "../premium/subscriptionApi";
 
 const EMPTY_INPUT = {
   origin: "",
@@ -26,6 +28,7 @@ const EMPTY_INPUT = {
 
 const TRAVEL_MODE_TO_API = { "도보": "WALK", "대중교통": "PUBLIC_TRANSIT" };
 const PREDICTION_RESULT_KEY = "ddarung.mainPredictionResult.v1";
+const PENDING_GUIDE_KEY = "ddarung.pendingGuideOpen.v1";
 
 function loadSavedPredictionResult() {
   try {
@@ -59,6 +62,9 @@ export default function MainPage({ onNavigate }) {
   const [predictLoading, setPredictLoading] = useState(false);
   const [selectedStationInfo, setSelectedStationInfo] = useState(null);
   const [ridingGuideOpen, setRidingGuideOpen] = useState(false);
+  const [guideAccessState, setGuideAccessState] = useState(null);
+  const [guideAccessLoading, setGuideAccessLoading] = useState(false);
+  const [guideAccessError, setGuideAccessError] = useState(null);
   const [guideAirQuality, setGuideAirQuality] = useState(null);
   const [guideAirQualityLoading, setGuideAirQualityLoading] = useState(false);
   const [arrivalWeather, setArrivalWeather] = useState(null);
@@ -91,6 +97,39 @@ export default function MainPage({ onNavigate }) {
         if (loginResult) window.history.replaceState({}, "", window.location.pathname);
       });
   }, []);
+
+  useEffect(() => {
+    if (
+      authState === "authenticated" &&
+      apiPredictionResult &&
+      selectedStationInfo &&
+      sessionStorage.getItem(PENDING_GUIDE_KEY) === "1"
+    ) {
+      sessionStorage.removeItem(PENDING_GUIDE_KEY);
+      setGuideAccessError(null);
+      setRidingGuideOpen(true);
+      setGuideAccessLoading(true);
+      let cancelled = false;
+      fetchSubscription()
+        .then((subscription) => {
+          if (!cancelled) {
+            setGuideAccessState(subscription.status === "ACTIVE" ? "ACTIVE" : subscription.status === "EXPIRED" ? "EXPIRED" : "FREE");
+          }
+        })
+        .catch((error) => {
+          if (!cancelled) {
+            setGuideAccessState("FREE");
+            setGuideAccessError(error.message === "AUTH_REQUIRED" ? "로그인 후 구독 상태를 확인해 주세요." : "구독 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setGuideAccessLoading(false);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
+  }, [apiPredictionResult, authState, selectedStationInfo]);
 
   useEffect(() => {
     const saved = loadSavedPredictionResult();
@@ -233,17 +272,54 @@ export default function MainPage({ onNavigate }) {
     }
   };
 
-  const openRidingGuideFor = (candidate) => {
+  const openRidingGuideFor = async (candidate) => {
     setSelectedStationInfo({ stationId: candidate.stationId, stationName: candidate.stationName });
     if (candidate.stationId !== selectedStationInfo?.stationId) {
       selectCandidateWeather(candidate);
     }
+    setGuideAccessError(null);
     setRidingGuideOpen(true);
+    if (authState !== "authenticated") {
+      setGuideAccessState("ANONYMOUS");
+      return;
+    }
+
+    setGuideAccessLoading(true);
+    try {
+      const subscription = await fetchSubscription();
+      setGuideAccessState(subscription.status === "ACTIVE" ? "ACTIVE" : subscription.status === "EXPIRED" ? "EXPIRED" : "FREE");
+    } catch (error) {
+      setGuideAccessState("FREE");
+      setGuideAccessError(error.message === "AUTH_REQUIRED" ? "로그인 후 구독 상태를 확인해 주세요." : "구독 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      setGuideAccessLoading(false);
+    }
   };
-  const closeRidingGuide = () => setRidingGuideOpen(false);
+  const closeRidingGuide = () => {
+    setRidingGuideOpen(false);
+    setGuideAccessState(null);
+    setGuideAccessError(null);
+  };
+
+  const handleGuideLogin = () => {
+    sessionStorage.setItem(PENDING_GUIDE_KEY, "1");
+    saveInputBeforeLogin();
+    window.location.assign("/login");
+  };
+
+  const handleSelectPlan = async ({ planCode }) => {
+    setGuideAccessError(null);
+    setGuideAccessState("PROCESSING");
+    try {
+      await startCheckout(planCode);
+    } catch (error) {
+      setGuideAccessState("FREE");
+      setGuideAccessError(error.message === "PAYMENT_NOT_ENABLED" ? "현재 결제를 사용할 수 없습니다." : "결제 요청을 시작하지 못했습니다. 다시 시도해 주세요.");
+    }
+  };
 
   useEffect(() => {
-    if (!ridingGuideOpen || !selectedStationInfo) return;
+    if (!ridingGuideOpen || !selectedStationInfo || guideAccessState !== "ACTIVE") return;
     let cancelled = false;
     setGuideAirQualityLoading(true);
     fetchAirQuality(selectedStationInfo.stationId)
@@ -271,7 +347,7 @@ export default function MainPage({ onNavigate }) {
     return () => {
       cancelled = true;
     };
-  }, [ridingGuideOpen, selectedStationInfo]);
+  }, [guideAccessState, ridingGuideOpen, selectedStationInfo]);
 
   const saveInputBeforeLogin = () => savePendingPrediction(input, routePlaces);
 
@@ -295,6 +371,23 @@ export default function MainPage({ onNavigate }) {
     const selectedCandidate = apiPredictionResult?.candidates?.find(
       (item) => item.stationId === selectedStationInfo.stationId
     ) || null;
+    if (guideAccessLoading || !guideAccessState) {
+      return <main className="main-shell"><p className="main-time-notice" role="status">구독 상태를 확인하는 중입니다…</p></main>;
+    }
+    if (guideAccessState !== "ACTIVE") {
+      return (
+        <main className="main-shell">
+          <PremiumGuideAccessPanel
+            accessState={guideAccessState}
+            onLogin={handleGuideLogin}
+            onSelectPlan={handleSelectPlan}
+          />
+          {guideAccessState === "PROCESSING" && <p className="main-time-notice" role="status">결제 확인 요청이 준비되었습니다. sandbox 인수 환경에서 완료를 확인합니다.</p>}
+          {guideAccessError && <p className="main-time-notice" role="alert">{guideAccessError}</p>}
+          <button type="button" onClick={closeRidingGuide}>대여 예측으로 돌아가기</button>
+        </main>
+      );
+    }
     return (
       <RidingGuidePage
         stationName={selectedStationInfo.stationName}

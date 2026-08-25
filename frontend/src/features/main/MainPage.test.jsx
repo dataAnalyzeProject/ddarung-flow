@@ -6,6 +6,7 @@ import { searchPlaces } from "../map/kakaoMapApi";
 import { fetchRouteCandidates } from "../map/candidatesApi";
 import { fetchAirQuality } from "../riding-guide/airQualityApi";
 import { fetchArrivalWeather } from "../weather/weatherApi";
+import { fetchSubscription, startCheckout } from "../premium/subscriptionApi";
 import { formatStationTime } from "./components/StationRecommendationPanel";
 
 jest.mock("../login/authApi", () => ({
@@ -22,11 +23,17 @@ jest.mock("../weather/weatherApi", () => ({
   fetchArrivalWeather: jest.fn(),
 }));
 
+jest.mock("../premium/subscriptionApi", () => ({
+  fetchSubscription: jest.fn(),
+  startCheckout: jest.fn(),
+}));
+
 test("UTC 도착시각을 Asia/Seoul 시각으로 표시한다", () => {
   expect(formatStationTime("2026-08-17T07:35:00Z")).toBe("오후 4:35");
 });
 
 const PREDICTION_RESULT_KEY = "ddarung.mainPredictionResult.v1";
+const PENDING_GUIDE_KEY = "ddarung.pendingGuideOpen.v1";
 
 function savedPredictionCandidate(overrides = {}) {
   return {
@@ -69,6 +76,8 @@ describe("시안 6 메인 로그인 통합", () => {
     getCurrentUser.mockResolvedValue({ authenticated: false, user: null });
     logout.mockResolvedValue();
     fetchArrivalWeather.mockResolvedValue({ status: "UNAVAILABLE", hourlyForecasts: [] });
+    fetchSubscription.mockResolvedValue({ status: "ACTIVE" });
+    startCheckout.mockResolvedValue({ status: "READY", orderId: "order-1", planId: "PREMIUM_MONTHLY_30D", amount: 2900, currency: "KRW" });
   });
 
   test("새로고침 후 저장된 성공률 게이지·수량별 막대·날씨 아이콘을 복원한다", async () => {
@@ -502,5 +511,110 @@ describe("시안 6 메인 로그인 통합", () => {
         await waitFor(() => expect(screen.queryByText("대기질 정보를 불러오는 중이에요.")).not.toBeInTheDocument());
       });
     });
+  });
+});
+
+describe("프리미엄 가이드 접근 통합", () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    jest.clearAllMocks();
+    getCurrentUser.mockResolvedValue({ authenticated: true, user: { displayName: "김따릉", provider: "kakao" } });
+    fetchSubscription.mockResolvedValue({ status: "FREE" });
+    startCheckout.mockResolvedValue({ status: "READY", orderId: "order-1", planId: "PREMIUM_MONTHLY_30D", amount: 2900, currency: "KRW" });
+    fetchAirQuality.mockResolvedValue({ status: "UNAVAILABLE" });
+  });
+
+  function restoreGuideCandidate() {
+    const candidate = savedPredictionCandidate();
+    sessionStorage.setItem(PREDICTION_RESULT_KEY, JSON.stringify({
+      input: {},
+      routePlaces: {},
+      result: { candidates: [candidate] },
+      selectedStationInfo: { stationId: candidate.stationId, stationName: candidate.stationName },
+      arrivalWeather: null,
+      weatherRequest: null,
+    }));
+    return candidate;
+  }
+
+  test("FREE 사용자가 상세보기를 열면 구독 안내와 서버 checkout 요청을 사용한다", async () => {
+    const candidate = restoreGuideCandidate();
+    render(<MainPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: `${candidate.stationName} 상세보기` }));
+    expect(await screen.findByText("프리미엄 월간")).toBeInTheDocument();
+    expect(fetchSubscription).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "월간 선택" }));
+    await waitFor(() => expect(startCheckout).toHaveBeenCalledWith("PREMIUM_MONTHLY_30D"));
+    expect(screen.getByText("결제 확인 중입니다.")).toBeInTheDocument();
+  });
+
+  test("ACTIVE 사용자는 기존 라이딩 가이드 본문을 연다", async () => {
+    const candidate = restoreGuideCandidate();
+    fetchSubscription.mockResolvedValue({ status: "ACTIVE" });
+    render(<MainPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: `${candidate.stationName} 상세보기` }));
+    expect(await screen.findByRole("heading", { name: `${candidate.stationName} 라이딩 가이드` })).toBeInTheDocument();
+  });
+
+  test("ANONYMOUS 사용자는 로그인 유도 뒤 원래 가이드 진입 지점을 복원한다", async () => {
+    const candidate = restoreGuideCandidate();
+    getCurrentUser.mockResolvedValue({ authenticated: false, user: null });
+    const firstRender = render(<MainPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: `${candidate.stationName} 상세보기` }));
+    expect(await screen.findByText("로그인 후 상세 가이드를 볼 수 있습니다.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "로그인하고 계속" }));
+    expect(sessionStorage.getItem(PENDING_GUIDE_KEY)).toBe("1");
+    expect(loadPendingPrediction()).toEqual(expect.objectContaining({ requiredBikeCount: 1 }));
+
+    firstRender.unmount();
+    window.history.replaceState({}, "", "/?login=success");
+    getCurrentUser.mockResolvedValue({ authenticated: true, user: { displayName: "김따릉", provider: "kakao" } });
+    render(<MainPage />);
+
+    expect(await screen.findByRole("heading", { name: "라이딩 가이드 접근 안내" })).toBeInTheDocument();
+    expect(sessionStorage.getItem(PENDING_GUIDE_KEY)).toBeNull();
+  });
+
+  test("EXPIRED 사용자는 가이드 본문 대신 요금제 안내를 본다", async () => {
+    const candidate = restoreGuideCandidate();
+    fetchSubscription.mockResolvedValue({ status: "EXPIRED" });
+    render(<MainPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: `${candidate.stationName} 상세보기` }));
+    expect(await screen.findByText("이용 기간이 종료되었습니다. 계속 이용하시려면 요금제를 선택해 주세요.")).toBeInTheDocument();
+    expect(screen.getByText("프리미엄 월간")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: `${candidate.stationName} 라이딩 가이드` })).not.toBeInTheDocument();
+  });
+
+  test.each([
+    ["PAYMENT_NOT_ENABLED", "현재 결제를 사용할 수 없습니다."],
+    ["CHECKOUT_REQUEST_FAILED", "결제 요청을 시작하지 못했습니다. 다시 시도해 주세요."],
+  ])("checkout이 %s로 실패하면 FREE 안내와 재시도 메시지로 돌아간다", async (code, notice) => {
+    const candidate = restoreGuideCandidate();
+    startCheckout.mockRejectedValue(new Error(code));
+    render(<MainPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: `${candidate.stationName} 상세보기` }));
+    await screen.findByText("프리미엄 월간");
+    fireEvent.click(screen.getByRole("button", { name: "월간 선택" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(notice);
+    expect(screen.getByRole("button", { name: "월간 선택" })).toBeEnabled();
+    expect(screen.queryByText("결제 확인 중입니다.")).not.toBeInTheDocument();
+  });
+
+  test("구독 조회 실패 시 ACTIVE 가이드 대신 안전한 안내를 표시한다", async () => {
+    const candidate = restoreGuideCandidate();
+    fetchSubscription.mockRejectedValue(new Error("SUBSCRIPTION_FETCH_FAILED"));
+    render(<MainPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: `${candidate.stationName} 상세보기` }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("구독 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    expect(screen.getByText("프리미엄 월간")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: `${candidate.stationName} 라이딩 가이드` })).not.toBeInTheDocument();
   });
 });
