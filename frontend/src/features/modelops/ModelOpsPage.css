@@ -1,0 +1,516 @@
+/* frontend/src/features/modelops/ModelOpsPage.css */
+
+.modelops-container {
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 32px 24px;
+  box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: #0f172a;
+}
+
+.modelops-container--status {
+  min-height: 480px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 1. 상태 화면 (loading, empty, error, forbidden) */
+.modelops-status-box {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 48px 32px;
+  text-align: center;
+  max-width: 480px;
+  width: 100%;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+}
+
+.modelops-status-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  display: inline-block;
+}
+
+.modelops-status-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 8px 0;
+}
+
+.modelops-status-desc {
+  font-size: 14px;
+  color: #64748b;
+  margin: 0 0 24px 0;
+}
+
+.modelops-spinner {
+  width: 44px;
+  height: 44px;
+  border: 4px solid #e2e8f0;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: modelops-spin 0.8s linear infinite;
+  margin: 0 auto 20px auto;
+}
+
+@keyframes modelops-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 2. 상단 헤더 */
+.modelops-header {
+  margin-bottom: 28px;
+}
+
+.modelops-badge {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  color: #2563eb;
+  background-color: #eff6ff;
+  padding: 4px 10px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  letter-spacing: 0.05em;
+}
+
+.modelops-title {
+  font-size: 28px;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0 0 8px 0;
+}
+
+.modelops-header-desc {
+  font-size: 15px;
+  color: #64748b;
+  margin: 0;
+}
+
+/* 3. 탭 네비게이션 */
+.modelops-tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 2px solid #e2e8f0;
+  margin-bottom: 24px;
+}
+
+.modelops-tab-btn {
+  padding: 12px 20px;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  font-size: 15px;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  margin-bottom: -2px;
+  transition: all 0.15s ease;
+}
+
+.modelops-tab-btn:hover {
+  color: #0f172a;
+}
+
+.modelops-tab-btn.active {
+  color: #2563eb;
+  border-bottom-color: #2563eb;
+}
+
+.modelops-tab-btn:focus-visible {
+  outline: 3px solid #93c5fd;
+  outline-offset: 2px;
+}
+
+/* 4. 탭 패널 공통 */
+.modelops-panel {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+}
+
+/* 탭 1: 테이블 */
+.modelops-table-wrapper {
+  overflow-x: auto;
+}
+
+.modelops-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 14px;
+}
+
+.modelops-table th {
+  background-color: #f8fafc;
+  color: #475569;
+  font-weight: 700;
+  padding: 14px 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.modelops-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #334155;
+}
+
+.modelops-table tr.selected-row {
+  background-color: #f0f7ff;
+}
+
+.modelops-link-btn {
+  background: none;
+  border: none;
+  color: #2563eb;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+
+/* 상태 태그 */
+.modelops-state-tag {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.modelops-state-tag--active { background-color: #dcfce7; color: #166534; }
+.modelops-state-tag--approved { background-color: #e0f2fe; color: #0369a1; }
+.modelops-state-tag--validated { background-color: #fef9c3; color: #854d0e; }
+.modelops-state-tag--draft { background-color: #f1f5f9; color: #475569; }
+.modelops-state-tag--rejected { background-color: #fee2e2; color: #991b1b; }
+.modelops-state-tag--retired { background-color: #f3f4f6; color: #6b7280; }
+
+.modelops-gate-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.modelops-gate-badge--pass { background-color: #dcfce7; color: #15803d; }
+.modelops-gate-badge--fail { background-color: #fee2e2; color: #b91c1c; }
+
+/* 탭 2: 상세 뷰 */
+.modelops-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.modelops-detail-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.modelops-detail-title-row h2 {
+  font-size: 22px;
+  font-weight: 800;
+  margin: 0;
+}
+
+.modelops-model-id {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.modelops-select-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.modelops-select {
+  padding: 8px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 14px;
+  background-color: #ffffff;
+}
+
+/* 3대 메트릭 그리드 */
+.modelops-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.modelops-metric-card {
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.modelops-metric-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+
+.modelops-metric-value {
+  font-size: 24px;
+  font-weight: 800;
+  color: #0f172a;
+  margin-bottom: 4px;
+}
+
+.modelops-metric-hint {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+/* 승격 게이트 & 액션 섹션 */
+.modelops-gate-section,
+.modelops-actions-section {
+  margin-bottom: 28px;
+}
+
+.modelops-gate-section h3,
+.modelops-actions-section h3 {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0 0 12px 0;
+}
+
+.modelops-gate-result {
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.modelops-reasons ul {
+  margin: 6px 0 0 0;
+  padding-left: 20px;
+  color: #475569;
+}
+
+.modelops-reasons code {
+  background-color: #e2e8f0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.modelops-actions-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* 버튼 공통 */
+.modelops-btn {
+  padding: 10px 18px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.modelops-btn--sm {
+  padding: 6px 12px;
+  font-size: 13px;
+  background-color: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #334155;
+}
+
+.modelops-btn--sm:hover { background-color: #e2e8f0; }
+
+.modelops-btn--primary {
+  background-color: #2563eb;
+  color: #ffffff;
+}
+
+.modelops-btn--primary:hover { background-color: #1d4ed8; }
+
+.modelops-btn--secondary {
+  background-color: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #334155;
+}
+
+.modelops-btn--secondary:hover { background-color: #e2e8f0; }
+
+.modelops-btn--action {
+  background-color: #ffffff;
+  border-color: #cbd5e1;
+  color: #1e293b;
+}
+
+.modelops-btn--action:hover:not(:disabled) {
+  border-color: #2563eb;
+  color: #2563eb;
+  background-color: #eff6ff;
+}
+
+.modelops-btn--activate {
+  background-color: #16a34a;
+  color: #ffffff;
+  border-color: #16a34a;
+}
+.modelops-btn--activate:hover:not(:disabled) { background-color: #15803d; }
+
+.modelops-btn--reject {
+  background-color: #dc2626;
+  color: #ffffff;
+  border-color: #dc2626;
+}
+.modelops-btn--reject:hover:not(:disabled) { background-color: #b91c1c; }
+
+.modelops-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.modelops-btn:focus-visible {
+  outline: 3px solid #93c5fd;
+  outline-offset: 2px;
+}
+
+/* 탭 3: 타임라인 */
+.modelops-empty-history {
+  padding: 48px 24px;
+  text-align: center;
+  color: #64748b;
+  font-size: 15px;
+  background-color: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+}
+
+.modelops-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.modelops-timeline-item {
+  display: flex;
+  gap: 16px;
+  padding-left: 8px;
+}
+
+.modelops-timeline-badge {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: #2563eb;
+  margin-top: 6px;
+  flex-shrink: 0;
+}
+
+.modelops-timeline-content {
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 14px 18px;
+  flex-grow: 1;
+}
+
+.modelops-timeline-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.modelops-timeline-action {
+  font-size: 12px;
+  font-weight: 700;
+  color: #2563eb;
+  background-color: #eff6ff;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.modelops-timeline-time {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-left: auto;
+}
+
+.modelops-timeline-desc {
+  font-size: 13px;
+  color: #475569;
+  margin: 0;
+}
+
+/* 5. 확인 Action Dialog 모달 */
+.modelops-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(15, 23, 42, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(2px);
+}
+
+.modelops-dialog-card {
+  background-color: #ffffff;
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 440px;
+  width: 90%;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.modelops-dialog-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 12px 0;
+}
+
+.modelops-dialog-body {
+  font-size: 14px;
+  color: #475569;
+  line-height: 1.5;
+  margin: 0 0 20px 0;
+}
+
+.modelops-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* 6. PC 뷰포트 반응형 (1280x720, 1440x900) */
+@media (max-width: 1280px) {
+  .modelops-metrics-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
