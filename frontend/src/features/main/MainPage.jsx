@@ -16,7 +16,7 @@ import RidingGuidePage from "../riding-guide/RidingGuidePage";
 import { fetchAirQuality } from "../riding-guide/airQualityApi";
 import { adaptArrivalWeather, fetchArrivalWeather } from "../weather/weatherApi";
 import PremiumGuideAccessPanel from "../premium/PremiumGuideAccessPanel";
-import { fetchSubscription, startCheckout } from "../premium/subscriptionApi";
+import { confirmPayment, fetchSubscription, startCheckout } from "../premium/subscriptionApi";
 import { requestTossCheckout } from "../premium/tossCheckout";
 
 const EMPTY_INPUT = {
@@ -97,6 +97,13 @@ export default function MainPage({ onNavigate }) {
       .finally(() => {
         if (loginResult) window.history.replaceState({}, "", window.location.pathname);
       });
+  }, []);
+
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    if (query.get("payment") !== "processing" || !query.get("paymentKey")) return;
+    confirmPayment({ paymentKey: query.get("paymentKey"), orderId: query.get("orderId"), amount: Number(query.get("amount")) })
+      .finally(() => window.location.replace(window.location.pathname));
   }, []);
 
   useEffect(() => {

@@ -40,4 +40,19 @@ public class TossPaymentVerifier implements PaymentVerifier {
             throw new IllegalStateException("invalid Toss payment response", ex);
         }
     }
+
+    @Override
+    public VerifiedTossPayment confirm(String paymentKey, String orderId, int amount) {
+        if (secretKey.isBlank() || paymentKey == null || paymentKey.isBlank()) throw new IllegalStateException("payment confirmation is not configured");
+        String authorization = "Basic " + Base64.getEncoder().encodeToString((secretKey + ":").getBytes(StandardCharsets.UTF_8));
+        String body = client.post().uri("/v1/payments/confirm")
+                .header(HttpHeaders.AUTHORIZATION, authorization)
+                .body(java.util.Map.of("paymentKey", paymentKey, "orderId", orderId, "amount", amount))
+                .retrieve().body(String.class);
+        try {
+            JsonNode payment = objectMapper.readTree(body);
+            return new VerifiedTossPayment(payment.path("orderId").asText(), paymentKey,
+                    payment.path("totalAmount").asInt(-1), payment.path("currency").asText(), payment.path("status").asText());
+        } catch (Exception ex) { throw new IllegalStateException("invalid Toss payment response", ex); }
+    }
 }
