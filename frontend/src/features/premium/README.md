@@ -132,3 +132,81 @@ C:\Users\M\Documents\GitHub\ddarung-flow>
 ```
 
 > Trailing whitespace(끝 공백) 에러 출력 없이 100% 정상 통과.
+
+# [EXP-FE-5.4-UI] 프리미엄 가이드 접근 fixture UI
+
+## 🔗 모듈 개요
+
+- **컴포넌트**: `PremiumGuideAccessPanel`
+- **목적**: 실제 결제나 서버 연결 없이, 프리미엄 라이딩 가이드의 접근 상태(`accessState`)와 요금제 안내를 Props와 Fixture만으로 보여주는 독립 Presentational React 컴포넌트입니다.
+
+---
+
+## 🧩 Props 및 인터페이스 명세
+
+| Prop 이름      | 타입       | 기본값                | 설명                                                                      |
+| :------------- | :--------- | :-------------------- | :------------------------------------------------------------------------ |
+| `accessState`  | `string`   | `'FREE'`              | 사용자의 접근 상태 (`'ANONYMOUS'`, `'FREE'`, `'EXPIRED'`, `'PROCESSING'`) |
+| `onLogin`      | `function` | `undefined`           | 비로그인(`ANONYMOUS`) 상태에서 '로그인하고 계속' 클릭 시 호출되는 콜백    |
+| `onSelectPlan` | `function` | `undefined`           | 요금제 선택 시 호출되는 콜백 (`{ planCode: "..." }` 인자 전달)            |
+| `plans`        | `Array`    | `premiumPlansFixture` | 표시할 프리미엄 요금제 목록 데이터 배열                                   |
+
+---
+
+## 🚦 상태별(`accessState`) 동작 및 화면 정의
+
+| `accessState`    | 화면 렌더링 내용                                       | 버튼 동작 및 콜백                                                           |
+| :--------------- | :----------------------------------------------------- | :-------------------------------------------------------------------------- |
+| **`ANONYMOUS`**  | 🔒 로그인 후 상세 가이드를 볼 수 있다는 잠금 안내 박스 | `[로그인하고 계속]` 클릭 시 `onLogin()` 1회 호출                            |
+| **`FREE`**       | 프리미엄 월간 / 프리미엄 연간 요금제 카드 2장          | `[월간 선택]` / `[연간 선택]` 클릭 시 `onSelectPlan({ planCode })` 1회 호출 |
+| **`EXPIRED`**    | 이용 기간 종료 안내 문구 + 요금제 카드 2장             | `[월간 선택]` / `[연간 선택]` 클릭 시 `onSelectPlan({ planCode })` 1회 호출 |
+| **`PROCESSING`** | ⏳ 결제 확인 중 안내 문구 + 요금제 카드 2장            | 두 버튼 모두 `disabled` (비활성화) 처리되며 콜백 호출 없음                  |
+
+### 💳 지원 요금제 규격 (`planCode`)
+
+- `PREMIUM_MONTHLY_30D`: 프리미엄 월간 (30일 · 2,900원, 자동 갱신 없음, `월간 선택` 버튼)
+- `PREMIUM_YEARLY_365D`: 프리미엄 연간 (365일 · 29,000원, 자동 갱신 없음, `연간 선택` 버튼)
+
+---
+
+## 📁 관련 파일 구성
+
+1. `frontend/src/features/premium/PremiumGuideAccessPanel.jsx`: 순수 Presentational UI 본체 컴포넌트.
+2. `frontend/src/features/premium/PremiumGuideAccessPanel.css`: 960px 중앙 정렬, PC 2열 Grid / 모바일 1열 반응형, Tab 포커스 윤곽선 스타일.
+3. `frontend/src/features/premium/PremiumGuideAccessPanel.test.jsx`: 4대 상태 렌더링, 요금제 카드 Scoping 검증, 콜백 인자 단정 단위 테스트.
+4. `frontend/src/features/premium/data/premiumGuideAccessFixture.js`: 4가지 접근 상태 상수 및 2종 요금제 규격 데이터.
+5. `frontend/src/features/premium/README.md`: 컴포넌트 명세 및 테스트 실행 가이드.
+
+---
+
+## 🔒 보안 및 조장 통합 범위 밖 항목 (한계사항 명시)
+
+- **API 및 통신 미사용**: `fetch`, `axios` 등 백엔드 통신을 전혀 사용하지 않으며, Props와 Fixture만으로 동작합니다.
+- **브라우저 전역 제어 미사용**: `window.location`, `localStorage` 등을 사용하지 않으며, 전역 라우팅을 조작하지 않습니다.
+- **실제 결제·SDK 미포함**: TossPayments / OAuth 등 외부 PG SDK나 실제 결제/환불/정산 로직이 포함되지 않습니다.
+- **조장 통합 대상 영역**: `ACTIVE` 사용자의 실제 라이딩 가이드 본문 진입, 로그인 복귀 리다이렉트, 실제 구독 API/Webhook 연동, 사용자 격리 및 보안은 조장 소유의 통합 작업에서 처리됩니다.
+
+---
+
+## 🧪 단위 테스트 실행 가이드 및 결과
+
+```bash
+# 프리미엄 가이드 접근 패널 단위 테스트 독립 실행
+npm test -- --testPathPattern=PremiumGuideAccessPanel.test.jsx --watchAll=false
+테스트 실행 통과 결과 (8/8 PASS 🟢)
+text
+PASS src/features/premium/PremiumGuideAccessPanel.test.jsx
+  PremiumGuideAccessPanel 컴포넌트 단위 테스트
+    ✓ ANONYMOUS 상태에서는 잠금 안내를 보여주고 로그인 버튼 클릭 시 onLogin을 1회 호출한다 (74 ms)
+    ✓ FREE 상태에서 각 요금제 카드 내부에 해당 플랜의 이름, 가격, 정책문구, 버튼이 정확히 렌더링되고 클릭된다 (35 ms)
+    ✓ EXPIRED 상태에서는 이용 기간 종료 안내 문구와 요금제 카드를 함께 렌더링한다 (13 ms)
+    ✓ PROCESSING 상태에서는 결제 확인 중 문구가 뜨고 버튼이 disabled되며 콜백이 호출되지 않는다 (19 ms)
+    ✓ ANONYMOUS 상태에서 SANDBOX TEST 필수 안전 배지가 상시 노출된다 (3 ms)
+    ✓ FREE 상태에서 SANDBOX TEST 필수 안전 배지가 상시 노출된다 (2 ms)
+    ✓ EXPIRED 상태에서 SANDBOX TEST 필수 안전 배지가 상시 노출된다 (3 ms)
+    ✓ PROCESSING 상태에서 SANDBOX TEST 필수 안전 배지가 상시 노출된다 (2 ms)
+Test Suites: 1 passed, 1 total
+Tests:       8 passed, 8 total
+Snapshots:   0 total
+Time:        1.062 s
+```
