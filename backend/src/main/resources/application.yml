@@ -8,6 +8,9 @@ spring:
       enabled: false
   datasource:
     driver-class-name: org.postgresql.Driver
+  flyway:
+    baseline-on-migrate: ${FLYWAY_BASELINE_ON_MIGRATE:false}
+    baseline-version: ${FLYWAY_BASELINE_VERSION:1}
   jpa:
     hibernate:
       ddl-auto: validate
