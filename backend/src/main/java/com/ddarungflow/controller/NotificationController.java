@@ -5,6 +5,9 @@ import com.ddarungflow.dto.RetentionDtos;
 import com.ddarungflow.notification.AlertRule;
 import com.ddarungflow.notification.InAppNotification;
 import com.ddarungflow.notification.NotificationService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -56,6 +59,12 @@ public class NotificationController {
     }
 
     @PostMapping("/notifications/{id}/read")
+    @Operation(parameters = @Parameter(
+        name = "X-CSRF-TOKEN",
+        in = ParameterIn.HEADER,
+        required = true,
+        description = "GET /api/v1/auth/csrf 응답의 headerName에 해당하는 CSRF 토큰"
+    ))
     public RetentionDtos.NotificationResponse markRead(@AuthenticationPrincipal PrincipalDetails principal, @PathVariable Long id) {
         return notificationResponse(notificationService.markNotificationAsRead(userId(principal), id, null));
     }
