@@ -20,22 +20,28 @@ function loadTossPayments() {
   });
 }
 
-export async function requestTossCheckout(checkout) {
+export async function requestTossCheckout(checkout, { onCancel } = {}) {
   const clientKey = process.env.REACT_APP_TOSS_PAYMENTS_CLIENT_KEY;
   if (!clientKey || !clientKey.startsWith('test_')) throw new Error('PAYMENT_NOT_ENABLED');
 
   const TossPayments = await loadTossPayments();
   const widgets = TossPayments(clientKey).widgets({ customerKey: checkout.customerKey });
-  const callbackUrl = new URL(window.location.href);
-  callbackUrl.searchParams.set('payment', 'processing');
+  const successUrl = new URL(window.location.href);
+  successUrl.searchParams.set('payment', 'processing');
+  const failUrl = new URL(window.location.href);
+  failUrl.searchParams.set('payment', 'failed');
 
   await widgets.setAmount({ value: checkout.amount, currency: checkout.currency });
   const paymentWindow = await widgets.renderPaymentWindow();
-  paymentWindow.on('paymentRequest', () => widgets.requestPayment({
-    orderId: checkout.orderId,
-    orderName: checkout.planId === 'PREMIUM_YEARLY_365D' ? '따릉이 프리미엄 연간 가이드' : '따릉이 프리미엄 월간 가이드',
-    successUrl: callbackUrl.toString(),
-    failUrl: callbackUrl.toString(),
-  }));
+  paymentWindow.on('paymentRequest', () => {
+    const paymentRequest = widgets.requestPayment({
+      orderId: checkout.orderId,
+      orderName: checkout.planId === 'PREMIUM_YEARLY_365D' ? '따릉이 프리미엄 연간 가이드' : '따릉이 프리미엄 월간 가이드',
+      successUrl: successUrl.toString(),
+      failUrl: failUrl.toString(),
+    });
+    if (typeof paymentRequest?.catch === 'function') paymentRequest.catch(() => onCancel?.());
+  });
+  paymentWindow.on('cancel', () => onCancel?.());
   return paymentWindow;
 }

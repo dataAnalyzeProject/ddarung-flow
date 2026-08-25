@@ -30,6 +30,13 @@ const EMPTY_INPUT = {
 const TRAVEL_MODE_TO_API = { "도보": "WALK", "대중교통": "PUBLIC_TRANSIT" };
 const PREDICTION_RESULT_KEY = "ddarung.mainPredictionResult.v1";
 const PENDING_GUIDE_KEY = "ddarung.pendingGuideOpen.v1";
+const PAYMENT_FAILURE_MESSAGE_KEY = "ddarung.paymentFailureMessage.v1";
+
+function paymentFailureMessage(code) {
+  return code === "PAY_PROCESS_CANCELED"
+    ? "결제가 취소되었습니다. 다시 시도해 주세요."
+    : "결제를 완료하지 못했습니다. 다시 시도해 주세요.";
+}
 
 function loadSavedPredictionResult() {
   try {
@@ -101,9 +108,17 @@ export default function MainPage({ onNavigate }) {
 
   useEffect(() => {
     const query = new URLSearchParams(window.location.search);
-    if (query.get("payment") !== "processing" || !query.get("paymentKey")) return;
-    confirmPayment({ paymentKey: query.get("paymentKey"), orderId: query.get("orderId"), amount: Number(query.get("amount")) })
-      .finally(() => window.location.replace(window.location.pathname));
+    if (query.get("payment") === "processing" && query.get("paymentKey")) {
+      confirmPayment({ paymentKey: query.get("paymentKey"), orderId: query.get("orderId"), amount: Number(query.get("amount")) })
+        .catch(() => sessionStorage.setItem(PAYMENT_FAILURE_MESSAGE_KEY, "결제를 확인하지 못했습니다. 다시 시도해 주세요."))
+        .finally(() => window.location.replace(window.location.pathname));
+      return;
+    }
+    if (query.get("payment") === "failed") {
+      sessionStorage.setItem(PENDING_GUIDE_KEY, "1");
+      sessionStorage.setItem(PAYMENT_FAILURE_MESSAGE_KEY, paymentFailureMessage(query.get("code")));
+      window.history.replaceState({}, "", window.location.pathname);
+    }
   }, []);
 
   useEffect(() => {
@@ -123,6 +138,11 @@ export default function MainPage({ onNavigate }) {
           if (!cancelled) {
             const paymentProcessing = new URLSearchParams(window.location.search).get("payment") === "processing";
             setGuideAccessState(paymentProcessing ? "PROCESSING" : subscription.status === "ACTIVE" ? "ACTIVE" : subscription.status === "EXPIRED" ? "EXPIRED" : "FREE");
+            const paymentFailure = sessionStorage.getItem(PAYMENT_FAILURE_MESSAGE_KEY);
+            if (paymentFailure) {
+              sessionStorage.removeItem(PAYMENT_FAILURE_MESSAGE_KEY);
+              setGuideAccessError(paymentFailure);
+            }
           }
         })
         .catch((error) => {
@@ -322,7 +342,13 @@ export default function MainPage({ onNavigate }) {
     sessionStorage.setItem(PENDING_GUIDE_KEY, "1");
     try {
       const checkout = await startCheckout(planCode);
-      await requestTossCheckout(checkout);
+      await requestTossCheckout(checkout, {
+        onCancel: () => {
+          sessionStorage.removeItem(PENDING_GUIDE_KEY);
+          setGuideAccessState("FREE");
+          setGuideAccessError("결제가 취소되었습니다. 다시 시도해 주세요.");
+        },
+      });
     } catch (error) {
       sessionStorage.removeItem(PENDING_GUIDE_KEY);
       setGuideAccessState("FREE");
