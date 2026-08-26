@@ -7,7 +7,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
+import com.ddarungflow.entity.Station;
 import com.ddarungflow.map.PredictionApiDtos;
+import com.ddarungflow.repository.StationRepository;
 
 @Service
 @RequiredArgsConstructor
@@ -18,6 +20,7 @@ public class NotificationService {
 
     private final AlertRuleRepository alertRuleRepository;
     private final InAppNotificationRepository inAppNotificationRepository;
+    private final StationRepository stationRepository;
 
     @Transactional
     public AlertRule createAlertRule(Long userId, Long stationId, String conditionType, Integer threshold, Boolean enabled) {
@@ -103,12 +106,24 @@ public class NotificationService {
 
     @Transactional
     public void evaluateArrivalRules(Long userId, PredictionApiDtos.CandidatePredictionResponseDto candidate) {
-        Long stationId = Long.valueOf(candidate.stationId());
+        Long stationNumber = stationRepository.findById(candidate.stationId())
+                .map(Station::getStationNumber)
+                .map(this::toStationNumber)
+                .orElse(null);
+        if (stationNumber == null) return;
         for (AlertRule rule : alertRuleRepository.findByUserIdOrderByCreatedAtDesc(userId)) {
-            if (rule.isEnabled() && rule.getStationId().equals(stationId) && rule.getThreshold().equals(candidate.requiredBikeCount())) {
+            if (rule.isEnabled() && rule.getStationId().equals(stationNumber) && rule.getThreshold().equals(candidate.requiredBikeCount())) {
                 String key = "arrival-high:" + rule.getId() + ":" + candidate.predictionTargetAt();
                 createInAppNotification(userId, key, "도착 시점 대여 가능", candidate.stationName() + "에서 자전거를 빌릴 수 있어요.", ARRIVAL_AVAILABLE_HIGH);
             }
+        }
+    }
+
+    private Long toStationNumber(String stationNumber) {
+        try {
+            return Long.valueOf(stationNumber);
+        } catch (NumberFormatException ignored) {
+            return null;
         }
     }
 

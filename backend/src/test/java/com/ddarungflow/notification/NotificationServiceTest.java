@@ -9,9 +9,13 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.OffsetDateTime;
+import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.List;
 
+import com.ddarungflow.entity.Station;
+import com.ddarungflow.map.PredictionApiDtos;
+import com.ddarungflow.repository.StationRepository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -27,6 +31,9 @@ class NotificationServiceTest {
 
     @Mock
     private InAppNotificationRepository inAppNotificationRepository;
+
+    @Mock
+    private StationRepository stationRepository;
 
     @InjectMocks
     private NotificationService notificationService;
@@ -177,6 +184,24 @@ class NotificationServiceTest {
 
             assertThatThrownBy(() -> notificationService.createAlertRule(1L, 10L, "ignored", 3, true))
                     .isInstanceOf(IllegalStateException.class).hasMessageContaining("최대 20개");
+        }
+
+        @Test
+        @DisplayName("문자열 대여소 ID는 대여소 번호 규칙과 매핑해 HIGH 알림을 만든다")
+        void evaluateArrivalRules_MapsStationIdToStationNumber() {
+            AlertRule rule = AlertRule.builder().userId(1L).stationId(305L).conditionType("ARRIVAL_AVAILABLE_HIGH").threshold(1).enabled(true).build();
+            PredictionApiDtos.CandidatePredictionResponseDto candidate = new PredictionApiDtos.CandidatePredictionResponseDto(
+                    "ST-121", "305. 종로구청 옆", BigDecimal.ZERO, BigDecimal.ZERO, 1, 1, 19, null, OffsetDateTime.now(),
+                    BigDecimal.ONE, null, 1, OffsetDateTime.now(), OffsetDateTime.now(), 1, 1, OffsetDateTime.now(), OffsetDateTime.now(),
+                    PredictionApiDtos.AvailabilityLevel.HIGH, PredictionApiDtos.PredictionStatus.NORMAL, "test", OffsetDateTime.now());
+            given(stationRepository.findById("ST-121")).willReturn(Optional.of(new Station("ST-121", "305", "305. 종로구청 옆", BigDecimal.ZERO, BigDecimal.ZERO, true)));
+            given(alertRuleRepository.findByUserIdOrderByCreatedAtDesc(1L)).willReturn(List.of(rule));
+            given(inAppNotificationRepository.findByUserIdAndDedupKey(any(), any())).willReturn(Optional.empty());
+            given(inAppNotificationRepository.save(any(InAppNotification.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+            notificationService.evaluateArrivalRules(1L, candidate);
+
+            verify(inAppNotificationRepository).save(any(InAppNotification.class));
         }
     }
 }
