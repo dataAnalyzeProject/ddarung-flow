@@ -47,6 +47,19 @@ test("users menu loads the API and changes a selected user's role", async () => 
   await waitFor(() => expect(changeAdminUserRole).toHaveBeenCalledWith("00000000-0000-0000-0000-000000000001", "USER", "운영 권한 조정"));
 });
 
+test("users menu sends the search query to the API", async () => {
+  listAdminUsers.mockResolvedValueOnce({ items: [{ userId: "00000000-0000-0000-0000-000000000001", displayName: "관리자", role: "ADMIN" }], page: 0, size: 20, total: 1 });
+  listAdminUsers.mockResolvedValueOnce({ items: [{ userId: "00000000-0000-0000-0000-000000000002", displayName: "검색 결과", role: "USER" }], page: 0, size: 20, total: 1 });
+  renderPage("users", "ADMIN");
+  await screen.findByText("관리자");
+
+  fireEvent.change(screen.getByRole("textbox", { name: "사용자 검색" }), { target: { value: "검색 결과" } });
+  fireEvent.click(screen.getByRole("button", { name: "검색" }));
+
+  await waitFor(() => expect(listAdminUsers).toHaveBeenLastCalledWith({ q: "검색 결과" }));
+  expect(await screen.findByText("검색 결과")).toBeInTheDocument();
+});
+
 test("users menu distinguishes an unauthenticated API response", async () => {
   listAdminUsers.mockRejectedValueOnce({ status: 401 });
   renderPage("users", "ADMIN");
