@@ -7,6 +7,7 @@ import MyPage from './features/mypage/MyPage';
 import LoginPage from './features/login/LoginPage';
 import IntroPage from './features/intro/IntroPage';
 import AdminAccessGate from './features/admin/AdminAccessGate';
+import AdminApp from './features/admin/AdminApp';
 import { hasSeenIntro } from './features/intro/introStorage';
 import { getCurrentUser, logout } from './features/login/authApi';
 
@@ -19,6 +20,7 @@ function routeFromHash() {
 
 function App() {
   const isLoginPath = window.location.pathname === '/login';
+  const isAdminPreviewPath = process.env.NODE_ENV !== 'production' && new URLSearchParams(window.location.search).has('adminPreview');
   const [route, setRoute] = useState(routeFromHash);
   const [authState, setAuthState] = useState('loading');
   const [user, setUser] = useState(null);
@@ -33,6 +35,7 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (isAdminPreviewPath) return undefined;
     let cancelled = false;
 
     getCurrentUser()
@@ -48,7 +51,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isAdminPreviewPath]);
 
   const handleLogout = async () => {
     setAuthState('logging-out');
@@ -73,6 +76,10 @@ function App() {
 
   if (isLoginPath) {
     return <LoginPage />;
+  }
+
+  if (isAdminPreviewPath) {
+    return <AdminApp />;
   }
 
   if (window.location.pathname === '/admin') {

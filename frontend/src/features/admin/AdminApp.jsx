@@ -11,6 +11,6 @@ export default function AdminApp({ actorRole = ADMIN_ROLES.ADMIN, viewState = "s
   };
   const forbidden = actorRole === ADMIN_ROLES.USER || actorRole === ADMIN_ROLES.ANONYMOUS || !canAccess(actorRole, menuId);
   return <AdminShell activeMenuId={menuId} actorRole={actorRole} onMenu={onMenu} onAction={onAction}>
-    {forbidden ? <AdminStatePanel state="forbidden" /> : viewState !== "success" ? <AdminStatePanel state={viewState} /> : <AdminPage menuId={menuId} actorRole={actorRole} fixtureData={data} onAction={onAction} />}
+    {forbidden ? <AdminStatePanel state="forbidden" /> : viewState !== "success" ? <AdminStatePanel state={viewState} /> : <AdminPage menuId={menuId} actorRole={actorRole} fixtureData={data} onAction={onAction} onNavigate={onMenu} />}
   </AdminShell>;
 }

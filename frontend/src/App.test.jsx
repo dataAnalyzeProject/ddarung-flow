@@ -49,6 +49,15 @@ test("does not render the admin fixture for a USER at the direct admin URL", asy
   expect(screen.queryByText("운영 현황")).not.toBeInTheDocument();
 });
 
+test("renders the fixture-only admin preview without checking a session outside production", () => {
+  window.history.replaceState({}, "", "/?adminPreview=1");
+
+  render(<App />);
+
+  expect(screen.getByRole("heading", { name: "운영 현황" })).toBeInTheDocument();
+  expect(getCurrentUser).not.toHaveBeenCalled();
+});
+
 test("shows the intro before the main page on the first visit", async () => {
   window.history.replaceState({}, "", "/");
 

@@ -27,6 +27,21 @@ test("menus call back and admin sees dashboard fixture", async () => {
   expect(await screen.findByRole("heading", { name: "ModelOps" })).toBeInTheDocument();
 });
 
+test("dashboard queue and audit links open their matching admin menu", () => {
+  const exportAction = jest.fn();
+  const { unmount } = render(<AdminApp actorRole="ADMIN" onAction={exportAction} />);
+
+  fireEvent.click(screen.getByRole("button", { name: /Export 요청 검토/ }));
+  expect(exportAction).toHaveBeenCalledWith(expect.objectContaining({ type: "menu", menuId: "export" }));
+
+  unmount();
+  const auditAction = jest.fn();
+  render(<AdminApp actorRole="ADMIN" onAction={auditAction} />);
+  fireEvent.click(screen.getByRole("button", { name: "전체 보기 ›" }));
+
+  expect(auditAction).toHaveBeenCalledWith(expect.objectContaining({ type: "menu", menuId: "audit" }));
+});
+
 test.each(["loading", "empty", "error"])('renders common %s state', (viewState) => {
   render(<AdminApp actorRole="ADMIN" viewState={viewState} />);
   expect(screen.getByTestId(`admin-${viewState}`)).toBeInTheDocument();
