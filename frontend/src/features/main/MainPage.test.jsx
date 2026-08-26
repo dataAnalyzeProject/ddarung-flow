@@ -6,7 +6,7 @@ import { searchPlaces } from "../map/kakaoMapApi";
 import { fetchRouteCandidates } from "../map/candidatesApi";
 import { fetchAirQuality } from "../riding-guide/airQualityApi";
 import { fetchArrivalWeather } from "../weather/weatherApi";
-import { fetchSubscription, startCheckout } from "../premium/subscriptionApi";
+import { confirmPayment, fetchSubscription, startCheckout } from "../premium/subscriptionApi";
 import { requestTossCheckout } from "../premium/tossCheckout";
 import { formatStationTime } from "./components/StationRecommendationPanel";
 
@@ -25,6 +25,7 @@ jest.mock("../weather/weatherApi", () => ({
 }));
 
 jest.mock("../premium/subscriptionApi", () => ({
+  confirmPayment: jest.fn(),
   fetchSubscription: jest.fn(),
   startCheckout: jest.fn(),
 }));
@@ -523,6 +524,7 @@ describe("프리미엄 가이드 접근 통합", () => {
     jest.clearAllMocks();
     getCurrentUser.mockResolvedValue({ authenticated: true, user: { displayName: "김따릉", provider: "kakao" } });
     fetchSubscription.mockResolvedValue({ status: "FREE" });
+    confirmPayment.mockResolvedValue({ status: "ACTIVE" });
     startCheckout.mockResolvedValue({ status: "READY", orderId: "order-1", planId: "PREMIUM_MONTHLY_30D", amount: 2900, currency: "KRW" });
     requestTossCheckout.mockResolvedValue(undefined);
     fetchAirQuality.mockResolvedValue({ status: "UNAVAILABLE" });
@@ -627,16 +629,16 @@ describe("프리미엄 가이드 접근 통합", () => {
     expect(screen.queryByText("결제 확인 중입니다.")).not.toBeInTheDocument();
   });
 
-  test("성공 redirect는 webhook 구독 조회가 ACTIVE가 되기 전까지 확인 중으로 남는다", async () => {
+  test("성공 redirect는 서버 확인 뒤 ACTIVE 가이드를 연다", async () => {
     restoreGuideCandidate();
     window.history.replaceState({}, "", "/?payment=processing&paymentKey=masked&orderId=masked&amount=2900");
-    fetchSubscription.mockResolvedValue({ status: "FREE" });
+    fetchSubscription.mockResolvedValue({ status: "ACTIVE" });
 
     render(<MainPage />);
 
-    expect(await screen.findByText("결제 확인 중입니다.")).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: /라이딩 가이드$/ })).not.toBeInTheDocument();
-    expect(sessionStorage.getItem(PAYMENT_PROCESSING_KEY)).toBe("1");
+    await waitFor(() => expect(confirmPayment).toHaveBeenCalledWith({ paymentKey: "masked", orderId: "masked", amount: 2900 }));
+    expect(await screen.findByRole("heading", { name: /라이딩 가이드$/ })).toBeInTheDocument();
+    expect(sessionStorage.getItem(PAYMENT_PROCESSING_KEY)).toBeNull();
     expect(window.location.search).toBe("");
   });
 

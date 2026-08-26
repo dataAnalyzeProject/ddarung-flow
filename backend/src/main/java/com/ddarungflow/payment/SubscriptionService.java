@@ -67,6 +67,24 @@ public class SubscriptionService {
     paymentEvents.save(new PaymentEvent("TOSS", eventId, PaymentEventOutcome.ACTIVE));
     return Map.of("status", "ACTIVE");
   }
+  @Transactional public Map<String,Object> confirmRedirect(Users user, String paymentKey, String orderId, int amount) {
+    Payment payment = payments.findByOrderId(orderId).orElse(null);
+    if (payment == null || payment.getUser().getId() == null || !payment.getUser().getId().equals(user.getId())
+        || payment.getAmount() != amount) return Map.of("code", "PAYMENT_VERIFICATION_FAILED");
+    if (payment.getStatus() == PaymentStatus.SUCCEEDED) return Map.of("status", "ACTIVE");
+    if (payment.getStatus() != PaymentStatus.READY) return Map.of("code", "PAYMENT_VERIFICATION_FAILED");
+    try {
+      paymentVerifier.confirm(paymentKey, payment.getOrderId(), payment.getAmount());
+      VerifiedTossPayment verified = paymentVerifier.verify(paymentKey);
+      if (!matchesReadyPayment(payment, verified) || !verified.isDone()) return Map.of("code", "PAYMENT_VERIFICATION_FAILED");
+    } catch (RuntimeException ex) {
+      return Map.of("code", "PAYMENT_VERIFICATION_FAILED");
+    }
+    payment.markProcessing();
+    payment.markSucceeded();
+    subscriptions.save(new Subscription(payment.getUser(), payment.getPlan(), OffsetDateTime.now()));
+    return Map.of("status", "ACTIVE");
+  }
   private Map<String,Object> recordFailure(String eventId) {
     paymentEvents.save(new PaymentEvent("TOSS", eventId, PaymentEventOutcome.VERIFICATION_FAILED));
     return resultFor(PaymentEventOutcome.VERIFICATION_FAILED);

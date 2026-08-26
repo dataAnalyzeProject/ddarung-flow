@@ -1,4 +1,4 @@
-import { fetchSubscription, startCheckout } from './subscriptionApi';
+import { confirmPayment, fetchSubscription, startCheckout } from './subscriptionApi';
 
 function jsonResponse(body, ok = true) {
   return { ok, json: jest.fn().mockResolvedValue(body) };
@@ -53,5 +53,21 @@ describe('subscriptionApi', () => {
 
     await expect(startCheckout('PREMIUM_MONTHLY_30D')).rejects.toThrow('PAYMENT_NOT_ENABLED');
     expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  test('posts the Toss callback values to the authenticated server confirmation endpoint', async () => {
+    fetch
+      .mockResolvedValueOnce(jsonResponse({ headerName: 'X-CSRF-TOKEN', token: 'csrf-token' }))
+      .mockResolvedValueOnce(jsonResponse({ status: 'ACTIVE' }));
+
+    await expect(confirmPayment({ paymentKey: 'payment-key', orderId: 'order-1', amount: 2900 }))
+      .resolves.toEqual({ status: 'ACTIVE' });
+
+    expect(fetch).toHaveBeenLastCalledWith('http://localhost:8080/api/v1/payments/confirm', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ paymentKey: 'payment-key', orderId: 'order-1', amount: '2900' }),
+      credentials: 'include',
+      headers: expect.objectContaining({ 'X-CSRF-TOKEN': 'csrf-token' }),
+    }));
   });
 });

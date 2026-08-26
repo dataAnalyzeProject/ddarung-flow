@@ -7,6 +7,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.lang.reflect.Field;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 
@@ -26,8 +27,15 @@ class SubscriptionServiceTest {
     private final Users user = Users.builder().provider("test").providerUserId("u1").displayName("tester").build();
 
     @BeforeEach
-    void initializeUserPublicId() {
+    void initializeUserPublicId() throws ReflectiveOperationException {
         user.prePersist();
+        assignId(user, 1L);
+    }
+
+    private void assignId(Users target, long id) throws ReflectiveOperationException {
+        Field field = Users.class.getDeclaredField("id");
+        field.setAccessible(true);
+        field.set(target, id);
     }
 
     @Test
@@ -114,6 +122,36 @@ class SubscriptionServiceTest {
         verify(verifier).confirm("key-confirm", "ddarung-order-confirm", 2900);
         verify(verifier, times(2)).verify("key-confirm");
         verify(subscriptions).save(any(Subscription.class));
+    }
+
+    @Test
+    void successfulRedirectConfirmationActivatesOnlyItsOwner() {
+        Payment payment = new Payment(user, "ddarung-order-redirect", SubscriptionPlan.PREMIUM_MONTHLY_30D);
+        when(payments.findByOrderId("ddarung-order-redirect")).thenReturn(Optional.of(payment));
+        when(verifier.verify("key-redirect"))
+                .thenReturn(new VerifiedTossPayment("ddarung-order-redirect", "key-redirect", 2900, "KRW", "DONE"));
+
+        var result = service.confirmRedirect(user, "key-redirect", "ddarung-order-redirect", 2900);
+
+        assertEquals("ACTIVE", result.get("status"));
+        assertEquals(PaymentStatus.SUCCEEDED, payment.getStatus());
+        verify(verifier).confirm("key-redirect", "ddarung-order-redirect", 2900);
+        verify(subscriptions).save(any(Subscription.class));
+    }
+
+    @Test
+    void redirectConfirmationCannotActivateAnotherUsersOrder() throws ReflectiveOperationException {
+        Users otherUser = Users.builder().provider("test").providerUserId("u2").displayName("other").build();
+        otherUser.prePersist();
+        assignId(otherUser, 2L);
+        Payment payment = new Payment(otherUser, "ddarung-order-other", SubscriptionPlan.PREMIUM_MONTHLY_30D);
+        when(payments.findByOrderId("ddarung-order-other")).thenReturn(Optional.of(payment));
+
+        var result = service.confirmRedirect(user, "key-other", "ddarung-order-other", 2900);
+
+        assertEquals("PAYMENT_VERIFICATION_FAILED", result.get("code"));
+        verifyNoInteractions(verifier);
+        verify(subscriptions, never()).save(any());
     }
 
     @Test
