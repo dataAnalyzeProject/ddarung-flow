@@ -3,7 +3,8 @@ import { canDo, fixture } from "./adminFixture";
 import { answerQuestion, hideQuestion, listAdminQuestions } from "./qnaAdminApi";
 import { changeAdminUserRole, listAdminUsers } from "./adminUsersApi";
 import { listAdminAuditLogs } from "./adminAuditLogsApi";
-import { ExportDetail, QnaAnswerDetail } from "./AdminDetailViews";
+import { QnaAnswerDetail } from "./AdminDetailViews";
+import { createAdminExport, downloadAdminExport, listAdminExports } from "./adminExportsApi";
 
 const Icon = ({ children }) => <span className="admin-card-icon" aria-hidden="true">{children}</span>;
 const Button = ({ children, onClick, kind = "secondary", disabled = false }) => <button type="button" className={`admin-button ${kind}`} onClick={onClick} disabled={disabled}>{children}</button>;
@@ -29,9 +30,9 @@ function MetricIcon({ type }) {
 
 export function AdminStatePanel({ state }) {
   const content = {
-    loading: ["불러오는 중", "fixture 화면을 준비하고 있습니다."],
-    empty: ["표시할 fixture가 없습니다", "필터를 조정하거나 다시 시도해 주세요."],
-    error: ["일시적으로 표시할 수 없습니다", "실제 API 오류가 아닌 fixture 상태입니다."],
+    loading: ["불러오는 중", "관리자 데이터를 준비하고 있습니다."],
+    empty: ["표시할 항목이 없습니다", "필터를 조정하거나 다시 시도해 주세요."],
+    error: ["일시적으로 표시할 수 없습니다", "잠시 후 다시 시도해 주세요."],
     forbidden: ["관리자 권한이 필요합니다", "관리자 데이터와 카드, 표는 표시하지 않습니다."],
     unauthorized: ["로그인이 필요합니다", "로그인 후 다시 시도해 주세요."],
   }[state] || ["알 수 없는 상태", ""];
@@ -66,12 +67,15 @@ function Users() {
     {dialog && <Dialog title="역할 변경 확인" onClose={() => setDialog(null)}><p><b>{dialog.displayName}</b>의 역할을 변경합니다.</p><label>새 역할<select aria-label="새 역할" value={nextRole} onChange={(event) => setNextRole(event.target.value)}><option value="USER">USER</option><option value="ADMIN">ADMIN</option></select></label><label>변경 사유<textarea aria-label="변경 사유" value={reason} onChange={(event) => setReason(event.target.value)} /></label>{actionError && <p role="alert">{actionError}</p>}<div className="admin-dialog-actions"><Button onClick={() => setDialog(null)}>취소</Button><Button kind="primary" disabled={reason.trim().length < 2 || reason.trim().length > 200} onClick={confirmRole}>변경 확인</Button></div></Dialog>}</>;
 }
 
-function Export({ data, actorRole, onAction }) {
-  const [selected, setSelected] = useState(null);
-  if (selected) return <ExportDetail item={selected} onBack={() => setSelected(null)} onDownload={(item) => onAction({ type: "export_download", exportId: item.id })} />;
-  return <><div className="admin-page-title"><div><p className="admin-eyebrow">UI-ADMIN-03</p><h1>데이터 · Export</h1><span>원본 데이터는 브라우저에서 만들지 않습니다.</span></div>{canDo(actorRole, "export_request") && <Button kind="primary" onClick={() => onAction({ type: "export_request", exportType: "station_availability" })}>Export 요청</Button>}</div>
-    <div className="admin-stat-grid"><StatCard label="Curated 상태" value="정상" note="fixture 배치 기준" icon="✓" tone="green" /><StatCard label="Coverage" value="98.7%" note="비운영 fixture" icon="◔" /><StatCard label="격리 항목" value="3건" note="검토 필요" icon="!" tone="orange" /><StatCard label="최근 배치" value="21:15" note="데이터 기준 시각" icon="◷" /></div>
-    <div className="admin-dashboard-grid"><Section title="제한 Export 요청" action={<span className="admin-filter-hint">상태 · 전체</span>} className="admin-tall-panel"><table><thead><tr><th>작업 ID</th><th>데이터 유형</th><th>요청자</th><th>상태</th><th>진행률</th></tr></thead><tbody>{data.exports.map((item) => <tr key={item.id}><td><button type="button" className="admin-table-link" onClick={() => setSelected(item)}>{item.id}</button></td><td>{item.type}</td><td>{item.requester}</td><td><Chip tone={item.state === "완료" ? "green" : item.state === "대기" ? "gray" : "blue"}>{item.state}</Chip></td><td><div className="admin-progress"><i style={{ width: `${item.progress}%` }} /><span>{item.progress}%</span></div></td></tr>)}</tbody></table></Section><Section title="요청 상세"><div className="admin-request-detail"><Chip tone="green">완료</Chip><p>목록에서 작업 ID를 선택하면 상세를 확인합니다.</p></div></Section></div></>;
+function Export({ actorRole }) {
+  const [items, setItems] = useState([]); const [state, setState] = useState("loading"); const [source, setSource] = useState("CURATED"); const [format, setFormat] = useState("CSV"); const [purpose, setPurpose] = useState(""); const [rowCount, setRowCount] = useState("1000"); const [actionError, setActionError] = useState(""); const [downloading, setDownloading] = useState(null);
+  const load = useCallback(() => { setState("loading"); listAdminExports().then((page) => { setItems(page.items); setState(page.items.length ? "success" : "empty"); }).catch((error) => setState(error.status === 401 ? "unauthorized" : error.status === 403 ? "forbidden" : "error")); }, []);
+  useEffect(() => { load(); }, [load]);
+  const requestExport = async () => { setActionError(""); try { await createAdminExport({ source, format, purpose: purpose.trim() || null, rowCount: Number(rowCount) }); load(); } catch (error) { setActionError(error.code === "VALIDATION_ERROR" ? "입력값 또는 행 수 상한을 확인해 주세요." : "Export 생성에 실패했습니다."); } };
+  const download = async (item) => { setActionError(""); setDownloading(item.exportId); try { const blob = await downloadAdminExport(item.exportId); if (typeof URL.createObjectURL === "function") { const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = `export-${item.exportId}`; link.click(); URL.revokeObjectURL(url); } } catch (error) { setActionError(error.code === "EXPORT_EXPIRED" ? "다운로드 기간이 만료되었습니다." : "다운로드 파일을 찾을 수 없습니다."); } finally { setDownloading(null); } };
+  if (state !== "success" && state !== "empty") return <><AdminStatePanel state={state} /><div className="admin-action-row"><Button onClick={load}>다시 시도</Button></div></>;
+  return <><div className="admin-page-title"><div><p className="admin-eyebrow">UI-ADMIN-03</p><h1>데이터 · Export</h1><span>서버가 생성한 비식별 데이터만 내려받습니다.</span></div></div>
+    <Section title="제한 Export 요청" className="admin-tall-panel"><div className="admin-filter-row"><select aria-label="Export 원본" value={source} onChange={(event) => setSource(event.target.value)}><option value="CURATED">CURATED</option><option value="QUARANTINE_NORMALIZED">QUARANTINE_NORMALIZED</option></select><select aria-label="Export 형식" value={format} onChange={(event) => setFormat(event.target.value)}><option value="CSV">CSV</option><option value="PARQUET">Parquet</option></select><input aria-label="Export 목적" value={purpose} onChange={(event) => setPurpose(event.target.value)} placeholder="사용 목적" /><input aria-label="Export 행 수" type="number" min="0" value={rowCount} onChange={(event) => setRowCount(event.target.value)} />{canDo(actorRole, "export_request") && <Button kind="primary" onClick={requestExport}>Export 요청</Button>}</div>{actionError && <p role="alert">{actionError}</p>}{state === "empty" ? <><AdminStatePanel state="empty" /><div className="admin-action-row"><Button onClick={load}>다시 시도</Button></div></> : <table><thead><tr><th>요청</th><th>원본</th><th>형식</th><th>상태</th><th>행 수</th><th>작업</th></tr></thead><tbody>{items.map((item) => <tr key={item.exportId}><td>{item.exportId}</td><td>{item.source}</td><td>{item.format}</td><td><Chip tone={item.status === "COMPLETED" ? "green" : "blue"}>{item.status}</Chip></td><td>{item.rowCount ?? "-"}</td><td>{item.status === "COMPLETED" && <Button onClick={() => download(item)} disabled={downloading === item.exportId}>{downloading === item.exportId ? "다운로드 준비 중" : "다운로드"}</Button>}</td></tr>)}</tbody></table>}</Section></>;
 }
 
 function Audit() {
@@ -102,6 +106,6 @@ function Qna({ actorRole }) {
 function Dialog({ title, children, onClose }) { return <div className="admin-dialog-backdrop" role="presentation"><section className="admin-dialog" role="dialog" aria-modal="true" aria-label={title}><button type="button" className="admin-dialog-close" aria-label="닫기" onClick={onClose}>×</button><h2>{title}</h2>{children}</section></div>; }
 
 export function AdminPage({ menuId, actorRole, fixtureData = fixture, onAction = () => {} }) {
-  const pages = { dashboard: <Dashboard data={fixtureData} />, users: <Users />, export: <Export data={fixtureData} actorRole={actorRole} onAction={onAction} />, audit: <Audit />, modelops: <ModelOps data={fixtureData} actorRole={actorRole} onAction={onAction} />, qna: <Qna data={fixtureData} actorRole={actorRole} onAction={onAction} /> };
+  const pages = { dashboard: <Dashboard data={fixtureData} />, users: <Users />, export: <Export actorRole={actorRole} />, audit: <Audit />, modelops: <ModelOps data={fixtureData} actorRole={actorRole} onAction={onAction} />, qna: <Qna data={fixtureData} actorRole={actorRole} onAction={onAction} /> };
   return <div className="admin-page">{pages[menuId] || pages.dashboard}</div>;
 }

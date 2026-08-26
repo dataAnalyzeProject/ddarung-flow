@@ -3,6 +3,7 @@ import { AdminPage } from "./AdminPages";
 import { answerQuestion, hideQuestion, listAdminQuestions } from "./qnaAdminApi";
 import { changeAdminUserRole, listAdminUsers } from "./adminUsersApi";
 import { listAdminAuditLogs } from "./adminAuditLogsApi";
+import { createAdminExport, downloadAdminExport, listAdminExports } from "./adminExportsApi";
 
 jest.mock("./qnaAdminApi", () => ({
   listAdminQuestions: jest.fn(),
@@ -14,6 +15,11 @@ jest.mock("./adminUsersApi", () => ({
   changeAdminUserRole: jest.fn(),
 }));
 jest.mock("./adminAuditLogsApi", () => ({ listAdminAuditLogs: jest.fn() }));
+jest.mock("./adminExportsApi", () => ({
+  listAdminExports: jest.fn(),
+  createAdminExport: jest.fn(),
+  downloadAdminExport: jest.fn(),
+}));
 
 const qnaPage = { items: [{ id: 104, title: "Q&A 질문", body: "질문 내용", category: "SERVICE", visibility: "PUBLIC", status: "PENDING", answers: [] }] };
 
@@ -24,6 +30,9 @@ beforeEach(() => {
   listAdminUsers.mockResolvedValue({ items: [{ userId: "00000000-0000-0000-0000-000000000001", displayName: "관리자", role: "ADMIN" }], page: 0, size: 20, total: 1 });
   changeAdminUserRole.mockResolvedValue({});
   listAdminAuditLogs.mockResolvedValue({ items: [{ action: "ROLE_CHANGE", targetType: "USER", targetId: "public-user", actorRole: "ADMIN", result: "SUCCESS", reasonCode: "ROLE_CHANGED", correlationId: "audit-1", occurredAt: "2026-08-26T10:00:00+09:00" }], page: 0, size: 20, total: 1 });
+  listAdminExports.mockResolvedValue({ items: [{ exportId: 7, source: "CURATED", format: "CSV", status: "COMPLETED", rowCount: 2 }] });
+  createAdminExport.mockResolvedValue({ exportId: 8, status: "COMPLETED" });
+  downloadAdminExport.mockResolvedValue(new Blob());
 });
 
 const renderPage = (menuId, actorRole, onAction = jest.fn()) => {
@@ -31,11 +40,24 @@ const renderPage = (menuId, actorRole, onAction = jest.fn()) => {
   return onAction;
 };
 
-test("admin sends export callback without confirming success", () => {
-  const onAction = renderPage("export", "ADMIN");
+test("admin export menu uses the actual adapter for request and download", async () => {
+  renderPage("export", "ADMIN");
+  expect(await screen.findByText("COMPLETED")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Export 요청" }));
-  expect(onAction).toHaveBeenCalledWith(expect.objectContaining({ type: "export_request" }));
-  expect(screen.queryByText("요청 완료")).not.toBeInTheDocument();
+  await waitFor(() => expect(createAdminExport).toHaveBeenCalledWith(expect.objectContaining({ source: "CURATED", format: "CSV", rowCount: 1000 })));
+  fireEvent.click(screen.getByRole("button", { name: "다운로드" }));
+  await waitFor(() => expect(downloadAdminExport).toHaveBeenCalledWith(7));
+});
+
+test("admin export menu distinguishes empty, unauthorized, forbidden, and retry states", async () => {
+  listAdminExports.mockResolvedValueOnce({ items: [] }).mockRejectedValueOnce({ status: 401 }).mockRejectedValueOnce({ status: 403 }).mockResolvedValueOnce({ items: [{ exportId: 9, source: "CURATED", format: "CSV", status: "COMPLETED", rowCount: 1 }] });
+  const { unmount } = render(<AdminPage menuId="export" actorRole="ADMIN" />);
+  expect(await screen.findByText("표시할 항목이 없습니다")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "다시 시도" }));
+  expect(await screen.findByText("로그인이 필요합니다")).toBeInTheDocument();
+  unmount();
+  render(<AdminPage menuId="export" actorRole="ADMIN" />);
+  expect(await screen.findByText("관리자 권한이 필요합니다")).toBeInTheDocument();
 });
 
 test("users menu loads the API and changes a selected user's role", async () => {
@@ -77,7 +99,7 @@ test("users menu shows loading, empty, and retry states", async () => {
   renderPage("users", "ADMIN");
   expect(screen.getByRole("heading", { name: "불러오는 중" })).toBeInTheDocument();
   resolveFirstLoad({ items: [], page: 0, size: 20, total: 0 });
-  expect(await screen.findByText("표시할 fixture가 없습니다")).toBeInTheDocument();
+  expect(await screen.findByText("표시할 항목이 없습니다")).toBeInTheDocument();
 
   fireEvent.click(screen.getByRole("button", { name: "다시 시도" }));
   expect(await screen.findByText("재시도 사용자")).toBeInTheDocument();
