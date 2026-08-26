@@ -31,3 +31,14 @@ export async function startCheckout(planId) {
     },
   });
 }
+
+export async function confirmPayment({ paymentKey, orderId, amount }) {
+  const csrf = await request('/api/v1/auth/csrf');
+  return request('/api/v1/payments/confirm', {
+    method: 'POST',
+    body: JSON.stringify({ paymentKey, orderId, amount: String(amount) }),
+    headers: {
+      [csrf.headerName]: csrf.token,
+    },
+  });
+}

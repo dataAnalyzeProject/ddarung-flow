@@ -16,7 +16,7 @@ import RidingGuidePage from "../riding-guide/RidingGuidePage";
 import { fetchAirQuality } from "../riding-guide/airQualityApi";
 import { adaptArrivalWeather, fetchArrivalWeather } from "../weather/weatherApi";
 import PremiumGuideAccessPanel from "../premium/PremiumGuideAccessPanel";
-import { fetchSubscription, startCheckout } from "../premium/subscriptionApi";
+import { confirmPayment, fetchSubscription, startCheckout } from "../premium/subscriptionApi";
 import { requestTossCheckout } from "../premium/tossCheckout";
 
 const EMPTY_INPUT = {
@@ -112,7 +112,24 @@ export default function MainPage({ onNavigate }) {
     if (query.get("payment") === "processing") {
       sessionStorage.setItem(PENDING_GUIDE_KEY, "1");
       sessionStorage.setItem(PAYMENT_PROCESSING_KEY, "1");
+      const paymentKey = query.get("paymentKey");
+      const orderId = query.get("orderId");
+      const amount = Number(query.get("amount"));
       window.history.replaceState({}, "", window.location.pathname);
+      if (!paymentKey || !orderId || !Number.isInteger(amount)) {
+        sessionStorage.removeItem(PAYMENT_PROCESSING_KEY);
+        sessionStorage.setItem(PAYMENT_FAILURE_MESSAGE_KEY, "결제를 확인하지 못했습니다. 다시 시도해 주세요.");
+        return;
+      }
+      confirmPayment({ paymentKey, orderId, amount })
+        .then(() => {
+          sessionStorage.removeItem(PAYMENT_PROCESSING_KEY);
+          setGuideAccessState("ACTIVE");
+        })
+        .catch(() => {
+          sessionStorage.removeItem(PAYMENT_PROCESSING_KEY);
+          sessionStorage.setItem(PAYMENT_FAILURE_MESSAGE_KEY, "결제를 확인하지 못했습니다. 다시 시도해 주세요.");
+        });
       return;
     }
     if (query.get("payment") === "failed") {
