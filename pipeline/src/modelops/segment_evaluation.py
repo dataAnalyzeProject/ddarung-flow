@@ -37,7 +37,7 @@ def evaluate_segments(rows):
     for row in rows:
         if (int(row["horizonMinutes"]), int(row["requiredBikeCount"])) != (REFERENCE_HORIZON, REFERENCE_QUANTITY): continue
         timestamp = datetime.fromisoformat(row["timestamp"].replace("Z", "+00:00")); bucket, size = hour_bucket(timestamp.hour), row["stationSize"]
-        values = {"HOUR_BUCKET": bucket, "DAY_TYPE": "WEEKEND" if timestamp.weekday() >= 5 else "WEEKDAY", "STATION_SIZE": size, "INVENTORY_LEVEL": row["inventoryLevel"], "FLOW_TYPE": row["flowType"], "HOUR_BUCKET_X_STATION_SIZE": f"{bucket}:{size}"}
+        values = {"HOUR_BUCKET": bucket, "DAY_TYPE": "WEEKEND" if timestamp.weekday() >= 5 else "WEEKDAY", "STATION_SIZE": size, "INVENTORY_LEVEL": row["inventoryLevel"], "FLOW_TYPE": row["flowType"], "HOUR_BUCKET_X_STATION_SIZE": f"{bucket}:{size}", "STATION": row["stationId"]}
         for axis, value in values.items(): groups[(axis, value)].append(row)
     return [{"axis": axis, "segmentValue": value, **_metric(items)} for (axis, value), items in sorted(groups.items())]
 
