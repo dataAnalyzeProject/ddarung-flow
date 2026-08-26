@@ -45,32 +45,32 @@ class AdminUserServiceTest {
     }
 
     @Test
-    void selfRoleChangeIsDeniedAndAuditedWithoutPii() {
+    void selfRoleChangeIsAllowedWhenAnotherAdminRemains() {
         Users actor = user(1L, "actor", UserRole.ADMIN);
         when(usersRepository.findByPublicId(actor.getPublicId())).thenReturn(Optional.of(actor));
+        when(usersRepository.findAllByRoleForUpdate(UserRole.ADMIN.name())).thenReturn(List.of(actor, user(2L, "other-admin", UserRole.ADMIN)));
 
         AdminUserService.RoleChangeResult result = adminUserService.changeRole(actor, actor.getPublicId(), UserRole.USER);
 
-        assertFalse(result.isSuccess());
-        assertEquals("SELF_ROLE_CHANGE_FORBIDDEN", result.errorCode());
+        assertTrue(result.isSuccess());
+        assertEquals(UserRole.USER, actor.getRole());
         verify(auditEventService).appendEvent(eq(1L), eq(UserRole.ADMIN), eq("ROLE_CHANGE"), eq("USER"),
-                eq(actor.getPublicId().toString()), eq(AuditResult.FAILURE), eq("SELF_ROLE_CHANGE_FORBIDDEN"), anyString(), any());
+                eq(actor.getPublicId().toString()), eq(AuditResult.SUCCESS), eq("ROLE_CHANGED"), anyString(), any());
     }
 
     @Test
     void lastAdminCannotBeLowered() {
         Users actor = user(1L, "actor", UserRole.ADMIN);
-        Users target = user(2L, "target", UserRole.ADMIN);
-        when(usersRepository.findByPublicId(target.getPublicId())).thenReturn(Optional.of(target));
-        when(usersRepository.findAllByRoleForUpdate(UserRole.ADMIN.name())).thenReturn(List.of(target));
+        when(usersRepository.findByPublicId(actor.getPublicId())).thenReturn(Optional.of(actor));
+        when(usersRepository.findAllByRoleForUpdate(UserRole.ADMIN.name())).thenReturn(List.of(actor));
 
-        AdminUserService.RoleChangeResult result = adminUserService.changeRole(actor, target.getPublicId(), UserRole.USER);
+        AdminUserService.RoleChangeResult result = adminUserService.changeRole(actor, actor.getPublicId(), UserRole.USER);
 
         assertFalse(result.isSuccess());
         assertEquals("LAST_SUPER_ADMIN_REQUIRED", result.errorCode());
-        assertEquals(UserRole.ADMIN, target.getRole());
+        assertEquals(UserRole.ADMIN, actor.getRole());
         verify(auditEventService).appendEvent(eq(1L), eq(UserRole.ADMIN), eq("ROLE_CHANGE"), eq("USER"),
-                eq(target.getPublicId().toString()), eq(AuditResult.FAILURE), eq("LAST_SUPER_ADMIN_REQUIRED"), anyString(), any());
+                eq(actor.getPublicId().toString()), eq(AuditResult.FAILURE), eq("LAST_SUPER_ADMIN_REQUIRED"), anyString(), any());
     }
 
     @Test

@@ -42,10 +42,6 @@ public class AdminUserService {
             audit(actor, targetPublicId.toString(), AuditResult.FAILURE, "USER_NOT_FOUND");
             return RoleChangeResult.error("USER_NOT_FOUND", "사용자를 찾을 수 없습니다.");
         }
-        if (actor.getId().equals(target.getId())) {
-            audit(actor, targetPublicId.toString(), AuditResult.FAILURE, "SELF_ROLE_CHANGE_FORBIDDEN");
-            return RoleChangeResult.error("SELF_ROLE_CHANGE_FORBIDDEN", "자신의 역할은 변경할 수 없습니다.");
-        }
         if (target.getRole() == nextRole) {
             audit(actor, targetPublicId.toString(), AuditResult.SUCCESS, "ROLE_UNCHANGED");
             return RoleChangeResult.success(response(target));
@@ -55,8 +51,8 @@ public class AdminUserService {
             audit(actor, targetPublicId.toString(), AuditResult.FAILURE, "LAST_SUPER_ADMIN_REQUIRED");
             return RoleChangeResult.error("LAST_SUPER_ADMIN_REQUIRED", "마지막 ADMIN의 역할은 낮출 수 없습니다.");
         }
-        target.changeRole(nextRole);
         audit(actor, targetPublicId.toString(), AuditResult.SUCCESS, "ROLE_CHANGED");
+        target.changeRole(nextRole);
         return RoleChangeResult.success(response(target));
     }
 

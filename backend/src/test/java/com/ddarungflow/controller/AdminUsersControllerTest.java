@@ -47,22 +47,25 @@ class AdminUsersControllerTest {
     }
 
     @Test
-    void roleChangeHandlesSuccessNotFoundAndLastAdmin() throws Exception {
+    void roleChangeHandlesSelfDemotionNotFoundAndLastAdmin() throws Exception {
         Users target = usersRepository.save(user("target", UserRole.USER));
         UsernamePasswordAuthenticationToken admin = authFor("admin", UserRole.ADMIN);
 
         mockMvc.perform(patch("/api/v1/admin/users/{userId}/role", target.getPublicId()).with(authentication(admin)).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON).content("{\"role\":\"ADMIN\",\"reason\":\"운영 권한 조정\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.role").value("ADMIN"));
+        Users actor = ((PrincipalDetails) admin.getPrincipal()).getUsers();
+        mockMvc.perform(patch("/api/v1/admin/users/{userId}/role", actor.getPublicId()).with(authentication(admin)).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"role\":\"USER\",\"reason\":\"운영 권한 조정\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.role").value("USER"));
         mockMvc.perform(patch("/api/v1/admin/users/00000000-0000-0000-0000-000000000001/role").with(authentication(admin)).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON).content("{\"role\":\"USER\",\"reason\":\"운영 권한 조정\"}"))
                 .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("USER_NOT_FOUND"));
 
         usersRepository.deleteAll();
-        Users onlyAdmin = usersRepository.save(user("only-admin", UserRole.ADMIN));
-        UsernamePasswordAuthenticationToken actor = authFor("actor", UserRole.ADMIN);
-        usersRepository.delete(((PrincipalDetails) actor.getPrincipal()).getUsers());
-        mockMvc.perform(patch("/api/v1/admin/users/{userId}/role", onlyAdmin.getPublicId()).with(authentication(actor)).with(csrf())
+        UsernamePasswordAuthenticationToken onlyAdmin = authFor("only-admin", UserRole.ADMIN);
+        Users onlyAdminUser = ((PrincipalDetails) onlyAdmin.getPrincipal()).getUsers();
+        mockMvc.perform(patch("/api/v1/admin/users/{userId}/role", onlyAdminUser.getPublicId()).with(authentication(onlyAdmin)).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON).content("{\"role\":\"USER\",\"reason\":\"운영 권한 조정\"}"))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("LAST_SUPER_ADMIN_REQUIRED"));
     }
