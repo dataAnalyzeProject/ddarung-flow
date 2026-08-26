@@ -93,7 +93,9 @@ class ModelOpsControllerSecurityTest {
                 "/api/v1/admin/model-uploads/00000000-0000-0000-0000-000000000001/complete",
                 "/api/v1/admin/models/1/validate",
                 "/api/v1/admin/models/1/approve",
-                "/api/v1/admin/models/1/reject"
+                "/api/v1/admin/models/1/reject",
+                "/api/v1/admin/models/1/activate",
+                "/api/v1/admin/models/rollback"
         )) {
             mockMvc.perform(post(path).with(csrf()).with(authentication(user)))
                     .andExpect(status().isForbidden())

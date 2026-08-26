@@ -23,6 +23,8 @@ public class OciModelActivationGateway implements ModelActivationGateway {
     private final String namespace;
     private final String bucket;
     private final URI reloadUri;
+    private final URI healthUri;
+    private final boolean ociProfile;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
 
@@ -30,17 +32,24 @@ public class OciModelActivationGateway implements ModelActivationGateway {
         @Value("${model.activation.oci-namespace:${OCI_OBJECT_NAMESPACE:}}") String namespace,
         @Value("${model.activation.bucket:${MODEL_BUCKET:}}") String bucket,
         @Value("${model.activation.inference-base-url:http://inference:8081}") String inferenceBaseUrl,
+        @Value("${spring.profiles.active:local}") String activeProfile,
         ObjectMapper objectMapper
     ) {
         this.namespace = namespace;
         this.bucket = bucket;
         this.reloadUri = URI.create(inferenceBaseUrl.replaceAll("/+$", "") + "/internal/model-reloads");
+        this.healthUri = URI.create(inferenceBaseUrl.replaceAll("/+$", "") + "/health");
+        this.ociProfile = "oci".equals(activeProfile);
         this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build();
     }
 
     @Override
     public void activate(ModelArtifact artifact) {
+        if (!ociProfile) {
+            verifyLocalInferenceHealth();
+            return;
+        }
         if (namespace.isBlank() || bucket.isBlank() || artifact.getManifestKey() == null || artifact.getManifestSha256() == null) {
             throw new ModelActivationService.ActivationFailedException();
         }
@@ -65,6 +74,17 @@ public class OciModelActivationGateway implements ModelActivationGateway {
             if (response.statusCode() != 200) {
                 throw new ModelActivationService.ActivationFailedException();
             }
+        } catch (ModelActivationService.ActivationFailedException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new ModelActivationService.ActivationFailedException();
+        }
+    }
+
+    private void verifyLocalInferenceHealth() {
+        try {
+            HttpResponse<Void> response = httpClient.send(HttpRequest.newBuilder(healthUri).timeout(Duration.ofSeconds(5)).GET().build(), HttpResponse.BodyHandlers.discarding());
+            if (response.statusCode() != 200) throw new ModelActivationService.ActivationFailedException();
         } catch (ModelActivationService.ActivationFailedException exception) {
             throw exception;
         } catch (Exception exception) {

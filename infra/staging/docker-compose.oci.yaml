@@ -3,3 +3,9 @@ services:
     environment:
       MODEL_LOCAL_PATH: ""
     volumes: !reset []
+
+  backend:
+    environment:
+      MODEL_ACTIVATION_OCI_NAMESPACE: ${OCI_OBJECT_NAMESPACE}
+      MODEL_ACTIVATION_BUCKET: ${MODEL_BUCKET}
+      MODEL_ACTIVATION_INFERENCE_BASE_URL: http://inference:8081
