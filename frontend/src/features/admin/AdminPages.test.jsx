@@ -65,13 +65,19 @@ test("dashboard shows actual and predicted calibration series with a legend", as
   expect(screen.getAllByTestId("calibration-predicted")).toHaveLength(1);
 });
 
-test("dashboard distinguishes an empty calibration bin from a sampled zero actual rate", async () => {
-  getAdminPerformance.mockResolvedValueOnce({ combinations: Array.from({ length: 20 }, (_, index) => ({ horizonMinutes: 60, requiredBikeCount: index + 1, sampleCount: 1000, brierScore: 0.030425997143861183 })), calibrationBins: [{ binLowerPercent: 0, binUpperPercent: 10, sampleCount: 10, actualRate: 0, meanPredicted: .2 }, { binLowerPercent: 10, binUpperPercent: 20, sampleCount: 0, actualRate: 0, meanPredicted: 0 }], segments: [] });
+test("dashboard renders a sampled zero actual rate as a calibration bar", async () => {
+  getAdminPerformance.mockResolvedValueOnce({ combinations: Array.from({ length: 20 }, (_, index) => ({ horizonMinutes: 60, requiredBikeCount: index + 1, sampleCount: 1000, brierScore: 0.030425997143861183 })), calibrationBins: [{ binLowerPercent: 0, binUpperPercent: 10, sampleCount: 10, actualRate: 0, meanPredicted: .2 }], segments: [] });
   renderPage("dashboard", "ADMIN");
   expect(await screen.findByLabelText("0-10% · 표본 10 · 실제 비율 0.0% · 예측 확률 20.0%")).toBeInTheDocument();
   expect(screen.getAllByTestId("calibration-actual")).toHaveLength(1);
+});
+
+test("dashboard renders a zero-sample calibration bin without bars", async () => {
+  getAdminPerformance.mockResolvedValueOnce({ combinations: Array.from({ length: 20 }, (_, index) => ({ horizonMinutes: 60, requiredBikeCount: index + 1, sampleCount: 1000, brierScore: 0.030425997143861183 })), calibrationBins: [{ binLowerPercent: 10, binUpperPercent: 20, sampleCount: 0, actualRate: 0, meanPredicted: 0 }], segments: [] });
+  renderPage("dashboard", "ADMIN");
+  expect(await screen.findByLabelText("10-20% · 표본 없음")).toBeInTheDocument();
   expect(screen.getByText("표본 없음")).toBeInTheDocument();
-  expect(screen.getByLabelText("10-20% · 표본 없음")).toBeInTheDocument();
+  expect(screen.queryByTestId("calibration-actual")).not.toBeInTheDocument();
 });
 
 test("dashboard formats heatmap Brier scores to four decimals", async () => {
