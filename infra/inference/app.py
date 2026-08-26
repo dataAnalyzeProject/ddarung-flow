@@ -316,6 +316,12 @@ class InferenceHandler(BaseHTTPRequestHandler):
             bundle, pointer = load_pointer_model(object_storage, settings, expected_state="ACTIVE")
             bundle = validate_distribution_artifact(bundle)
             _model_parts(bundle)
+            smoke = predict_candidates(bundle, {"candidates": [{
+                "stationId": "smoke", "stationNumber": 1, "currentBikeCount": 1,
+                "featureAsOf": "2026-01-01T00:00:00+09:00",
+            }]}, model_sha256=pointer["artifact"]["sha256"])
+            if smoke.get("status") != "NORMAL" or smoke.get("predictions", [{}])[0].get("status") != "NORMAL":
+                raise RuntimeError("post-switch smoke failed")
             self.server.model_bundle = bundle
             self.server.model_sha256 = pointer["artifact"]["sha256"]
             self.server.health_response = {"status": "healthy", "model_source": "verified_active_pointer"}
