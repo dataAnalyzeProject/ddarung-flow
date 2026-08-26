@@ -83,9 +83,9 @@ def _require_sha256(value, field):
         raise RuntimeError(f"pointer {field} must be a lowercase SHA-256 digest")
 
 
-def validate_pointer(pointer):
-    if pointer.get("schema_version") != 1 or pointer.get("state") != "INACTIVE":
-        raise RuntimeError("pointer must be schema version 1 and INACTIVE")
+def validate_pointer(pointer, expected_state="INACTIVE"):
+    if pointer.get("schema_version") != 1 or pointer.get("state") != expected_state:
+        raise RuntimeError(f"pointer must be schema version 1 and {expected_state}")
     for name in ("artifact", "manifest"):
         entry = pointer.get(name)
         if not isinstance(entry, dict) or not isinstance(entry.get("key"), str) or not entry["key"]:
@@ -125,15 +125,15 @@ def validate_distribution_artifact(model):
     return model
 
 
-def load_pointer_model(object_storage, settings):
-    pointer = validate_pointer(json.loads(download_bytes_and_verify(object_storage, settings, settings["MODEL_POINTER_KEY"], settings["MODEL_POINTER_SHA256"])))
+def load_pointer_model(object_storage, settings, expected_state="INACTIVE"):
+    pointer = validate_pointer(json.loads(download_bytes_and_verify(object_storage, settings, settings["MODEL_POINTER_KEY"], settings["MODEL_POINTER_SHA256"])), expected_state)
     manifest = json.loads(download_bytes_and_verify(object_storage, settings, pointer["manifest"]["key"], pointer["manifest"]["sha256"]))
     validate_manifest(manifest, pointer)
     pointer_settings = {**settings, "MODEL_OBJECT_KEY": pointer["artifact"]["key"], "MODEL_SHA256": pointer["artifact"]["sha256"]}
     with tempfile.NamedTemporaryFile(suffix=".joblib") as artifact:
         download_and_verify(object_storage, pointer_settings, artifact.name)
         import joblib
-        return joblib.load(artifact.name)
+        return joblib.load(artifact.name), pointer
 
 
 def load_model(settings):
@@ -154,7 +154,7 @@ def load_model(settings):
     signer = oci.auth.signers.InstancePrincipalsSecurityTokenSigner()
     object_storage = oci.object_storage.ObjectStorageClient({}, signer=signer)
     if settings["MODEL_MODE"] == "pointer":
-        return validate_distribution_artifact(load_pointer_model(object_storage, settings))
+        return validate_distribution_artifact(load_pointer_model(object_storage, settings)[0])
     with tempfile.NamedTemporaryFile(suffix=".joblib") as artifact:
         download_and_verify(object_storage, settings, artifact.name)
         return validate_distribution_artifact(joblib.load(artifact.name))
@@ -273,6 +273,9 @@ class InferenceHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self):
+        if self.path == "/internal/model-reloads":
+            self._reload_active_model()
+            return
         if self.path != "/predict":
             self.send_response(404)
             self.end_headers()
@@ -296,6 +299,42 @@ class InferenceHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _reload_active_model(self):
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if length <= 0 or length > 4096:
+                raise ValueError("invalid content length")
+            payload = json.loads(self.rfile.read(length))
+            pointer_key = payload.get("pointerKey")
+            pointer_sha256 = payload.get("pointerSha256")
+            if not isinstance(pointer_key, str) or not pointer_key or not re.fullmatch(r"[0-9a-f]{64}", pointer_sha256 or ""):
+                raise ValueError("invalid pointer reference")
+            import oci
+            signer = oci.auth.signers.InstancePrincipalsSecurityTokenSigner()
+            object_storage = oci.object_storage.ObjectStorageClient({}, signer=signer)
+            settings = {**self.server.settings, "MODEL_POINTER_KEY": pointer_key, "MODEL_POINTER_SHA256": pointer_sha256}
+            bundle, pointer = load_pointer_model(object_storage, settings, expected_state="ACTIVE")
+            bundle = validate_distribution_artifact(bundle)
+            _model_parts(bundle)
+            smoke = predict_candidates(bundle, {"candidates": [{
+                "stationId": "smoke", "stationNumber": 1, "currentBikeCount": 1,
+                "featureAsOf": "2026-01-01T00:00:00+09:00",
+            }]}, model_sha256=pointer["artifact"]["sha256"])
+            if smoke.get("status") != "NORMAL" or smoke.get("predictions", [{}])[0].get("status") != "NORMAL":
+                raise RuntimeError("post-switch smoke failed")
+            self.server.model_bundle = bundle
+            self.server.model_sha256 = pointer["artifact"]["sha256"]
+            self.server.health_response = {"status": "healthy", "model_source": "verified_active_pointer"}
+        except Exception:
+            self.send_response(503)
+            self.end_headers()
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", "2")
+        self.end_headers()
+        self.wfile.write(b"{}")
+
     def log_message(self, format, *args):
         return
 
@@ -307,6 +346,7 @@ def main():
     server = HTTPServer(("0.0.0.0", 8081), InferenceHandler)
     server.model_bundle = model_bundle
     server.model_sha256 = settings["MODEL_SHA256"]
+    server.settings = settings
     server.health_response = {"status": "healthy"}
     if settings["MODEL_MODE"] == "pointer":
         server.health_response["model_source"] = "verified_pointer"

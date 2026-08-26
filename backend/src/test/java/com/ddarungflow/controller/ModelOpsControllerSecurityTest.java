@@ -93,7 +93,9 @@ class ModelOpsControllerSecurityTest {
                 "/api/v1/admin/model-uploads/00000000-0000-0000-0000-000000000001/complete",
                 "/api/v1/admin/models/1/validate",
                 "/api/v1/admin/models/1/approve",
-                "/api/v1/admin/models/1/reject"
+                "/api/v1/admin/models/1/reject",
+                "/api/v1/admin/models/1/activate",
+                "/api/v1/admin/models/rollback"
         )) {
             mockMvc.perform(post(path).with(csrf()).with(authentication(user)))
                     .andExpect(status().isForbidden())
@@ -208,8 +210,8 @@ class ModelOpsControllerSecurityTest {
 
     private String modelRequest(String version) {
         return """
-            {"version":"%s","artifactKey":"models/%s.joblib","sha256":"%s","codeCommit":"abc123","dataManifestHash":"%s","configHash":"%s","featureSchemaVersion":"v1"}
-            """.formatted(version, version, HASH, "b".repeat(64), "c".repeat(64));
+            {"version":"%s","artifactKey":"models/%s.joblib","sha256":"%s","codeCommit":"abc123","dataManifestHash":"%s","configHash":"%s","featureSchemaVersion":"v1","manifestKey":"models/%s.json","manifestSha256":"%s"}
+            """.formatted(version, version, HASH, "b".repeat(64), "c".repeat(64), version, "d".repeat(64));
     }
 
     private List<ModelEvaluation> evaluationsFor(Long modelId) {

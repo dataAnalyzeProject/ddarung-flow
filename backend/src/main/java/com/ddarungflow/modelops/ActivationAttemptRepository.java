@@ -7,8 +7,7 @@ import java.util.Optional;
 
 @Repository
 public interface ActivationAttemptRepository extends JpaRepository<ActivationAttempt, Long> {
-
     Optional<ActivationAttempt> findByCorrelationId(String correlationId);
-
     boolean existsByCorrelationId(String correlationId);
+    Optional<ActivationAttempt> findFirstByCandidateModelIdAndStatusOrderByIdDesc(Long candidateModelId, ActivationAttemptStatus status);
 }

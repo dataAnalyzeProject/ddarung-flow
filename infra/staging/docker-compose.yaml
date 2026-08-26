@@ -24,6 +24,7 @@ services:
       context: ../../backend
       dockerfile: Dockerfile
     environment:
+      MODEL_ACTIVATION_LOCAL_TEST_FAIL_VERSION: ${MODEL_ACTIVATION_LOCAL_TEST_FAIL_VERSION:-}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
       SWAGGER_ENABLED: ${SWAGGER_ENABLED:-false}
       PORT: 8080
@@ -45,6 +46,7 @@ services:
       TOSS_PAYMENTS_SECRET_KEY: ${TOSS_PAYMENTS_SECRET_KEY}
       PAYMENT_MODE: ${PAYMENT_MODE:-sandbox}
       INFERENCE_BASE_URL: http://inference:8081
+      MODEL_ACTIVATION_INFERENCE_BASE_URL: http://inference:8081
       SERVER_FORWARD_HEADERS_STRATEGY: framework
     ports:
       - "${BACKEND_BIND_ADDRESS:-127.0.0.1}:${BACKEND_PORT}:8080"

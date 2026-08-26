@@ -48,6 +48,12 @@ public class ModelArtifact {
     @Column(name = "feature_schema_version", nullable = false, length = 64)
     private String featureSchemaVersion;
 
+    @Column(name = "manifest_key", length = 512)
+    private String manifestKey;
+
+    @Column(name = "manifest_sha256", length = 64)
+    private String manifestSha256;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private ModelArtifactState state;
@@ -108,6 +114,23 @@ public class ModelArtifact {
         this.featureSchemaVersion = featureSchemaVersion;
         this.state = state;
         this.createdAt = createdAt;
+    }
+
+    public ModelArtifact(
+        String version, Long trainerUserId, String artifactKey, String sha256, String codeCommit,
+        String dataManifestHash, String configHash, String featureSchemaVersion, String manifestKey,
+        String manifestSha256, ModelArtifactState state, OffsetDateTime createdAt
+    ) {
+        this(version, trainerUserId, artifactKey, sha256, codeCommit, dataManifestHash, configHash,
+            featureSchemaVersion, state, createdAt);
+        if (manifestKey == null || manifestKey.isBlank() || manifestKey.length() > 512) {
+            throw new IllegalArgumentException("manifestKey must not be null or blank, max length 512");
+        }
+        if (manifestSha256 == null || !manifestSha256.matches("^[0-9a-f]{64}$")) {
+            throw new IllegalArgumentException("manifestSha256 must be a 64-character lowercase hexadecimal string");
+        }
+        this.manifestKey = manifestKey;
+        this.manifestSha256 = manifestSha256;
     }
 
     public void transitionTo(ModelArtifactState newState) {

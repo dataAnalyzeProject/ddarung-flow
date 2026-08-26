@@ -26,27 +26,21 @@ public final class ModelOpsDtos {
         String codeCommit,
         String dataManifestHash,
         String configHash,
-        String featureSchemaVersion
+        String featureSchemaVersion,
+        String manifestKey,
+        String manifestSha256
     ) {
     }
 
     public record ModelResponse(
         Long id,
         String version,
-        String artifactKey,
-        String sha256,
-        String codeCommit,
-        String dataManifestHash,
-        String configHash,
-        String featureSchemaVersion,
         ModelArtifactState state,
         OffsetDateTime createdAt
     ) {
         public static ModelResponse from(ModelArtifact artifact) {
             return new ModelResponse(
-                artifact.getId(), artifact.getVersion(), artifact.getArtifactKey(), artifact.getSha256(),
-                artifact.getCodeCommit(), artifact.getDataManifestHash(), artifact.getConfigHash(),
-                artifact.getFeatureSchemaVersion(), artifact.getState(), artifact.getCreatedAt()
+                artifact.getId(), artifact.getVersion(), artifact.getState(), artifact.getCreatedAt()
             );
         }
     }
@@ -70,6 +64,16 @@ public final class ModelOpsDtos {
     }
 
     public record MetricsResponse(Long modelId, List<MetricResponse> metrics) {
+    }
+
+    public record ActivationResponse(Long activationAttemptId, Long candidateModelId, Long previousActiveModelId,
+                                     ModelArtifactState finalState) {
+        public static ActivationResponse from(com.ddarungflow.modelops.ModelActivationService.ActivationResult result) {
+            return new ActivationResponse(result.activationAttemptId(), result.candidateModelId(), result.previousActiveModelId(), result.finalState());
+        }
+    }
+
+    public record ErrorResponse(String code, String message) {
     }
 
     public record MetricResponse(

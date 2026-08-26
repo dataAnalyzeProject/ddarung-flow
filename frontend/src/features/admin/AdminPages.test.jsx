@@ -4,6 +4,7 @@ import { answerQuestion, hideQuestion, listAdminQuestions } from "./qnaAdminApi"
 import { changeAdminUserRole, listAdminUsers } from "./adminUsersApi";
 import { listAdminAuditLogs } from "./adminAuditLogsApi";
 import { createAdminExport, downloadAdminExport, listAdminExports } from "./adminExportsApi";
+import { activateAdminModel, approveAdminModel, listAdminModels, rollbackAdminModel, validateAdminModel } from "./adminModelOpsApi";
 
 jest.mock("./qnaAdminApi", () => ({
   listAdminQuestions: jest.fn(),
@@ -20,6 +21,7 @@ jest.mock("./adminExportsApi", () => ({
   createAdminExport: jest.fn(),
   downloadAdminExport: jest.fn(),
 }));
+jest.mock("./adminModelOpsApi", () => ({ listAdminModels: jest.fn(), validateAdminModel: jest.fn(), approveAdminModel: jest.fn(), activateAdminModel: jest.fn(), rollbackAdminModel: jest.fn() }));
 
 const qnaPage = { items: [{ id: 104, title: "Q&A 질문", body: "질문 내용", category: "SERVICE", visibility: "PUBLIC", status: "PENDING", answers: [] }] };
 
@@ -33,6 +35,8 @@ beforeEach(() => {
   listAdminExports.mockResolvedValue({ items: [{ exportId: 7, source: "CURATED", format: "CSV", status: "COMPLETED", rowCount: 2 }] });
   createAdminExport.mockResolvedValue({ exportId: 8, status: "COMPLETED" });
   downloadAdminExport.mockResolvedValue(new Blob());
+  listAdminModels.mockResolvedValue([{ id: 1, version: "v17", state: "ACTIVE", createdAt: "2026-08-26T10:00:00+09:00" }, { id: 2, version: "v18", state: "APPROVED", createdAt: "2026-08-26T10:01:00+09:00" }]);
+  validateAdminModel.mockResolvedValue({}); approveAdminModel.mockResolvedValue({}); activateAdminModel.mockResolvedValue({}); rollbackAdminModel.mockResolvedValue({});
 });
 
 const renderPage = (menuId, actorRole, onAction = jest.fn()) => {
@@ -176,8 +180,12 @@ test("qna overview shows the API result count", async () => {
   expect(await screen.findByText("문의 목록 · 1건")).toBeInTheDocument();
 });
 
-test("admin may approve model", () => {
-  const onAction = renderPage("modelops", "ADMIN");
-  fireEvent.click(screen.getByRole("button", { name: "승인" }));
-  expect(onAction).toHaveBeenCalledWith(expect.objectContaining({ type: "approve_model" }));
+test("modelops menu uses the actual adapter for activation and rollback", async () => {
+  renderPage("modelops", "ADMIN");
+  expect(await screen.findByText("v18")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "활성화" }));
+  await waitFor(() => expect(activateAdminModel).toHaveBeenCalledWith(2));
+  await waitFor(() => expect(listAdminModels).toHaveBeenCalledTimes(2));
+  fireEvent.click(screen.getByRole("button", { name: "이전 ACTIVE로 롤백" }));
+  await waitFor(() => expect(rollbackAdminModel).toHaveBeenCalled());
 });
