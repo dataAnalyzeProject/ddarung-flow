@@ -1,11 +1,16 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { AdminPage } from "./AdminPages";
 import { answerQuestion, hideQuestion, listAdminQuestions } from "./qnaAdminApi";
+import { changeAdminUserRole, listAdminUsers } from "./adminUsersApi";
 
 jest.mock("./qnaAdminApi", () => ({
   listAdminQuestions: jest.fn(),
   answerQuestion: jest.fn(),
   hideQuestion: jest.fn(),
+}));
+jest.mock("./adminUsersApi", () => ({
+  listAdminUsers: jest.fn(),
+  changeAdminUserRole: jest.fn(),
 }));
 
 const qnaPage = { items: [{ id: 104, title: "Q&A 질문", body: "질문 내용", category: "SERVICE", visibility: "PUBLIC", status: "PENDING", answers: [] }] };
@@ -14,6 +19,8 @@ beforeEach(() => {
   listAdminQuestions.mockResolvedValue(qnaPage);
   answerQuestion.mockResolvedValue({});
   hideQuestion.mockResolvedValue({});
+  listAdminUsers.mockResolvedValue({ items: [{ userId: "00000000-0000-0000-0000-000000000001", displayName: "관리자", role: "ADMIN" }], page: 0, size: 20, total: 1 });
+  changeAdminUserRole.mockResolvedValue({});
 });
 
 const renderPage = (menuId, actorRole, onAction = jest.fn()) => {
@@ -28,14 +35,22 @@ test("admin sends export callback without confirming success", () => {
   expect(screen.queryByText("요청 완료")).not.toBeInTheDocument();
 });
 
-test("role change dialog can cancel and sends the ADMIN role", () => {
-  const onAction = renderPage("users", "ADMIN");
-  fireEvent.click(screen.getAllByRole("button", { name: "역할 변경" })[0]);
+test("users menu loads the API and changes a selected user's role", async () => {
+  renderPage("users", "ADMIN");
+  expect(await screen.findByText("관리자")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "역할 변경" }));
   fireEvent.click(screen.getByRole("button", { name: "취소" }));
-  expect(onAction).not.toHaveBeenCalled();
-  fireEvent.click(screen.getAllByRole("button", { name: "역할 변경" })[1]);
+  expect(changeAdminUserRole).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "역할 변경" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "변경 사유" }), { target: { value: "운영 권한 조정" } });
   fireEvent.click(screen.getByRole("button", { name: "변경 확인" }));
-  expect(onAction).toHaveBeenCalledWith(expect.objectContaining({ type: "change_role", nextRole: "ADMIN" }));
+  await waitFor(() => expect(changeAdminUserRole).toHaveBeenCalledWith("00000000-0000-0000-0000-000000000001", "USER", "운영 권한 조정"));
+});
+
+test("users menu distinguishes an unauthenticated API response", async () => {
+  listAdminUsers.mockRejectedValueOnce({ status: 401 });
+  renderPage("users", "ADMIN");
+  expect(await screen.findByText("로그인이 필요합니다")).toBeInTheDocument();
 });
 
 test("admin loads an API question and sends its answer", async () => {
