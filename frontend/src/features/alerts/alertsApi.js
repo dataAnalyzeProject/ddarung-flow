@@ -21,4 +21,5 @@ async function mutation(path, method, body) {
 export const loadAlerts = () => Promise.all([request("/api/v1/notifications"), request("/api/v1/notification-rules")]);
 export const readNotification = (id) => mutation(`/api/v1/notifications/${id}/read`, "POST");
 export const readAllNotifications = () => mutation("/api/v1/notifications/read-all", "POST");
+export const createRule = (stationId, threshold) => mutation("/api/v1/notification-rules", "POST", { stationId: Number(stationId), threshold: Number(threshold), enabled: true });
 export const updateRule = (id, enabled) => mutation(`/api/v1/notification-rules/${id}`, "PATCH", { enabled });

@@ -31,3 +31,15 @@ test("deleting a favorite uses the CSRF token then removes only that item", asyn
   await waitFor(() => expect(screen.queryByText("성수역")).not.toBeInTheDocument());
   expect(global.fetch).toHaveBeenLastCalledWith("http://localhost:8080/api/v1/favorites/1", expect.objectContaining({ method: "DELETE" }));
 });
+
+test("replayable saved route restores only its input before returning to the main screen", async () => {
+  const onNavigate = jest.fn();
+  global.fetch.mockResolvedValueOnce(response([]))
+    .mockResolvedValueOnce(response([{ id: 2, displayName: "서울역 → 광화문", replayable: true, routeInput: { kind: "ROUTE", originName: "서울역", originLatitude: 37.55, originLongitude: 126.97, destinationName: "광화문", destinationLatitude: 37.57, destinationLongitude: 126.98, travelMode: "WALK", requiredBikeCount: 2 } }]))
+    .mockResolvedValueOnce(response([]));
+  render(<ArchivePage onNavigate={onNavigate} />);
+  fireEvent.click(await screen.findByRole("tab", { name: "저장 경로" }));
+  fireEvent.click(await screen.findByRole("button", { name: "입력 복원" }));
+  expect(onNavigate).toHaveBeenCalledWith("main");
+  expect(JSON.parse(sessionStorage.getItem("ddarung.savedRouteRestore.v1"))).toMatchObject({ originName: "서울역", destinationName: "광화문", requiredBikeCount: 2 });
+});

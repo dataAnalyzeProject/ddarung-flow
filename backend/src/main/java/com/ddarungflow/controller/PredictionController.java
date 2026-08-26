@@ -5,6 +5,7 @@ import com.ddarungflow.map.MapPredictionService;
 import com.ddarungflow.map.PredictionApiDtos;
 import com.ddarungflow.dto.PrincipalDetails;
 import com.ddarungflow.retention.RetentionService;
+import com.ddarungflow.notification.NotificationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
@@ -23,10 +24,12 @@ public class PredictionController {
 
     private final MapPredictionService mapPredictionService;
     private final RetentionService retentionService;
+    private final NotificationService notificationService;
 
-    public PredictionController(MapPredictionService mapPredictionService, RetentionService retentionService) {
+    public PredictionController(MapPredictionService mapPredictionService, RetentionService retentionService, NotificationService notificationService) {
         this.mapPredictionService = mapPredictionService;
         this.retentionService = retentionService;
+        this.notificationService = notificationService;
     }
 
     @PostMapping("/route")
@@ -48,7 +51,7 @@ public class PredictionController {
             request.requiredBikeCount()
         );
 
-        recordSuccessfulHistory(principal, "ROUTE", results.size());
+        recordSuccessfulPrediction(principal, "ROUTE", results);
         return ResponseEntity.ok(results);
     }
 
@@ -76,13 +79,22 @@ public class PredictionController {
             request.requiredBikeCount()
         );
 
-        recordSuccessfulHistory(principal, "DIRECT", results.size());
+        recordSuccessfulPrediction(principal, "DIRECT", results);
         return ResponseEntity.ok(results);
     }
 
-    private void recordSuccessfulHistory(PrincipalDetails principal, String type, int resultCount) {
-        if (principal != null && resultCount > 0) {
-            retentionService.recordPredictionHistory(principal.getUsers().getId(), type, "추천 결과 " + resultCount + "건");
-        }
+    private void recordSuccessfulPrediction(PrincipalDetails principal, String type, List<PredictionApiDtos.CandidatePredictionResponseDto> results) {
+        if (principal == null) return;
+        results.stream().filter(x -> x.predictionStatus() == PredictionApiDtos.PredictionStatus.NORMAL)
+                .sorted(java.util.Comparator.comparing(PredictionApiDtos.CandidatePredictionResponseDto::predictionProbability, java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder()))
+                        .thenComparingInt(PredictionApiDtos.CandidatePredictionResponseDto::durationSeconds).thenComparingInt(PredictionApiDtos.CandidatePredictionResponseDto::distanceMeters)
+                        .thenComparing(PredictionApiDtos.CandidatePredictionResponseDto::stationId))
+                .findFirst().ifPresent(candidate -> {
+                    Long userId = principal.getUsers().getId();
+                    retentionService.recordNormalPrediction(userId, type, candidate);
+                    if (candidate.availabilityLevel() == PredictionApiDtos.AvailabilityLevel.HIGH) {
+                        try { notificationService.evaluateArrivalRules(userId, candidate); } catch (NumberFormatException ignored) { }
+                    }
+                });
     }
 }

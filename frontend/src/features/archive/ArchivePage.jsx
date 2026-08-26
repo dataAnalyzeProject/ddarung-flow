@@ -47,6 +47,11 @@ export default function ArchivePage({ authState, user, onNavigate, onBeforeLogin
   };
 
   const savedCount = stations.length + routes.length + histories.length;
+  const restoreRoute = (route) => {
+    if (!route.replayable || !route.routeInput) return;
+    sessionStorage.setItem("ddarung.savedRouteRestore.v1", JSON.stringify(route.routeInput));
+    onNavigate?.("main");
+  };
 
   return (
     <div className="archive-shell">
@@ -69,7 +74,7 @@ export default function ArchivePage({ authState, user, onNavigate, onBeforeLogin
           {!stations.length && <section className="archive-card archive-placeholder"><h2>저장한 대여소가 없습니다.</h2><p>지도에서 대여소를 저장하면 이곳에서 확인할 수 있습니다.</p></section>}
           <aside className="archive-card summary-card"><h2>보관함 요약</h2><div className="summary-row"><span>저장 대여소</span><b style={{ color: "#08a36f" }}>{stations.length}</b></div><div className="summary-row"><span>저장 경로</span><b style={{ color: "#0875ef" }}>{routes.length}</b></div><div className="summary-row"><span>예측 이력</span><b style={{ color: "#ff8700" }}>{histories.length}</b></div><button type="button" className="archive-find-btn" onClick={() => onNavigate?.("main")}>대여소 찾기</button></aside>
         </div>}
-        {!loading && tab === "routes" && <ArchiveList title="저장 경로" items={routes} empty="저장한 경로가 없습니다." format={(route) => `${route.startStationName || route.startStationId} → ${route.endStationName || route.endStationId}`} onRemove={(id) => remove("route", id)} />}
+        {!loading && tab === "routes" && <ArchiveList title="저장 경로" items={routes} empty="저장한 경로가 없습니다." format={(route) => route.displayName ? `${route.displayName}${route.replayable ? " · 입력 복원 가능" : " · 이전 형식"}` : `${route.startStationName || route.startStationId} → ${route.endStationName || route.endStationId}`} onRemove={(id) => remove("route", id)} onRestore={restoreRoute} />}
         {!loading && tab === "history" && <ArchiveList title="예측 이력" items={histories} empty="예측 이력이 없습니다." format={(history) => `${history.queryCondition} · ${history.summaryResult}`} onRemove={(id) => remove("history", id)} />}
         <div className="archive-note"><span className="note-icon">i</span><span>예측 이력은 요청 당시의 조건이며 현재 결과가 아닙니다.</span></div>
       </main>
@@ -77,6 +82,6 @@ export default function ArchivePage({ authState, user, onNavigate, onBeforeLogin
   );
 }
 
-function ArchiveList({ title, items, empty, format, onRemove }) {
-  return <section className="archive-card archive-placeholder"><h2>{title}</h2>{items.length ? items.map((item) => <div className="summary-row" key={item.id}><span>{format(item)}</span><button type="button" className="archive-btn danger" onClick={() => onRemove(item.id)}>삭제</button></div>) : <p>{empty}</p>}</section>;
+function ArchiveList({ title, items, empty, format, onRemove, onRestore }) {
+  return <section className="archive-card archive-placeholder"><h2>{title}</h2>{items.length ? items.map((item) => <div className="summary-row" key={item.id}><span>{format(item)}</span><span>{item.replayable && <button type="button" className="archive-btn" onClick={() => onRestore(item)}>입력 복원</button>}<button type="button" className="archive-btn danger" onClick={() => onRemove(item.id)}>삭제</button></span></div>) : <p>{empty}</p>}</section>;
 }

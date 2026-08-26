@@ -6,6 +6,7 @@ import com.ddarungflow.retention.FavoriteStation;
 import com.ddarungflow.retention.PredictionHistory;
 import com.ddarungflow.retention.RetentionService;
 import com.ddarungflow.retention.SavedRoute;
+import com.ddarungflow.retention.SavedPredictionRoute;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
@@ -55,7 +56,9 @@ public class RetentionController {
 
     @GetMapping("/saved-routes")
     public List<RetentionDtos.SavedRouteResponse> getSavedRoutes(@AuthenticationPrincipal PrincipalDetails principal) {
-        return retentionService.getSavedRoutes(userId(principal)).stream().map(this::savedRouteResponse).toList();
+        List<RetentionDtos.SavedRouteResponse> current = retentionService.getSavedPredictionRoutes(userId(principal)).stream().map(this::savedRouteResponse).toList();
+        List<RetentionDtos.SavedRouteResponse> legacy = retentionService.getSavedRoutes(userId(principal)).stream().map(this::legacySavedRouteResponse).toList();
+        return java.util.stream.Stream.concat(current.stream(), legacy.stream()).toList();
     }
 
     @PostMapping("/saved-routes")
@@ -63,8 +66,7 @@ public class RetentionController {
             description = "GET /api/v1/auth/csrf 응답의 headerName에 해당하는 CSRF 토큰"))
     public RetentionDtos.SavedRouteResponse addSavedRoute(@AuthenticationPrincipal PrincipalDetails principal,
                                                            @RequestBody RetentionDtos.SavedRouteRequest request) {
-        SavedRoute route = retentionService.addSavedRoute(userId(principal), request.name(), request.startStationId(),
-                request.startStationName(), request.endStationId(), request.endStationName(), request.travelMode());
+        SavedPredictionRoute route = retentionService.addSavedRoute(userId(principal), request.kind(), request.originName(), request.originLatitude(), request.originLongitude(), request.destinationName(), request.destinationLatitude(), request.destinationLongitude(), request.stationId(), request.travelMode(), request.directMinutes(), request.requiredBikeCount());
         return savedRouteResponse(route);
     }
 
@@ -115,9 +117,12 @@ public class RetentionController {
         return new RetentionDtos.FavoriteResponse(favorite.getId(), favorite.getStationId(), favorite.getStationName(), favorite.getCreatedAt().toString());
     }
 
-    private RetentionDtos.SavedRouteResponse savedRouteResponse(SavedRoute route) {
-        return new RetentionDtos.SavedRouteResponse(route.getId(), route.getName(), route.getStartStationId(),
-                route.getStartStationName(), route.getEndStationId(), route.getEndStationName(), route.getTravelMode(), route.getCreatedAt().toString());
+    private RetentionDtos.SavedRouteResponse savedRouteResponse(SavedPredictionRoute route) {
+        RetentionDtos.SavedRouteRequest input = new RetentionDtos.SavedRouteRequest(route.getKind(), route.getOriginName(), route.getOriginLatitude(), route.getOriginLongitude(), route.getDestinationName(), route.getDestinationLatitude(), route.getDestinationLongitude(), route.getStationId(), route.getTravelMode(), route.getDirectMinutes(), route.getRequiredBikeCount());
+        return new RetentionDtos.SavedRouteResponse(route.getId(), route.getKind(), route.getDisplayName(), true, input, route.getCreatedAt().toString());
+    }
+    private RetentionDtos.SavedRouteResponse legacySavedRouteResponse(SavedRoute route) {
+        return new RetentionDtos.SavedRouteResponse(route.getId(), "LEGACY_STATION_ROUTE", route.getName(), false, null, route.getCreatedAt().toString());
     }
 
     private RetentionDtos.PredictionHistoryResponse predictionHistoryResponse(PredictionHistory history) {

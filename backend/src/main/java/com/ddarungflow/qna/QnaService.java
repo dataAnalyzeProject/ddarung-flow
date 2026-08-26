@@ -3,6 +3,7 @@ package com.ddarungflow.qna;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.ddarungflow.notification.NotificationService;
 
 import java.util.List;
 import java.util.Locale;
@@ -14,6 +15,7 @@ public class QnaService {
 
     private final QnaQuestionRepository questionRepository;
     private final QnaAnswerRepository answerRepository;
+    private final NotificationService notificationService;
 
     @Transactional
     public QnaQuestion createQuestion(QnaQuestion question) {
@@ -136,6 +138,8 @@ public class QnaService {
 
         QnaAnswer savedAnswer = answerRepository.save(answer);
         question.changeStatus(QnaStatus.ANSWERED);
+        notificationService.createInAppNotification(question.getAuthorId(), "qna-answered:" + questionId,
+                "문의에 답변이 등록되었습니다", question.getTitle(), "QNA_ANSWERED");
         return savedAnswer;
     }
 

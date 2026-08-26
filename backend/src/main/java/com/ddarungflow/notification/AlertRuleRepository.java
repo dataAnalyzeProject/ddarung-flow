@@ -12,4 +12,6 @@ public interface AlertRuleRepository extends JpaRepository<AlertRule, Long> {
     List<AlertRule> findByUserIdOrderByCreatedAtDesc(Long userId);
 
     Optional<AlertRule> findByUserIdAndId(Long userId, Long id);
+    Optional<AlertRule> findByUserIdAndStationIdAndConditionTypeAndThreshold(Long userId, Long stationId, String conditionType, Integer threshold);
+    long countByUserId(Long userId);
 }

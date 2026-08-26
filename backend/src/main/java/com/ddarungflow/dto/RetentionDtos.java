@@ -1,5 +1,7 @@
 package com.ddarungflow.dto;
 
+import java.math.BigDecimal;
+
 public final class RetentionDtos {
 
     private RetentionDtos() {
@@ -11,12 +13,13 @@ public final class RetentionDtos {
     public record FavoriteResponse(Long id, Long stationId, String stationName, String createdAt) {
     }
 
-    public record SavedRouteRequest(String name, Long startStationId, String startStationName,
-                                    Long endStationId, String endStationName, String travelMode) {
+    public record SavedRouteRequest(String kind, String originName, BigDecimal originLatitude, BigDecimal originLongitude,
+                                    String destinationName, BigDecimal destinationLatitude, BigDecimal destinationLongitude,
+                                    String stationId, String travelMode, Integer directMinutes, Integer requiredBikeCount) {
     }
 
-    public record SavedRouteResponse(Long id, String name, Long startStationId, String startStationName,
-                                     Long endStationId, String endStationName, String travelMode, String createdAt) {
+    public record SavedRouteResponse(Long id, String kind, String displayName, boolean replayable,
+                                     SavedRouteRequest routeInput, String createdAt) {
     }
 
     public record PredictionHistoryResponse(Long id, String queryCondition, String summaryResult, String queriedAt) {

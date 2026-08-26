@@ -9,9 +9,13 @@ async function request(path, options = {}) {
   return response.status === 204 ? null : body;
 }
 
-async function mutation(path, method) {
+async function mutation(path, method, body) {
   const csrf = await request("/api/v1/auth/csrf");
-  return request(path, { method, headers: { [csrf.headerName]: csrf.token } });
+  return request(path, {
+    method,
+    headers: { ...(body ? { "Content-Type": "application/json" } : {}), [csrf.headerName]: csrf.token },
+    body: body ? JSON.stringify(body) : undefined,
+  });
 }
 
 export function loadArchive() {
@@ -23,5 +27,6 @@ export function loadArchive() {
 }
 
 export const removeFavorite = (id) => mutation(`/api/v1/favorites/${id}`, "DELETE");
+export const saveSavedRoute = (route) => mutation("/api/v1/saved-routes", "POST", route);
 export const removeSavedRoute = (id) => mutation(`/api/v1/saved-routes/${id}`, "DELETE");
 export const removePredictionHistory = (id) => mutation(`/api/v1/prediction-histories/${id}`, "DELETE");
