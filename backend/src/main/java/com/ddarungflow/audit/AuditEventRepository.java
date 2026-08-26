@@ -25,8 +25,8 @@ public interface AuditEventRepository extends Repository<AuditEvent, Long> {
             where (:action is null or event.action = :action)
               and (:result is null or event.result = :result)
               and (:reasonCode is null or event.reasonCode = :reasonCode)
-              and (:from is null or event.occurredAt >= :from)
-              and (:to is null or event.occurredAt <= :to)
+              and event.occurredAt >= coalesce(:from, event.occurredAt)
+              and event.occurredAt <= coalesce(:to, event.occurredAt)
             """)
     Page<AuditEvent> findAuditLogs(@Param("action") String action,
                                    @Param("result") AuditResult result,
