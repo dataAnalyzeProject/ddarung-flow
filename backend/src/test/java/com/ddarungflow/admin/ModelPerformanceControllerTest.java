@@ -22,6 +22,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  @Autowired MockMvc mvc; @Autowired UsersRepository users; @Autowired ModelPerformanceRunRepository runs; @Autowired ObjectMapper mapper;
  @BeforeEach void clear() { runs.deleteAll(); users.deleteAll(); }
  @Test void adminGetsLatestSnapshotAndMissingSnapshotIs404() throws Exception {
+  mvc.perform(get("/api/v1/admin/model-performance")).andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("AUTH_REQUIRED"));
+  Users user=users.save(Users.builder().provider("google").providerUserId("performance-user").displayName("user").role(UserRole.USER).build()); PrincipalDetails userPrincipal=new PrincipalDetails(user); mvc.perform(get("/api/v1/admin/model-performance").with(authentication(new UsernamePasswordAuthenticationToken(userPrincipal,null,userPrincipal.getAuthorities())))).andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("ADMIN_ACCESS_DENIED"));
   Users admin=users.save(Users.builder().provider("google").providerUserId("performance-admin").displayName("admin").role(UserRole.ADMIN).build()); PrincipalDetails principal=new PrincipalDetails(admin); var auth=new UsernamePasswordAuthenticationToken(principal,null,principal.getAuthorities());
   mvc.perform(get("/api/v1/admin/model-performance").with(authentication(auth))).andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("MODEL_PERFORMANCE_NOT_FOUND"));
   var payload=mapper.createObjectNode(); payload.putObject("evaluation").put("method","FIXED_WINDOW_REPLAY"); payload.putArray("combinations"); payload.putArray("segments"); payload.putArray("calibrationBins");

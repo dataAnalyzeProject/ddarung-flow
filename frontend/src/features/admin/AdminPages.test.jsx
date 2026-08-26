@@ -56,6 +56,20 @@ test("dashboard shows API operating data instead of fixture data", async () => {
   expect(screen.getByText("평가 artifact ceeccc… · 현재 서비스 운영 모델과 다를 수 있습니다")).toBeInTheDocument();
 });
 
+test("dashboard keeps the page when model performance is not yet available", async () => {
+  getAdminPerformance.mockRejectedValueOnce({ status: 404 });
+  renderPage("dashboard", "ADMIN");
+  expect(await screen.findByText("평가 결과가 아직 없습니다")).toBeInTheDocument();
+  expect(screen.getAllByText("NORMAL").length).toBeGreaterThan(0);
+});
+
+test("dashboard keeps stat cards when overview loading fails", async () => {
+  getAdminOverview.mockRejectedValueOnce({ status: 500, code: "INTERNAL_ERROR" });
+  renderPage("dashboard", "ADMIN");
+  expect((await screen.findAllByText("불러오지 못함")).length).toBeGreaterThan(0);
+  expect(screen.queryByText("INTERNAL_ERROR")).not.toBeInTheDocument();
+});
+
 test("admin export menu uses the actual adapter for request and download", async () => {
   renderPage("export", "ADMIN");
   expect(await screen.findByText("COMPLETED")).toBeInTheDocument();
