@@ -630,14 +630,14 @@ describe("프리미엄 가이드 접근 통합", () => {
   });
 
   test("성공 redirect는 서버 확인 뒤 ACTIVE 가이드를 연다", async () => {
-    restoreGuideCandidate();
+    const candidate = restoreGuideCandidate();
     window.history.replaceState({}, "", "/?payment=processing&paymentKey=masked&orderId=masked&amount=2900");
     fetchSubscription.mockResolvedValue({ status: "ACTIVE" });
 
     render(<MainPage />);
 
     await waitFor(() => expect(confirmPayment).toHaveBeenCalledWith({ paymentKey: "masked", orderId: "masked", amount: 2900 }));
-    expect(await screen.findByRole("heading", { name: /라이딩 가이드$/ })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: `${candidate.stationName} 라이딩 가이드` })).toBeInTheDocument();
     expect(sessionStorage.getItem(PAYMENT_PROCESSING_KEY)).toBeNull();
     expect(window.location.search).toBe("");
   });
