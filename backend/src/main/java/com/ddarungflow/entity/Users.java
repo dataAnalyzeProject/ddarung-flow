@@ -116,4 +116,11 @@ public class Users {
         this.displayName = displayName;
         this.email = email;
     }
+
+    public void changeRole(UserRole role) {
+        if (role != UserRole.USER && role != UserRole.ADMIN) {
+            throw new IllegalArgumentException("허용되지 않은 역할입니다.");
+        }
+        this.role = role;
+    }
 }

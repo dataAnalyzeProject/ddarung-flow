@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { canDo, fixture } from "./adminFixture";
 import { answerQuestion, hideQuestion, listAdminQuestions } from "./qnaAdminApi";
+import { changeAdminUserRole, listAdminUsers } from "./adminUsersApi";
 import { ExportDetail, QnaAnswerDetail } from "./AdminDetailViews";
 
 const Icon = ({ children }) => <span className="admin-card-icon" aria-hidden="true">{children}</span>;
@@ -31,6 +32,7 @@ export function AdminStatePanel({ state }) {
     empty: ["표시할 fixture가 없습니다", "필터를 조정하거나 다시 시도해 주세요."],
     error: ["일시적으로 표시할 수 없습니다", "실제 API 오류가 아닌 fixture 상태입니다."],
     forbidden: ["관리자 권한이 필요합니다", "관리자 데이터와 카드, 표는 표시하지 않습니다."],
+    unauthorized: ["로그인이 필요합니다", "로그인 후 다시 시도해 주세요."],
   }[state] || ["알 수 없는 상태", ""];
   return <section className="admin-state-panel" data-testid={`admin-${state}`} aria-live="polite"><Icon>{state === "error" ? "!" : state === "forbidden" ? "×" : "…"}</Icon><h1>{content[0]}</h1><p>{content[1]}</p></section>;
 }
@@ -49,14 +51,18 @@ function Dashboard({ data }) {
 
 function Queue({ icon, title, detail, badge }) { return <div className="admin-queue"><Icon>{icon}</Icon><div><strong>{title}</strong><span>{detail}</span></div><Chip>{badge}</Chip></div>; }
 
-function Users({ data, actorRole, onAction }) {
-  const [dialog, setDialog] = useState(null);
-  const selected = dialog || data.users[0];
-  const confirmRole = () => { onAction({ type: "change_role", userId: selected.id, nextRole: "ADMIN" }); setDialog(null); };
-  return <><div className="admin-page-title"><div><p className="admin-eyebrow">UI-ADMIN-02</p><h1>사용자 · 권한</h1><span>비식별 fixture 사용자만 표시합니다.</span></div>{canDo(actorRole, "change_role") && <Button kind="primary" onClick={() => setDialog(data.users[0])}>역할 변경</Button>}</div>
-    <div className="admin-filter-row"><input aria-label="사용자 검색" placeholder="비식별 사용자 검색" /><span>역할: ADMIN</span><span>총 {data.users.length}명</span></div>
-    <div className="admin-users-layout"><Section title="사용자 목록" className="admin-table-panel"><table><thead><tr><th>사용자</th><th>역할</th><th>상태</th><th>권한 범위</th><th>최근 변경</th><th>작업</th></tr></thead><tbody>{data.users.map((user) => <tr key={user.id}><td><strong>{user.name}</strong><small>{user.id}</small></td><td><Chip>{user.role}</Chip></td><td><span className="admin-status-dot">● {user.status}</span></td><td>{user.scope}</td><td>{user.updated}</td><td>{canDo(actorRole, "change_role") && <Button onClick={() => setDialog(user)}>역할 변경</Button>}</td></tr>)}</tbody></table></Section><aside className="admin-user-side"><Section title="선택 사용자 상세"><div className="admin-user-detail"><b>{data.users[0].name}</b><span>{data.users[0].id}</span><dl><dt>현재 역할</dt><dd>ADMIN</dd><dt>권한 범위</dt><dd>관리자 기능</dd><dt>상태</dt><dd>활성</dd></dl><p>역할 변경은 실제 서버 통합 전까지 callback만 전송합니다.</p></div></Section><Section title="권한 요약"><div className="admin-role-summary"><p><Chip tone="green">ADMIN 3</Chip></p></div></Section></aside></div>
-    {dialog && <Dialog title="역할 변경 확인" onClose={() => setDialog(null)}><p><b>{selected.name}</b>의 역할을 관리자로 변경할까요?</p><p className="admin-dialog-note">이 동작은 callback만 전송하며 실제 권한은 변경하지 않습니다.</p><div className="admin-dialog-actions"><Button onClick={() => setDialog(null)}>취소</Button><Button kind="primary" onClick={confirmRole}>변경 확인</Button></div></Dialog>}</>;
+function Users() {
+  const [items, setItems] = useState([]); const [query, setQuery] = useState(""); const [state, setState] = useState("loading");
+  const [dialog, setDialog] = useState(null); const [nextRole, setNextRole] = useState("USER"); const [reason, setReason] = useState(""); const [actionError, setActionError] = useState("");
+  const load = useCallback((nextQuery = "") => { setState("loading"); listAdminUsers({ q: nextQuery }).then((page) => { setItems(page.items); setState(page.items.length ? "success" : "empty"); }).catch((error) => setState(error.status === 401 ? "unauthorized" : error.status === 403 ? "forbidden" : "error")); }, []);
+  useEffect(() => { load(); }, [load]);
+  if (state !== "success") return <><AdminStatePanel state={state} /><div className="admin-action-row"><Button onClick={() => load()}>다시 시도</Button></div></>;
+  const openDialog = (user) => { setDialog(user); setNextRole(user.role === "ADMIN" ? "USER" : "ADMIN"); setReason(""); setActionError(""); };
+  const confirmRole = async () => { try { await changeAdminUserRole(dialog.userId, nextRole, reason); setDialog(null); load(); } catch (error) { setActionError(error.code === "LAST_SUPER_ADMIN_REQUIRED" ? "마지막 ADMIN의 역할은 낮출 수 없습니다." : error.status === 404 ? "사용자를 찾을 수 없습니다." : "역할 변경에 실패했습니다."); } };
+  return <><div className="admin-page-title"><div><p className="admin-eyebrow">UI-ADMIN-02</p><h1>사용자 · 권한</h1><span>실제 API의 공개 UUID, 표시 이름, 역할만 표시합니다.</span></div></div>
+    <form className="admin-filter-row" onSubmit={(event) => { event.preventDefault(); load(query); }}><input aria-label="사용자 검색" placeholder="표시 이름 검색" value={query} onChange={(event) => setQuery(event.target.value)} /><Button kind="primary" onClick={() => load(query)}>검색</Button><span>총 {items.length}명</span></form>
+    <div className="admin-users-layout"><Section title="사용자 목록" className="admin-table-panel"><table><thead><tr><th>사용자</th><th>역할</th><th>작업</th></tr></thead><tbody>{items.map((user) => <tr key={user.userId}><td><strong>{user.displayName}</strong><small>{user.userId}</small></td><td><Chip>{user.role}</Chip></td><td><Button onClick={() => openDialog(user)}>역할 변경</Button></td></tr>)}</tbody></table></Section><aside className="admin-user-side"><Section title="안전한 표시 원칙"><div className="admin-safe-list"><p>✓ 이메일은 표시하지 않습니다.</p><p>✓ OAuth 식별자는 표시하지 않습니다.</p><p>✓ 내부 숫자 ID는 표시하지 않습니다.</p></div></Section></aside></div>
+    {dialog && <Dialog title="역할 변경 확인" onClose={() => setDialog(null)}><p><b>{dialog.displayName}</b>의 역할을 변경합니다.</p><label>새 역할<select aria-label="새 역할" value={nextRole} onChange={(event) => setNextRole(event.target.value)}><option value="USER">USER</option><option value="ADMIN">ADMIN</option></select></label><label>변경 사유<textarea aria-label="변경 사유" value={reason} onChange={(event) => setReason(event.target.value)} /></label>{actionError && <p role="alert">{actionError}</p>}<div className="admin-dialog-actions"><Button onClick={() => setDialog(null)}>취소</Button><Button kind="primary" disabled={reason.trim().length < 2 || reason.trim().length > 200} onClick={confirmRole}>변경 확인</Button></div></Dialog>}</>;
 }
 
 function Export({ data, actorRole, onAction }) {
@@ -89,6 +95,6 @@ function Qna({ actorRole }) {
 function Dialog({ title, children, onClose }) { return <div className="admin-dialog-backdrop" role="presentation"><section className="admin-dialog" role="dialog" aria-modal="true" aria-label={title}><button type="button" className="admin-dialog-close" aria-label="닫기" onClick={onClose}>×</button><h2>{title}</h2>{children}</section></div>; }
 
 export function AdminPage({ menuId, actorRole, fixtureData = fixture, onAction = () => {} }) {
-  const pages = { dashboard: <Dashboard data={fixtureData} />, users: <Users data={fixtureData} actorRole={actorRole} onAction={onAction} />, export: <Export data={fixtureData} actorRole={actorRole} onAction={onAction} />, audit: <Audit data={fixtureData} />, modelops: <ModelOps data={fixtureData} actorRole={actorRole} onAction={onAction} />, qna: <Qna data={fixtureData} actorRole={actorRole} onAction={onAction} /> };
+  const pages = { dashboard: <Dashboard data={fixtureData} />, users: <Users />, export: <Export data={fixtureData} actorRole={actorRole} onAction={onAction} />, audit: <Audit data={fixtureData} />, modelops: <ModelOps data={fixtureData} actorRole={actorRole} onAction={onAction} />, qna: <Qna data={fixtureData} actorRole={actorRole} onAction={onAction} /> };
   return <div className="admin-page">{pages[menuId] || pages.dashboard}</div>;
 }
