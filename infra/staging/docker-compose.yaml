@@ -24,6 +24,7 @@ services:
       context: ../../backend
       dockerfile: Dockerfile
     environment:
+      MODEL_ACTIVATION_LOCAL_TEST_FAIL_VERSION: ${MODEL_ACTIVATION_LOCAL_TEST_FAIL_VERSION:-}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
       SWAGGER_ENABLED: ${SWAGGER_ENABLED:-false}
       PORT: 8080

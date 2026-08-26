@@ -25,6 +25,7 @@ public class OciModelActivationGateway implements ModelActivationGateway {
     private final URI reloadUri;
     private final URI healthUri;
     private final boolean ociProfile;
+    private final String localTestFailVersion;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
 
@@ -33,6 +34,7 @@ public class OciModelActivationGateway implements ModelActivationGateway {
         @Value("${model.activation.bucket:${MODEL_BUCKET:}}") String bucket,
         @Value("${model.activation.inference-base-url:http://inference:8081}") String inferenceBaseUrl,
         @Value("${spring.profiles.active:local}") String activeProfile,
+        @Value("${model.activation.local-test-fail-version:${MODEL_ACTIVATION_LOCAL_TEST_FAIL_VERSION:}}") String localTestFailVersion,
         ObjectMapper objectMapper
     ) {
         this.namespace = namespace;
@@ -40,6 +42,7 @@ public class OciModelActivationGateway implements ModelActivationGateway {
         this.reloadUri = URI.create(inferenceBaseUrl.replaceAll("/+$", "") + "/internal/model-reloads");
         this.healthUri = URI.create(inferenceBaseUrl.replaceAll("/+$", "") + "/health");
         this.ociProfile = "oci".equals(activeProfile);
+        this.localTestFailVersion = localTestFailVersion;
         this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build();
     }
@@ -48,6 +51,9 @@ public class OciModelActivationGateway implements ModelActivationGateway {
     public void activate(ModelArtifact artifact) {
         if (!ociProfile) {
             verifyLocalInferenceHealth();
+            if (artifact.getVersion().equals(localTestFailVersion)) {
+                throw new ModelActivationService.ActivationFailedException();
+            }
             return;
         }
         if (namespace.isBlank() || bucket.isBlank() || artifact.getManifestKey() == null || artifact.getManifestSha256() == null) {
