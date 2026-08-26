@@ -13,7 +13,7 @@ const providers = [
 
 function LoginIcon({ name }) {
   const paths = {
-    bookmark: "M7 4h10v16l-5-3-5 3V4Z",
+    bookmark: "M5 3h14v18l-7-4-7 4V3Z",
     bell: "M6 16h12l-2-3V9a4 4 0 0 0-8 0v4l-2 3Zm4 3h4",
     history: "M4 7v5h5M5 11a7 7 0 1 0 2-5M12 8v4l3 2",
     arrow: "M9 5l7 7-7 7",
@@ -143,7 +143,7 @@ export default function LoginPage({ initialStatus, mockOutcome, initialPredictio
         }
         setLoginStatus(LOGIN_STATUS.WAITING);
       })
-      .catch(() => setLoginStatus(LOGIN_STATUS.FAILED));
+      .catch(() => setLoginStatus(LOGIN_STATUS.WAITING));
   }, [initialPredictionInput, initialStatus]);
 
   useEffect(() => {
@@ -256,14 +256,6 @@ export default function LoginPage({ initialStatus, mockOutcome, initialPredictio
                   </button>
                 ))}
               </div>
-            )}
-
-            {showLoginChoices && (
-              <>
-                <div className="login-divider"><span>또는</span></div>
-                <a className="login-without" href="/">로그인 없이 대여 예측하기 <LoginIcon name="arrow" /></a>
-                <p className="login-legal">로그인 시 서비스 <span>이용약관</span> 및 <span>개인정보 처리방침</span>에 동의하게 됩니다.</p>
-              </>
             )}
 
             <footer className="login-help">도움이 필요하신가요? <a href="/#qna">Q&amp;A 보기 <LoginIcon name="arrow" /></a></footer>
