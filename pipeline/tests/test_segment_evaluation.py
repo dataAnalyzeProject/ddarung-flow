@@ -1,6 +1,6 @@
 import json
 import pytest
-from pipeline.src.modelops.segment_evaluation import assert_brier_matches_reference, build_performance_payload, calibration_bins, evaluate_combinations, evaluate_segments, hour_bucket
+from pipeline.src.modelops.segment_evaluation import assert_brier_matches_reference, build_performance_payload, calibration_bins, evaluate_combinations, evaluate_segments, hour_bucket, min_samples_for_axis
 from pipeline.src.modelops.publish_performance_run import publish_performance_run
 
 def test_hour_boundaries_and_unknown_fixture():
@@ -48,3 +48,20 @@ def test_combinations_reject_missing_or_extra_pairs():
     with pytest.raises(ValueError): evaluate_combinations(rows[:-1])
     rows.append({"horizonMinutes": 300, "requiredBikeCount": 1, "probability": .5, "actual": 1})
     with pytest.raises(ValueError): evaluate_combinations(rows)
+
+def test_station_axis_uses_150_sample_threshold():
+    row = {"horizonMinutes": 120, "requiredBikeCount": 3, "stationId": "ST-1", "timestamp": "2026-08-24T07:00:00Z", "stationSize": "SMALL", "inventoryLevel": "ZERO", "flowType": "OUTFLOW", "probability": .2, "actual": 1}
+    assert next(segment for segment in evaluate_segments([row] * 149) if segment["axis"] == "STATION")["status"] == "UNKNOWN_INSUFFICIENT_SAMPLES"
+    assert next(segment for segment in evaluate_segments([row] * 150) if segment["axis"] == "STATION")["status"] == "OK"
+
+def test_non_station_axes_keep_the_1000_sample_threshold_and_unknown_axes_default_to_it():
+    row = {"horizonMinutes": 120, "requiredBikeCount": 3, "stationId": "ST-1", "timestamp": "2026-08-24T07:00:00Z", "stationSize": "SMALL", "inventoryLevel": "ZERO", "flowType": "OUTFLOW", "probability": .2, "actual": 1}
+    assert next(segment for segment in evaluate_segments([row] * 999) if segment["axis"] == "HOUR_BUCKET")["status"] == "UNKNOWN_INSUFFICIENT_SAMPLES"
+    assert next(segment for segment in evaluate_segments([row] * 1000) if segment["axis"] == "HOUR_BUCKET")["status"] == "OK"
+    assert min_samples_for_axis("FUTURE_AXIS") == 1000
+
+def test_combination_threshold_remains_1000_samples():
+    rows = [{"horizonMinutes": horizon, "requiredBikeCount": quantity, "probability": .2, "actual": 1} for horizon in (60, 120, 180, 240) for quantity in (1, 2, 3, 4, 5) for _ in range(999)]
+    assert all(row["brierScore"] is None for row in evaluate_combinations(rows))
+    rows.extend({"horizonMinutes": horizon, "requiredBikeCount": quantity, "probability": .2, "actual": 1} for horizon in (60, 120, 180, 240) for quantity in (1, 2, 3, 4, 5))
+    assert all(row["brierScore"] is not None for row in evaluate_combinations(rows))
