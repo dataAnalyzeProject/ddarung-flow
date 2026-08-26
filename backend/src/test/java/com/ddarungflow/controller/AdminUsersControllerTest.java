@@ -14,6 +14,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -32,7 +33,8 @@ class AdminUsersControllerTest {
 
     @Test
     void adminListsOnlyPublicUserFieldsAndRejectsInvalidPagination() throws Exception {
-        Users target = usersRepository.save(user("target", UserRole.USER));
+        usersRepository.save(user("alpha-user", UserRole.USER));
+        usersRepository.save(user("beta-user", UserRole.USER));
         UsernamePasswordAuthenticationToken admin = authFor("admin", UserRole.ADMIN);
 
         mockMvc.perform(get("/api/v1/admin/users").with(authentication(admin)))
@@ -42,6 +44,13 @@ class AdminUsersControllerTest {
                 .andExpect(jsonPath("$.items[0].role").exists())
                 .andExpect(jsonPath("$.items[0].email").doesNotExist())
                 .andExpect(jsonPath("$.items[0].id").doesNotExist());
+        mockMvc.perform(get("/api/v1/admin/users?page=0&size=1&sort=displayName,asc&q=alpha").with(authentication(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].displayName").value("alpha-user"))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(1))
+                .andExpect(jsonPath("$.total").value(1));
         mockMvc.perform(get("/api/v1/admin/users?page=-1").with(authentication(admin)))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
@@ -68,6 +77,24 @@ class AdminUsersControllerTest {
         mockMvc.perform(patch("/api/v1/admin/users/{userId}/role", onlyAdminUser.getPublicId()).with(authentication(onlyAdmin)).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON).content("{\"role\":\"USER\",\"reason\":\"운영 권한 조정\"}"))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("LAST_SUPER_ADMIN_REQUIRED"));
+    }
+
+    @Test
+    void sameRoleReturnsOkAndRoleChangeOnlyAffectsRequestedUser() throws Exception {
+        Users target = usersRepository.save(user("target", UserRole.USER));
+        UsernamePasswordAuthenticationToken admin = authFor("admin", UserRole.ADMIN);
+        Users actor = ((PrincipalDetails) admin.getPrincipal()).getUsers();
+
+        mockMvc.perform(patch("/api/v1/admin/users/{userId}/role", target.getPublicId()).with(authentication(admin)).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"role\":\"USER\",\"reason\":\"동일 역할 확인\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.role").value("USER"));
+        mockMvc.perform(patch("/api/v1/admin/users/{userId}/role", target.getPublicId()).with(authentication(admin)).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"role\":\"ADMIN\",\"reason\":\"대상 역할 변경\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.userId").value(target.getPublicId().toString()))
+                .andExpect(jsonPath("$.role").value("ADMIN"));
+
+        assertThat(usersRepository.findByPublicId(actor.getPublicId())).get().extracting(Users::getRole).isEqualTo(UserRole.ADMIN);
+        assertThat(usersRepository.findByPublicId(target.getPublicId())).get().extracting(Users::getRole).isEqualTo(UserRole.ADMIN);
     }
 
     private UsernamePasswordAuthenticationToken authFor(String providerUserId, UserRole role) {

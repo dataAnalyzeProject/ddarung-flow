@@ -53,6 +53,44 @@ test("users menu distinguishes an unauthenticated API response", async () => {
   expect(await screen.findByText("로그인이 필요합니다")).toBeInTheDocument();
 });
 
+test("users menu shows loading, empty, and retry states", async () => {
+  let resolveFirstLoad;
+  listAdminUsers.mockImplementationOnce(() => new Promise((resolve) => { resolveFirstLoad = resolve; }));
+  listAdminUsers.mockResolvedValueOnce({ items: [{ userId: "00000000-0000-0000-0000-000000000002", displayName: "재시도 사용자", role: "USER" }], page: 0, size: 20, total: 1 });
+
+  renderPage("users", "ADMIN");
+  expect(screen.getByRole("heading", { name: "불러오는 중" })).toBeInTheDocument();
+  resolveFirstLoad({ items: [], page: 0, size: 20, total: 0 });
+  expect(await screen.findByText("표시할 fixture가 없습니다")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "다시 시도" }));
+  expect(await screen.findByText("재시도 사용자")).toBeInTheDocument();
+});
+
+test("users menu distinguishes a forbidden API response", async () => {
+  listAdminUsers.mockRejectedValueOnce({ status: 403 });
+  renderPage("users", "ADMIN");
+  expect(await screen.findByText("관리자 권한이 필요합니다")).toBeInTheDocument();
+});
+
+test("users menu distinguishes role-change 404 and 409 responses", async () => {
+  changeAdminUserRole.mockRejectedValueOnce({ status: 404 });
+  changeAdminUserRole.mockRejectedValueOnce({ code: "LAST_SUPER_ADMIN_REQUIRED" });
+  renderPage("users", "ADMIN");
+  await screen.findByText("관리자");
+
+  fireEvent.click(screen.getByRole("button", { name: "역할 변경" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "변경 사유" }), { target: { value: "없는 사용자 확인" } });
+  fireEvent.click(screen.getByRole("button", { name: "변경 확인" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("사용자를 찾을 수 없습니다.");
+
+  fireEvent.click(screen.getByRole("button", { name: "취소" }));
+  fireEvent.click(screen.getByRole("button", { name: "역할 변경" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "변경 사유" }), { target: { value: "마지막 관리자 확인" } });
+  fireEvent.click(screen.getByRole("button", { name: "변경 확인" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("마지막 ADMIN의 역할은 낮출 수 없습니다.");
+});
+
 test("admin loads an API question and sends its answer", async () => {
   renderPage("qna", "ADMIN");
   expect(await screen.findByRole("button", { name: "Q&A 질문" })).toBeInTheDocument();
