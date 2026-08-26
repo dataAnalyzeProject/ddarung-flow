@@ -9,6 +9,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.SimpleTransactionStatus;
 
 import java.time.OffsetDateTime;
 import java.util.Optional;
@@ -22,9 +24,16 @@ import static org.mockito.Mockito.*;
 class ModelActivationServiceTest {
     @Mock private ModelArtifactRepository artifactRepository;
     @Mock private ActivationAttemptService attemptService;
+    @Mock private ActivationAttemptRepository attemptRepository;
     @Mock private ModelActivationGateway gateway;
     @Mock private AuditEventService auditEventService;
+    @Mock private PlatformTransactionManager transactionManager;
     @InjectMocks private ModelActivationService service;
+
+    @org.junit.jupiter.api.BeforeEach
+    void setUpTransactionManager() {
+        when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
+    }
 
     @Test
     void approvedCandidateIsReloadedBeforeDatabaseStateAndAudited() {
@@ -61,6 +70,22 @@ class ModelActivationServiceTest {
         verify(gateway).activate(previous);
         verify(artifactRepository, never()).save(any());
         verify(auditEventService).appendEvent(eq(1L), eq(UserRole.ADMIN), eq("MODEL_ACTIVATE"), eq("MODEL"), anyString(), eq(AuditResult.FAILURE), eq("POST_SWITCH_SMOKE_FAILED"), anyString(), any());
+    }
+
+    @Test
+    void rollbackUsesTheProtectedPreviousModelFromTheLastSuccessfulActivation() {
+        ModelArtifact current = artifact("current", ModelArtifactState.ACTIVE);
+        ModelArtifact protectedPrevious = artifact("protected", ModelArtifactState.RETIRED);
+        ActivationAttempt activation = ActivationAttempt.builder().candidateModelId(10L).previousModelId(20L).actorUserId(1L).correlationId("corr").startedAt(OffsetDateTime.now()).build();
+        when(artifactRepository.findFirstByState(ModelArtifactState.ACTIVE)).thenReturn(Optional.of(current));
+        when(attemptRepository.findFirstByCandidateModelIdAndStatusOrderByIdDesc(nullable(Long.class), eq(ActivationAttemptStatus.SUCCEEDED))).thenReturn(Optional.of(activation));
+        when(artifactRepository.findById(20L)).thenReturn(Optional.of(protectedPrevious));
+        when(attemptService.start(nullable(Long.class), nullable(Long.class), anyLong(), anyString(), any())).thenReturn(ActivationAttempt.builder().candidateModelId(20L).previousModelId(10L).actorUserId(1L).correlationId("rollback").startedAt(OffsetDateTime.now()).build());
+
+        service.rollback(1L, UserRole.ADMIN);
+
+        verify(gateway).activate(protectedPrevious);
+        verify(artifactRepository, never()).findFirstByStateOrderByIdDesc(ModelArtifactState.RETIRED);
     }
 
     private ModelArtifact artifact(String version, ModelArtifactState state) {

@@ -4,25 +4,30 @@ import com.ddarungflow.audit.AuditEventService;
 import com.ddarungflow.audit.AuditResult;
 import com.ddarungflow.entity.UserRole;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Service
-@Transactional
 public class ModelActivationService {
     private final ModelArtifactRepository artifactRepository;
     private final ActivationAttemptService attemptService;
+    private final ActivationAttemptRepository attemptRepository;
     private final ModelActivationGateway gateway;
     private final AuditEventService auditEventService;
+    private final TransactionTemplate transactionTemplate;
 
     public ModelActivationService(ModelArtifactRepository artifactRepository, ActivationAttemptService attemptService,
-                                  ModelActivationGateway gateway, AuditEventService auditEventService) {
+                                  ActivationAttemptRepository attemptRepository, ModelActivationGateway gateway,
+                                  AuditEventService auditEventService, PlatformTransactionManager transactionManager) {
         this.artifactRepository = artifactRepository;
         this.attemptService = attemptService;
+        this.attemptRepository = attemptRepository;
         this.gateway = gateway;
         this.auditEventService = auditEventService;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
     public ActivationResult activate(Long candidateId, Long actorUserId, UserRole actorRole) {
@@ -36,8 +41,13 @@ public class ModelActivationService {
 
     public ActivationResult rollback(Long actorUserId, UserRole actorRole) {
         ModelArtifact current = artifactRepository.findFirstByState(ModelArtifactState.ACTIVE).orElseThrow(RollbackTargetUnavailableException::new);
-        ModelArtifact previous = artifactRepository.findFirstByStateOrderByIdDesc(ModelArtifactState.RETIRED).orElseThrow(RollbackTargetUnavailableException::new);
-        if (previous.getManifestKey() == null || previous.getManifestSha256() == null) {
+        ActivationAttempt activation = attemptRepository.findFirstByCandidateModelIdAndStatusOrderByIdDesc(current.getId(), ActivationAttemptStatus.SUCCEEDED)
+            .orElseThrow(RollbackTargetUnavailableException::new);
+        if (activation.getPreviousModelId() == null) {
+            throw new RollbackTargetUnavailableException();
+        }
+        ModelArtifact previous = artifactRepository.findById(activation.getPreviousModelId()).orElseThrow(RollbackTargetUnavailableException::new);
+        if (previous.getState() != ModelArtifactState.RETIRED || previous.getManifestKey() == null || previous.getManifestSha256() == null) {
             throw new RollbackTargetUnavailableException();
         }
         return switchTo(previous, current, actorUserId, actorRole, "MODEL_ROLLBACK");
@@ -48,14 +58,16 @@ public class ModelActivationService {
         OffsetDateTime now = OffsetDateTime.now();
         ActivationAttempt attempt = attemptService.start(candidate.getId(), previous.getId(), actorUserId, correlationId, now);
         try {
-            gateway.activate(candidate);
-            previous.transitionTo(ModelArtifactState.RETIRED);
-            candidate.transitionTo(ModelArtifactState.ACTIVE);
-            artifactRepository.save(previous);
-            artifactRepository.save(candidate);
-            attemptService.finish(attempt.getId(), ActivationAttemptStatus.SUCCEEDED, null, OffsetDateTime.now());
-            auditEventService.appendEvent(actorUserId, actorRole, action, "MODEL", String.valueOf(candidate.getId()), AuditResult.SUCCESS, null, correlationId, OffsetDateTime.now());
-            return new ActivationResult(attempt.getId(), candidate.getId(), previous.getId(), ModelArtifactState.ACTIVE);
+            return transactionTemplate.execute(status -> {
+                gateway.activate(candidate);
+                previous.transitionTo(ModelArtifactState.RETIRED);
+                candidate.transitionTo(ModelArtifactState.ACTIVE);
+                artifactRepository.save(previous);
+                artifactRepository.save(candidate);
+                attemptService.finish(attempt.getId(), ActivationAttemptStatus.SUCCEEDED, null, OffsetDateTime.now());
+                auditEventService.appendEvent(actorUserId, actorRole, action, "MODEL", String.valueOf(candidate.getId()), AuditResult.SUCCESS, null, correlationId, OffsetDateTime.now());
+                return new ActivationResult(attempt.getId(), candidate.getId(), previous.getId(), ModelArtifactState.ACTIVE);
+            });
         } catch (RuntimeException exception) {
             try {
                 gateway.activate(previous);
