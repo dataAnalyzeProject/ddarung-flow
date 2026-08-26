@@ -44,6 +44,12 @@ const renderPage = (menuId, actorRole, onAction = jest.fn()) => {
   return onAction;
 };
 
+test("dashboard fixture trend stretches across its chart area", () => {
+  renderPage("dashboard", "ADMIN");
+  expect(screen.getByRole("img", { name: "fixture 값 변화" })).toHaveAttribute("preserveAspectRatio", "none");
+  expect(document.querySelectorAll(".admin-queue-icon")).toHaveLength(3);
+});
+
 test("admin export menu uses the actual adapter for request and download", async () => {
   renderPage("export", "ADMIN");
   expect(await screen.findByText("COMPLETED")).toBeInTheDocument();
