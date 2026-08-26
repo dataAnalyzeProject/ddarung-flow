@@ -26,7 +26,9 @@ public final class ModelOpsDtos {
         String codeCommit,
         String dataManifestHash,
         String configHash,
-        String featureSchemaVersion
+        String featureSchemaVersion,
+        String manifestKey,
+        String manifestSha256
     ) {
     }
 
@@ -70,6 +72,16 @@ public final class ModelOpsDtos {
     }
 
     public record MetricsResponse(Long modelId, List<MetricResponse> metrics) {
+    }
+
+    public record ActivationResponse(Long activationAttemptId, Long candidateModelId, Long previousActiveModelId,
+                                     ModelArtifactState finalState) {
+        public static ActivationResponse from(com.ddarungflow.modelops.ModelActivationService.ActivationResult result) {
+            return new ActivationResponse(result.activationAttemptId(), result.candidateModelId(), result.previousActiveModelId(), result.finalState());
+        }
+    }
+
+    public record ErrorResponse(String code, String message) {
     }
 
     public record MetricResponse(
