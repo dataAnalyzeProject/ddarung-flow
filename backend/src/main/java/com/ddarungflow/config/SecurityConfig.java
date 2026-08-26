@@ -59,6 +59,7 @@ public class SecurityConfig {
     private static final Pattern ROUTE_CANDIDATES_PATH = Pattern.compile("^/api/v1/routes/candidates/?$");
     private static final Pattern PAYMENT_API_PATH = Pattern.compile("^/api/v1/(?:me/subscription|payments/checkout)/?$");
     private static final Pattern QNA_API_PATH = Pattern.compile("^/api/v1/(admin/)?qna(?:/.*)?$");
+    private static final Pattern RETENTION_API_PATH = Pattern.compile("^/api/v1/(?:favorites|saved-routes|prediction-histories|notification-rules|notifications)(?:/.*)?$");
 
     private void writeApiError(HttpServletResponse response, int status, String code, String message) throws IOException {
         response.setStatus(status);
@@ -75,7 +76,9 @@ public class SecurityConfig {
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                 return;
             }
-            if (ADMIN_API_PATH.matcher(request.getRequestURI()).matches() || QNA_API_PATH.matcher(request.getRequestURI()).matches()) {
+            if (ADMIN_API_PATH.matcher(request.getRequestURI()).matches()
+                    || QNA_API_PATH.matcher(request.getRequestURI()).matches()
+                    || RETENTION_API_PATH.matcher(request.getRequestURI()).matches()) {
                 writeApiError(response, HttpServletResponse.SC_UNAUTHORIZED, "AUTH_REQUIRED", "로그인이 필요합니다.");
                 return;
             }
@@ -177,6 +180,10 @@ public class SecurityConfig {
         return (request, response, accessDeniedException) -> {
             if (ADMIN_API_PATH.matcher(request.getRequestURI()).matches()) {
                 writeApiError(response, HttpServletResponse.SC_FORBIDDEN, "ADMIN_ACCESS_DENIED", "관리자 권한이 필요합니다.");
+                return;
+            }
+            if (RETENTION_API_PATH.matcher(request.getRequestURI()).matches()) {
+                writeApiError(response, HttpServletResponse.SC_FORBIDDEN, "ACCESS_DENIED", "요청 권한이 없습니다.");
                 return;
             }
             response.sendError(HttpServletResponse.SC_FORBIDDEN);

@@ -10,6 +10,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.OffsetDateTime;
 import java.util.Optional;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -33,6 +34,16 @@ class NotificationServiceTest {
     @Nested
     @DisplayName("인앱 알림 (InAppNotification) 사용자별 격리, 멱등성 및 읽음 시각 보존 테스트")
     class InAppNotificationTests {
+
+        @Test
+        @DisplayName("미읽음 필터는 해당 사용자의 미읽음 알림만 조회한다")
+        void getInAppNotifications_UnreadOnly() {
+            Long userId = 1L;
+            InAppNotification unread = InAppNotification.builder().userId(userId).dedupKey("u").title("제목").message("내용").build();
+            given(inAppNotificationRepository.findByUserIdAndReadAtIsNullOrderByCreatedAtDesc(userId)).willReturn(List.of(unread));
+
+            assertThat(notificationService.getInAppNotifications(userId, true)).containsExactly(unread);
+        }
 
         @Test
         @DisplayName("서로 다른 사용자 A, B가 동일한 dedupKey로 요청 시 각자 독립적인 알림이 생성됨")

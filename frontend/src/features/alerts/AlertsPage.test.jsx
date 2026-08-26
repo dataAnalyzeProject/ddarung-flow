@@ -1,42 +1,24 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import AlertsPage from "./AlertsPage";
 
-test("renders the fixture notifications and rules", () => {
-  render(<AlertsPage />);
+const response = (body, status = 200) => ({ ok: status < 400, status, json: async () => body });
 
-  expect(screen.getByRole("heading", { name: "알림" })).toBeInTheDocument();
-  expect(screen.getByText("저장 대여소의 도착 대여 가능성이 높아요")).toBeInTheDocument();
-  expect(screen.getByText("데이터 업데이트 안내")).toBeInTheDocument();
-  expect(screen.getByText("2개 사용 중")).toBeInTheDocument();
+beforeEach(() => { global.fetch = jest.fn(); });
+afterEach(() => { jest.restoreAllMocks(); });
+
+test("loads notifications and rules from the API", async () => {
+  global.fetch.mockResolvedValueOnce(response([{ id: 1, title: "도착 가능성이 높아요", message: "대여소 알림", readAt: null }]))
+    .mockResolvedValueOnce(response([{ id: 2, conditionType: "BIKE_LOW", enabled: true }]));
+  render(<AlertsPage />);
+  expect(await screen.findByText("도착 가능성이 높아요")).toBeInTheDocument();
+  expect(screen.getByRole("switch", { name: "BIKE_LOW" })).toHaveAttribute("aria-checked", "true");
 });
 
-test("marking a notification read updates its pill and the unread count", () => {
+test("marks every notification as read through the API", async () => {
+  global.fetch.mockResolvedValueOnce(response([{ id: 1, title: "알림", message: "내용", readAt: null }]))
+    .mockResolvedValueOnce(response([])).mockResolvedValueOnce(response({ headerName: "X-CSRF-TOKEN", token: "csrf" })).mockResolvedValueOnce(response(null, 204));
   render(<AlertsPage />);
-
-  expect(screen.getByText("2")).toBeInTheDocument();
-
-  fireEvent.click(
-    screen.getByRole("button", { name: "저장 대여소의 도착 대여 가능성이 높아요 읽음 처리" })
-  );
-
-  expect(screen.getByText("1")).toBeInTheDocument();
-});
-
-test("모두 읽음 clears every unread pill", () => {
-  render(<AlertsPage />);
-
-  fireEvent.click(screen.getByRole("button", { name: "모두 읽음" }));
-
-  expect(document.querySelectorAll(".read-pill.unread")).toHaveLength(0);
-});
-
-test("toggling a rule switch flips its aria-checked state", () => {
-  render(<AlertsPage />);
-
-  const ruleSwitch = screen.getByRole("switch", { name: "도착 가능성 높음" });
-  expect(ruleSwitch).toHaveAttribute("aria-checked", "true");
-
-  fireEvent.click(ruleSwitch);
-  expect(ruleSwitch).toHaveAttribute("aria-checked", "false");
-  expect(screen.getByText("1개 사용 중")).toBeInTheDocument();
+  fireEvent.click(await screen.findByRole("button", { name: "모두 읽음" }));
+  await waitFor(() => expect(screen.getByText("읽음")).toBeInTheDocument());
+  expect(global.fetch).toHaveBeenLastCalledWith("http://localhost:8080/api/v1/notifications/read-all", expect.objectContaining({ method: "POST" }));
 });

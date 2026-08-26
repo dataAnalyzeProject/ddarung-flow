@@ -3,7 +3,13 @@ package com.ddarungflow.controller;
 import com.ddarungflow.map.MapApiDtos;
 import com.ddarungflow.map.MapPredictionService;
 import com.ddarungflow.map.PredictionApiDtos;
+import com.ddarungflow.dto.PrincipalDetails;
+import com.ddarungflow.retention.RetentionService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -16,14 +22,17 @@ import java.util.List;
 public class PredictionController {
 
     private final MapPredictionService mapPredictionService;
+    private final RetentionService retentionService;
 
-    public PredictionController(MapPredictionService mapPredictionService) {
+    public PredictionController(MapPredictionService mapPredictionService, RetentionService retentionService) {
         this.mapPredictionService = mapPredictionService;
+        this.retentionService = retentionService;
     }
 
     @PostMapping("/route")
     public ResponseEntity<List<PredictionApiDtos.CandidatePredictionResponseDto>> getRoutePredictions(
-        @RequestBody MapApiDtos.RouteCandidateRequestDto request
+        @RequestBody MapApiDtos.RouteCandidateRequestDto request,
+        @AuthenticationPrincipal PrincipalDetails principal
     ) {
         if (request == null || request.destinationLatitude() == null || request.destinationLongitude() == null) {
             return ResponseEntity.badRequest().build();
@@ -39,12 +48,20 @@ public class PredictionController {
             request.requiredBikeCount()
         );
 
+        recordSuccessfulHistory(principal, "ROUTE", results.size());
         return ResponseEntity.ok(results);
     }
 
     @PostMapping("/direct")
+    @Operation(parameters = @Parameter(
+        name = "X-CSRF-TOKEN",
+        in = ParameterIn.HEADER,
+        required = true,
+        description = "GET /api/v1/auth/csrf 응답의 headerName에 해당하는 CSRF 토큰"
+    ))
     public ResponseEntity<List<PredictionApiDtos.CandidatePredictionResponseDto>> getDirectPredictions(
-        @RequestBody PredictionApiDtos.PredictionDirectRequestDto request
+        @RequestBody PredictionApiDtos.PredictionDirectRequestDto request,
+        @AuthenticationPrincipal PrincipalDetails principal
     ) {
         if (request == null || request.stationId() == null || request.stationId().isBlank()) {
             return ResponseEntity.badRequest().build();
@@ -59,6 +76,13 @@ public class PredictionController {
             request.requiredBikeCount()
         );
 
+        recordSuccessfulHistory(principal, "DIRECT", results.size());
         return ResponseEntity.ok(results);
+    }
+
+    private void recordSuccessfulHistory(PrincipalDetails principal, String type, int resultCount) {
+        if (principal != null && resultCount > 0) {
+            retentionService.recordPredictionHistory(principal.getUsers().getId(), type, "추천 결과 " + resultCount + "건");
+        }
     }
 }

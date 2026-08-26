@@ -61,7 +61,7 @@ public class RetentionService {
             throw new IllegalArgumentException("userId와 favoriteId는 필수입니다.");
         }
         FavoriteStation favorite = favoriteStationRepository.findByUserIdAndId(userId, favoriteId)
-                .orElseThrow(() -> new IllegalArgumentException("해당 사용자의 즐겨찾기 항목을 찾을 수 없습니다."));
+                .orElseThrow(RetentionNotFoundException::new);
         favoriteStationRepository.delete(favorite);
     }
 
@@ -104,7 +104,7 @@ public class RetentionService {
             throw new IllegalArgumentException("userId와 routeId는 필수입니다.");
         }
         SavedRoute route = savedRouteRepository.findByUserIdAndId(userId, routeId)
-                .orElseThrow(() -> new IllegalArgumentException("해당 사용자의 저장 경로를 찾을 수 없습니다."));
+                .orElseThrow(RetentionNotFoundException::new);
         savedRouteRepository.delete(route);
     }
 
@@ -112,6 +112,11 @@ public class RetentionService {
     public PredictionHistory recordPredictionHistory(Long userId, String queryCondition, String summaryResult) {
         if (userId == null || queryCondition == null || summaryResult == null) {
             throw new IllegalArgumentException("조회 이력 정보는 필수입니다.");
+        }
+
+        if (predictionHistoryRepository.countByUserId(userId) >= MAX_PREDICTION_HISTORIES) {
+            predictionHistoryRepository.findFirstByUserIdOrderByQueriedAtAsc(userId)
+                    .ifPresent(predictionHistoryRepository::delete);
         }
 
         PredictionHistory history = PredictionHistory.builder()
@@ -129,5 +134,18 @@ public class RetentionService {
         }
         // 최신 30건만 반환 강제
         return predictionHistoryRepository.findByUserIdOrderByQueriedAtDesc(userId, PageRequest.of(0, MAX_PREDICTION_HISTORIES));
+    }
+
+    @Transactional
+    public void deletePredictionHistory(Long userId, Long historyId) {
+        if (userId == null || historyId == null) {
+            throw new IllegalArgumentException("userId와 historyId는 필수입니다.");
+        }
+        PredictionHistory history = predictionHistoryRepository.findByUserIdAndId(userId, historyId)
+                .orElseThrow(RetentionNotFoundException::new);
+        predictionHistoryRepository.delete(history);
+    }
+
+    public static class RetentionNotFoundException extends RuntimeException {
     }
 }
