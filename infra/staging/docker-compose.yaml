@@ -53,6 +53,8 @@ services:
         condition: service_healthy
       inference:
         condition: service_healthy
+    volumes:
+      - export-data:/app/exports
     restart: unless-stopped
     networks:
       - staging
@@ -121,3 +123,4 @@ networks:
 
 volumes:
   postgres-data:
+  export-data:

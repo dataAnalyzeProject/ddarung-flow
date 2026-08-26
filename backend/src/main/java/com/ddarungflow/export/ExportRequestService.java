@@ -134,6 +134,50 @@ public class ExportRequestService {
         return requests;
     }
 
+    @Transactional
+    public ExportRequest getExportRequestForAdmin(Long id, OffsetDateTime now) {
+        if (id == null) {
+            throw new IllegalArgumentException("id는 필수입니다.");
+        }
+        ExportRequest request = exportRequestRepository.findById(id)
+                .orElseThrow(() -> new ExportRequestNotFoundException(id));
+        expireIfNeeded(request, now);
+        return request;
+    }
+
+    @Transactional
+    public List<ExportRequest> getExportRequestsForAdmin(OffsetDateTime now) {
+        List<ExportRequest> requests = exportRequestRepository.findAllByOrderByRequestedAtDesc();
+        for (ExportRequest request : requests) {
+            expireIfNeeded(request, now);
+        }
+        return requests;
+    }
+
+    @Transactional
+    public ExportRequest markGeneratingForAdmin(Long id) {
+        ExportRequest request = getExportRequestForAdmin(id, OffsetDateTime.now());
+        request.markGenerating();
+        return request;
+    }
+
+    @Transactional
+    public ExportRequest completeForAdmin(Long id, Long rowCount, OffsetDateTime completedAt) {
+        ExportRequest request = getExportRequestForAdmin(id, completedAt);
+        if (rowCount != null) {
+            validateRowCount(request.getFormat(), rowCount);
+        }
+        request.complete(rowCount, completedAt != null ? completedAt : OffsetDateTime.now());
+        return request;
+    }
+
+    @Transactional
+    public ExportRequest failForAdmin(Long id, String failureReasonCode, OffsetDateTime failedAt) {
+        ExportRequest request = getExportRequestForAdmin(id, failedAt);
+        request.fail(failureReasonCode, failedAt != null ? failedAt : OffsetDateTime.now());
+        return request;
+    }
+
     public void validateRowCount(ExportFormat format, Long rowCount) {
         if (rowCount < 0) {
             throw new IllegalArgumentException("행 수는 0 이상이어야 합니다: " + rowCount);
@@ -157,5 +201,18 @@ public class ExportRequestService {
                 .orElseThrow(() -> new IllegalArgumentException(
                         String.format("내보내기 요청을 찾을 수 없거나 접근 권한이 없습니다. (ID: %d, UserId: %d)", id, requesterUserId)
                 ));
+    }
+
+    private void expireIfNeeded(ExportRequest request, OffsetDateTime now) {
+        OffsetDateTime evalTime = now != null ? now : OffsetDateTime.now();
+        if (request.isExpired(evalTime) && request.getStatus() == ExportStatus.COMPLETED) {
+            request.markExpired();
+        }
+    }
+
+    public static class ExportRequestNotFoundException extends RuntimeException {
+        public ExportRequestNotFoundException(Long id) {
+            super("내보내기 요청을 찾을 수 없습니다.");
+        }
     }
 }

@@ -11,6 +11,8 @@ public interface ExportRequestRepository extends JpaRepository<ExportRequest, Lo
 
     List<ExportRequest> findByRequesterUserIdOrderByRequestedAtDesc(Long requesterUserId);
 
+    List<ExportRequest> findAllByOrderByRequestedAtDesc();
+
     Optional<ExportRequest> findByIdAndRequesterUserId(Long id, Long requesterUserId);
 
     List<ExportRequest> findByRequesterUserIdAndStatusOrderByRequestedAtDesc(Long requesterUserId, ExportStatus status);
