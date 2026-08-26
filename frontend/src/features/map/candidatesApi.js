@@ -20,7 +20,7 @@ export async function fetchRouteCandidates({
   requiredBikeCount,
 }) {
   const csrf = await fetchCsrfToken();
-  const response = await fetch(`${API_BASE_URL}/api/v1/routes/candidates`, {
+  const response = await fetch(`${API_BASE_URL}/api/v1/predictions/route`, {
     method: "POST",
     credentials: "include",
     headers: {
