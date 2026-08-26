@@ -5,6 +5,8 @@ import { changeAdminUserRole, listAdminUsers } from "./adminUsersApi";
 import { listAdminAuditLogs } from "./adminAuditLogsApi";
 import { createAdminExport, downloadAdminExport, listAdminExports } from "./adminExportsApi";
 import { activateAdminModel, approveAdminModel, listAdminModels, rollbackAdminModel, validateAdminModel } from "./adminModelOpsApi";
+import { getAdminOverview } from "./adminOverviewApi";
+import { getAdminPerformance } from "./adminPerformanceApi";
 
 jest.mock("./qnaAdminApi", () => ({
   listAdminQuestions: jest.fn(),
@@ -22,6 +24,8 @@ jest.mock("./adminExportsApi", () => ({
   downloadAdminExport: jest.fn(),
 }));
 jest.mock("./adminModelOpsApi", () => ({ listAdminModels: jest.fn(), validateAdminModel: jest.fn(), approveAdminModel: jest.fn(), activateAdminModel: jest.fn(), rollbackAdminModel: jest.fn() }));
+jest.mock("./adminOverviewApi", () => ({ getAdminOverview: jest.fn() }));
+jest.mock("./adminPerformanceApi", () => ({ getAdminPerformance: jest.fn() }));
 
 const qnaPage = { items: [{ id: 104, title: "Q&A 질문", body: "질문 내용", category: "SERVICE", visibility: "PUBLIC", status: "PENDING", answers: [] }] };
 
@@ -37,6 +41,8 @@ beforeEach(() => {
   downloadAdminExport.mockResolvedValue(new Blob());
   listAdminModels.mockResolvedValue([{ id: 1, version: "v17", state: "ACTIVE", createdAt: "2026-08-26T10:00:00+09:00" }, { id: 2, version: "v18", state: "APPROVED", createdAt: "2026-08-26T10:01:00+09:00" }]);
   validateAdminModel.mockResolvedValue({}); approveAdminModel.mockResolvedValue({}); activateAdminModel.mockResolvedValue({}); rollbackAdminModel.mockResolvedValue({});
+  getAdminOverview.mockResolvedValue({ serviceStatus: "NORMAL", dataFreshness: { ageMinutes: 12, status: "NORMAL" }, activeModel: { state: "NONE" }, pending: { exports: 1, modelApprovals: 2, qnaUnanswered: 3 } });
+  getAdminPerformance.mockResolvedValue({ combinations: Array.from({ length: 20 }, (_, index) => ({ horizonMinutes: 60, requiredBikeCount: index + 1, sampleCount: 1000, brierScore: 0.03 })), calibrationBins: [{ binLowerPercent: 0, actualRate: .1 }], segments: [{ axis: "HOUR_BUCKET_X_STATION_SIZE", segmentValue: "COMMUTE_AM:SMALL", sampleCount: 1000, brierScore: .06, skillScore: .1, status: "OK" }] });
 });
 
 const renderPage = (menuId, actorRole, onAction = jest.fn()) => {
@@ -44,13 +50,10 @@ const renderPage = (menuId, actorRole, onAction = jest.fn()) => {
   return onAction;
 };
 
-test("dashboard shows an unavailable notice instead of fixture operating data", () => {
+test("dashboard shows API operating data instead of fixture data", async () => {
   renderPage("dashboard", "ADMIN");
-
-  expect(screen.getByRole("heading", { name: "운영 현황 API 준비 중" })).toBeInTheDocument();
-  expect(screen.queryByText("서비스 상태 · 정상")).not.toBeInTheDocument();
-  expect(screen.queryByText("15분")).not.toBeInTheDocument();
-  expect(screen.queryByText("운영 요청 128건 · 표시는 fixture이며 실시간 지표가 아닙니다.")).not.toBeInTheDocument();
+  expect((await screen.findAllByText("NORMAL")).length).toBeGreaterThan(0);
+  expect(screen.getByText("평가 artifact ceeccc… · 현재 서비스 운영 모델과 다를 수 있습니다")).toBeInTheDocument();
 });
 
 test("admin export menu uses the actual adapter for request and download", async () => {

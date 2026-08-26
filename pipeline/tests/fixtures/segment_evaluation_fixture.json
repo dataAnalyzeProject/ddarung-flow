@@ -1,0 +1,1 @@
+{"rows": [{"timestamp":"2026-08-24T07:00:00Z","stationSize":"SMALL","inventoryLevel":"ZERO","flowType":"OUTFLOW","probability":0.2,"actual":0}, {"timestamp":"2026-08-24T10:00:00Z","stationSize":"LARGE","inventoryLevel":"SIX_PLUS","flowType":"INFLOW","probability":0.8,"actual":1}]}
