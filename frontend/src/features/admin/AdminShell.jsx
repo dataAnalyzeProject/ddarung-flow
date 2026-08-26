@@ -31,7 +31,7 @@ export default function AdminShell({ activeMenuId, actorRole, onMenu, onAction, 
       <div className="admin-workspace">
         <header className="admin-topbar">
           <p>관리자 <span>/</span> <strong>{active.label}</strong></p>
-          <div className="admin-top-meta"><span className="admin-reference">● fixture 기준 2026.08.21 21:30</span><span className="admin-role">{roleLabels[actorRole] || "권한 없음"}</span></div>
+          <div className="admin-top-meta"><span className="admin-role">{roleLabels[actorRole] || "권한 없음"}</span></div>
         </header>
         <main className="admin-content">{children}</main>
       </div>

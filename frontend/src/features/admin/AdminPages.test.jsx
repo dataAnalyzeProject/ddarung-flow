@@ -42,7 +42,7 @@ beforeEach(() => {
   listAdminModels.mockResolvedValue([{ id: 1, version: "v17", state: "ACTIVE", createdAt: "2026-08-26T10:00:00+09:00" }, { id: 2, version: "v18", state: "APPROVED", createdAt: "2026-08-26T10:01:00+09:00" }]);
   validateAdminModel.mockResolvedValue({}); approveAdminModel.mockResolvedValue({}); activateAdminModel.mockResolvedValue({}); rollbackAdminModel.mockResolvedValue({});
   getAdminOverview.mockResolvedValue({ serviceStatus: "NORMAL", dataFreshness: { ageMinutes: 12, status: "NORMAL" }, activeModel: { state: "NONE" }, pending: { exports: 1, modelApprovals: 2, qnaUnanswered: 3 } });
-  getAdminPerformance.mockResolvedValue({ combinations: Array.from({ length: 20 }, (_, index) => ({ horizonMinutes: 60, requiredBikeCount: index + 1, sampleCount: 1000, brierScore: 0.03 })), calibrationBins: [{ binLowerPercent: 0, actualRate: .1 }], segments: [{ axis: "HOUR_BUCKET_X_STATION_SIZE", segmentValue: "COMMUTE_AM:SMALL", sampleCount: 1000, brierScore: .06, skillScore: .1, status: "OK" }] });
+  getAdminPerformance.mockResolvedValue({ combinations: Array.from({ length: 20 }, (_, index) => ({ horizonMinutes: 60, requiredBikeCount: index + 1, sampleCount: 1000, brierScore: 0.03 })), calibrationBins: [{ binLowerPercent: 0, actualRate: .1, meanPredicted: .2 }], segments: [{ axis: "HOUR_BUCKET_X_STATION_SIZE", segmentValue: "COMMUTE_AM:SMALL", sampleCount: 1000, brierScore: .06, skillScore: .1, status: "OK" }] });
 });
 
 const renderPage = (menuId, actorRole, onAction = jest.fn()) => {
@@ -54,6 +54,20 @@ test("dashboard shows API operating data instead of fixture data", async () => {
   renderPage("dashboard", "ADMIN");
   expect((await screen.findAllByText("NORMAL")).length).toBeGreaterThan(0);
   expect(screen.getByText("평가 artifact ceeccc… · 현재 서비스 운영 모델과 다를 수 있습니다")).toBeInTheDocument();
+});
+
+test("dashboard shows actual and predicted calibration series with a legend", async () => {
+  renderPage("dashboard", "ADMIN");
+  expect(await screen.findByLabelText("신뢰도 곡선 범례")).toHaveTextContent("실제 비율예측 확률");
+  expect(screen.getAllByTestId("calibration-actual")).toHaveLength(1);
+  expect(screen.getAllByTestId("calibration-predicted")).toHaveLength(1);
+});
+
+test("dashboard renders a missing skill score as a dash", async () => {
+  getAdminPerformance.mockResolvedValueOnce({ combinations: Array.from({ length: 20 }, (_, index) => ({ horizonMinutes: 60, requiredBikeCount: index + 1, sampleCount: 1000, brierScore: 0.03 })), calibrationBins: [{ binLowerPercent: 0, actualRate: .1, meanPredicted: .2 }], segments: [{ axis: "HOUR_BUCKET_X_STATION_SIZE", segmentValue: "COMMUTE_AM:SMALL", sampleCount: 1000, brierScore: .06123, skillScore: null, status: "OK" }, { axis: "STATION", segmentValue: "ST-1", sampleCount: 190, skillScore: null, shortageRecall: null, status: "OK" }] });
+  renderPage("dashboard", "ADMIN");
+  expect(await screen.findByText("0.0612")).toBeInTheDocument();
+  expect(screen.getAllByText("-").length).toBeGreaterThan(0);
 });
 
 test("dashboard keeps the page when model performance is not yet available", async () => {

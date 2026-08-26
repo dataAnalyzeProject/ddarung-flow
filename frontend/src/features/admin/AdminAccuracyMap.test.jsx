@@ -27,3 +27,8 @@ test("표본 부족 대여소는 중립색이며 score 수치를 만들지 않�
   expect(accuracyTone({ status: "UNKNOWN_INSUFFICIENT_SAMPLES", skillScore: null })).toBe("unknown");
   expect(accuracyTone({ status: "OK", skillScore: 0 })).toBe("warn");
 });
+
+test("skill score가 없는 대여소는 마커 제목에 대시로 표시한다", async () => {
+  render(<AdminAccuracyMap segments={[{ axis: "STATION", segmentValue: "ST-1", skillScore: null, status: "OK" }]} />);
+  await waitFor(() => expect(maps.Marker).toHaveBeenCalledWith(expect.objectContaining({ title: "대여소 1 · skill score -" })));
+});
