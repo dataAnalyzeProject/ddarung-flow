@@ -26,7 +26,9 @@ describe('LoginPage 핵심 테스트', () => {
         expect(screen.getByRole('button', { name: 'Google로 계속하기' })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: '네이버로 계속하기' })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: '카카오로 계속하기' })).toBeInTheDocument();
-        expect(screen.getByRole('link', { name: /로그인 없이 대여 예측하기/ })).toHaveAttribute('href', '/');
+        expect(screen.queryByText('로그인 없이 대여 예측하기')).not.toBeInTheDocument();
+        expect(screen.queryByText('이용약관')).not.toBeInTheDocument();
+        expect(screen.queryByText('개인정보 처리방침')).not.toBeInTheDocument();
     });
 
     test('LOADING 처리 중에는 버튼이 비활성화되어 중복 클릭할 수 없다', () => {
@@ -86,6 +88,16 @@ describe('LoginPage 핵심 테스트', () => {
         render(<LoginPage />);
         expect(screen.getByText(/로그인 취소/i)).toBeInTheDocument();
         window.history.pushState({}, '', '/');
+    });
+
+    test('초기 로그인 상태 확인이 실패해도 소셜 로그인 선택을 표시한다', async () => {
+        getCurrentUser.mockRejectedValueOnce(new Error('네트워크 오류'));
+        render(<LoginPage />);
+
+        await waitFor(() => {
+            expect(screen.getByRole('button', { name: 'Google로 계속하기' })).toBeInTheDocument();
+        });
+        expect(screen.queryByText('로그인에 실패했습니다.')).not.toBeInTheDocument();
     });
 
     test('세션 만료 복귀 주소에서 만료 안내를 표시한다', () => {
