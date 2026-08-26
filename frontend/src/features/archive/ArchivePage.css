@@ -1,19 +1,46 @@
-.archive-shell{--navy:#071c40;--blue:#086ff2;--green:#00a875;--line:#d9e3ed;--muted:#667990;width:100%;min-height:100vh;min-width:1180px;background:#fff;color:var(--navy);font-family:"Pretendard","Noto Sans KR","Segoe UI",sans-serif}
-.archive-shell button{font:inherit;color:inherit}
-.archive-content{max-width:1546px;margin:0 auto;padding:43px 32px 64px}
-.archive-head{display:flex;align-items:flex-end;justify-content:space-between;gap:20px}
-.archive-title{margin:0;font-size:44px;line-height:1;letter-spacing:-.03em}
-.archive-subtitle{margin:20px 0 0;color:var(--muted);font-size:18px}
+.archive-shell{--navy:#071c40;--blue:#086ff2;--green:#00a875;--line:#d9e3ed;--muted:#667990;width:100%; height:100vh;min-width:0;display: flex;flex-direction: column;overflow: hidden; background:#fff;color:var(--navy);font-family:"Pretendard","Noto Sans KR","Segoe UI",sans-serif;}
+.archive-shell button{ font-family:inherit;color:inherit}
+.archive-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  max-width: none; /* 👈 [핵심] 스크롤바를 브라우저 맨 오른쪽 끝으로 밀어붙임! */
+  margin: 0 auto;
+  padding: 36px max(24px, calc((100vw - 1400px) / 2)) 60px; /* 👈 내용물은 1400px 중앙 정렬! */
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+.archive-head{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;}
+.archive-title{margin:0; font-size: clamp(32px, 2.6vw, 42px);line-height:1;letter-spacing:-.03em;font-weight: 800;}
+.archive-subtitle{margin:20px 0 0;color:var(--muted);font-size: clamp(14px, 1.2vw, 18px);}
 .archive-saved-count{margin:0 0 4px;font-size:18px}
 .archive-saved-count b{color:#079f6c;font-size:25px}
 
-.archive-tabs{display:grid;grid-template-columns:1fr 1fr 1fr;height:75px;margin-top:31px}
-.archive-tabs button{border:1px solid #cad6e3;background:#fff;font-size:21px;cursor:pointer}
+.archive-tabs{display:grid;grid-template-columns:1fr 1fr 1fr;height: clamp(56px, 4vw, 68px);margin-top:31px}
+.archive-tabs button{border:1px solid #cad6e3;background:#fff;font-size: clamp(16px, 1.2vw, 19px);font-weight: 800;cursor:pointer;}
 .archive-tabs button:first-child{border-radius:9px 0 0 9px}
 .archive-tabs button:last-child{border-radius:0 9px 9px 0}
 .archive-tabs button.active{border-color:#0c69ed;background:linear-gradient(135deg,#0c68ef,#0a5ce2);color:#fff;font-weight:800}
 
 .archive-card{border:1px solid var(--line);border-radius:13px;background:#fff}
+
+.archive-grid .archive-placeholder {
+  grid-column: span 2;  /* 👈 2칸을 널찍하게 차지 */
+  margin-top: 0;        /* 👈 이중 마진 제거하여 상단 수평 일치 */
+  min-height: 360px;    /* 👈 오른쪽 요약 카드와 높이 일치 */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: #fff;
+  padding: 40px 30px;
+  text-align: center;
+}
+
 .archive-grid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1.3fr) minmax(0,1fr);gap:23px;margin-top:27px}
 .station-card{padding:28px 23px 22px;display:flex;flex-direction:column;gap:19px}
 .station-top{display:grid;grid-template-columns:89px 1fr;gap:0 12px}
@@ -32,20 +59,73 @@
 .archive-btn{height:56px;border:1.5px solid #0a73f2;border-radius:9px;background:#fff;color:var(--navy);font-weight:800;font-size:17px;cursor:pointer}
 .archive-btn.danger{border-color:#ff453d;color:#ef2b22}
 
-.summary-card{padding:26px 22px}
+.summary-card .archive-find-btn {
+  margin-top: auto; /* 👈 [대여소 찾기] 버튼이 카드 맨 아래에 예쁘게 착지 */
+}
+.summary-card {
+  min-height: 360px;
+  padding: 28px 24px;
+  display: flex;
+  flex-direction: column;
+}
 .summary-card h2{font-size:22px;margin:0 0 17px;font-weight:900}
 .summary-row{height:72px;border-bottom:1px solid #d2dce8;display:flex;align-items:center;justify-content:space-between;font-size:17px}
 .summary-row b{font-size:24px}
-.archive-find-btn{width:100%;height:60px;margin-top:20px;border:0;border-radius:9px;background:linear-gradient(135deg,#0876f6,#096ae5);color:#fff;font-weight:800;font-size:17px;cursor:pointer}
+.archive-find-btn{width:100%;height:60px;margin-top:20px;border:0;border-radius:9px;background:linear-gradient(135deg,#0876f6,#096ae5);color:#fff!important;font-weight:800!important;font-size:17px;cursor:pointer}
 
 .archive-note{height:auto;min-height:60px;margin-top:30px;padding:16px 32px;border:1px solid #84baff;border-radius:9px;background:#f2f8ff;display:flex;align-items:center;gap:14px;font-size:16px;font-weight:700}
 .note-icon{width:32px;height:32px;flex:0 0 auto;border:2px solid #0877f4;border-radius:50%;display:grid;place-items:center;color:#0877f4;font-weight:900;font-size:20px}
 
-.archive-placeholder{margin-top:27px;padding:60px 34px;display:grid;place-items:center;text-align:center}
-.archive-placeholder h2{font-size:24px;margin:0 0 12px}
-.archive-placeholder p{margin:0;font-size:17px;color:#617590;line-height:1.7}
+.archive-placeholder{margin-top:24px;padding:60px 34px;display:grid;place-items:center;text-align:center}
+.archive-placeholder h2 {
+  font-size: 22px;
+  font-weight: 800;
+  margin: 0 0 10px;
+  color: var(--navy);
+}
+.archive-placeholder p {
+  margin: 0;
+  font-size: 15px;
+  color: #617590;
+  line-height: 1.6;
+}
 
-@media(max-width:1500px){
-  .archive-grid{grid-template-columns:1fr 1fr;}
-  .summary-card{grid-column:1/-1}
+@media (max-width: 1300px) {
+  .archive-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .summary-card {
+    grid-column: 1 / -1; /* 요약 카드가 아래에 시원하게 2칸 차지 */
+  }
+  .archive-grid .archive-placeholder {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 768px) {
+  .archive-content {
+    padding: 20px 16px 40px;
+  }
+  .archive-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .archive-saved-count {
+    align-self: flex-end;
+  }
+  .archive-tabs {
+    height: 50px;
+    margin-top: 16px;
+  }
+  .archive-tabs button {
+    font-size: 14px;
+  }
+  .archive-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .station-actions {
+    grid-template-columns: 1fr 1fr;
+  }
 }
