@@ -19,28 +19,10 @@ function StatCard({ label, value, note, icon, tone = "blue" }) {
   return <article className={`admin-stat-card ${tone}`}><div><p>{label}</p><strong>{value}</strong><small>{note}</small></div><Icon>{icon}</Icon></article>;
 }
 
-function MetricIcon({ type }) {
-  const paths = {
-    health: <><path d="M12 3.5 19 6v5.6c0 4.4-3 7.5-7 8.9-4-1.4-7-4.5-7-8.9V6l7-2.5Z" /><path d="m8.8 11.7 2.1 2.1 4.3-4.3" /></>,
-    freshness: <><circle cx="12" cy="12" r="7.5" /><path d="M12 7.7v4.7l3.2 1.8" /></>,
-    model: <><path d="m12 3.8 6.8 3.9v7.8L12 19.4l-6.8-3.9V7.7L12 3.8Z" /><path d="m5.4 7.8 6.6 3.8 6.6-3.8M12 11.6v7.5" /></>,
-    alert: <><path d="M12 4.1 20 18H4l8-13.9Z" /><path d="M12 9v4.2M12 15.9v.1" /></>,
-  };
-  return <svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[type]}</g></svg>;
-}
-
-function QueueIcon({ type }) {
-  const paths = {
-    export: <><path d="M12 3.5v10" /><path d="m8.2 10.1 3.8 3.8 3.8-3.8" /><path d="M5 17.5v2h14v-2" /></>,
-    model: <><path d="m12 3.8 6.8 3.9v7.8L12 19.4l-6.8-3.9V7.7L12 3.8Z" /><path d="m5.4 7.8 6.6 3.8 6.6-3.8M12 11.6v7.5" /></>,
-    qna: <><path d="M5 5.5h14v10H9l-4 4v-14Z" /><path d="M8.5 9.5h7M8.5 13h4.5" /></>,
-  };
-  return <svg className="admin-queue-icon" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[type]}</g></svg>;
-}
-
 export function AdminStatePanel({ state }) {
   const content = {
     loading: ["불러오는 중", "관리자 데이터를 준비하고 있습니다."],
+    unavailable: ["운영 현황 API 준비 중", "실제 운영 현황 API가 준비되면 이 화면에 표시합니다."],
     empty: ["표시할 항목이 없습니다", "필터를 조정하거나 다시 시도해 주세요."],
     error: ["일시적으로 표시할 수 없습니다", "잠시 후 다시 시도해 주세요."],
     forbidden: ["관리자 권한이 필요합니다", "관리자 데이터와 카드, 표는 표시하지 않습니다."],
@@ -49,19 +31,9 @@ export function AdminStatePanel({ state }) {
   return <section className="admin-state-panel" data-testid={`admin-${state}`} aria-live="polite"><Icon>{state === "error" ? "!" : state === "forbidden" ? "×" : "…"}</Icon><h1>{content[0]}</h1><p>{content[1]}</p></section>;
 }
 
-function AuditTable({ audit }) {
-  return <table><thead><tr><th>시각</th><th>행위</th><th>사용자 역할</th><th>대상</th><th>결과</th></tr></thead><tbody>{audit.map((item) => <tr key={item.time}><td>{item.time}</td><td><strong>{item.action}</strong></td><td>{item.actor}</td><td>{item.target}</td><td><Chip tone="green">{item.result}</Chip></td></tr>)}</tbody></table>;
+function Dashboard() {
+  return <><div className="admin-page-title"><div><p className="admin-eyebrow">UI-ADMIN-01</p><h1>운영 현황</h1></div></div><AdminStatePanel state="unavailable" /></>;
 }
-
-function Dashboard({ data, onNavigate }) {
-  return <><div className="admin-page-title"><div><p className="admin-eyebrow">UI-ADMIN-01 · fixture only</p><h1>운영 현황</h1><span>실시간 운영 통계가 아닌 검토용 fixture입니다.</span></div><Chip tone="green">서비스 상태 · 정상</Chip></div>
-    <div className="admin-stat-grid"><StatCard label="서비스 상태" value="정상" note="fixture 표시 상태" icon={<MetricIcon type="health" />} tone="green" /><StatCard label="데이터 신선도" value="15분" note="최근 배치 fixture" icon={<MetricIcon type="freshness" />} /><StatCard label="활성 모델" value="v17" note="승인된 fixture 모델" icon={<MetricIcon type="model" />} /><StatCard label="최근 실패" value="0건" note="운영 사실이 아닌 fixture" icon={<MetricIcon type="alert" />} tone="coral" /></div>
-    <div className="admin-dashboard-top"><Section title="fixture 운영 추이" action={<span className="admin-filter-hint">최근 7회 기준</span>} className="admin-trend-panel"><div className="admin-line-chart" aria-label="fixture 운영 추이 차트"><svg viewBox="0 0 700 190" preserveAspectRatio="none" role="img" aria-label="fixture 값 변화"><path d="M22 143 L126 105 L230 132 L334 73 L438 94 L542 51 L674 78" fill="none" stroke="#176eea" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" /><path d="M22 143 L126 105 L230 132 L334 73 L438 94 L542 51 L674 78 L674 178 L22 178 Z" fill="url(#admin-chart-fill)" /><defs><linearGradient id="admin-chart-fill" x1="0" x2="0" y1="0" y2="1"><stop stopColor="#277cf0" stopOpacity=".24" /><stop offset="1" stopColor="#277cf0" stopOpacity="0" /></linearGradient></defs></svg><div><span>08.15</span><span>08.16</span><span>08.17</span><span>08.18</span><span>08.19</span><span>08.20</span><span>08.21</span></div></div><p className="admin-chart-caption">운영 요청 128건 · 표시는 fixture이며 실시간 지표가 아닙니다.</p></Section>
-      <Section title="운영 대기 항목" className="admin-pending-panel"><div className="admin-queue-list"><Queue icon="export" title="Export 요청 검토" detail="정거장 가용성 집계" badge="2건" onClick={() => onNavigate("export")} /><Queue icon="model" title="모델 승인 대기" detail="v16 검증 결과 확인" badge="1건" onClick={() => onNavigate("modelops")} /><Queue icon="qna" title="Q&A 답변 대기" detail="예측 결과 카테고리" badge="1건" onClick={() => onNavigate("qna")} /></div></Section></div>
-    <div className="admin-dashboard-bottom"><Section title="최근 감사 이벤트" action={<button type="button" className="admin-linkish" onClick={() => onNavigate("audit")}>전체 보기 ›</button>}><AuditTable audit={data.audit} /></Section><Section title="운영 알림"><div className="admin-alert-list"><p><b>주의</b> 격리 항목 3건은 fixture 검토 대상입니다.</p><p><b>안내</b> Export는 callback만 전송합니다.</p><p><b>안내</b> 실제 운영 알림은 연결되지 않았습니다.</p></div></Section></div></>;
-}
-
-function Queue({ icon, title, detail, badge, onClick }) { return <button type="button" className="admin-queue" onClick={onClick}><Icon><QueueIcon type={icon} /></Icon><div><strong>{title}</strong><span>{detail}</span></div><Chip>{badge}</Chip></button>; }
 
 function Users() {
   const [items, setItems] = useState([]); const [query, setQuery] = useState(""); const [state, setState] = useState("loading");
@@ -120,7 +92,7 @@ function Qna({ actorRole }) {
 
 function Dialog({ title, children, onClose }) { return <div className="admin-dialog-backdrop" role="presentation"><section className="admin-dialog" role="dialog" aria-modal="true" aria-label={title}><button type="button" className="admin-dialog-close" aria-label="닫기" onClick={onClose}>×</button><h2>{title}</h2>{children}</section></div>; }
 
-export function AdminPage({ menuId, actorRole, fixtureData = fixture, onAction = () => {}, onNavigate = () => {} }) {
-  const pages = { dashboard: <Dashboard data={fixtureData} onNavigate={onNavigate} />, users: <Users />, export: <Export actorRole={actorRole} />, audit: <Audit />, modelops: <ModelOps actorRole={actorRole} />, qna: <Qna data={fixtureData} actorRole={actorRole} onAction={onAction} /> };
+export function AdminPage({ menuId, actorRole, fixtureData = fixture, onAction = () => {} }) {
+  const pages = { dashboard: <Dashboard />, users: <Users />, export: <Export actorRole={actorRole} />, audit: <Audit />, modelops: <ModelOps actorRole={actorRole} />, qna: <Qna data={fixtureData} actorRole={actorRole} onAction={onAction} /> };
   return <div className="admin-page">{pages[menuId] || pages.dashboard}</div>;
 }

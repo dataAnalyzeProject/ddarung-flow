@@ -16,30 +16,16 @@ jest.mock("./adminModelOpsApi", () => ({
   rollbackAdminModel: jest.fn(),
 }));
 
-test("menus call back and admin sees dashboard fixture", async () => {
+test("menus call back and admin sees the unavailable dashboard notice", async () => {
   listAdminModels.mockResolvedValue([]);
   const onAction = jest.fn();
   render(<AdminApp actorRole="ADMIN" onAction={onAction} />);
   expect(screen.getByRole("heading", { name: "운영 현황" })).toBeInTheDocument();
-  ["서비스 상태", "데이터 신선도", "활성 모델", "최근 실패"].forEach((label) => expect(screen.getByText(label)).toBeInTheDocument());
+  expect(screen.getByRole("heading", { name: "운영 현황 API 준비 중" })).toBeInTheDocument();
+  expect(screen.queryByText("서비스 상태")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: /ModelOps/ }));
   expect(onAction).toHaveBeenCalledWith(expect.objectContaining({ type: "menu", menuId: "modelops" }));
   expect(await screen.findByRole("heading", { name: "ModelOps" })).toBeInTheDocument();
-});
-
-test("dashboard queue and audit links open their matching admin menu", () => {
-  const exportAction = jest.fn();
-  const { unmount } = render(<AdminApp actorRole="ADMIN" onAction={exportAction} />);
-
-  fireEvent.click(screen.getByRole("button", { name: /Export 요청 검토/ }));
-  expect(exportAction).toHaveBeenCalledWith(expect.objectContaining({ type: "menu", menuId: "export" }));
-
-  unmount();
-  const auditAction = jest.fn();
-  render(<AdminApp actorRole="ADMIN" onAction={auditAction} />);
-  fireEvent.click(screen.getByRole("button", { name: "전체 보기 ›" }));
-
-  expect(auditAction).toHaveBeenCalledWith(expect.objectContaining({ type: "menu", menuId: "audit" }));
 });
 
 test.each(["loading", "empty", "error"])('renders common %s state', (viewState) => {

@@ -44,10 +44,13 @@ const renderPage = (menuId, actorRole, onAction = jest.fn()) => {
   return onAction;
 };
 
-test("dashboard fixture trend stretches across its chart area", () => {
+test("dashboard shows an unavailable notice instead of fixture operating data", () => {
   renderPage("dashboard", "ADMIN");
-  expect(screen.getByRole("img", { name: "fixture 값 변화" })).toHaveAttribute("preserveAspectRatio", "none");
-  expect(document.querySelectorAll(".admin-queue-icon")).toHaveLength(3);
+
+  expect(screen.getByRole("heading", { name: "운영 현황 API 준비 중" })).toBeInTheDocument();
+  expect(screen.queryByText("서비스 상태 · 정상")).not.toBeInTheDocument();
+  expect(screen.queryByText("15분")).not.toBeInTheDocument();
+  expect(screen.queryByText("운영 요청 128건 · 표시는 fixture이며 실시간 지표가 아닙니다.")).not.toBeInTheDocument();
 });
 
 test("admin export menu uses the actual adapter for request and download", async () => {
