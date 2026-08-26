@@ -1,0 +1,5 @@
+package com.ddarungflow.controller;
+import com.ddarungflow.admin.ModelPerformanceService;
+import com.ddarungflow.dto.AdminModelPerformanceDtos;
+import org.springframework.http.*; import org.springframework.web.bind.annotation.*;
+@RestController @RequestMapping("/api/v1/admin/model-performance") public class AdminModelPerformanceController { private final ModelPerformanceService service; public AdminModelPerformanceController(ModelPerformanceService service) { this.service=service; } @GetMapping public AdminModelPerformanceDtos.Response get(@RequestParam(required=false) String artifactSha256) { return service.find(artifactSha256); } @ExceptionHandler(ModelPerformanceService.ModelPerformanceNotFoundException.class) ResponseEntity<AdminModelPerformanceDtos.ErrorResponse> missing() { return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new AdminModelPerformanceDtos.ErrorResponse("MODEL_PERFORMANCE_NOT_FOUND", "모델 성능 평가를 찾을 수 없습니다.")); } }
