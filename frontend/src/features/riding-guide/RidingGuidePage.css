@@ -293,23 +293,31 @@
 }
 
 .guide-route-back {
-  border-radius: 7px;
+  width: 100%;
+  border-radius: 8px;
   font-weight: 800;
   cursor: pointer;
-  min-height: clamp(40px, 2.65vw, 50px);
+  min-height: clamp(38px, 2.4vw, 46px);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 11px;
-  border: 1px solid #146ce0;
-  background: #fff;
-  color: #10428e;
-  font-size: clamp(12px, .87vw, 16px);
+  gap: 8px;
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: clamp(12px, .85vw, 15px);
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.guide-route-back:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
 }
 
 .guide-route-back .guide-icon {
-  width: 1.55em;
-  height: 1.55em;
+  width: 1.2em;
+  height: 1.2em;
+  flex-shrink: 0;
 }
 
 .guide-center-column {
@@ -780,16 +788,24 @@
 
 .guide-summary-toggle {
   width: 100%;
-  padding: 5px 0;
+  padding: 6px 0;
   margin-bottom: 4px;
   border: 0;
   background: transparent;
   color: var(--guide-blue);
-  font-size: clamp(9px, .68vw, 12px);
+  font-size: clamp(10px, .7vw, 13px);
   font-weight: 700;
   text-align: left;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
+
+.guide-summary-toggle:hover {
+  text-decoration: underline;
+}
+
 
 .guide-summary-detail {
   max-height: 108px;
