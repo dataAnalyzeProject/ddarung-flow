@@ -14,12 +14,14 @@ def test_combinations_are_calculated_for_all_twenty_and_reference_metrics_are_re
     for horizon in (60, 120, 180, 240):
         for quantity in (1, 2, 3, 4, 5):
             for index in range(1000):
-                rows.append({"horizonMinutes": horizon, "requiredBikeCount": quantity, "timestamp": "2026-08-24T07:00:00Z", "stationSize": "SMALL", "inventoryLevel": "ZERO", "flowType": "OUTFLOW", "probability": .2 if index % 2 == 0 else .8, "actual": 0 if index % 2 == 0 else 1})
+                rows.append({"horizonMinutes": horizon, "requiredBikeCount": quantity, "stationId": "ST-1", "timestamp": "2026-08-24T07:00:00Z", "stationSize": "SMALL", "inventoryLevel": "ZERO", "flowType": "OUTFLOW", "probability": .2 if index % 2 == 0 else .8, "actual": 0 if index % 2 == 0 else 1})
     payload = build_performance_payload(rows)
     assert len(payload["combinations"]) == 20
     reference = next(row for row in payload["combinations"] if row["horizonMinutes"] == 120 and row["requiredBikeCount"] == 3)
     assert reference["sampleCount"] == 1000 and reference["brierScore"] == pytest.approx(.04)
     assert all(row["status"] == "OK" for row in payload["segments"])
+    station = next(row for row in payload["segments"] if row["axis"] == "STATION")
+    assert station["segmentValue"] == "ST-1" and station["sampleCount"] == 1000
     reference = json.load(open("pipeline/tests/fixtures/segment_evaluation_fixture.json", encoding="utf-8"))["model51Combinations"]
     assert_brier_matches_reference(reference, reference)
     changed = [dict(row) for row in payload["combinations"]]; changed[0]["brierScore"] += 1e-8
@@ -29,7 +31,7 @@ def test_sha_rejected_before_database_access():
     with pytest.raises(ValueError): publish_performance_run(None, {"artifactSha256":"BAD"})
 
 def test_segment_metrics_cover_threshold_skill_and_no_shortage():
-    rows = [{"horizonMinutes": 120, "requiredBikeCount": 3, "timestamp": "2026-08-24T07:00:00Z", "stationSize": "SMALL", "inventoryLevel": "ZERO", "flowType": "OUTFLOW", "probability": .2, "actual": 1} for _ in range(999)]
+    rows = [{"horizonMinutes": 120, "requiredBikeCount": 3, "stationId": "ST-1", "timestamp": "2026-08-24T07:00:00Z", "stationSize": "SMALL", "inventoryLevel": "ZERO", "flowType": "OUTFLOW", "probability": .2, "actual": 1} for _ in range(999)]
     assert evaluate_segments(rows)[0]["status"] == "UNKNOWN_INSUFFICIENT_SAMPLES"
     rows.append({**rows[0], "probability": .8})
     metric = evaluate_segments(rows)[0]
