@@ -22,3 +22,16 @@ test("marks every notification as read through the API", async () => {
   await waitFor(() => expect(screen.getByText("읽음")).toBeInTheDocument());
   expect(global.fetch).toHaveBeenLastCalledWith("http://localhost:8080/api/v1/notifications/read-all", expect.objectContaining({ method: "POST" }));
 });
+
+test("creates a HIGH arrival rule with the selected station and bike count", async () => {
+  global.fetch.mockResolvedValueOnce(response([])).mockResolvedValueOnce(response([]))
+    .mockResolvedValueOnce(response({ headerName: "X-CSRF-TOKEN", token: "csrf" }))
+    .mockResolvedValueOnce(response({ id: 4, stationId: 77, threshold: 3, enabled: true, conditionType: "ARRIVAL_AVAILABLE_HIGH" }));
+  render(<AlertsPage />);
+  await screen.findByText("표시할 알림이 없습니다.");
+  fireEvent.change(screen.getByLabelText("대여소 ID"), { target: { value: "77" } });
+  fireEvent.change(screen.getByLabelText("알림 필요 자전거 수"), { target: { value: "3" } });
+  fireEvent.click(screen.getByRole("button", { name: "규칙 추가" }));
+  expect(await screen.findByText("대여소 77 · 자전거 3대 이상")).toBeInTheDocument();
+  expect(global.fetch).toHaveBeenLastCalledWith("http://localhost:8080/api/v1/notification-rules", expect.objectContaining({ method: "POST", body: expect.stringContaining('"stationId":77') }));
+});

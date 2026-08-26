@@ -158,5 +158,25 @@ class NotificationServiceTest {
 
             verify(inAppNotificationRepository, never()).save(any());
         }
+
+        @Test
+        @DisplayName("같은 대여소와 필요 대수 규칙은 기존 항목을 반환한다")
+        void createAlertRule_Duplicate_ReturnsExisting() {
+            AlertRule existing = AlertRule.builder().userId(1L).stationId(10L).conditionType("ARRIVAL_AVAILABLE_HIGH").threshold(3).enabled(true).build();
+            given(alertRuleRepository.findByUserIdAndStationIdAndConditionTypeAndThreshold(1L, 10L, "ARRIVAL_AVAILABLE_HIGH", 3)).willReturn(Optional.of(existing));
+
+            assertThat(notificationService.createAlertRule(1L, 10L, "ignored", 3, true)).isEqualTo(existing);
+            verify(alertRuleRepository, never()).save(any(AlertRule.class));
+        }
+
+        @Test
+        @DisplayName("알림 규칙 20개 이후 새 규칙은 거부한다")
+        void createAlertRule_LimitExceeded_ThrowsException() {
+            given(alertRuleRepository.findByUserIdAndStationIdAndConditionTypeAndThreshold(1L, 10L, "ARRIVAL_AVAILABLE_HIGH", 3)).willReturn(Optional.empty());
+            given(alertRuleRepository.countByUserId(1L)).willReturn(20L);
+
+            assertThatThrownBy(() -> notificationService.createAlertRule(1L, 10L, "ignored", 3, true))
+                    .isInstanceOf(IllegalStateException.class).hasMessageContaining("최대 20개");
+        }
     }
 }

@@ -18,6 +18,7 @@ import { adaptArrivalWeather, fetchArrivalWeather } from "../weather/weatherApi"
 import PremiumGuideAccessPanel from "../premium/PremiumGuideAccessPanel";
 import { confirmPayment, fetchSubscription, startCheckout } from "../premium/subscriptionApi";
 import { requestTossCheckout } from "../premium/tossCheckout";
+import { saveSavedRoute } from "../archive/archiveApi";
 
 const EMPTY_INPUT = {
   origin: "",
@@ -32,6 +33,8 @@ const PREDICTION_RESULT_KEY = "ddarung.mainPredictionResult.v1";
 const PENDING_GUIDE_KEY = "ddarung.pendingGuideOpen.v1";
 const PAYMENT_FAILURE_MESSAGE_KEY = "ddarung.paymentFailureMessage.v1";
 const PAYMENT_PROCESSING_KEY = "ddarung.paymentProcessing.v1";
+const SAVED_ROUTE_RESTORE_KEY = "ddarung.savedRouteRestore.v1";
+const API_TRAVEL_MODE_TO_LABEL = { WALK: "도보", PUBLIC_TRANSIT: "대중교통" };
 
 function paymentFailureMessage(code) {
   return code === "PAY_PROCESS_CANCELED"
@@ -79,6 +82,7 @@ export default function MainPage({ onNavigate }) {
   const [arrivalWeather, setArrivalWeather] = useState(null);
   const [weatherRequest, setWeatherRequest] = useState(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
+  const [saveRouteState, setSaveRouteState] = useState("idle");
 
   useEffect(() => {
     const loginResult = new URLSearchParams(window.location.search).get("login");
@@ -204,6 +208,20 @@ export default function MainPage({ onNavigate }) {
     setSelectedStationInfo(saved.selectedStationInfo || null);
     setArrivalWeather(saved.arrivalWeather || null);
     setWeatherRequest(saved.weatherRequest || null);
+  }, []);
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(SAVED_ROUTE_RESTORE_KEY));
+      if (!saved || saved.kind !== "ROUTE") return;
+      setInput((current) => ({ ...current, origin: saved.originName, destination: saved.destinationName, travelMode: API_TRAVEL_MODE_TO_LABEL[saved.travelMode] || "도보", requiredBikeCount: saved.requiredBikeCount }));
+      setRoutePlaces({ origin: { name: saved.originName, latitude: Number(saved.originLatitude), longitude: Number(saved.originLongitude) }, destination: { name: saved.destinationName, latitude: Number(saved.destinationLatitude), longitude: Number(saved.destinationLongitude) } });
+      setTimeConfirmed(false);
+    } catch {
+      // A malformed local restore entry is discarded without changing the current search.
+    } finally {
+      sessionStorage.removeItem(SAVED_ROUTE_RESTORE_KEY);
+    }
   }, []);
 
   useEffect(() => {
@@ -333,6 +351,17 @@ export default function MainPage({ onNavigate }) {
     if (candidate) {
       setSelectedStationInfo({ stationId: candidate.stationId, stationName: candidate.stationName });
       selectCandidateWeather(candidate);
+    }
+  };
+
+  const saveCurrentRoute = async () => {
+    if (!routePlaces.origin || !routePlaces.destination) return;
+    setSaveRouteState("saving");
+    try {
+      await saveSavedRoute({ kind: "ROUTE", originName: routePlaces.origin.name, originLatitude: routePlaces.origin.latitude, originLongitude: routePlaces.origin.longitude, destinationName: routePlaces.destination.name, destinationLatitude: routePlaces.destination.latitude, destinationLongitude: routePlaces.destination.longitude, stationId: null, travelMode: TRAVEL_MODE_TO_API[input.travelMode] || "WALK", directMinutes: null, requiredBikeCount: input.requiredBikeCount });
+      setSaveRouteState("saved");
+    } catch (error) {
+      setSaveRouteState(error.code === "SAVED_ROUTE_LIMIT_REACHED" ? "limit" : "error");
     }
   };
 
@@ -528,6 +557,7 @@ export default function MainPage({ onNavigate }) {
             weatherLoading={weatherLoading}
             onRetryWeather={() => void loadArrivalWeather(weatherRequest)}
           />
+          <div className="main-time-notice"><button type="button" onClick={() => void saveCurrentRoute()} disabled={saveRouteState === "saving"}>현재 검색 저장</button>{saveRouteState === "saved" && <span> 저장했습니다.</span>}{saveRouteState === "limit" && <span> 저장 경로는 최대 10개입니다.</span>}{saveRouteState === "error" && <span> 저장하지 못했습니다. 다시 시도해 주세요.</span>}</div>
         </section>
       ) : (
         <section className="main-dashboard main-dashboard-empty">

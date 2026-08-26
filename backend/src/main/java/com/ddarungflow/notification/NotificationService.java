@@ -7,25 +7,31 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
+import com.ddarungflow.map.PredictionApiDtos;
 
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class NotificationService {
+    public static final int MAX_ALERT_RULES = 20;
+    public static final String ARRIVAL_AVAILABLE_HIGH = "ARRIVAL_AVAILABLE_HIGH";
 
     private final AlertRuleRepository alertRuleRepository;
     private final InAppNotificationRepository inAppNotificationRepository;
 
     @Transactional
     public AlertRule createAlertRule(Long userId, Long stationId, String conditionType, Integer threshold, Boolean enabled) {
-        if (userId == null || stationId == null || conditionType == null || conditionType.isBlank()) {
+        if (userId == null || stationId == null || threshold == null || threshold < 1 || threshold > 5) {
             throw new IllegalArgumentException("필수 알림 규칙 정보가 누락되었습니다.");
         }
+        Optional<AlertRule> existing = alertRuleRepository.findByUserIdAndStationIdAndConditionTypeAndThreshold(userId, stationId, ARRIVAL_AVAILABLE_HIGH, threshold);
+        if (existing.isPresent()) return existing.get();
+        if (alertRuleRepository.countByUserId(userId) >= MAX_ALERT_RULES) throw new IllegalStateException("알림 규칙은 최대 20개까지 저장할 수 있습니다.");
 
         AlertRule rule = AlertRule.builder()
                 .userId(userId)
                 .stationId(stationId)
-                .conditionType(conditionType)
+                .conditionType(ARRIVAL_AVAILABLE_HIGH)
                 .threshold(threshold)
                 .enabled(enabled != null ? enabled : true)
                 .build();
@@ -53,6 +59,10 @@ public class NotificationService {
 
     @Transactional
     public InAppNotification createInAppNotification(Long userId, String dedupKey, String title, String message) {
+        return createInAppNotification(userId, dedupKey, title, message, "QNA_ANSWERED");
+    }
+    @Transactional
+    public InAppNotification createInAppNotification(Long userId, String dedupKey, String title, String message, String notificationType) {
         if (userId == null || dedupKey == null || dedupKey.isBlank() || title == null || message == null) {
             throw new IllegalArgumentException("필수 알림 정보가 누락되었습니다.");
         }
@@ -68,6 +78,7 @@ public class NotificationService {
                 .dedupKey(dedupKey)
                 .title(title)
                 .message(message)
+                .notificationType(notificationType)
                 .build();
 
         return inAppNotificationRepository.save(notification);
@@ -87,7 +98,18 @@ public class NotificationService {
             throw new IllegalStateException("비활성화된 알림 규칙에서는 알림을 생성할 수 없습니다.");
         }
 
-        return createInAppNotification(userId, dedupKey, title, message);
+        return createInAppNotification(userId, dedupKey, title, message, ARRIVAL_AVAILABLE_HIGH);
+    }
+
+    @Transactional
+    public void evaluateArrivalRules(Long userId, PredictionApiDtos.CandidatePredictionResponseDto candidate) {
+        Long stationId = Long.valueOf(candidate.stationId());
+        for (AlertRule rule : alertRuleRepository.findByUserIdOrderByCreatedAtDesc(userId)) {
+            if (rule.isEnabled() && rule.getStationId().equals(stationId) && rule.getThreshold().equals(candidate.requiredBikeCount())) {
+                String key = "arrival-high:" + rule.getId() + ":" + candidate.predictionTargetAt();
+                createInAppNotification(userId, key, "도착 시점 대여 가능", candidate.stationName() + "에서 자전거를 빌릴 수 있어요.", ARRIVAL_AVAILABLE_HIGH);
+            }
+        }
     }
 
     public List<InAppNotification> getInAppNotifications(Long userId) {

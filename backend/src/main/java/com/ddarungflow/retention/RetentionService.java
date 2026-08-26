@@ -7,6 +7,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
+import java.math.BigDecimal;
+import com.ddarungflow.map.PredictionApiDtos;
 
 @Service
 @RequiredArgsConstructor
@@ -19,6 +21,7 @@ public class RetentionService {
 
     private final FavoriteStationRepository favoriteStationRepository;
     private final SavedRouteRepository savedRouteRepository;
+    private final SavedPredictionRouteRepository savedPredictionRouteRepository;
     private final PredictionHistoryRepository predictionHistoryRepository;
 
     @Transactional
@@ -66,35 +69,57 @@ public class RetentionService {
     }
 
     @Transactional
-    public SavedRoute addSavedRoute(Long userId, String name, Long startStationId, String startStationName,
-                                    Long endStationId, String endStationName, String travelMode) {
-        if (userId == null || name == null || name.isBlank() || startStationId == null || endStationId == null) {
+    public SavedPredictionRoute addSavedRoute(Long userId, String kind, String originName, BigDecimal originLatitude,
+                                               BigDecimal originLongitude, String destinationName, BigDecimal destinationLatitude,
+                                               BigDecimal destinationLongitude, String stationId, String travelMode,
+                                               Integer directMinutes, Integer requiredBikeCount) {
+        if (userId == null || originName == null || originName.isBlank() || originLatitude == null || originLongitude == null
+                || requiredBikeCount == null || requiredBikeCount < 1 || requiredBikeCount > 5
+                || !("WALK".equals(travelMode) || "PUBLIC_TRANSIT".equals(travelMode))) {
             throw new IllegalArgumentException("필수 저장 경로 정보가 누락되었습니다.");
         }
-
-        // 최대 10개 강제 (11번째는 거부)
-        long currentCount = savedRouteRepository.countByUserId(userId);
+        boolean route = "ROUTE".equals(kind);
+        boolean direct = "DIRECT".equals(kind);
+        if ((!route && !direct) || (route && (destinationName == null || destinationName.isBlank() || destinationLatitude == null || destinationLongitude == null))
+                || (direct && (stationId == null || stationId.isBlank() || directMinutes == null || directMinutes < 1 || directMinutes > 240))) {
+            throw new IllegalArgumentException("저장 경로 형식이 올바르지 않습니다.");
+        }
+        String key = String.join("|", kind, originName, originLatitude.toPlainString(), originLongitude.toPlainString(),
+                String.valueOf(destinationName), String.valueOf(destinationLatitude), String.valueOf(destinationLongitude),
+                String.valueOf(stationId), travelMode, String.valueOf(directMinutes), requiredBikeCount.toString());
+        Optional<SavedPredictionRoute> existing = savedPredictionRouteRepository.findByUserIdAndRouteKey(userId, key);
+        if (existing.isPresent()) return existing.get();
+        long currentCount = savedPredictionRouteRepository.countByUserId(userId);
         if (currentCount >= MAX_SAVED_ROUTES) {
             throw new IllegalStateException("저장 경로는 최대 " + MAX_SAVED_ROUTES + "개까지 저장할 수 있습니다.");
         }
-
-        SavedRoute route = SavedRoute.builder()
-                .userId(userId)
-                .name(name)
-                .startStationId(startStationId)
-                .startStationName(startStationName)
-                .endStationId(endStationId)
-                .endStationName(endStationName)
-                .travelMode(travelMode)
+        String displayName = originName + " → " + (route ? destinationName : stationId);
+        SavedPredictionRoute routeEntity = SavedPredictionRoute.builder()
+                .userId(userId).kind(kind).displayName(displayName).originName(originName).originLatitude(originLatitude).originLongitude(originLongitude)
+                .destinationName(destinationName).destinationLatitude(destinationLatitude).destinationLongitude(destinationLongitude).stationId(stationId)
+                .travelMode(travelMode).directMinutes(directMinutes).requiredBikeCount(requiredBikeCount).routeKey(key)
                 .build();
-
-        return savedRouteRepository.save(route);
+        return savedPredictionRouteRepository.save(routeEntity);
     }
 
-    public List<SavedRoute> getSavedRoutes(Long userId) {
+    /** Legacy writer retained only for V1 compatibility tests; new API writes saved_prediction_routes. */
+    @Deprecated
+    public SavedRoute addSavedRoute(Long userId, String name, Long startStationId, String startStationName,
+                                    Long endStationId, String endStationName, String travelMode) {
+        if (savedRouteRepository.countByUserId(userId) >= MAX_SAVED_ROUTES) throw new IllegalStateException("저장 경로는 최대 " + MAX_SAVED_ROUTES + "개까지 저장할 수 있습니다.");
+        return savedRouteRepository.save(SavedRoute.builder().userId(userId).name(name).startStationId(startStationId)
+                .startStationName(startStationName).endStationId(endStationId).endStationName(endStationName).travelMode(travelMode).build());
+    }
+
+    public List<SavedPredictionRoute> getSavedPredictionRoutes(Long userId) {
         if (userId == null) {
             throw new IllegalArgumentException("userId는 필수입니다.");
         }
+        return savedPredictionRouteRepository.findByUserIdOrderByCreatedAtDesc(userId);
+    }
+
+    public List<SavedRoute> getSavedRoutes(Long userId) {
+        if (userId == null) throw new IllegalArgumentException("userId는 필수입니다.");
         return savedRouteRepository.findByUserIdOrderByCreatedAtDesc(userId);
     }
 
@@ -103,9 +128,10 @@ public class RetentionService {
         if (userId == null || routeId == null) {
             throw new IllegalArgumentException("userId와 routeId는 필수입니다.");
         }
-        SavedRoute route = savedRouteRepository.findByUserIdAndId(userId, routeId)
-                .orElseThrow(RetentionNotFoundException::new);
-        savedRouteRepository.delete(route);
+        Optional<SavedPredictionRoute> current = savedPredictionRouteRepository == null ? Optional.empty() : Optional.ofNullable(savedPredictionRouteRepository.findByUserIdAndId(userId, routeId)).orElse(Optional.empty());
+        if (current.isPresent()) { savedPredictionRouteRepository.delete(current.get()); return; }
+        SavedRoute legacy = savedRouteRepository.findByUserIdAndId(userId, routeId).orElseThrow(RetentionNotFoundException::new);
+        savedRouteRepository.delete(legacy);
     }
 
     @Transactional
@@ -126,6 +152,13 @@ public class RetentionService {
                 .build();
 
         return predictionHistoryRepository.save(history);
+    }
+
+    @Transactional
+    public void recordNormalPrediction(Long userId, String type, PredictionApiDtos.CandidatePredictionResponseDto candidate) {
+        if (candidate == null || candidate.predictionStatus() != PredictionApiDtos.PredictionStatus.NORMAL) return;
+        PredictionHistory history = recordPredictionHistory(userId, type, "추천 결과");
+        history.recordCandidate(candidate.stationId(), candidate.stationName(), candidate.availabilityLevel().name(), candidate.predictionStatus().name(), candidate.predictionTargetAt(), candidate.requiredBikeCount());
     }
 
     public List<PredictionHistory> getPredictionHistories(Long userId) {

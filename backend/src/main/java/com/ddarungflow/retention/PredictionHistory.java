@@ -26,6 +26,12 @@ public class PredictionHistory {
 
     @Column(name = "summary_result", nullable = false, columnDefinition = "TEXT")
     private String summaryResult;
+    @Column(name = "station_id") private String stationId;
+    @Column(name = "station_name") private String stationName;
+    @Column(name = "availability_level") private String availabilityLevel;
+    @Column(name = "prediction_status") private String predictionStatus;
+    @Column(name = "prediction_target_at") private OffsetDateTime predictionTargetAt;
+    @Column(name = "required_bike_count") private Integer requiredBikeCount;
 
     @Column(name = "queried_at", nullable = false, updatable = false)
     private OffsetDateTime queriedAt;
@@ -43,4 +49,5 @@ public class PredictionHistory {
         this.queryCondition = queryCondition;
         this.summaryResult = summaryResult;
     }
+    public void recordCandidate(String stationId, String stationName, String availabilityLevel, String predictionStatus, OffsetDateTime predictionTargetAt, Integer requiredBikeCount) { this.stationId=stationId; this.stationName=stationName; this.availabilityLevel=availabilityLevel; this.predictionStatus=predictionStatus; this.predictionTargetAt=predictionTargetAt; this.requiredBikeCount=requiredBikeCount; }
 }

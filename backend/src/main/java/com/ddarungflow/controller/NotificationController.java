@@ -84,6 +84,10 @@ public class NotificationController {
     public ResponseEntity<Map<String, String>> invalidRequest() {
         return ResponseEntity.badRequest().body(Map.of("code", "INVALID_REQUEST"));
     }
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<Map<String, String>> conflict() {
+        return ResponseEntity.status(409).body(Map.of("code", "ALERT_RULE_LIMIT_REACHED"));
+    }
 
     private Long userId(PrincipalDetails principal) {
         return principal.getUsers().getId();

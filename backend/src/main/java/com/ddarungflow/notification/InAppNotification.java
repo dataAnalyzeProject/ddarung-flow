@@ -38,6 +38,9 @@ public class InAppNotification {
     @Column(name = "message", nullable = false, columnDefinition = "TEXT")
     private String message;
 
+    @Column(name = "notification_type", nullable = false, length = 50)
+    private String notificationType;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 
@@ -52,11 +55,12 @@ public class InAppNotification {
     }
 
     @Builder
-    public InAppNotification(Long userId, String dedupKey, String title, String message, OffsetDateTime readAt) {
+    public InAppNotification(Long userId, String dedupKey, String title, String message, String notificationType, OffsetDateTime readAt) {
         this.userId = userId;
         this.dedupKey = dedupKey;
         this.title = title;
         this.message = message;
+        this.notificationType = notificationType;
         this.readAt = readAt;
     }
 

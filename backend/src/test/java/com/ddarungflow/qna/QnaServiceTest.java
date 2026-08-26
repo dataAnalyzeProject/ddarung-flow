@@ -7,6 +7,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import com.ddarungflow.notification.NotificationService;
 
 import java.util.List;
 import java.util.Optional;
@@ -26,6 +27,9 @@ class QnaServiceTest {
 
     @Mock
     private QnaAnswerRepository answerRepository;
+
+    @Mock
+    private NotificationService notificationService;
 
     @InjectMocks
     private QnaService qnaService;
@@ -280,6 +284,8 @@ class QnaServiceTest {
             assertThat(answer).isNotNull();
             assertThat(question.getStatus()).isEqualTo(QnaStatus.ANSWERED);
             verify(answerRepository).save(any(QnaAnswer.class));
+            verify(notificationService).createInAppNotification(question.getAuthorId(), "qna-answered:1",
+                    "문의에 답변이 등록되었습니다", question.getTitle(), "QNA_ANSWERED");
         }
 
         @Test
