@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { AdminPage } from "./AdminPages";
 import { answerQuestion, hideQuestion, listAdminQuestions } from "./qnaAdminApi";
 import { changeAdminUserRole, listAdminUsers } from "./adminUsersApi";
+import { listAdminAuditLogs } from "./adminAuditLogsApi";
 
 jest.mock("./qnaAdminApi", () => ({
   listAdminQuestions: jest.fn(),
@@ -12,6 +13,7 @@ jest.mock("./adminUsersApi", () => ({
   listAdminUsers: jest.fn(),
   changeAdminUserRole: jest.fn(),
 }));
+jest.mock("./adminAuditLogsApi", () => ({ listAdminAuditLogs: jest.fn() }));
 
 const qnaPage = { items: [{ id: 104, title: "Q&A 질문", body: "질문 내용", category: "SERVICE", visibility: "PUBLIC", status: "PENDING", answers: [] }] };
 
@@ -21,6 +23,7 @@ beforeEach(() => {
   hideQuestion.mockResolvedValue({});
   listAdminUsers.mockResolvedValue({ items: [{ userId: "00000000-0000-0000-0000-000000000001", displayName: "관리자", role: "ADMIN" }], page: 0, size: 20, total: 1 });
   changeAdminUserRole.mockResolvedValue({});
+  listAdminAuditLogs.mockResolvedValue({ items: [{ action: "ROLE_CHANGE", targetType: "USER", targetId: "public-user", actorRole: "ADMIN", result: "SUCCESS", reasonCode: "ROLE_CHANGED", correlationId: "audit-1", occurredAt: "2026-08-26T10:00:00+09:00" }], page: 0, size: 20, total: 1 });
 });
 
 const renderPage = (menuId, actorRole, onAction = jest.fn()) => {
@@ -102,6 +105,15 @@ test("users menu distinguishes role-change 404 and 409 responses", async () => {
   fireEvent.change(screen.getByRole("textbox", { name: "변경 사유" }), { target: { value: "마지막 관리자 확인" } });
   fireEvent.click(screen.getByRole("button", { name: "변경 확인" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("마지막 ADMIN의 역할은 낮출 수 없습니다.");
+});
+
+test("audit menu loads API rows and sends filters", async () => {
+  renderPage("audit", "ADMIN");
+  expect(await screen.findByText("ROLE_CHANGE")).toBeInTheDocument();
+  fireEvent.change(screen.getByRole("textbox", { name: "행위 필터" }), { target: { value: "ROLE_CHANGE" } });
+  fireEvent.change(screen.getByRole("combobox", { name: "결과 필터" }), { target: { value: "SUCCESS" } });
+  fireEvent.click(screen.getByRole("button", { name: "조회" }));
+  await waitFor(() => expect(listAdminAuditLogs).toHaveBeenLastCalledWith(expect.objectContaining({ action: "ROLE_CHANGE", result: "SUCCESS", page: 0 })));
 });
 
 test("admin loads an API question and sends its answer", async () => {
