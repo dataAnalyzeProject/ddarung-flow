@@ -26,6 +26,9 @@ test("export page renders data quality separately from zero-bike inventory", asy
   expect(screen.getByText("3 / 4")).toBeInTheDocument();
   expect(screen.getByText("4분 / 13분")).toBeInTheDocument();
   expect(screen.getAllByText("NORMAL").length).toBeGreaterThan(0);
+  expect(screen.getByText("누락 대여소 (활성 대여소 중 수집 행 없음)")).toBeInTheDocument();
+  expect(screen.getByText("MISSING (수집 행 상태)")).toBeInTheDocument();
+  expect(screen.queryByText("2026-08-26T11:52:00Z")).not.toBeInTheDocument();
   await waitFor(() => expect(getAdminDataQuality).toHaveBeenCalled());
 });
 
