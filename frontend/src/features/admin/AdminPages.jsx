@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { canDo, fixture } from "./adminFixture";
 import { answerQuestion, hideQuestion, listAdminQuestions } from "./qnaAdminApi";
 import { changeAdminUserRole, listAdminUsers } from "./adminUsersApi";
@@ -54,8 +54,8 @@ function Queue({ icon, title, detail, badge }) { return <div className="admin-qu
 function Users() {
   const [items, setItems] = useState([]); const [query, setQuery] = useState(""); const [state, setState] = useState("loading");
   const [dialog, setDialog] = useState(null); const [nextRole, setNextRole] = useState("USER"); const [reason, setReason] = useState(""); const [actionError, setActionError] = useState("");
-  const load = (nextQuery = query) => { setState("loading"); listAdminUsers({ q: nextQuery }).then((page) => { setItems(page.items); setState(page.items.length ? "success" : "empty"); }).catch((error) => setState(error.status === 401 ? "unauthorized" : error.status === 403 ? "forbidden" : "error")); };
-  useEffect(() => { load(""); }, []);
+  const load = useCallback((nextQuery = "") => { setState("loading"); listAdminUsers({ q: nextQuery }).then((page) => { setItems(page.items); setState(page.items.length ? "success" : "empty"); }).catch((error) => setState(error.status === 401 ? "unauthorized" : error.status === 403 ? "forbidden" : "error")); }, []);
+  useEffect(() => { load(); }, [load]);
   if (state !== "success") return <><AdminStatePanel state={state} /><div className="admin-action-row"><Button onClick={() => load()}>다시 시도</Button></div></>;
   const openDialog = (user) => { setDialog(user); setNextRole(user.role === "ADMIN" ? "USER" : "ADMIN"); setReason(""); setActionError(""); };
   const confirmRole = async () => { try { await changeAdminUserRole(dialog.userId, nextRole, reason); setDialog(null); load(); } catch (error) { setActionError(error.code === "LAST_SUPER_ADMIN_REQUIRED" ? "마지막 ADMIN의 역할은 낮출 수 없습니다." : error.code === "SELF_ROLE_CHANGE_FORBIDDEN" ? "자신의 역할은 변경할 수 없습니다." : error.status === 404 ? "사용자를 찾을 수 없습니다." : "역할 변경에 실패했습니다."); } };
