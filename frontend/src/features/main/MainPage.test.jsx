@@ -4,6 +4,7 @@ import { getCurrentUser, logout } from "../login/authApi";
 import { loadPendingPrediction, savePendingPrediction } from "../login/loginStorage";
 import { searchPlaces } from "../map/kakaoMapApi";
 import { fetchRouteCandidates } from "../map/candidatesApi";
+import { fetchStationDetail } from "../map/stationApi";
 import { fetchAirQuality } from "../riding-guide/airQualityApi";
 import { fetchArrivalWeather } from "../weather/weatherApi";
 import { confirmPayment, fetchSubscription, startCheckout } from "../premium/subscriptionApi";
@@ -19,6 +20,7 @@ jest.mock("../login/authApi", () => ({
 
 jest.mock("../map/kakaoMapApi", () => ({ searchPlaces: jest.fn() }));
 jest.mock("../map/candidatesApi", () => ({ fetchRouteCandidates: jest.fn() }));
+jest.mock("../map/stationApi", () => ({ fetchStationDetail: jest.fn() }));
 jest.mock("../riding-guide/airQualityApi", () => ({ fetchAirQuality: jest.fn() }));
 jest.mock("../weather/weatherApi", () => ({
   adaptArrivalWeather: jest.fn((weather) => weather),
@@ -83,6 +85,7 @@ describe("시안 6 메인 로그인 통합", () => {
     logout.mockResolvedValue();
     fetchArrivalWeather.mockResolvedValue({ status: "UNAVAILABLE", hourlyForecasts: [] });
     fetchSubscription.mockResolvedValue({ status: "ACTIVE" });
+    fetchStationDetail.mockResolvedValue({ stationId: "ST-1009", stationNumber: "1009" });
     startCheckout.mockResolvedValue({ status: "READY", orderId: "order-1", planId: "PREMIUM_MONTHLY_30D", amount: 2900, currency: "KRW" });
   });
 
@@ -369,7 +372,7 @@ describe("시안 6 메인 로그인 통합", () => {
       });
 
       expect(confirm).toHaveBeenCalledWith("이 대여소를 보관함에 저장할까요?");
-      await waitFor(() => expect(saveFavorite).toHaveBeenCalledWith({ stationId: "1009", stationName: "천호역 4번출구" }));
+      await waitFor(() => expect(saveFavorite).toHaveBeenCalledWith({ stationId: 1009, stationName: "천호역 4번출구" }));
       expect(await screen.findByText("천호역 4번출구 저장이 완료되었습니다. 보관함의 저장 대여소에서 확인하세요.")).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "천호역 4번출구 즐겨찾기 저장됨" })).toHaveAttribute("aria-pressed", "true");
       confirm.mockRestore();
