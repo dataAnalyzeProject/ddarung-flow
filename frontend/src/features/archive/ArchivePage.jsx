@@ -97,7 +97,12 @@ function removeScore(summary, history) {
 }
 
 function PredictionHistoryList({ items, scoreSummary, onRemove }) {
-  return <section className="archive-card prediction-history"><div className="prediction-history-head"><h2>예측 이력</h2>{scoreSummary && <b>{scoreSummary.scoredCount}건 중 {scoreSummary.hitCount}건 적중 · {Math.round(scoreSummary.hitRate * 100)}%</b>}</div>{scoreSummary && <p className="prediction-score-note">등급 안내가 실제와 맞았는지를 표시하며, 확률값의 정확도와는 다릅니다.</p>}{items.length ? items.map((history) => <div className="prediction-history-row" key={history.id}><span>{history.stationName || history.queryCondition} · {history.requiredBikeCount ?? "-"}대 · {history.predictionTargetAt || history.queriedAt}</span><span>{history.actualBikeCount == null ? outcomeLabel(history.outcome) : `실제 ${history.actualBikeCount}대`}</span><span className={`prediction-outcome ${history.outcome || "pending"}`}>{outcomeLabel(history.outcome)}</span><button type="button" className="archive-btn danger" onClick={() => onRemove(history.id)}>삭제</button></div>) : <p className="prediction-history-empty">예측 이력이 없습니다.</p>}</section>;
+  return <section className="archive-card prediction-history"><div className="prediction-history-head"><h2>예측 이력</h2>{scoreSummary && <b>{scoreSummary.scoredCount}건 중 {scoreSummary.hitCount}건 적중 · {Math.round(scoreSummary.hitRate * 100)}%</b>}</div>{scoreSummary && <p className="prediction-score-note">등급 안내가 실제와 맞았는지를 표시하며, 확률값의 정확도와는 다릅니다.</p>}{items.length ? items.map((history) => <div className="prediction-history-row" key={history.id}><span>{history.stationName || history.queryCondition} · {history.requiredBikeCount ?? "-"}대 · {formatPredictionTargetAt(history.predictionTargetAt || history.queriedAt)}</span><span>{history.actualBikeCount == null ? outcomeLabel(history.outcome) : `실제 ${history.actualBikeCount}대`}</span><span className={`prediction-outcome ${history.outcome || "pending"}`}>{outcomeLabel(history.outcome)}</span><button type="button" className="archive-btn danger" onClick={() => onRemove(history.id)}>삭제</button></div>) : <p className="prediction-history-empty">예측 이력이 없습니다.</p>}</section>;
+}
+
+function formatPredictionTargetAt(value) {
+  const targetAt = new Date(value);
+  return value && !Number.isNaN(targetAt.getTime()) ? new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).format(targetAt) : "시각 확인 필요";
 }
 
 function outcomeLabel(outcome) {

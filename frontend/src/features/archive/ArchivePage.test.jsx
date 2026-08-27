@@ -69,3 +69,12 @@ test("hides the score summary when there are no scored items", async () => {
   expect(screen.queryByText(/건 중 .*건 적중/)).not.toBeInTheDocument();
   expect(screen.queryByText("등급 안내가 실제와 맞았는지를 표시하며, 확률값의 정확도와는 다릅니다.")).not.toBeInTheDocument();
 });
+
+test("formats a UTC prediction target in Korea time", async () => {
+  global.fetch.mockResolvedValueOnce(response([])).mockResolvedValueOnce(response([]))
+    .mockResolvedValueOnce(response({ items: [{ id: 1, stationName: "3559.성동구민종합체육센터 앞", requiredBikeCount: 1, predictionTargetAt: "2026-08-27T14:00:00Z", outcome: "HIT", actualBikeCount: 1 }], scoreSummary: null }));
+  render(<ArchivePage />);
+  fireEvent.click(await screen.findByRole("tab", { name: "예측 이력" }));
+  expect(await screen.findByText("3559.성동구민종합체육센터 앞 · 1대 · 8월 27일 23:00")).toBeInTheDocument();
+  expect(screen.queryByText(/2026-08-27T14:00:00Z/)).not.toBeInTheDocument();
+});
