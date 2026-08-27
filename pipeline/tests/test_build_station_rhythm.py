@@ -20,6 +20,18 @@ def test_stockout_gap_is_not_merged_and_recovery_requires_three_bikes():
     assert stockout["episodeCount"] == 2
     assert stockout["medianRecoveryMinutesToThree"] == 120
 
+def test_stockout_duration_ends_at_first_positive_bike_but_recovery_waits_for_three():
+    rows = [
+        {"station_id":"108", "observed_at":datetime(2026,1,5,8), "bike_count":0},
+        {"station_id":"108", "observed_at":datetime(2026,1,5,9), "bike_count":1},
+        {"station_id":"108", "observed_at":datetime(2026,1,5,10), "bike_count":2},
+        {"station_id":"108", "observed_at":datetime(2026,1,5,11), "bike_count":3},
+    ]
+    stockout = build_profiles(rows)["108"]["payload"]["stockout"]
+    assert stockout["episodeCount"] == 1
+    assert stockout["medianDurationMinutes"] == 60
+    assert stockout["medianRecoveryMinutesToThree"] == 180
+
 class Cursor:
     def __init__(self): self.calls=[]
     def __enter__(self): return self

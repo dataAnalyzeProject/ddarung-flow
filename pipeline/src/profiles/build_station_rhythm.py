@@ -10,14 +10,19 @@ def _percentile_90(values):
     return ordered[max(0, (len(ordered) * 90 + 99) // 100 - 1)] if ordered else None
 
 def _stockout(rows):
-    episodes, recoveries, start, previous = [], [], None, None
+    episodes, recoveries, start, previous, pending_recoveries = [], [], None, None, []
     for row in rows:
         timestamp, bikes = row["observed_at"], row["bike_count"]
         if start and timestamp - previous != timedelta(hours=1):
+            episodes.append((start, previous)); start = None; pending_recoveries = []
+        if bikes == 0 and start is None:
+            start = timestamp
+            pending_recoveries.append(timestamp)
+        if start and bikes > 0:
             episodes.append((start, previous)); start = None
-        if bikes == 0 and start is None: start = timestamp
-        if start and bikes >= 3:
-            episodes.append((start, previous)); recoveries.append((timestamp - start).total_seconds() / 60); start = None
+        if bikes >= 3:
+            recoveries.extend((timestamp - recovery_start).total_seconds() / 60 for recovery_start in pending_recoveries)
+            pending_recoveries = []
         previous = timestamp
     if start: episodes.append((start, previous))
     durations = [(end - begin).total_seconds() / 60 + 60 for begin, end in episodes]
