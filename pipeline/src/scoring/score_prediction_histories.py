@@ -3,6 +3,7 @@
 import io
 import os
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
@@ -11,7 +12,8 @@ from pipeline.src.storage.oci_raw_store import create_object_storage_client
 
 
 def curated_object_name(target_at):
-    target = _as_datetime(target_at).replace(minute=0, second=0, microsecond=0)
+    target = _as_datetime(target_at).astimezone(ZoneInfo("Asia/Seoul"))
+    target = target.replace(minute=0, second=0, microsecond=0)
     return build_curated_snapshot_record([], target)[0].as_posix()
 
 
