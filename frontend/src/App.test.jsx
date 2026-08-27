@@ -2,16 +2,20 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import App from "./App";
 import { getCurrentUser } from "./features/login/authApi";
 import { INTRO_SEEN_KEY } from "./features/intro/introStorage";
+import { fetchStationDetail, fetchStationRhythm } from "./features/station-detail/stationRhythmApi";
 
 jest.mock("./features/login/authApi", () => ({
   getCurrentUser: jest.fn(() => Promise.resolve({ authenticated: false, user: null })),
   logout: jest.fn(() => Promise.resolve()),
   startSocialLogin: jest.fn(),
 }));
+jest.mock("./features/station-detail/stationRhythmApi", () => ({ fetchStationDetail: jest.fn(), fetchStationRhythm: jest.fn() }));
 
 beforeEach(() => {
   window.localStorage.clear();
   getCurrentUser.mockResolvedValue({ authenticated: false, user: null });
+  fetchStationDetail.mockResolvedValue({ stationName: "대여소 테스트", availableBikeCount: 1, inventoryStatus: "NORMAL" });
+  fetchStationRhythm.mockRejectedValue(new Error("RHYTHM_NOT_AVAILABLE"));
 });
 
 afterEach(() => {
@@ -28,6 +32,15 @@ test("shows the selected draft 6 as the main page", async () => {
   await waitFor(() => {
     expect(document.querySelector(".main-shell")).toBeInTheDocument();
   });
+});
+
+test("renders the station hash route and keeps the station id", async () => {
+  window.history.replaceState({}, "", "/#station/ST-10");
+  window.localStorage.setItem(INTRO_SEEN_KEY, "true");
+  getCurrentUser.mockResolvedValue({ authenticated: true, user: { displayName: "사용자" } });
+  render(<App />);
+  expect(await screen.findByRole("heading", { name: /대여소 테스트/ })).toBeInTheDocument();
+  expect(fetchStationDetail).toHaveBeenCalledWith("ST-10");
 });
 
 test("shows the existing login page at the login URL", async () => {

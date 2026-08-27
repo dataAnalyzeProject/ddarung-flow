@@ -8,6 +8,7 @@ import LoginPage from './features/login/LoginPage';
 import IntroPage from './features/intro/IntroPage';
 import AdminAccessGate from './features/admin/AdminAccessGate';
 import AdminApp from './features/admin/AdminApp';
+import StationDetailPage from './features/station-detail/StationDetailPage';
 import { hasSeenIntro } from './features/intro/introStorage';
 import { getCurrentUser, logout } from './features/login/authApi';
 
@@ -15,13 +16,14 @@ const HASH_ROUTES = ['qna', 'archive', 'alerts', 'mypage'];
 
 function routeFromHash() {
   const hash = window.location.hash.slice(1);
-  return HASH_ROUTES.includes(hash) ? hash : 'main';
+  if (hash.startsWith('station/') && hash.slice('station/'.length)) return { route: 'station', stationId: hash.slice('station/'.length) };
+  return { route: HASH_ROUTES.includes(hash) ? hash : 'main', stationId: null };
 }
 
 function App() {
   const isLoginPath = window.location.pathname === '/login';
   const isAdminPreviewPath = process.env.NODE_ENV !== 'production' && new URLSearchParams(window.location.search).has('adminPreview');
-  const [route, setRoute] = useState(routeFromHash);
+  const [{ route, stationId }, setRoute] = useState(routeFromHash);
   const [authState, setAuthState] = useState('loading');
   const [user, setUser] = useState(null);
   const [introComplete, setIntroComplete] = useState(
@@ -64,14 +66,14 @@ function App() {
     }
   };
 
-  const navigate = (nextRoute) => {
+  const navigate = (nextRoute, nextStationId) => {
     if (nextRoute === 'admin') {
       window.location.assign('/admin');
       return;
     }
-    const nextHash = HASH_ROUTES.includes(nextRoute) ? `#${nextRoute}` : '';
+    const nextHash = nextRoute === 'station' && nextStationId ? `#station/${encodeURIComponent(nextStationId)}` : HASH_ROUTES.includes(nextRoute) ? `#${nextRoute}` : '';
     window.history.pushState({}, '', `${window.location.pathname}${window.location.search}${nextHash}`);
-    setRoute(nextRoute);
+    setRoute({ route: nextRoute === 'station' && nextStationId ? 'station' : HASH_ROUTES.includes(nextRoute) ? nextRoute : 'main', stationId: nextStationId || null });
   };
 
   if (isLoginPath) {
@@ -104,6 +106,10 @@ function App() {
 
   if (route === 'mypage') {
     return <MyPage onNavigate={navigate} />;
+  }
+
+  if (route === 'station') {
+    return <StationDetailPage stationId={stationId} authState={authState} user={user} onNavigate={navigate} onLogout={handleLogout} />;
   }
 
   return <MainPage onNavigate={navigate} />;

@@ -517,6 +517,7 @@ export default function MainPage({ onNavigate }) {
     onRouteCalculated: () => setTimeConfirmed(true),
     fallbackImage: routeMap,
     canViewStations: authState === "authenticated",
+    onStationDetail: (stationId) => onNavigate?.("station", stationId),
   };
 
   return (
@@ -547,6 +548,7 @@ export default function MainPage({ onNavigate }) {
             selectedStationId={selectedStationInfo?.stationId}
             onSelect={handleSelectStation}
             onViewGuide={openRidingGuideFor}
+            onViewStation={(stationId) => onNavigate?.("station", stationId)}
             routeDurationMinutes={timeConfirmed ? input.directMinutes : null}
           />
           <MapRoutePanel key="map-route-panel" {...mapRoutePanelProps} />

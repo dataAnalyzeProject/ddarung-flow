@@ -58,3 +58,19 @@ test("경로 좌표를 파란 폴리라인으로 그리고 빈 좌표에서는 �
   adapter.setRoutePath([]);
   expect(line.setMap).toHaveBeenCalledWith(null);
 });
+
+test("상세 콜백이 있을 때만 XSS 안전한 상세 보기 버튼을 추가한다", () => {
+  const maps = createMapsMock();
+  const onStationDetail = jest.fn();
+  const adapter = createKakaoMapAdapter(document.createElement("div"), maps, undefined, { onStationDetail });
+  adapter.showStationOverlay({ ...station, name: "<img src=x>" });
+  const content = maps.CustomOverlay.mock.calls[0][0].content;
+  expect(content.querySelector("strong").textContent).toBe("<img src=x>");
+  expect(content.querySelector("img")).toBeNull();
+  content.querySelector("button").click();
+  expect(onStationDetail).toHaveBeenCalledWith("station-1");
+  const noCallbackMaps = createMapsMock();
+  const noCallback = createKakaoMapAdapter(document.createElement("div"), noCallbackMaps);
+  noCallback.showStationOverlay(station);
+  expect(noCallbackMaps.CustomOverlay.mock.calls[0][0].content.querySelector("button")).toBeNull();
+});
