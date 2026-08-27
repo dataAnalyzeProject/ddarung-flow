@@ -1,4 +1,6 @@
 from uuid import uuid4
+from pathlib import Path
+import re
 
 import pytest
 
@@ -10,8 +12,9 @@ class Cursor:
         self.rowcount = rowcount
         self.closed = False
 
-    def execute(self, *_args):
-        pass
+    def execute(self, statement, parameters):
+        self.statement = statement
+        self.parameters = parameters
 
     def close(self):
         self.closed = True
@@ -41,6 +44,10 @@ def test_deactivate_prediction_batch_is_recoverable_state_change():
     }
     assert connection.committed is True
     assert connection.cursor_instance.closed is True
+    status = re.search(r"publish_status = '([A-Z_]+)'", connection.cursor_instance.statement).group(1)
+    enum_source = Path(__file__).parents[2] / "backend/src/main/java/com/ddarungflow/entity/PredictionPublishStatus.java"
+    allowed_statuses = set(re.findall(r"^\s*([A-Z_]+),?$", enum_source.read_text(encoding="utf-8"), re.MULTILINE))
+    assert status in allowed_statuses
 
 
 def test_deactivate_rejects_missing_active_batch_without_committing():
