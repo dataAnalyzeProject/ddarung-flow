@@ -489,8 +489,8 @@
 }
 
 .main-station-name h3 {
-  margin: 0 !important;
-  font-size: 14px !important
+  margin: 0;
+  font-size: 14px
 }
 
 .main-station-name em {
@@ -1212,7 +1212,7 @@
 
 /* Reference-matched iconography and vertical fill. */
 .main-login-link {
-  display: flex !important;
+  display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px
@@ -1389,7 +1389,7 @@
   }
 
   .main-station-name h3 {
-    font-size: 13px !important
+    font-size: 13px
   }
 
   .main-station-name small,
@@ -1537,7 +1537,7 @@
   }
 
   .main-station-name h3 {
-    font-size: 15px !important
+    font-size: 15px
   }
 
   .main-station-name small,
@@ -1813,7 +1813,7 @@
   }
 
   .main-station-name h3 {
-    font-size: 13px !important
+    font-size: 13px
   }
 
   .main-station-name em,
@@ -2181,7 +2181,7 @@
   }
 
   .main-station-name h3 {
-    font-size: 14px !important
+    font-size: 14px
   }
 
   .main-station-name em,
@@ -2407,7 +2407,7 @@
   }
 
   .main-station-name h3 {
-    font-size: 17px !important
+    font-size: 17px
   }
 
   .main-station-name em {
@@ -2683,7 +2683,7 @@
 /* Recommendation card spacing refinement */
 @media (min-width:780px) {
   .main-station {
-    height: 118px !important;
+    height: 118px;
     grid-template-columns: minmax(64px, 1fr) minmax(70px, 1fr) minmax(76px, 1.05fr) minmax(78px, .82fr);
     column-gap: 12px;
     padding-top: 12px;
@@ -2915,11 +2915,11 @@
   display: grid;
   flex: 0 0 78px;
   place-items: center;
-  border: 0 !important;
+  border: 0;
   border-radius: 50%;
   background: radial-gradient(circle, #fff 0 59%, transparent 60%), conic-gradient(var(--gauge-color) var(--gauge-progress), #dfe7ef 0);
   color: var(--gauge-color);
-  font-size: 22px !important;
+  font-size: 22px;
   font-variant-numeric: tabular-nums
 }
 
@@ -3036,7 +3036,7 @@
     width: 50px;
     height: 50px;
     flex-basis: 50px;
-    font-size: 14px !important
+    font-size: 14px
   }
 
   .main-success-gauge::before {
@@ -3083,7 +3083,7 @@
 /* Use a real SVG arc so the percentage remains visually unambiguous. */
 .main-success-gauge {
   position: relative;
-  background: none !important;
+  background: none;
   color: var(--gauge-color)
 }
 
@@ -3119,7 +3119,7 @@
 }
 
 .main-success-gauge.is-unavailable {
-  background: #f8fafc !important
+  background: #f8fafc
 }
 
 /* Let the comparison chart and weather content use their full cards. */
@@ -3254,7 +3254,7 @@
     width: 104px;
     height: 104px;
     flex-basis: 104px;
-    font-size: 26px !important
+    font-size: 26px
   }
 
   .main-success-gauge circle {
@@ -3531,7 +3531,7 @@
   }
 
   .main-station-name h3 {
-    font-size: 15px !important
+    font-size: 15px
   }
 
   .main-station-stat strong {
@@ -3581,7 +3581,7 @@
     width: 102px;
     height: 102px;
     flex-basis: 102px;
-    font-size: 26px !important
+    font-size: 26px
   }
 
   .main-chart {
@@ -3841,7 +3841,7 @@
     width: 96px;
     height: 96px;
     flex-basis: 96px;
-    font-size: 25px !important
+    font-size: 25px
   }
 
   .main-success p {
@@ -3949,7 +3949,7 @@
   }
 
   .main-station-panel .main-station {
-    height: auto !important;
+    height: auto;
     min-height: 0;
     margin: 0;
     padding: 11px 14px 10px 62px;
@@ -3967,7 +3967,7 @@
   }
 
   .main-station-panel .main-station:first-child {
-    height: auto !important;
+    height: auto;
     margin: 0
   }
 
@@ -3994,7 +3994,7 @@
   }
 
   .main-station-panel .main-station-name h3 {
-    font-size: 16px !important
+    font-size: 16px
   }
 
   .main-station-panel .main-station-name small {
@@ -4141,7 +4141,7 @@
   }
 
   .main-station-modal-list .main-station {
-    height: 144px !important;
+    height: 144px;
     margin: 0;
     padding: 14px 16px 12px 68px;
     grid-template-columns: minmax(90px, 1fr) minmax(130px, 1.15fr) minmax(110px, 1fr) 108px;
@@ -4154,7 +4154,7 @@
   }
 
   .main-station-modal-list .main-station-name h3 {
-    font-size: 17px !important
+    font-size: 17px
   }
 
   .main-station-modal-list .main-station-name small {
@@ -4272,14 +4272,28 @@
 
 .main-station-bookmark {
   position: absolute;
-  right: 10px;
-  top: 8px;
-  width: 18px;
-  height: 22px;
-  max-width: 18px;
-  max-height: 22px;
-  object-fit: contain;
-  pointer-events: none;
+  right: 12px;
+  top: 12px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: transform 0.15s ease, background-color 0.15s ease;
+  z-index: 2;
+}
+.main-station-bookmark:hover {
+  background-color: #f1f5f9;
+  transform: scale(1.1);
+}
+.main-station-bookmark img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain
 }
 
 @media (min-width:1180px) {
@@ -4588,7 +4602,7 @@
   }
 
   .main-station-panel .main-station {
-    height: auto !important;
+    height: auto;
     min-height: 0;
     margin: 0;
     padding: 12px 18px 12px 66px;
