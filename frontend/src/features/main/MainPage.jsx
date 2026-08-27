@@ -4,6 +4,7 @@ import { serviceData } from "./mainPageData";
 import { getCurrentUser, logout } from "../login/authApi";
 import { loadPendingPrediction, savePendingPrediction } from "../login/loginStorage";
 import { fetchRouteCandidates } from "../map/candidatesApi";
+import { fetchStationDetail } from "../map/stationApi";
 import routeMap from "../../assets/main/route-map.png";
 import AppHeader from "../../shared/AppHeader";
 import MapRoutePanel from "../map/MapRoutePanel";
@@ -359,7 +360,10 @@ export default function MainPage({ onNavigate }) {
   const saveFavoriteStation = async (candidate) => {
     if (!window.confirm("이 대여소를 보관함에 저장할까요?")) return;
     try {
-      await saveFavorite({ stationId: candidate.stationId, stationName: candidate.stationName });
+      const station = await fetchStationDetail(candidate.stationId);
+      const favoriteStationId = Number(station.stationNumber);
+      if (!Number.isSafeInteger(favoriteStationId)) throw new Error("INVALID_STATION_NUMBER");
+      await saveFavorite({ stationId: favoriteStationId, stationName: candidate.stationName });
       setFavoriteStationIds((current) => current.includes(String(candidate.stationId)) ? current : [...current, String(candidate.stationId)]);
       setFavoriteNotice(`${candidate.stationName} 저장이 완료되었습니다. 보관함의 저장 대여소에서 확인하세요.`);
     } catch (error) {
