@@ -74,3 +74,15 @@ test("상세 콜백이 있을 때만 XSS 안전한 상세 보기 버튼을 추�
   noCallback.showStationOverlay(station);
   expect(noCallbackMaps.CustomOverlay.mock.calls[0][0].content.querySelector("button")).toBeNull();
 });
+
+test("경로를 맞춘 뒤 마커를 갱신해도 지도 중심을 목적지로 덮어쓰지 않는다", () => {
+  const maps = createMapsMock();
+  const adapter = createKakaoMapAdapter(document.createElement("div"), maps);
+  const map = maps.Map.mock.results[0].value;
+
+  adapter.setRoutePath([{ latitude: 37.54, longitude: 127.05 }, { latitude: 37.55, longitude: 127.06 }]);
+  adapter.setPoints({ current: null, origin: { latitude: 37.54, longitude: 127.05 }, destination: { latitude: 37.55, longitude: 127.06 } });
+
+  expect(map.setBounds).toHaveBeenCalledTimes(1);
+  expect(map.setCenter).not.toHaveBeenCalled();
+});

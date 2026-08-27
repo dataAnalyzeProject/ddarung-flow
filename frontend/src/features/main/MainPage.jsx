@@ -18,7 +18,7 @@ import { adaptArrivalWeather, fetchArrivalWeather } from "../weather/weatherApi"
 import PremiumGuideAccessPanel from "../premium/PremiumGuideAccessPanel";
 import { confirmPayment, fetchSubscription, startCheckout } from "../premium/subscriptionApi";
 import { requestTossCheckout } from "../premium/tossCheckout";
-import { saveSavedRoute } from "../archive/archiveApi";
+import { saveFavorite, saveSavedRoute } from "../archive/archiveApi";
 
 const EMPTY_INPUT = {
   origin: "",
@@ -83,6 +83,8 @@ export default function MainPage({ onNavigate }) {
   const [weatherRequest, setWeatherRequest] = useState(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [saveRouteState, setSaveRouteState] = useState("idle");
+  const [favoriteStationIds, setFavoriteStationIds] = useState([]);
+  const [favoriteNotice, setFavoriteNotice] = useState("");
 
   useEffect(() => {
     const loginResult = new URLSearchParams(window.location.search).get("login");
@@ -354,6 +356,17 @@ export default function MainPage({ onNavigate }) {
     }
   };
 
+  const saveFavoriteStation = async (candidate) => {
+    if (!window.confirm("이 대여소를 보관함에 저장할까요?")) return;
+    try {
+      await saveFavorite({ stationId: candidate.stationId, stationName: candidate.stationName });
+      setFavoriteStationIds((current) => current.includes(String(candidate.stationId)) ? current : [...current, String(candidate.stationId)]);
+      setFavoriteNotice(`${candidate.stationName} 저장이 완료되었습니다. 보관함의 저장 대여소에서 확인하세요.`);
+    } catch (error) {
+      setFavoriteNotice(error.code === "FAVORITE_LIMIT_REACHED" ? "저장 대여소는 최대 20개까지 등록할 수 있습니다." : "대여소를 저장하지 못했습니다. 다시 시도해 주세요.");
+    }
+  };
+
   const saveCurrentRoute = async () => {
     if (!routePlaces.origin || !routePlaces.destination) return;
     setSaveRouteState("saving");
@@ -533,6 +546,7 @@ export default function MainPage({ onNavigate }) {
       <MainSearchForm serviceData={serviceData} input={input} onInputChange={updateInput} onPlaceSelect={selectPlace} onPredict={handlePredict} />
 
       {timeConfirmed && <p className="main-time-notice">예상시간을 <strong>{input.directMinutes || "이동수단 기준"}{input.directMinutes ? "분" : ""}</strong>으로 확인했습니다.</p>}
+      {favoriteNotice && <p className="main-time-notice" role="status">{favoriteNotice}</p>}
       {predictLoading && <p className="main-time-notice" role="status">예측 결과를 불러오는 중입니다…</p>}
       {emptyCandidateResult && (
         <section className="main-empty-result" role="status">
@@ -549,6 +563,8 @@ export default function MainPage({ onNavigate }) {
             onSelect={handleSelectStation}
             onViewGuide={openRidingGuideFor}
             onViewStation={(stationId) => onNavigate?.("station", stationId)}
+            onFavorite={saveFavoriteStation}
+            favoriteStationIds={favoriteStationIds}
             routeDurationMinutes={timeConfirmed ? input.directMinutes : null}
           />
           <MapRoutePanel key="map-route-panel" {...mapRoutePanelProps} />
