@@ -58,3 +58,15 @@ test("경로 좌표를 파란 폴리라인으로 그리고 빈 좌표에서는 �
   adapter.setRoutePath([]);
   expect(line.setMap).toHaveBeenCalledWith(null);
 });
+
+test("경로를 맞춘 뒤 마커를 갱신해도 지도 중심을 목적지로 덮어쓰지 않는다", () => {
+  const maps = createMapsMock();
+  const adapter = createKakaoMapAdapter(document.createElement("div"), maps);
+  const map = maps.Map.mock.results[0].value;
+
+  adapter.setRoutePath([{ latitude: 37.54, longitude: 127.05 }, { latitude: 37.55, longitude: 127.06 }]);
+  adapter.setPoints({ current: null, origin: { latitude: 37.54, longitude: 127.05 }, destination: { latitude: 37.55, longitude: 127.06 } });
+
+  expect(map.setBounds).toHaveBeenCalledTimes(1);
+  expect(map.setCenter).not.toHaveBeenCalled();
+});
