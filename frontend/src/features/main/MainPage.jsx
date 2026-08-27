@@ -16,7 +16,7 @@ import { adaptCandidateResponse } from "../prediction-results/adaptCandidateResp
 import RidingGuidePage from "../riding-guide/RidingGuidePage";
 import { fetchAirQuality } from "../riding-guide/airQualityApi";
 import { adaptArrivalWeather, fetchArrivalWeather } from "../weather/weatherApi";
-import PremiumGuideAccessPanel from "../premium/PremiumGuideAccessPanel";
+import PremiumSandboxPage from "../premium/PremiumSandboxPage"
 import { confirmPayment, fetchSubscription, startCheckout } from "../premium/subscriptionApi";
 import { requestTossCheckout } from "../premium/tossCheckout";
 import { saveFavorite, saveSavedRoute } from "../archive/archiveApi";
@@ -497,8 +497,11 @@ export default function MainPage({ onNavigate }) {
     if (guideAccessState !== "ACTIVE") {
       return (
         <main className="main-shell">
-          <PremiumGuideAccessPanel
-            accessState={guideAccessState}
+          <PremiumSandboxPage
+            authState={authState}
+            user={user}
+            onNavigate={onNavigate}
+            onLogout={handleLogout}
             onLogin={handleGuideLogin}
             onSelectPlan={handleSelectPlan}
           />
