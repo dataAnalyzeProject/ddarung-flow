@@ -17,9 +17,9 @@ def test_outcomes_include_hit_miss_unverifiable_and_low_inversion():
     assert outcome_for(row(), None) == "UNVERIFIABLE"
 
 
-def test_curated_object_name_uses_target_date_partition():
+def test_curated_object_name_converts_utc_target_to_kst_snapshot_key():
     target = datetime(2026, 8, 27, 1, 37, tzinfo=timezone.utc)
-    assert curated_object_name(target) == "curated/year=2026/month=08/day=27/observed_20260827T010000p0000.parquet"
+    assert curated_object_name(target) == "curated/year=2026/month=08/day=27/observed_20260827T100000p0900.parquet"
 
 
 class Cursor:
