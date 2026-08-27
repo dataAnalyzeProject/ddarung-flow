@@ -257,7 +257,7 @@ describe("시안 6 메인 로그인 통합", () => {
     expect(screen.queryByRole("button", { name: "관리자 콘솔" })).not.toBeInTheDocument();
   });
 
-  test("지도 탭과 확대 축소 컨트롤은 상태를 왕복 변경한다", async () => {
+  test("예시 지도에서는 지도 탭만 전환하고 확대 축소를 비활성화한다", async () => {
     render(<MainPage />);
     await screen.findByRole("link", { name: "로그인" });
 
@@ -267,10 +267,9 @@ describe("시안 6 메인 로그인 통합", () => {
     expect(satellite).toHaveAttribute("aria-pressed", "true");
     expect(mapImage).toHaveClass("satellite");
 
-    fireEvent.click(screen.getByRole("button", { name: "지도 확대" }));
-    expect(mapImage).toHaveStyle("transform: scale(1.1)");
-    fireEvent.click(screen.getByRole("button", { name: "지도 축소" }));
-    expect(mapImage).toHaveStyle("transform: scale(1)");
+    expect(screen.getByRole("button", { name: "지도 확대" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "지도 축소" })).toBeDisabled();
+    expect(mapImage).not.toHaveStyle("transform: scale(1.1)");
   });
 
   test("메인 화면에서 하단 인사이트와 즐겨찾기 패널을 렌더링하지 않는다", async () => {
