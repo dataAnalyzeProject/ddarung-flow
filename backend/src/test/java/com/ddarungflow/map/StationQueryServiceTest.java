@@ -57,7 +57,7 @@ class StationQueryServiceTest {
     }
 
     @Test
-    @DisplayName("활성 대여소 위치는 재고를 포함하지 않고 모두 반환한다")
+    @DisplayName("활성 대여소 위치는 재고를 포함하지 않고 station number와 함께 모두 반환한다")
     void findAllActiveLocations() {
         stationRepository.save(new Station("ST-INACTIVE", "00104", "비활성 대여소", new BigDecimal("37.5510"), new BigDecimal("126.9000"), false));
 
@@ -65,6 +65,8 @@ class StationQueryServiceTest {
 
         assertThat(results).extracting(MapApiDtos.StationLocationResponseDto::stationId)
             .containsExactlyInAnyOrder("ST-4", "ST-5");
+        assertThat(results).extracting(MapApiDtos.StationLocationResponseDto::stationNumber)
+            .containsExactlyInAnyOrder("00102", "00103");
     }
 
     @Test

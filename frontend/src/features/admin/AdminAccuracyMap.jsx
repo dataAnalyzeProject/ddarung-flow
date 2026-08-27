@@ -4,6 +4,7 @@ import { fetchStationLocations } from "../map/stationApi";
 
 export function accuracyTone(segment) {
   if (!segment || segment.status === "UNKNOWN_INSUFFICIENT_SAMPLES") return "unknown";
+  if (segment.status === "OK" && segment.skillScore === null) return "unknown";
   if (segment.skillScore > 0) return "good";
   if (segment.skillScore < 0) return "bad";
   return "warn";
@@ -28,7 +29,7 @@ export default function AdminAccuracyMap({ segments = [] }) {
         const center = locations[0] || { latitude: 37.5665, longitude: 126.9780 };
         const map = new maps.Map(containerRef.current, { center: new maps.LatLng(center.latitude, center.longitude), level: 7 });
         locations.forEach((location) => {
-          const segment = metrics.get(location.stationId);
+          const segment = metrics.get(location.stationNumber);
           const tone = accuracyTone(segment);
           new maps.Marker({ map, position: new maps.LatLng(location.latitude, location.longitude), image: markerImage(maps, tone), title: segment?.status === "UNKNOWN_INSUFFICIENT_SAMPLES" ? `${location.name} · 표본 부족` : `${location.name} · skill score ${segment?.skillScore ?? "-"}` });
         });
