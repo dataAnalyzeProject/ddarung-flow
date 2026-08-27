@@ -65,11 +65,38 @@ function PredictionChart({ candidate }) {
   );
 }
 
+function HorizonOutlook({ candidate }) {
+  const horizonOutlook = candidate?.horizonOutlook;
+  if (!horizonOutlook) return null;
+
+  return (
+    <section className="main-horizon-outlook" aria-labelledby="main-horizon-outlook-title">
+      <header>
+        <h2 id="main-horizon-outlook-title">도착 시간대별 가능성</h2>
+        <span>{candidate?.requiredBikeCount}대 기준</span>
+      </header>
+      <div className="main-horizon-outlook-list">
+        {horizonOutlook.map((outlook) => {
+          const percent = Number.isFinite(outlook.probability) ? Math.round(outlook.probability * 100) : null;
+          return (
+            <div className={`main-horizon-outlook-row${outlook.isSelected ? " is-selected" : ""}`} key={outlook.horizonMinutes} aria-current={outlook.isSelected ? "true" : undefined}>
+              <span>{formatStationTime(outlook.predictionTargetAt)} (H{outlook.horizonMinutes / 60})</span>
+              <i aria-label={percent === null ? "확률 정보 없음" : `${percent}%`}><b style={{ width: `${percent ?? 0}%` }} /></i>
+              <strong>{percent === null ? "-" : `${percent}%`}</strong>
+              <em>{availabilityLabels[outlook.availabilityLevel] ?? "-"}</em>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function PredictionWeather({ weather, weatherLoading, onRetryWeather, arrivalAt }) {
   const isFailure = weather && (weather.status === "MISSING" || weather.status === "UNAVAILABLE");
 
   return (
-    <section aria-labelledby="main-weather-title">
+    <section className="main-weather-section" aria-labelledby="main-weather-title">
       <header>
         <h2 id="main-weather-title">날씨 &amp; 추천 이동 팁</h2>
         <i className="main-info" aria-label="도움말" />
@@ -142,6 +169,8 @@ export default function PredictionSummaryPanel({ candidates, selectedStationId, 
       </section>
 
       <PredictionChart candidate={selectedCandidate} />
+
+      <HorizonOutlook candidate={selectedCandidate} />
 
       <PredictionWeather
         weather={arrivalWeather}
