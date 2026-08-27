@@ -3,28 +3,29 @@
   box-sizing: border-box;
 }
 
+
 .riding-guide-shell {
   --guide-navy: #071a3d;
-  --guide-blue: #0969e8;
-  --guide-green: #079b58;
-  --guide-orange: #ff9700;
-  --guide-warn: #d9640a;
-  --guide-red: #d13438;
-  --guide-line: #d9e2ec;
-  --guide-muted: #60728d;
-  --guide-header-height: clamp(52px, 3.45vw, 64px);
+  --guide-blue: #0874ee;
+  --guide-green: #059669;
+  --guide-orange: #f59e0b;
+  --guide-warn: #ea580c;
+  --guide-red: #e11d48;
+  --guide-line: #e2e8f0;      /* 👈 맑고 세련된 경계선 */
+  --guide-muted: #64748b;     /* 👈 모던 텍스트 뮤트 */
+  --guide-header-height: 70px;/* 👈 헤더 높이 70px 일치 */
   width: 100%;
   height: 100vh;
   min-width: 0;
   overflow: hidden;
-  background: linear-gradient(120deg, #fff 0%, #fbfdff 68%, #f8fbff 100%);
+  background: #ffffff;
   color: var(--guide-navy);
-  font-family: "Pretendard", "Noto Sans KR", "Malgun Gothic", "Segoe UI", sans-serif;
+  font-family: "Pretendard", "Noto Sans KR", -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .riding-guide-shell button,
 .riding-guide-shell a {
-  font: inherit;
+  font-family: inherit;
 }
 
 .guide-icon {
@@ -34,8 +35,10 @@
 }
 
 .guide-page {
+  width: min(calc(100% - 48px), 1400px); /* 👈 1400px 규격 제한 */
+  margin: 0 auto;                        /* 👈 화면 정중앙 정렬 */
   height: calc(100vh - var(--guide-header-height));
-  padding: clamp(12px, 1.25vw, 23px) clamp(22px, 1.78vw, 33px) clamp(10px, 1.15vw, 20px);
+  padding: clamp(12px, 1.25vw, 23px) 0 clamp(10px, 1.15vw, 20px);
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: clamp(8px, .75vw, 14px);
@@ -43,80 +46,96 @@
 
 .guide-back {
   width: max-content;
-  padding: 0 7px;
+  padding: 0 4px;
   display: inline-flex;
   align-items: center;
   gap: 8px;
   border: 0;
   background: transparent;
   color: #52647f;
-  font-size: clamp(11px, .75vw, 14px);
+  font-size: clamp(12px, 0.9vw, 14px);
+  font-weight: 700;
   cursor: pointer;
 }
 
 .guide-back .guide-icon {
-  width: 1.2em;
+  width: clamp(12px, 0.95vw, 15px);
+  height: clamp(12px, 0.95vw, 15px);
 }
 
 .guide-intro {
   min-width: 0;
-  display: grid;
-  grid-template-columns: minmax(520px, 1.1fr) minmax(360px, 2.2fr);
-  align-items: center;
-  gap: clamp(20px, 2.7vw, 50px);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: clamp(16px, 1.8vw, 32px);
+  padding: 4px 0 clamp(8px, 0.9vw, 14px);
+  border-bottom: 1px solid #e2e8f0;
 }
 
 .guide-intro-title {
   display: flex;
-  align-items: start;
-  gap: clamp(16px, 1.3vw, 24px);
+  align-items: center;
+  gap: clamp(10px, 1vw, 16px);
+  flex-wrap: wrap;
 }
 
 .guide-intro h1 {
   margin: 0;
-  font-size: clamp(23px, 1.7vw, 32px);
-  line-height: 1.1;
-  letter-spacing: -.045em;
+  font-size: clamp(22px, 1.8vw, 28px);
+  font-weight: 800;
+  color: #071a3d;
+  letter-spacing: -0.03em;
   white-space: nowrap;
 }
 
 .guide-intro-title p {
-  margin: 8px 0 0;
-  color: #4d6fa5;
-  font-size: clamp(11px, .76vw, 14px);
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: clamp(11.5px, 0.9vw, 13.5px);
+  font-weight: 600;
 }
 
 .guide-badge {
-  margin-top: 1px;
-  padding: 7px 14px;
-  border: 1px solid #18a05b;
-  border-radius: 8px;
-  background: #f2fff8;
-  color: #087c46;
-  font-size: clamp(11px, .78vw, 15px);
+  padding: clamp(4px, 0.4vw, 6px) clamp(10px, 0.9vw, 14px);
+  border: 1px solid #a7f3d0;
+  border-radius: 20px;
+  background: #ecfdf5;
+  color: #059669;
+  font-size: clamp(11.5px, 0.85vw, 13.5px);
   font-weight: 800;
   white-space: nowrap;
 }
 
 .guide-intro-copy {
-  align-self: center;
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: clamp(4px, 0.4vw, 7px);
 }
 
 .guide-intro-copy strong {
-  font-size: clamp(11px, .78vw, 15px);
+  font-size: clamp(12.5px, 0.95vw, 15px);
+  font-weight: 700;
+  color: #1e293b;
+  line-height: 1.4;
 }
 
 .guide-intro-copy p {
-  margin: 10px 0 0;
-  display: flex;
+  margin: 0;
+  display: inline-flex;
   align-items: center;
-  gap: 7px;
-  color: #4c70a5;
-  font-size: clamp(10px, .7vw, 13px);
+  gap: 6px;
+  color: #94a3b8;
+  font-size: clamp(10.5px, 0.8vw, 12.5px);
+  font-weight: 500;
 }
 
 .guide-intro-copy .guide-icon {
-  width: 1.1em;
+  width: clamp(12px, 0.9vw, 14px);
+  height: clamp(12px, 0.9vw, 14px);
+  opacity: 0.7;
 }
 
 .guide-dashboard {
@@ -131,16 +150,19 @@
   min-width: 0;
   min-height: 0;
   border: 1px solid var(--guide-line);
-  border-radius: clamp(8px, .65vw, 12px);
-  background: rgba(255, 255, 255, .95);
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.05);
 }
 
 .guide-card h2,
 .guide-card-heading h2 {
   margin: 0;
-  font-size: clamp(14px, 1.05vw, 20px);
-  line-height: 1.1;
-  letter-spacing: -.035em;
+  font-size: clamp(15px, 1.1vw, 18px);
+  font-weight: 800;
+  color: var(--guide-navy);
+  line-height: 1.2;
+  letter-spacing: -0.03em;
 }
 
 .guide-overall {
@@ -606,24 +628,26 @@
 
 .guide-air-body {
   min-height: 0;
-  margin-top: 7px;
+  margin-top: 8px;
   display: grid;
-  grid-template-columns: 24% 1fr;
+  grid-template-columns: clamp(65px, 5.2vw, 85px) 1fr;
   align-items: center;
+  gap: clamp(10px, 1vw, 16px);
 }
 
 .guide-air-dots,
 .guide-small-dots {
-  background-image: radial-gradient(circle, var(--guide-orange) 2.4px, transparent 2.8px);
-  background-size: 13px 13px;
+  background-image: radial-gradient(circle, var(--guide-orange) 2px, transparent 2.5px);
+  background-size: 10px 10px;
 }
 
 .guide-air-dots {
-  width: clamp(53px, 4.2vw, 78px);
-  height: clamp(53px, 4.2vw, 78px);
+  width: clamp(50px, 4vw, 60px);
+  height: clamp(50px, 4vw, 60px);
   margin: auto;
   border-radius: 50%;
-  mask: radial-gradient(circle, transparent 0 26%, #000 27% 62%, transparent 63%);
+  -webkit-mask: radial-gradient(circle, transparent 0 34%, #000 35% 65%, transparent 66%);
+  mask: radial-gradient(circle, transparent 0 34%, #000 35% 65%, transparent 66%);
 }
 
 .guide-air-values {

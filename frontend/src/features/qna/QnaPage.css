@@ -6,9 +6,9 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    background: linear-gradient(115deg, #f9fcff 0%, #f3f9ff 55%, #f8fbff 100%);
+    background: #ffffff;
     color: var(--qna-navy);
-    font-family: "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", Arial, sans-serif;
+    font-family: "Pretendard", "Noto Sans KR", -apple-system, BlinkMacSystemFont, sans-serif;
     letter-spacing: -.025em
 }
 
@@ -91,9 +91,10 @@
     grid-template-columns: minmax(280px, 1.82fr) minmax(190px, 1fr) minmax(170px, .83fr) clamp(105px, 8.13vw, 136px);
     align-items: center;
     gap: clamp(16px, 1.91vw, 32px);
-    border: 1px solid #cfd9e6;
-    border-radius: clamp(10px, .72vw, 12px);
-    background: rgba(255, 255, 255, .86)
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    background: #ffffff;
+    box-shadow: 0 4px 20px rgba(15, 23, 42, 0.05);
 }
 
 .qna-search label {
@@ -498,7 +499,7 @@
 }
 
 .qna-detail > .qna-back {
-  align-self: flex-end; 
+  align-self: flex-end;
   margin-bottom: 20px;
 }
 
@@ -514,8 +515,8 @@
 }
 .qna-detail article > h1 {
   margin: 14px 0 8px;
-  font-size: clamp(24px, 1.8vw, 29px); 
-  font-weight: 700; 
+  font-size: clamp(24px, 1.8vw, 29px);
+  font-weight: 700;
   line-height: 1.35;
   letter-spacing: -0.02em;
   color: var(--qna-navy);

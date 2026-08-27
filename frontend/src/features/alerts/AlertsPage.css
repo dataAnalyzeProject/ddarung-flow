@@ -4,9 +4,9 @@
   flex: 1 1 auto;
   min-height: 0;
   width: 100%;
-  max-width: 1400px; /* 👈 통일 규격 */
+  max-width: none;                                            /* 👈 스크롤바 브라우저 우측 끝 밀착 */
   margin: 0 auto;
-  padding: 36px 24px 60px; /* 👈 좌우 24px 통일 */
+  padding: 36px max(24px, calc((100vw - 1400px) / 2)) 60px;  /* 👈 내용물 1400px 정중앙 정렬 */
   overflow-y: auto;
   scrollbar-gutter: stable;
   overflow-x: hidden;
@@ -58,31 +58,74 @@
   50% { opacity: 0.65; }
 }
 .alerts-head{display:flex;align-items:flex-end;justify-content:space-between;gap:20px}
-.alerts-title{margin:0;font-size:43px;line-height:1;letter-spacing:-.03em}
-.alerts-subtitle{margin:20px 0 0;color:var(--muted);font-size:18px}
-.alerts-actions{display:flex;gap:15px}
-.alerts-btn{height:48px;padding:0 18px;border:1.5px solid #0a73f2;border-radius:9px;background:#fff;color:var(--navy);font-weight:700!important;font-size:17px;cursor:pointer}
+.alerts-title {
+  margin: 0;
+  font-size: 43px;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-weight: 800;
+}
+
+.alerts-subtitle {
+  margin: 16px 0 0;
+  color: var(--muted);
+  font-size: 16px;
+}
+
+.alerts-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.alerts-btn {
+  height: 46px;
+  padding: 0 18px;
+  border: 1.5px solid #0a73f2;
+  border-radius: 9px;
+  background: #fff;
+  color: var(--navy);
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
 .alerts-btn:hover {
   background: #f0f7ff;
   border-color: #0b6ef2;
   color: #0874ef;
 }
-.alerts-btn.primary{background:linear-gradient(135deg,#0876f6,#096ae5);color:#fff!important;border-color:#0874f1;box-shadow:0 4px 12px rgba(8,118,246,.2)}
+
+.alerts-btn.primary {
+  background: linear-gradient(135deg, #0876f6, #096ae5);
+  color: #ffffff;
+  border-color: #0874f1;
+  box-shadow: 0 4px 12px rgba(8, 118, 246, 0.2);
+}
+
 .alerts-btn.primary:hover {
   background: linear-gradient(135deg, #076de4, #085fd3);
 }
 
-.alerts-grid{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:22px;margin-top:42px}
+
+.alerts-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 400px;
+  align-items: stretch;     /* 👈 [좌측 알림목록과 우측 규칙 카드의 상단 수평선 칼맞춤!] */
+  gap: 22px;
+  margin-top: 42px;
+}
+
 .alerts-card{border:1px solid var(--line);border-radius:13px;background:#fff;min-height: 360px;}
 
 .alert-list{overflow:hidden}
-.alert-tabs{height:85px;padding:0 28px;border-bottom:1px solid #cfd9e5;display:flex;align-items:stretch}
+.alert-tabs{height:68px;padding: 0 24px;border-bottom:1px solid #cfd9e5;display:flex;align-items:stretch}
 .alert-tabs button{position:relative;padding:0 18px;border:0;background:transparent;font-size:18px;font-weight:800;cursor:pointer}
 .alert-tabs button.active{color:#0874ef}
 .alert-tabs button.active::after{position:absolute;bottom:-1px;left:0;right:0;height:3px;background:#0877f7;content:""}
 .alerts-count{display:inline-grid;place-items:center;width:22px;height:22px;margin-left:6px;border-radius:50%;background:#0b73ed;color:#fff;font-size:12px}
 
-.notification-list{margin:0;padding:0;list-style:none}
+.notification-list{margin:0;padding:0;list-style:none;max-height: 480px;overflow-y: auto;scrollbar-width: thin;scrollbar-color: #cbd5e1 transparent;}
 
 .notification-list li > .notification:not(button),
 .notification-list li:only-child .notification {
@@ -94,13 +137,32 @@
   font-size: 16px;
   text-align: center;
 }
-.notification-list:empty,
+
+.rule-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  flex: 1 1 auto;
+  max-height: 240px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
 .rule-list:empty {
-  min-height: 275px; 
+  min-height: 140px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
+
+.notification-list:empty {
+  min-height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .notification-list:empty::before,
 .alerts-content:has(p[role="status"]) .rule-list:empty::before {
   content: "";
@@ -111,6 +173,7 @@
   border-radius: 50%;
   animation: alertSpin 0.8s linear infinite;
 }
+
 @keyframes alertSpin {
   to { transform: rotate(360deg); }
 }
@@ -130,18 +193,79 @@
 .read-pill{display:inline-flex;height:29px;align-items:center;padding:0 10px;margin-top:6px;border:1px solid #9eb1c7;border-radius:6px;background:#fff;color:#5e7189;font-size:13px}
 .read-pill.unread{border-color:#0877ef;color:#0877ef}
 
-.rule-card{padding:27px 29px}
-.rule-header{display:flex;align-items:center;justify-content:space-between}
+.rule-card {
+  padding: 24px 28px 32px;
+  display: flex;
+  flex-direction: column;
+}
+
+.rule-card > p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 13.5px;
+}
+
+.rule-card form {
+  margin: 16px 0 20px;
+  padding: 16px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.rule-card form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #475569;
+}
+
+.rule-card form input,
+.rule-card form select {
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--navy);
+  font-size: 14px;
+  font-weight: 600;
+  outline: none;
+}
+
+.rule-card form input:focus,
+.rule-card form select:focus {
+  border-color: #0874ee;
+  box-shadow: 0 0 0 3px rgba(8, 116, 238, 0.12);
+}
+
+.rule-card form button[type="submit"] {
+  grid-column: 1 / -1;
+  height: 42px;
+  margin-top: 4px;
+}
+
+.rule-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
 .rule-header h2{margin:0;font-size: clamp(20px, 1.4vw, 22px);font-weight: 800;letter-spacing: -0.02em;color: var(--navy);}
 .using{height:36px;padding:0 14px;display:inline-flex;align-items:center;border:1px solid #a9e2c7;border-radius:12px;background:#eaf8f2;color:#07966a;font-weight:800;font-size:15px}
 .rule-list{margin:0;padding:0;list-style:none;flex: 1 1 auto}
 
+
 .alerts-content:not(:has(p[role="status"])) .rule-list:empty::after {
   content: "";
-  width: 52px;
-  height: 52px;
+  width: 36px;       /* 👈 [52px ➔ 36px로 축소] */
+  height: 36px;
   border-radius: 50%;
-  background: #f1f5f9;
+  background: #f8fafc;
   border: 1.5px dashed #cbd5e1;
 }
 
@@ -216,7 +340,7 @@
 }
 
 li.notification {
-  display: flex !important;
+  display: flex;
   align-items: center;
   justify-content: center;
   min-height: 180px;
