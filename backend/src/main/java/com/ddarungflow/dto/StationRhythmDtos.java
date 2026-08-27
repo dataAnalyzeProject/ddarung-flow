@@ -1,0 +1,1 @@
+package com.ddarungflow.dto; import com.fasterxml.jackson.databind.JsonNode; import java.time.LocalDate; public final class StationRhythmDtos { private StationRhythmDtos(){} public record Response(LocalDate windowStart, LocalDate windowEnd, long sampleCount, JsonNode weekdayHourly, JsonNode stockout){} public record ErrorResponse(String code,String message){} }

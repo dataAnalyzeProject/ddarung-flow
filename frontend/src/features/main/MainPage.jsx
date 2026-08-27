@@ -4,6 +4,7 @@ import { serviceData } from "./mainPageData";
 import { getCurrentUser, logout } from "../login/authApi";
 import { loadPendingPrediction, savePendingPrediction } from "../login/loginStorage";
 import { fetchRouteCandidates } from "../map/candidatesApi";
+import { fetchStationDetail } from "../map/stationApi";
 import routeMap from "../../assets/main/route-map.png";
 import AppHeader from "../../shared/AppHeader";
 import MapRoutePanel from "../map/MapRoutePanel";
@@ -18,7 +19,7 @@ import { adaptArrivalWeather, fetchArrivalWeather } from "../weather/weatherApi"
 import PremiumGuideAccessPanel from "../premium/PremiumGuideAccessPanel";
 import { confirmPayment, fetchSubscription, startCheckout } from "../premium/subscriptionApi";
 import { requestTossCheckout } from "../premium/tossCheckout";
-import { saveSavedRoute } from "../archive/archiveApi";
+import { saveFavorite, saveSavedRoute } from "../archive/archiveApi";
 
 const EMPTY_INPUT = {
   origin: "",
@@ -83,6 +84,8 @@ export default function MainPage({ onNavigate }) {
   const [weatherRequest, setWeatherRequest] = useState(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [saveRouteState, setSaveRouteState] = useState("idle");
+  const [favoriteStationIds, setFavoriteStationIds] = useState([]);
+  const [favoriteNotice, setFavoriteNotice] = useState("");
 
   useEffect(() => {
     const loginResult = new URLSearchParams(window.location.search).get("login");
@@ -354,6 +357,20 @@ export default function MainPage({ onNavigate }) {
     }
   };
 
+  const saveFavoriteStation = async (candidate) => {
+    if (!window.confirm("이 대여소를 보관함에 저장할까요?")) return;
+    try {
+      const station = await fetchStationDetail(candidate.stationId);
+      const favoriteStationId = Number(station.stationNumber);
+      if (!Number.isSafeInteger(favoriteStationId)) throw new Error("INVALID_STATION_NUMBER");
+      await saveFavorite({ stationId: favoriteStationId, stationName: candidate.stationName });
+      setFavoriteStationIds((current) => current.includes(String(candidate.stationId)) ? current : [...current, String(candidate.stationId)]);
+      setFavoriteNotice(`${candidate.stationName} 저장이 완료되었습니다. 보관함의 저장 대여소에서 확인하세요.`);
+    } catch (error) {
+      setFavoriteNotice(error.code === "FAVORITE_LIMIT_REACHED" ? "저장 대여소는 최대 20개까지 등록할 수 있습니다." : "대여소를 저장하지 못했습니다. 다시 시도해 주세요.");
+    }
+  };
+
   const saveCurrentRoute = async () => {
     if (!routePlaces.origin || !routePlaces.destination) return;
     setSaveRouteState("saving");
@@ -517,6 +534,7 @@ export default function MainPage({ onNavigate }) {
     onRouteCalculated: () => setTimeConfirmed(true),
     fallbackImage: routeMap,
     canViewStations: authState === "authenticated",
+    onStationDetail: (stationId) => onNavigate?.("station", stationId),
   };
 
   return (
@@ -532,6 +550,7 @@ export default function MainPage({ onNavigate }) {
       <MainSearchForm serviceData={serviceData} input={input} onInputChange={updateInput} onPlaceSelect={selectPlace} onPredict={handlePredict} />
 
       {timeConfirmed && <p className="main-time-notice">예상시간을 <strong>{input.directMinutes || "이동수단 기준"}{input.directMinutes ? "분" : ""}</strong>으로 확인했습니다.</p>}
+      {favoriteNotice && <p className="main-time-notice" role="status">{favoriteNotice}</p>}
       {predictLoading && <p className="main-time-notice" role="status">예측 결과를 불러오는 중입니다…</p>}
       {emptyCandidateResult && (
         <section className="main-empty-result" role="status">
@@ -547,6 +566,9 @@ export default function MainPage({ onNavigate }) {
             selectedStationId={selectedStationInfo?.stationId}
             onSelect={handleSelectStation}
             onViewGuide={openRidingGuideFor}
+            onViewStation={(stationId) => onNavigate?.("station", stationId)}
+            onFavorite={saveFavoriteStation}
+            favoriteStationIds={favoriteStationIds}
             routeDurationMinutes={timeConfirmed ? input.directMinutes : null}
           />
           <MapRoutePanel key="map-route-panel" {...mapRoutePanelProps} />
@@ -557,7 +579,7 @@ export default function MainPage({ onNavigate }) {
             weatherLoading={weatherLoading}
             onRetryWeather={() => void loadArrivalWeather(weatherRequest)}
           />
-          <div className="main-time-notice"><button type="button" onClick={() => void saveCurrentRoute()} disabled={saveRouteState === "saving"}>현재 검색 저장</button>{saveRouteState === "saved" && <span> 저장했습니다.</span>}{saveRouteState === "limit" && <span> 저장 경로는 최대 10개입니다.</span>}{saveRouteState === "error" && <span> 저장하지 못했습니다. 다시 시도해 주세요.</span>}</div>
+          <div className="main-save-route"><button type="button" onClick={() => void saveCurrentRoute()} disabled={saveRouteState === "saving"}>현재 검색 저장</button>{saveRouteState === "saved" && <span> 저장했습니다.</span>}{saveRouteState === "limit" && <span> 저장 경로는 최대 10개입니다.</span>}{saveRouteState === "error" && <span> 저장하지 못했습니다. 다시 시도해 주세요.</span>}</div>
         </section>
       ) : (
         <section className="main-dashboard main-dashboard-empty">

@@ -27,6 +27,7 @@ export default function MapRoutePanel({
   onRouteCalculated,
   fallbackImage,
   canViewStations = false,
+  onStationDetail,
 }) {
   const containerRef = useRef(null);
   const adapterRef = useRef(null);
@@ -79,12 +80,13 @@ export default function MapRoutePanel({
         adapterRef.current = createKakaoMapAdapter(containerRef.current, maps, undefined, {
           currentMarkerImage: currentLocationMarker,
           stationMarkerImage: bikeStationMarker,
+          onStationDetail,
         });
         setSdkStatus("ready");
       })
       .catch((error) => active && setSdkStatus(error.message === "KAKAO_MAP_KEY_MISSING" ? "missing-key" : "failed"));
     return () => { active = false; };
-  }, []);
+  }, [onStationDetail]);
 
   useEffect(() => {
     adapterRef.current?.setPoints(points);

@@ -86,5 +86,7 @@ test("서비스 이용 방법 링크는 기능 카드로 이동하고 초점을 
 test("헤더에 주요 메뉴와 로그인 링크를 제공한다", () => {
   render(<IntroPage onComplete={jest.fn()} />);
   expect(screen.getByRole("navigation", { name: "주요 메뉴" })).toHaveTextContent("대여 예측");
+  expect(screen.getByRole("link", { name: "보관함" })).toHaveAttribute("href", "/#archive");
+  expect(screen.getByRole("link", { name: "알림" })).toHaveAttribute("href", "/#alerts");
   expect(screen.getByRole("link", { name: "로그인" })).toHaveAttribute("href", "/login");
 });

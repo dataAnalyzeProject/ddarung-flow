@@ -1,0 +1,1 @@
+package com.ddarungflow.repository; import com.ddarungflow.entity.StationRhythmProfile; import org.springframework.data.jpa.repository.JpaRepository; public interface StationRhythmProfileRepository extends JpaRepository<StationRhythmProfile,String> {}

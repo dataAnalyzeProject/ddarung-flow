@@ -35,6 +35,17 @@ describe("INT-3.6 MapRoutePanel", () => {
     fetchStationDetail.mockResolvedValue({ stationId: "station-1", name: "성수역 3번 출구", latitude: 37.544, longitude: 127.056, availableBikeCount: 8, collectedAt: "2026-08-14T10:32:00+09:00", inventoryStatus: "NORMAL" });
   });
 
+  test("passes the detail callback into the map adapter", async () => {
+    process.env.REACT_APP_KAKAO_MAP_APP_KEY = "test-key";
+    const adapter = { setCenter: jest.fn(), setLevel: jest.fn(), setMapType: jest.fn(), setPoints: jest.fn(), setRoutePath: jest.fn(), setStations: jest.fn() };
+    const onStationDetail = jest.fn();
+    createKakaoMapAdapter.mockReturnValue(adapter);
+    loadKakaoMapSdk.mockResolvedValue({});
+    renderPanel({ onStationDetail });
+    await waitFor(() => expect(createKakaoMapAdapter).toHaveBeenCalled());
+    expect(createKakaoMapAdapter.mock.calls[0][3]).toEqual(expect.objectContaining({ onStationDetail }));
+  });
+
   afterEach(() => {
     Object.defineProperty(navigator, "geolocation", { configurable: true, value: originalGeolocation });
     if (originalMapAppKey === undefined) delete process.env.REACT_APP_KAKAO_MAP_APP_KEY;

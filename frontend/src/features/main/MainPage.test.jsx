@@ -4,10 +4,12 @@ import { getCurrentUser, logout } from "../login/authApi";
 import { loadPendingPrediction, savePendingPrediction } from "../login/loginStorage";
 import { searchPlaces } from "../map/kakaoMapApi";
 import { fetchRouteCandidates } from "../map/candidatesApi";
+import { fetchStationDetail } from "../map/stationApi";
 import { fetchAirQuality } from "../riding-guide/airQualityApi";
 import { fetchArrivalWeather } from "../weather/weatherApi";
 import { confirmPayment, fetchSubscription, startCheckout } from "../premium/subscriptionApi";
 import { requestTossCheckout } from "../premium/tossCheckout";
+import { saveFavorite } from "../archive/archiveApi";
 import { formatStationTime } from "./components/StationRecommendationPanel";
 
 jest.mock("../login/authApi", () => ({
@@ -18,6 +20,7 @@ jest.mock("../login/authApi", () => ({
 
 jest.mock("../map/kakaoMapApi", () => ({ searchPlaces: jest.fn() }));
 jest.mock("../map/candidatesApi", () => ({ fetchRouteCandidates: jest.fn() }));
+jest.mock("../map/stationApi", () => ({ fetchStationDetail: jest.fn() }));
 jest.mock("../riding-guide/airQualityApi", () => ({ fetchAirQuality: jest.fn() }));
 jest.mock("../weather/weatherApi", () => ({
   adaptArrivalWeather: jest.fn((weather) => weather),
@@ -30,6 +33,7 @@ jest.mock("../premium/subscriptionApi", () => ({
   startCheckout: jest.fn(),
 }));
 jest.mock("../premium/tossCheckout", () => ({ requestTossCheckout: jest.fn() }));
+jest.mock("../archive/archiveApi", () => ({ saveFavorite: jest.fn(), saveSavedRoute: jest.fn() }));
 
 test("UTC 도착시각을 Asia/Seoul 시각으로 표시한다", () => {
   expect(formatStationTime("2026-08-17T07:35:00Z")).toBe("오후 4:35");
@@ -81,6 +85,7 @@ describe("시안 6 메인 로그인 통합", () => {
     logout.mockResolvedValue();
     fetchArrivalWeather.mockResolvedValue({ status: "UNAVAILABLE", hourlyForecasts: [] });
     fetchSubscription.mockResolvedValue({ status: "ACTIVE" });
+    fetchStationDetail.mockResolvedValue({ stationId: "ST-1009", stationNumber: "1009" });
     startCheckout.mockResolvedValue({ status: "READY", orderId: "order-1", planId: "PREMIUM_MONTHLY_30D", amount: 2900, currency: "KRW" });
   });
 
@@ -350,6 +355,29 @@ describe("시안 6 메인 로그인 통합", () => {
         arrivalAt: "2026-08-15T10:05:00+09:00",
         location: "테스트 대여소",
       });
+    });
+
+    test("추천 대여소 즐겨찾기를 수락하면 보관함 저장 API를 호출하고 저장 안내를 표시한다", async () => {
+      const confirm = jest.spyOn(window, "confirm").mockReturnValue(true);
+      fetchRouteCandidates.mockResolvedValue([
+        { stationId: "1009", stationName: "천호역 4번출구", distanceMeters: 200, durationSeconds: 300, arrivalAt: "2026-08-15T10:05:00+09:00", availabilityLevel: "HIGH", predictionProbability: 0.9, probabilities: { atLeast1: 0.95 }, availableBikeCount: 6, inventoryStatus: "NORMAL" },
+      ]);
+      saveFavorite.mockResolvedValue({ id: 1, stationId: 1009, stationName: "천호역 4번출구" });
+
+      await renderAndSelectPlaces();
+      fireEvent.click(screen.getByRole("button", { name: "대여 가능성 예측" }));
+      await screen.findByRole("heading", { name: "천호역 4번출구" });
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "천호역 4번출구 즐겨찾기 저장" }));
+      });
+
+      expect(confirm).toHaveBeenCalledWith("이 대여소를 보관함에 저장할까요?");
+      await waitFor(() => expect(saveFavorite).toHaveBeenCalledWith({ stationId: 1009, stationName: "천호역 4번출구" }));
+      expect(await screen.findByText("천호역 4번출구 저장이 완료되었습니다. 보관함의 저장 대여소에서 확인하세요.")).toBeInTheDocument();
+      const favoriteButton = screen.getByRole("button", { name: "천호역 4번출구 즐겨찾기 저장됨" });
+      expect(favoriteButton).toHaveAttribute("aria-pressed", "true");
+      expect(favoriteButton.tagName).toBe("BUTTON");
+      confirm.mockRestore();
     });
 
     test("후보가 없으면 입력을 유지한 안내를 표시하고 날씨를 요청하지 않는다", async () => {

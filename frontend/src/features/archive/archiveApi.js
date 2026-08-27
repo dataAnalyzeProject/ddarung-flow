@@ -26,6 +26,7 @@ export function loadArchive() {
   ]);
 }
 
+export const saveFavorite = (station) => mutation("/api/v1/favorites", "POST", station);
 export const removeFavorite = (id) => mutation(`/api/v1/favorites/${id}`, "DELETE");
 export const saveSavedRoute = (route) => mutation("/api/v1/saved-routes", "POST", route);
 export const removeSavedRoute = (id) => mutation(`/api/v1/saved-routes/${id}`, "DELETE");
