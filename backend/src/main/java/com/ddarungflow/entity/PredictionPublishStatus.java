@@ -4,5 +4,6 @@ public enum PredictionPublishStatus {
     STAGING,
     ACTIVE,
     REJECTED,
-    EXPIRED
+    EXPIRED,
+    INACTIVE
 }

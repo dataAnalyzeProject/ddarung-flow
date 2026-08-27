@@ -21,6 +21,22 @@ def load_batch_result(path: Path) -> Mapping[str, Any]:
     return result
 
 
+def translate_station_ids(connection: Any, batch_result: Mapping[str, Any]) -> Mapping[str, Any]:
+    cursor = connection.cursor()
+    try:
+        cursor.execute("SELECT station_id, station_number FROM stations WHERE station_number IS NOT NULL")
+        station_ids = {str(number): station_id for station_id, number in cursor.fetchall()}
+    finally:
+        cursor.close()
+    translated_rows = []
+    for row in batch_result.get("rows", []):
+        station_id = station_ids.get(str(row.get("stationId")))
+        if station_id is None:
+            raise ValueError("published prediction station number is not mapped")
+        translated_rows.append({**row, "stationId": station_id})
+    return {**batch_result, "rows": translated_rows}
+
+
 def publish_batch_file(
     batch_file: Path,
     database_url: str,
@@ -28,7 +44,7 @@ def publish_batch_file(
 ) -> dict[str, Any]:
     connection = connect(database_url)
     try:
-        return publish_prediction_batch(connection, load_batch_result(batch_file))
+        return publish_prediction_batch(connection, translate_station_ids(connection, load_batch_result(batch_file)))
     finally:
         connection.close()
 

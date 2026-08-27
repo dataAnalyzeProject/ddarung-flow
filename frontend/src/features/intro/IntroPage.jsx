@@ -94,8 +94,8 @@ export default function IntroPage({ onComplete, storage = window.localStorage })
         <nav aria-label="주요 메뉴">
           <a href="/">대여 예측</a>
           <a href="/#qna">Q&amp;A</a>
-          <a href="/#saved">보관함</a>
-          <a href="/#notifications">알림</a>
+          <a href="/#archive">보관함</a>
+          <a href="/#alerts">알림</a>
         </nav>
         <a className="intro-login" href="/login"><IntroIcon name="user" />로그인</a>
       </header>
