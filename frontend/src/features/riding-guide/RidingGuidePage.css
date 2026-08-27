@@ -35,10 +35,9 @@
 }
 
 .guide-page {
-  width: min(calc(100% - 48px), 1400px); /* 👈 1400px 규격 제한 */
-  margin: 0 auto;                        /* 👈 화면 정중앙 정렬 */
+  width: 100%;
   height: calc(100vh - var(--guide-header-height));
-  padding: clamp(12px, 1.25vw, 23px) 0 clamp(10px, 1.15vw, 20px);
+  padding: clamp(12px, 1.25vw, 23px) clamp(20px, 2.5vw, 40px) clamp(10px, 1.15vw, 20px);
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: clamp(8px, .75vw, 14px);

@@ -121,7 +121,7 @@
   position: relative;
   min-height: 198px;
   height: auto;
-  width: min(calc(100% - 48px), 1400px);
+  width: calc(100% - clamp(40px, 5vw, 80px));
   margin: 10px auto 8px;
   padding: 24px 28px;
   display: grid;
@@ -384,8 +384,8 @@
   align-self: center;
   height: auto;
   min-height: 0;
-  width: min(calc(100% - 48px), 1400px); /* 👈 검색창과 똑같이 1400px 제한 */
-  margin: 0 auto;                        /* 👈 완벽한 화면 정중앙 정렬 */
+  width: calc(100% - clamp(40px, 5vw, 80px));
+  margin: 0 auto;
   display: grid;
   grid-template-columns: minmax(0, 38fr) minmax(0, 39fr) minmax(0, 23fr);
   gap: 12px;

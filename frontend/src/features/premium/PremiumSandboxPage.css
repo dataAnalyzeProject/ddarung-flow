@@ -7,12 +7,12 @@
 /* 1. 본문 최상위 컨테이너 */
 .premium-sandbox {
   width: 100%;
-  max-width: 1440px;
+  max-width: 1400px;
   margin: 0 auto;
-  padding: 40px 27px;
+  padding: 36px max(24px, calc((100vw - 1400px) / 2)) 60px;
   background-color: #ffffff;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  color: #0f172a;
+  font-family: "Pretendard", "Noto Sans KR", -apple-system, BlinkMacSystemFont, sans-serif;
+  color: #071a3d;
   box-sizing: border-box;
 }
 /* 2. 상단 타이틀 영역 */
@@ -21,16 +21,17 @@
 }
 .premium-sandbox__subtitle {
   font-size: 13px;
-  font-weight: 700;
-  color: #2563eb;
+  font-weight: 800;
+  color: #0874ee;
   letter-spacing: 0.05em;
   margin-bottom: 6px;
   text-transform: uppercase;
 }
 .premium-sandbox__header-title h1 {
-  font-size: 28px;
+  font-size: 32px;
   font-weight: 800;
-  color: #0f172a;
+  color: #071a3d;
+  letter-spacing: -0.03em;
   margin: 0 0 8px 0;
 }
 .premium-sandbox__desc {
@@ -43,20 +44,20 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background-color: #f0fdf4;
-  border: 1px solid #bbf7d0;
-  color: #166534;
-  padding: 12px 20px;
-  border-radius: 8px;
+  background-color: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+  padding: 14px 20px;
+  border-radius: 12px;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
   margin-bottom: 28px;
 }
 .premium-sandbox__status-badge {
   font-size: 12px;
-  font-weight: 700;
-  background-color: #dcfce7;
-  color: #15803d;
+  font-weight: 800;
+  background-color: #d1fae5;
+  color: #059669;
   padding: 4px 10px;
   border-radius: 6px;
   text-transform: uppercase;
@@ -66,22 +67,23 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 24px;
-  align-items: start;
+  align-items: stretch;
 }
 .premium-sandbox__card {
   background-color: #ffffff;
   border: 1px solid #e2e8f0;
-  border-radius: 16px;
+  border-radius: 14px;
   padding: 32px;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
-  min-height: 320px;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+  min-height: 440px;
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
 }
 .premium-sandbox__card h2 {
   font-size: 20px;
-  font-weight: 700;
-  color: #0f172a;
+  font-weight: 800;
+  color: #071a3d;
   margin-top: 0;
   margin-bottom: 6px;
 }
@@ -94,10 +96,12 @@
 .premium-sandbox__product-box,
 .premium-sandbox__sub-info {
   background-color: #f8fafc;
-  border-left: 4px solid #2563eb;
+  border-left: 4px solid #0874ee;
   padding: 16px 20px;
   border-radius: 0 8px 8px 0;
   margin-bottom: 24px;
+  min-height: 130px;
+  box-sizing: border-box;
 }
 .premium-sandbox__product-box h3,
 .premium-sandbox__sub-info h3 {
@@ -122,6 +126,7 @@
   font-size: 13px;
   color: #334155;
   font-weight: 600;
+  margin: 4px 0;
 }
 /* 액션 버튼 영역 */
 .premium-sandbox__action-area {
@@ -131,27 +136,38 @@
 .premium-sandbox__action-area button {
   width: 100%;
   padding: 14px 20px;
-  background-color: #2563eb;
+  background: linear-gradient(135deg, #0876f6, #096ae5);
   color: #ffffff;
   border: none;
-  border-radius: 8px;
-  font-size: 15px;
-  font-weight: 600;
+  border-radius: 9px;
+  font-size: 16px;
+  font-weight: 800;
   cursor: pointer;
-  transition: background-color 0.2s ease;
+  box-shadow: 0 4px 14px rgba(8, 118, 246, 0.25);
+  transition: all 0.15s ease;
 }
 .premium-sandbox__action-area button:hover:not(:disabled) {
-  background-color: #1d4ed8;
+  background: linear-gradient(135deg, #076de4, #085fd3);
 }
-.premium-sandbox__action-area button:focus-visible {
-  outline: 3px solid #93c5fd;
-  outline-offset: 2px;
+/* 상태별 버튼 테마 분기 */
+.premium-sandbox[data-status="SUCCESS"] .premium-sandbox__action-area button {
+  background: linear-gradient(135deg, #059669, #047857);
+  box-shadow: 0 4px 14px rgba(5, 150, 105, 0.25);
+}
+.premium-sandbox[data-status="SUCCESS"] .premium-sandbox__action-area button:hover {
+  background: linear-gradient(135deg, #047857, #065f46);
+}
+.premium-sandbox[data-status="CANCELLED"] .premium-sandbox__action-area button,
+.premium-sandbox[data-status="FAILED"] .premium-sandbox__action-area button {
+  background: linear-gradient(135deg, #ea580c, #c2410c);
+  box-shadow: 0 4px 14px rgba(234, 88, 12, 0.25);
 }
 .premium-sandbox__action-area button:disabled {
-  background-color: #cbd5e1;
+  background: #cbd5e1;
   color: #64748b;
   cursor: not-allowed;
   opacity: 0.9;
+  box-shadow: none;
 }
 /* 하단 힌트 문구 */
 .premium-sandbox__hint {
@@ -159,6 +175,7 @@
   color: #94a3b8;
   margin: 14px 0 0 0;
   line-height: 1.4;
+  min-height: 34px;
 }
 /* 우측 카드: callback 관찰기 영역 */
 .premium-sandbox__callback-section {
@@ -173,6 +190,25 @@
   margin: 0 0 8px 0;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+.premium-guide-card {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 28px 24px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
+}
+.premium-guide-card__action-btn {
+  background: linear-gradient(135deg, #0876f6, #096ae5);
+  border-radius: 8px;
+  font-weight: 800;
+  font-size: 15px;
+}
+
+.premium-guide-card__action-btn:focus-visible,
+.premium-sandbox__action-area button:focus-visible {
+  outline: 3px solid #93c5fd;
+  outline-offset: 2px;
 }
 .premium-sandbox__callback-counts {
   background-color: #f1f5f9;
