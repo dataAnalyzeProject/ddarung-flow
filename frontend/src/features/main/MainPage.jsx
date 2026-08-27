@@ -579,7 +579,7 @@ export default function MainPage({ onNavigate }) {
             weatherLoading={weatherLoading}
             onRetryWeather={() => void loadArrivalWeather(weatherRequest)}
           />
-          <div className="main-time-notice"><button type="button" onClick={() => void saveCurrentRoute()} disabled={saveRouteState === "saving"}>현재 검색 저장</button>{saveRouteState === "saved" && <span> 저장했습니다.</span>}{saveRouteState === "limit" && <span> 저장 경로는 최대 10개입니다.</span>}{saveRouteState === "error" && <span> 저장하지 못했습니다. 다시 시도해 주세요.</span>}</div>
+          <div className="main-save-route"><button type="button" onClick={() => void saveCurrentRoute()} disabled={saveRouteState === "saving"}>현재 검색 저장</button>{saveRouteState === "saved" && <span> 저장했습니다.</span>}{saveRouteState === "limit" && <span> 저장 경로는 최대 10개입니다.</span>}{saveRouteState === "error" && <span> 저장하지 못했습니다. 다시 시도해 주세요.</span>}</div>
         </section>
       ) : (
         <section className="main-dashboard main-dashboard-empty">

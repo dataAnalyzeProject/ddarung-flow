@@ -374,7 +374,9 @@ describe("시안 6 메인 로그인 통합", () => {
       expect(confirm).toHaveBeenCalledWith("이 대여소를 보관함에 저장할까요?");
       await waitFor(() => expect(saveFavorite).toHaveBeenCalledWith({ stationId: 1009, stationName: "천호역 4번출구" }));
       expect(await screen.findByText("천호역 4번출구 저장이 완료되었습니다. 보관함의 저장 대여소에서 확인하세요.")).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "천호역 4번출구 즐겨찾기 저장됨" })).toHaveAttribute("aria-pressed", "true");
+      const favoriteButton = screen.getByRole("button", { name: "천호역 4번출구 즐겨찾기 저장됨" });
+      expect(favoriteButton).toHaveAttribute("aria-pressed", "true");
+      expect(favoriteButton.tagName).toBe("BUTTON");
       confirm.mockRestore();
     });
 
