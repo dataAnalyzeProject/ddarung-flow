@@ -11,3 +11,4 @@ async function request(path) {
 
 export const fetchStationDetail = (stationId) => request(`/api/v1/stations/${encodeURIComponent(stationId)}`);
 export const fetchStationRhythm = (stationId) => request(`/api/v1/stations/${encodeURIComponent(stationId)}/rhythm`);
+export const fetchNearbyStations = (latitude, longitude) => request(`/api/v1/stations?minLat=${latitude - 0.01}&maxLat=${latitude + 0.01}&minLng=${longitude - 0.01}&maxLng=${longitude + 0.01}`);
