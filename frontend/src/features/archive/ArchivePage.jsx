@@ -15,15 +15,17 @@ export default function ArchivePage({ authState, user, onNavigate, onBeforeLogin
   const [stations, setStations] = useState([]);
   const [routes, setRoutes] = useState([]);
   const [histories, setHistories] = useState([]);
+  const [scoreSummary, setScoreSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     loadArchive()
-      .then(([favorites, savedRoutes, predictionHistories]) => {
+      .then(([favorites, savedRoutes, predictionHistories, predictionScoreSummary]) => {
         setStations(favorites);
         setRoutes(savedRoutes);
         setHistories(predictionHistories);
+        setScoreSummary(predictionScoreSummary);
       })
       .catch((requestError) => setError(requestError.code || "보관함을 불러오지 못했습니다."))
       .finally(() => setLoading(false));
@@ -38,8 +40,10 @@ export default function ArchivePage({ authState, user, onNavigate, onBeforeLogin
         await removeSavedRoute(id);
         setRoutes((current) => current.filter((item) => item.id !== id));
       } else {
+        const deleted = histories.find((item) => item.id === id);
         await removePredictionHistory(id);
         setHistories((current) => current.filter((item) => item.id !== id));
+        if (deleted?.outcome === "HIT" || deleted?.outcome === "MISS") setScoreSummary((current) => removeScore(current, deleted));
       }
     } catch (requestError) {
       setError(requestError.code || "삭제하지 못했습니다.");
@@ -75,11 +79,29 @@ export default function ArchivePage({ authState, user, onNavigate, onBeforeLogin
           <aside className="archive-card summary-card"><h2>보관함 요약</h2><div className="summary-row"><span>저장 대여소</span><b style={{ color: "#08a36f" }}>{stations.length}</b></div><div className="summary-row"><span>저장 경로</span><b style={{ color: "#0875ef" }}>{routes.length}</b></div><div className="summary-row"><span>예측 이력</span><b style={{ color: "#ff8700" }}>{histories.length}</b></div><button type="button" className="archive-find-btn" onClick={() => onNavigate?.("main")}>대여소 찾기</button></aside>
         </div>}
         {!loading && tab === "routes" && <ArchiveList title="저장 경로" items={routes} empty="저장한 경로가 없습니다." format={(route) => route.displayName ? `${route.displayName}${route.replayable ? " · 입력 복원 가능" : " · 이전 형식"}` : `${route.startStationName || route.startStationId} → ${route.endStationName || route.endStationId}`} onRemove={(id) => remove("route", id)} onRestore={restoreRoute} />}
-        {!loading && tab === "history" && <ArchiveList title="예측 이력" items={histories} empty="예측 이력이 없습니다." format={(history) => `${history.queryCondition} · ${history.summaryResult}`} onRemove={(id) => remove("history", id)} />}
+        {!loading && tab === "history" && <PredictionHistoryList items={histories} scoreSummary={scoreSummary} onRemove={(id) => remove("history", id)} />}
         <div className="archive-note"><span className="note-icon">i</span><span>예측 이력은 요청 당시의 조건이며 현재 결과가 아닙니다.</span></div>
       </main>
     </div>
   );
+}
+
+function removeScore(summary, history) {
+  if (!summary || summary.scoredCount <= 1) return null;
+  const byLevel = { ...summary.byLevel };
+  const level = history.availabilityLevel;
+  if (byLevel[level]) byLevel[level] = { scoredCount: byLevel[level].scoredCount - 1, hitCount: byLevel[level].hitCount - (history.outcome === "HIT" ? 1 : 0) };
+  const scoredCount = summary.scoredCount - 1;
+  const hitCount = summary.hitCount - (history.outcome === "HIT" ? 1 : 0);
+  return { scoredCount, hitCount, hitRate: hitCount / scoredCount, byLevel };
+}
+
+function PredictionHistoryList({ items, scoreSummary, onRemove }) {
+  return <section className="archive-card prediction-history"><div className="prediction-history-head"><h2>예측 이력</h2>{scoreSummary && <b>{scoreSummary.scoredCount}건 중 {scoreSummary.hitCount}건 적중 · {Math.round(scoreSummary.hitRate * 100)}%</b>}</div>{scoreSummary && <p className="prediction-score-note">등급 안내가 실제와 맞았는지를 표시하며, 확률값의 정확도와는 다릅니다.</p>}{items.length ? items.map((history) => <div className="prediction-history-row" key={history.id}><span>{history.stationName || history.queryCondition} · {history.requiredBikeCount ?? "-"}대 · {history.predictionTargetAt || history.queriedAt}</span><span>{history.actualBikeCount == null ? outcomeLabel(history.outcome) : `실제 ${history.actualBikeCount}대`}</span><span className={`prediction-outcome ${history.outcome || "pending"}`}>{outcomeLabel(history.outcome)}</span><button type="button" className="archive-btn danger" onClick={() => onRemove(history.id)}>삭제</button></div>) : <p className="prediction-history-empty">예측 이력이 없습니다.</p>}</section>;
+}
+
+function outcomeLabel(outcome) {
+  return ({ HIT: "적중", MISS: "빗나감", NOT_DUE: "아직 확인 전", UNVERIFIABLE: "확인 불가" })[outcome] || "아직 확인 전";
 }
 
 function ArchiveList({ title, items, empty, format, onRemove, onRestore }) {
