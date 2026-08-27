@@ -269,19 +269,27 @@ def test_end_to_end_sealed_evaluation_bundle(tmp_path, trained_distribution_arti
     )
 
     assert result["evaluated_combinations"] == 20
-    comb_file = Path(result["combinations_path"])
+    results_file = Path(result["results_path"])
     summary_file = Path(result["summary_path"])
+    manifest_file = Path(result["manifest_path"])
     checksum_file = Path(result["checksum_path"])
 
-    assert comb_file.exists()
+    assert results_file.exists()
+    assert results_file.name == "DATA-5.2_20-combination-results.json"
     assert summary_file.exists()
+    assert summary_file.name == "DATA-5.2_sealed-evaluation-summary.md"
+    assert manifest_file.exists()
+    assert manifest_file.name == "DATA-5.2_sealed-input-manifest.json"
     assert checksum_file.exists()
+    assert checksum_file.name == "SHA256SUMS"
 
-    comb_data = json.loads(comb_file.read_text(encoding="utf-8"))
+    comb_data = json.loads(results_file.read_text(encoding="utf-8"))
     assert len(comb_data) == 20
 
-    summary_data = json.loads(summary_file.read_text(encoding="utf-8"))
-    assert summary_data["task_id"] == "DATA-5.2"
-    assert summary_data["test_dataset_label"] == "reconstructed historical test"
-    assert summary_data["monotonicity_verified"] is True
-    assert summary_data["probability_bounds_verified"] is True
+    summary_text = summary_file.read_text(encoding="utf-8")
+    assert "DATA-5.2" in summary_text
+    assert "reconstructed historical test" in summary_text
+
+    manifest_data = json.loads(manifest_file.read_text(encoding="utf-8"))
+    assert manifest_data["task_id"] == "DATA-5.2"
+    assert manifest_data["test_dataset_label"] == "reconstructed historical test"

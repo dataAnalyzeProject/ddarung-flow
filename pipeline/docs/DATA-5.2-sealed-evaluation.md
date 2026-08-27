@@ -52,7 +52,7 @@
 
 ## 4. 출력 결과 설명 (총 20개 조합)
 
-결과 파일(`sealed_evaluation_20_combinations.json`)에는 20개 행이 출력되며, 각 항목의 쉬운 뜻은 다음과 같습니다.
+결과 파일(`DATA-5.2_20-combination-results.json` 및 `DATA-5.2_sealed-evaluation-summary.md`)에는 20개 행의 정량 지표와 요약 보고서가 출력되며, 각 항목의 쉬운 뜻은 다음과 같습니다.
 
 ### 4.1 출력 필드 설명
 - **`horizonMinutes` (예측 시간)**: 몇 분 뒤를 예측했는지 (60분, 120분, 180분, 240분)
@@ -81,7 +81,8 @@
 ## 6. 비공개 데이터(Private-Local) 보호 및 제출 규칙
 
 - **비공개 원칙**: `test_wide_labels.parquet` 원본 파일 자체 및 로컬 PC 경로는 Git 저장소, Google Drive, Notion 어디에도 커밋하거나 업로드하지 않습니다.
-- **제출 대상**:
-  - `sealed_evaluation_20_combinations.json` (20개 조합 평가 결과)
-  - `sealed_evaluation_summary.json` (전체 요약 보고서, `test_dataset_label: "reconstructed historical test"`)
-  - `SHA256SUMS` (위 파일들의 체크섬)
+- **Drive 제출 대상 (4종)**:
+  - `DATA-5.2_sealed-input-manifest.json` (입력 매니페스트)
+  - `DATA-5.2_20-combination-results.json` (20개 조합 평가 결과 JSON)
+  - `DATA-5.2_sealed-evaluation-summary.md` (평가 요약 마크다운 보고서)
+  - `SHA256SUMS` (위 산출물들의 체크섬)
