@@ -6,6 +6,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.math.BigDecimal;
 import com.ddarungflow.map.PredictionApiDtos;
@@ -168,6 +170,25 @@ public class RetentionService {
         // 최신 30건만 반환 강제
         return predictionHistoryRepository.findByUserIdOrderByQueriedAtDesc(userId, PageRequest.of(0, MAX_PREDICTION_HISTORIES));
     }
+
+    public RetentionScoreSummary getPredictionScoreSummary(Long userId) {
+        if (userId == null) throw new IllegalArgumentException("userId는 필수입니다.");
+        Map<String, ScoreLevel> byLevel = new LinkedHashMap<>();
+        long scoredCount = 0;
+        long hitCount = 0;
+        for (PredictionHistoryRepository.ScoreSummaryRow row : predictionHistoryRepository.summarizeScoresByUserId(userId)) {
+            String level = row.getLevel();
+            long scored = row.getScoredCount();
+            long hits = row.getHitCount();
+            byLevel.put(level, new ScoreLevel(scored, hits));
+            scoredCount += scored;
+            hitCount += hits;
+        }
+        return scoredCount == 0 ? null : new RetentionScoreSummary(scoredCount, hitCount, (double) hitCount / scoredCount, byLevel);
+    }
+
+    public record ScoreLevel(long scoredCount, long hitCount) { }
+    public record RetentionScoreSummary(long scoredCount, long hitCount, double hitRate, Map<String, ScoreLevel> byLevel) { }
 
     @Transactional
     public void deletePredictionHistory(Long userId, Long historyId) {

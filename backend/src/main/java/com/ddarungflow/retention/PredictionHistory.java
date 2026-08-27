@@ -32,6 +32,9 @@ public class PredictionHistory {
     @Column(name = "prediction_status") private String predictionStatus;
     @Column(name = "prediction_target_at") private OffsetDateTime predictionTargetAt;
     @Column(name = "required_bike_count") private Integer requiredBikeCount;
+    @Column(name = "actual_bike_count") private Integer actualBikeCount;
+    @Column(name = "outcome") private String outcome;
+    @Column(name = "scored_at") private OffsetDateTime scoredAt;
 
     @Column(name = "queried_at", nullable = false, updatable = false)
     private OffsetDateTime queriedAt;
