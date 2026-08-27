@@ -31,12 +31,14 @@ def build_snapshot_rows(inventory_rows: Iterable[Mapping[str, Any]], manifest: M
     for row in inventory_rows:
         if row.get("inventory_status") != "NORMAL":
             continue
-        station_id = row.get("station_id")
+        station_number = row.get("station_number")
         bike_count = row.get("available_bike_count")
-        if station_id is None or bike_count is None:
-            raise ValueError("NORMAL inventory rows require station_id and available_bike_count")
+        if station_number is None or str(station_number).strip() == "":
+            continue
+        if bike_count is None:
+            raise ValueError("NORMAL inventory rows require available_bike_count")
         normalized.append({
-            "stationId": str(station_id),
+            "stationId": int(str(station_number).strip()),
             "featureAsOf": _iso_timestamp(row.get("collected_at")),
             "currentBikeCount": int(bike_count),
             "modelVersion": str(model_version),
@@ -56,8 +58,9 @@ def load_current_inventory(database_url: str, connect: Callable[[str], Any]) -> 
         cursor = connection.cursor()
         try:
             cursor.execute(
-                "SELECT station_id, collected_at, available_bike_count, inventory_status "
-                "FROM station_inventory_current ORDER BY collected_at DESC, station_id"
+                "SELECT i.station_id, s.station_number, i.collected_at, i.available_bike_count, i.inventory_status "
+                "FROM station_inventory_current i JOIN stations s ON s.station_id = i.station_id "
+                "ORDER BY i.collected_at DESC, i.station_id"
             )
             columns = [column.name for column in cursor.description]
             return [dict(zip(columns, row)) for row in cursor.fetchall()]

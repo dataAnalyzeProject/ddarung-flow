@@ -1,5 +1,6 @@
 [
-  {"station_id": "ST-2", "collected_at": "2026-08-27T02:00:00Z", "available_bike_count": 3, "inventory_status": "NORMAL"},
-  {"station_id": "ST-1", "collected_at": "2026-08-27T02:00:00Z", "available_bike_count": 0, "inventory_status": "NORMAL"},
+  {"station_id": "ST-2", "station_number": "108", "collected_at": "2026-08-27T02:00:00Z", "available_bike_count": 3, "inventory_status": "NORMAL"},
+  {"station_id": "ST-1", "station_number": "101", "collected_at": "2026-08-27T02:00:00Z", "available_bike_count": 0, "inventory_status": "NORMAL"},
+  {"station_id": "ST-NUMBERLESS", "station_number": null, "collected_at": "2026-08-27T02:00:00Z", "available_bike_count": 1, "inventory_status": "NORMAL"},
   {"station_id": "ST-MISSING", "collected_at": "2026-08-27T02:00:00Z", "available_bike_count": null, "inventory_status": "MISSING"}
 ]
