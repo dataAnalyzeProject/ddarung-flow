@@ -836,6 +836,26 @@
   color: var(--guide-green);
 }
 
+.guide-summary-detail .guide-reliability {
+  display: block;
+  margin-top: 5px;
+  padding-top: 6px;
+  border-top: 1px solid #e1e6ec;
+}
+
+.guide-reliability > div {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  padding: 2px 0;
+}
+
+.guide-reliability > p {
+  margin: 5px 0 0;
+  color: #60728d;
+  font-size: .92em;
+  line-height: 1.45;
+}
+
 .guide-warnings ul {
   margin: clamp(10px, .8vw, 15px) 0 0;
   padding: 0;
