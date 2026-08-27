@@ -37,8 +37,12 @@ def build_snapshot_rows(inventory_rows: Iterable[Mapping[str, Any]], manifest: M
             continue
         if bike_count is None:
             raise ValueError("NORMAL inventory rows require available_bike_count")
+        try:
+            station_number = int(str(station_number).strip())
+        except ValueError as error:
+            raise ValueError(f"station {row.get('station_id')} has invalid station_number {station_number!r}") from error
         normalized.append({
-            "stationId": int(str(station_number).strip()),
+            "stationId": station_number,
             "featureAsOf": _iso_timestamp(row.get("collected_at")),
             "currentBikeCount": int(bike_count),
             "modelVersion": str(model_version),
@@ -86,7 +90,14 @@ def main(argv: list[str] | None = None) -> int:
     try:
         import psycopg
 
-        snapshot = build_snapshot(database_url, args.manifest, psycopg.connect)
+        manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
+        inventory_rows = load_current_inventory(database_url, psycopg.connect)
+        snapshot = build_snapshot_rows(inventory_rows, manifest)
+        skipped_count = sum(
+            row.get("inventory_status") == "NORMAL"
+            and (row.get("station_number") is None or str(row.get("station_number")).strip() == "")
+            for row in inventory_rows
+        )
         args.output.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2), encoding="utf-8")
     except (OSError, ValueError, json.JSONDecodeError) as error:
         print(f"prediction snapshot build failed: {error}", file=sys.stderr)
@@ -94,7 +105,7 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as error:
         print(f"prediction snapshot build failed: {type(error).__name__}", file=sys.stderr)
         return 1
-    print(json.dumps({"stationCount": len(snapshot)}, ensure_ascii=False))
+    print(json.dumps({"stationCount": len(snapshot), "skippedCount": skipped_count}, ensure_ascii=False))
     return 0
 
 

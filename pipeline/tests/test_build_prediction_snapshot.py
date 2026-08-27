@@ -32,6 +32,13 @@ def test_excludes_non_normal_inventory_rows():
     assert len(build_snapshot_rows(rows(), MANIFEST)) == 2
 
 
+def test_invalid_station_number_identifies_the_internal_station_id():
+    invalid = rows()
+    invalid[0]["station_number"] = "not-a-number"
+    with pytest.raises(ValueError, match="ST-2.*not-a-number"):
+        build_snapshot_rows(invalid, MANIFEST)
+
+
 def test_snapshot_uses_numeric_station_numbers_and_rejects_string_feature_input():
     snapshot = build_snapshot_rows(rows(), MANIFEST)
     assert all(isinstance(row["stationId"], int) for row in snapshot)
@@ -74,5 +81,6 @@ def test_database_url_is_not_written_to_snapshot_or_output(tmp_path, monkeypatch
 
     assert database_url not in output_path.read_text(encoding="utf-8")
     captured = capsys.readouterr()
+    assert json.loads(captured.out) == {"stationCount": 1, "skippedCount": 0}
     assert database_url not in captured.out
     assert database_url not in captured.err
