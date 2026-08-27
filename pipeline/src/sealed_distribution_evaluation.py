@@ -168,9 +168,10 @@ def evaluate_sealed_distribution_records(
     raw_probs = model_obj.predict_proba(features)
     tails = tail_probabilities(raw_probs, classes)
 
-    # Validate probability bounds
-    if (tails < 0.0).any() or (tails > 1.0).any():
+    # Validate probability bounds with numerical epsilon tolerance
+    if (tails < -1e-9).any() or (tails > 1.0 + 1e-9).any():
         raise ValueError("Rejected: predicted probabilities must be within [0.0, 1.0]")
+    tails = np.clip(tails, 0.0, 1.0)
 
     # Validate monotonicity (probability must not increase as required quantity increases)
     diffs = np.diff(tails, axis=1)
@@ -286,6 +287,7 @@ def run_sealed_evaluation(
     summary_data = {
         "task_id": "DATA-5.2",
         "model_version": REQUIRED_MODEL_VERSION,
+        "test_dataset_label": "reconstructed historical test",
         "artifact_sha256": expected_artifact_sha,
         "manifest_sha256": expected_manifest_sha,
         "sealed_input_sha256": expected_sealed_input_sha,

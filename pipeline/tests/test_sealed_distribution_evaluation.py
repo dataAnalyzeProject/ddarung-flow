@@ -224,14 +224,15 @@ def test_end_to_end_sealed_evaluation_bundle(tmp_path, trained_distribution_arti
     # Create valid mock wide-label parquet dataframe from test_records
     rows = []
     # Build tail labels mock
-    for r in test_records:
+    for idx, r in enumerate(test_records):
         row = {
             "station_id": r["station_id"],
             "feature_as_of": r["feature_as_of"],
             "current_bike_count": r["current_bike_count"],
         }
         for h in (1, 2, 3, 4):
-            row[f"target_valid_h{h}"] = True
+            # Mark even index H4 as target_valid=False to verify invalid rows are filtered out
+            row[f"target_valid_h{h}"] = not (h == 4 and idx % 2 == 0)
             fut = r["future_bike_count"]
             for q in (1, 2, 3, 4, 5):
                 row[f"label_h{h}_t{q}"] = 1 if fut >= q else 0
@@ -281,5 +282,6 @@ def test_end_to_end_sealed_evaluation_bundle(tmp_path, trained_distribution_arti
 
     summary_data = json.loads(summary_file.read_text(encoding="utf-8"))
     assert summary_data["task_id"] == "DATA-5.2"
+    assert summary_data["test_dataset_label"] == "reconstructed historical test"
     assert summary_data["monotonicity_verified"] is True
     assert summary_data["probability_bounds_verified"] is True
