@@ -46,7 +46,7 @@ function inventoryReferenceTime(candidates) {
   return collectedTimes.length ? collectedTimes.sort()[0] : null;
 }
 
-export default function StationRecommendationPanel({ candidates, selectedStationId, onSelect, onViewGuide, routeDurationMinutes }) {
+export default function StationRecommendationPanel({ candidates, selectedStationId, onSelect, onViewGuide, onFavorite, favoriteStationIds = [], routeDurationMinutes }) {
   const [sortBy, setSortBy] = useState("probability");
   const [isListOpen, setIsListOpen] = useState(false);
   const sortedCandidates = useMemo(() => sortCandidates(candidates, sortBy), [candidates, sortBy]);
@@ -64,12 +64,28 @@ export default function StationRecommendationPanel({ candidates, selectedStation
 
   const renderStation = (candidate, index) => {
     const selected = candidate.stationId === selectedStationId;
+    const favorite = favoriteStationIds.includes(String(candidate.stationId));
     const level = candidate.availabilityLevel;
     return (
       <div aria-label={`${candidate.stationName} 대여소 카드`} className={`main-station ${selected ? "selected" : ""}`} key={candidate.stationId} role="group">
         <button aria-label={`${candidate.stationName} 대여소 선택`} aria-pressed={selected} className="main-station-select" type="button" onClick={() => onSelect(candidate.stationId)} />
         <b className="main-rank">{index + 1}</b>
-        <img aria-hidden="true" alt="" className="main-station-bookmark" src={bookmarkIcon} />
+        <img
+          alt=""
+          aria-label={`${candidate.stationName} 즐겨찾기 ${favorite ? "저장됨" : "저장"}`}
+          aria-pressed={favorite}
+          className="main-station-bookmark"
+          onClick={() => onFavorite?.(candidate)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              onFavorite?.(candidate);
+            }
+          }}
+          role="button"
+          src={bookmarkIcon}
+          tabIndex={0}
+        />
         <span className="main-station-name">
           <h3>{candidate.stationName}</h3>
           {index === 0 && <em>추천</em>}

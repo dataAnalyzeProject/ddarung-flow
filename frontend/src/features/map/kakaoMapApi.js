@@ -103,8 +103,6 @@ export function createKakaoMapAdapter(container, maps, center = { latitude: 37.5
       setMarker("current", current, createMarkerImage(markerOptions.currentMarkerImage, 32, 32));
       setMarker("origin", origin);
       setMarker("destination", destination);
-      if (destination) map.setCenter(toLatLng(destination));
-      else if (origin) map.setCenter(toLatLng(origin));
     },
     setRoutePath(points) {
       clearRoute();
