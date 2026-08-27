@@ -317,6 +317,19 @@ jobs:
 
           compose_files=(-f docker-compose.yaml -f docker-compose.oci.yaml)
           docker compose --env-file .env --env-file oauth.env --env-file release.env "${compose_files[@]}" config --quiet
+
+          # Every deploy pulls four SHA-tagged images that nothing removes, so the
+          # host filled to 100% and pull failed with "no space left on device".
+          # Reclaim only when space is actually short, keeping the last day of
+          # images so this release and its rollback target survive.
+          available_kb=$(df -Pk / | awk 'NR==2 {print $4}')
+          echo "Root filesystem available: $((available_kb / 1024)) MiB"
+          if [ "$available_kb" -lt 10485760 ]; then
+            echo "Less than 10 GiB free. Pruning unused images older than 24h before pull."
+            docker image prune -af --filter "until=24h" || true
+            df -h / | tail -1
+          fi
+
           docker compose --env-file .env --env-file oauth.env --env-file release.env "${compose_files[@]}" pull frontend backend postgres inference inventory-refresher
           docker compose --env-file .env --env-file oauth.env --env-file release.env "${compose_files[@]}" up -d --no-build --remove-orphans
 
@@ -350,6 +363,13 @@ jobs:
           trap - ERR
           docker compose --env-file .env --env-file oauth.env --env-file release.env "${compose_files[@]}" ps
           echo "Public staging and OAuth HTTPS callback verification passed."
+
+          # The rollback trap is disarmed and the release is verified, so old
+          # images are no longer needed locally. A later rollback re-pulls from
+          # the registry, so removing them does not weaken recovery.
+          # Never fail the deploy on cleanup.
+          docker image prune -af --filter "until=168h" || true
+          df -h / | tail -1
           REMOTE
 
   verify-automatic-rollback:
