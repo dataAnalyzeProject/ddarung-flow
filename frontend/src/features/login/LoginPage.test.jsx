@@ -184,6 +184,8 @@ describe('LoginPage 핵심 테스트', () => {
         const navigation = screen.getByRole('navigation', { name: '주요 메뉴' });
         expect(navigation).toHaveTextContent('대여 예측');
         expect(navigation).toHaveTextContent('Q&A');
+        expect(screen.getByRole('link', { name: '보관함' })).toHaveAttribute('href', '/#archive');
+        expect(screen.getByRole('link', { name: '알림' })).toHaveAttribute('href', '/#alerts');
         expect(screen.getByRole('heading', { name: '로그인하고 더 편리하게 이용하세요' })).toBeInTheDocument();
         expect(screen.getByRole('heading', { name: '로그인하면' })).toBeInTheDocument();
     });
