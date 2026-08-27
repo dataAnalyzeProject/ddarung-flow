@@ -36,6 +36,14 @@ public class PredictionApiDtos {
         BigDecimal atLeast5
     ) {}
 
+    public record HorizonOutlook(
+        long horizonMinutes,
+        OffsetDateTime predictionTargetAt,
+        BigDecimal probability,
+        AvailabilityLevel availabilityLevel,
+        boolean isSelected
+    ) {}
+
     public record CandidatePredictionResponseDto(
         String stationId,
         String stationName,
@@ -58,6 +66,22 @@ public class PredictionApiDtos {
         AvailabilityLevel availabilityLevel,
         PredictionStatus predictionStatus,
         String modelVersion,
-        OffsetDateTime generatedAt
-    ) {}
+        OffsetDateTime generatedAt,
+        java.util.List<HorizonOutlook> horizonOutlook
+    ) {
+        public CandidatePredictionResponseDto(
+            String stationId, String stationName, BigDecimal latitude, BigDecimal longitude, int distanceMeters,
+            int durationSeconds, Integer availableBikeCount, InventoryStatus inventoryStatus,
+            OffsetDateTime inventoryCollectedAt, BigDecimal predictionProbability, QuantityProbabilities probabilities,
+            Integer requiredBikeCount, OffsetDateTime arrivalAt, OffsetDateTime predictionTargetAt,
+            long targetOffsetMinutes, long horizonMinutes, OffsetDateTime featureAsOf, OffsetDateTime expiresAt,
+            AvailabilityLevel availabilityLevel, PredictionStatus predictionStatus, String modelVersion,
+            OffsetDateTime generatedAt
+        ) {
+            this(stationId, stationName, latitude, longitude, distanceMeters, durationSeconds, availableBikeCount,
+                inventoryStatus, inventoryCollectedAt, predictionProbability, probabilities, requiredBikeCount,
+                arrivalAt, predictionTargetAt, targetOffsetMinutes, horizonMinutes, featureAsOf, expiresAt,
+                availabilityLevel, predictionStatus, modelVersion, generatedAt, null);
+        }
+    }
 }

@@ -114,6 +114,7 @@ public class MapPredictionService {
             BigDecimal probability = null;
             PredictionApiDtos.QuantityProbabilities probabilities = null;
             PredictionApiDtos.AvailabilityLevel availabilityLevel = null;
+            List<PredictionApiDtos.HorizonOutlook> horizonOutlook = null;
             PredictionApiDtos.PredictionStatus predictionStatus;
             String modelVersion = null;
             OffsetDateTime generatedAt = null;
@@ -180,6 +181,15 @@ public class MapPredictionService {
                             horizonRows.get(4).probability()
                         );
                         availabilityLevel = toAvailabilityLevel(probability);
+                        horizonOutlook = prediction.rows().stream()
+                            .filter(row -> row.requiredBikeCount() == bikeCount)
+                            .sorted(Comparator.comparingInt(InferenceDtos.ProbabilityRow::horizonMinutes))
+                            .map(row -> new PredictionApiDtos.HorizonOutlook(
+                                row.horizonMinutes(), featureAsOfApprox.plusMinutes(row.horizonMinutes()),
+                                row.probability(), toAvailabilityLevel(row.probability()),
+                                row.horizonMinutes() == timeResult.horizonMinutes()
+                            ))
+                            .toList();
                         predictionStatus = PredictionApiDtos.PredictionStatus.NORMAL;
                     }
                 } catch (Exception e) {
@@ -213,7 +223,8 @@ public class MapPredictionService {
                 availabilityLevel,
                 predictionStatus,
                 modelVersion,
-                generatedAt
+                generatedAt,
+                horizonOutlook
             ));
         }
 

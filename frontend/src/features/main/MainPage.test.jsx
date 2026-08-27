@@ -138,6 +138,27 @@ describe("시안 6 메인 로그인 통합", () => {
     expect(await screen.findByText("예측을 불러올 수 없음")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "예측을 불러올 수 없음" })).toBeInTheDocument();
     expect(screen.getByText("선택한 대여소의 대수별 확률 정보가 없어요.")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "도착 시간대별 가능성" })).not.toBeInTheDocument();
+  });
+
+  test("저장된 horizonOutlook을 도착 시간대별 가능성으로 표시하고 선택 시각을 구분한다", async () => {
+    const candidate = savedPredictionCandidate({
+      requiredBikeCount: 3,
+      horizonOutlook: [
+        { horizonMinutes: 60, predictionTargetAt: "2026-08-15T11:00:00+09:00", probability: 0.81, availabilityLevel: "HIGH", isSelected: false },
+        { horizonMinutes: 120, predictionTargetAt: "2026-08-15T12:00:00+09:00", probability: 0.54, availabilityLevel: "MEDIUM", isSelected: true },
+        { horizonMinutes: 180, predictionTargetAt: "2026-08-15T13:00:00+09:00", probability: 0.31, availabilityLevel: "LOW", isSelected: false },
+        { horizonMinutes: 240, predictionTargetAt: "2026-08-15T14:00:00+09:00", probability: 0.72, availabilityLevel: "HIGH", isSelected: false },
+      ],
+    });
+    sessionStorage.setItem(PREDICTION_RESULT_KEY, JSON.stringify({ input: {}, routePlaces: {}, result: { candidates: [candidate] }, selectedStationInfo: { stationId: candidate.stationId, stationName: candidate.stationName }, arrivalWeather: null, weatherRequest: null }));
+
+    render(<MainPage />);
+
+    expect(await screen.findByRole("heading", { name: "도착 시간대별 가능성" })).toBeInTheDocument();
+    expect(screen.getByText("3대 기준")).toBeInTheDocument();
+    expect(screen.getByText("오전 11:00 (H1)")).toBeInTheDocument();
+    expect(screen.getByLabelText("54%").parentElement).toHaveAttribute("aria-current", "true");
   });
 
   test("비로그인 예측 입력을 저장하고 기존 로그인 페이지로 연결한다", async () => {

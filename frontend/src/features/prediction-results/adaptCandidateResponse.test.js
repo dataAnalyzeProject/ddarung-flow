@@ -37,6 +37,7 @@ describe("adaptCandidateResponse", () => {
     const candidate = result.candidates[0];
     expect(candidate).toEqual(expect.objectContaining({ latitude: 37.51, longitude: 127.01 }));
     expect(candidate.selectedProbability).toBe(0.87);
+    expect(candidate.horizonOutlook).toBeNull();
     expect(candidate.probabilities).toEqual({ atLeast1: 0.93, atLeast2: 0.87, atLeast3: 0.76, atLeast4: 0.61, atLeast5: 0.45 });
     expect(candidate.currentInventory).toEqual({
       availableBikeCount: 8,
@@ -45,6 +46,18 @@ describe("adaptCandidateResponse", () => {
     });
     expect(candidate.predictionStatus).toBe("NORMAL");
     expect(candidate.requiredBikeCount).toBe(2);
+  });
+
+  it("passes horizonOutlook through without changing other candidate mappings", () => {
+    const horizonOutlook = [{ horizonMinutes: 60, predictionTargetAt: "2026-08-15T10:00:00+09:00", probability: 0.87, availabilityLevel: "HIGH", isSelected: true }];
+    const result = adaptCandidateResponse([{ ...dto, horizonOutlook }]);
+
+    expect(result.candidates[0]).toEqual(expect.objectContaining({
+      stationId: dto.stationId,
+      selectedProbability: dto.predictionProbability,
+      horizonOutlook,
+      probabilities: { atLeast1: 0.93, atLeast2: 0.87, atLeast3: 0.76, atLeast4: 0.61, atLeast5: 0.45 },
+    }));
   });
 
   it("handles TOO_SOON candidates with null probability/probabilities", () => {
