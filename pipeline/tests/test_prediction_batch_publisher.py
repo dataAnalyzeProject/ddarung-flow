@@ -18,11 +18,14 @@ class FakeCursor:
         self.calls = []
         self.closed = False
 
-    def execute(self, statement, parameters):
+    def execute(self, statement, parameters=None):
         self.calls.append((statement, parameters))
 
     def close(self):
         self.closed = True
+
+    def fetchall(self):
+        return [("ST-10", "101"), ("ST-20", "102")]
 
 
 class FakeConnection:
@@ -46,6 +49,8 @@ class FakeConnection:
 
 def valid_batch_result():
     inputs = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+    for row, station_number in zip(inputs, (101, 102)):
+        row["stationId"] = station_number
     return run_batch_inference(
         inputs,
         predictor=lambda rows: [0.95 - row["required_bike_count"] * 0.08 for row in rows],
@@ -92,6 +97,7 @@ def test_manual_publish_entry_point_loads_a_validated_batch_file(tmp_path):
     assert result["publishedStationPredictions"] == 8
     assert connection.commits == 1
     assert connection.closed is True
+    assert connection.cursor_value.calls[2][1][1] == "ST-10"
 
 
 def test_manual_publish_cli_uses_database_url_without_printing_it(tmp_path, monkeypatch, capsys):
