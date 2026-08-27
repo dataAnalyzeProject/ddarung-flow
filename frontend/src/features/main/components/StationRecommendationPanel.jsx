@@ -70,22 +70,15 @@ export default function StationRecommendationPanel({ candidates, selectedStation
       <div aria-label={`${candidate.stationName} 대여소 카드`} className={`main-station ${selected ? "selected" : ""}`} key={candidate.stationId} role="group">
         <button aria-label={`${candidate.stationName} 대여소 선택`} aria-pressed={selected} className="main-station-select" type="button" onClick={() => onSelect(candidate.stationId)} />
         <b className="main-rank">{index + 1}</b>
-        <img
-          alt=""
+        <button
           aria-label={`${candidate.stationName} 즐겨찾기 ${favorite ? "저장됨" : "저장"}`}
           aria-pressed={favorite}
           className="main-station-bookmark"
           onClick={() => onFavorite?.(candidate)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              onFavorite?.(candidate);
-            }
-          }}
-          role="button"
-          src={bookmarkIcon}
-          tabIndex={0}
-        />
+          type="button"
+        >
+          <img alt="" src={bookmarkIcon} />
+        </button>
         <span className="main-station-name">
           <h3><button type="button" onClick={() => onViewStation?.(candidate.stationId)}>{candidate.stationName}</button></h3>
           {index === 0 && <em>추천</em>}
