@@ -46,7 +46,7 @@ function inventoryReferenceTime(candidates) {
   return collectedTimes.length ? collectedTimes.sort()[0] : null;
 }
 
-export default function StationRecommendationPanel({ candidates, selectedStationId, onSelect, onViewGuide, onFavorite, favoriteStationIds = [], routeDurationMinutes }) {
+export default function StationRecommendationPanel({ candidates, selectedStationId, onSelect, onViewGuide, onViewStation, onFavorite, favoriteStationIds = [], routeDurationMinutes }) {
   const [sortBy, setSortBy] = useState("probability");
   const [isListOpen, setIsListOpen] = useState(false);
   const sortedCandidates = useMemo(() => sortCandidates(candidates, sortBy), [candidates, sortBy]);
@@ -87,7 +87,7 @@ export default function StationRecommendationPanel({ candidates, selectedStation
           tabIndex={0}
         />
         <span className="main-station-name">
-          <h3>{candidate.stationName}</h3>
+          <h3><button type="button" onClick={() => onViewStation?.(candidate.stationId)}>{candidate.stationName}</button></h3>
           {index === 0 && <em>추천</em>}
           <small>{candidate.distanceMeters}m · 도보 {Math.round(candidate.durationSeconds / 60)}분</small>
         </span>

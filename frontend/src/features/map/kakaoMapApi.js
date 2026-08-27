@@ -88,6 +88,14 @@ export function createKakaoMapAdapter(container, maps, center = { latitude: 37.5
     content.querySelector("strong").textContent = station.name || station.stationName;
     content.querySelector("span").textContent = count;
     content.querySelector("small").textContent = `${station.collectedAt || "수집 시각 확인 필요"} 기준 · ${inventoryStatus}`;
+    if (typeof markerOptions.onStationDetail === "function") {
+      const detail = document.createElement("button");
+      detail.type = "button";
+      detail.className = "station-map-detail";
+      detail.textContent = "상세 보기";
+      detail.addEventListener("click", () => markerOptions.onStationDetail(station.stationId));
+      content.appendChild(detail);
+    }
     stationOverlay?.setMap(null);
     stationOverlay = new maps.CustomOverlay({ map, position: toLatLng(station), content, yAnchor: 1.45 });
   };
