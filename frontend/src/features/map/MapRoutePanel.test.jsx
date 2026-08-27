@@ -142,6 +142,23 @@ describe("INT-3.6 MapRoutePanel", () => {
     await waitFor(() => expect(screen.queryByText("30분")).not.toBeInTheDocument());
   });
 
+  test("같은 장소 값으로 상위 화면이 갱신되어도 표시한 경로를 유지한다", async () => {
+    const view = renderPanel({ selectedPlaces });
+    fireEvent.click(screen.getByRole("button", { name: "경로 확인" }));
+    expect(await screen.findByText("30분")).toBeInTheDocument();
+
+    view.rerender(
+      <MapRoutePanel
+        travelMode="도보"
+        selectedPlaces={{ origin: { ...selectedPlaces.origin }, destination: { ...selectedPlaces.destination } }}
+        fallbackImage="fallback.png"
+        canViewStations
+      />
+    );
+
+    expect(screen.getByText("30분")).toBeInTheDocument();
+  });
+
   test("경로 요청 중 장소가 바뀌면 늦게 도착한 이전 응답을 무시한다", async () => {
     let resolveRoute;
     estimateRoute.mockReturnValue(new Promise((resolve) => { resolveRoute = resolve; }));

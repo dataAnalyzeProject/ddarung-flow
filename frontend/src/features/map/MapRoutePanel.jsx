@@ -48,9 +48,10 @@ export default function MapRoutePanel({
   const routeRequestRef = useRef(0);
 
   const mode = MODE_MAP[travelMode] || "WALK";
-  const fallbackScale = Number((1 + (5 - mapLevel) * 0.1).toFixed(2));
   const selected = selectedPlaces || { origin: null, destination: null };
   const points = useMemo(() => ({ current, origin: selected.origin, destination: selected.destination }), [current, selected.origin, selected.destination]);
+  const originKey = selected.origin?.placeId || `${selected.origin?.latitude || ""},${selected.origin?.longitude || ""}`;
+  const destinationKey = selected.destination?.placeId || `${selected.destination?.latitude || ""},${selected.destination?.longitude || ""}`;
 
   const handleStationSelected = useCallback(async (location) => {
     const requestId = stationRequestRef.current + 1;
@@ -100,7 +101,7 @@ export default function MapRoutePanel({
     setRoute(null);
     setRouteState("idle");
     setMessage("");
-  }, [selected.origin, selected.destination, travelMode]);
+  }, [destinationKey, originKey, travelMode]);
   useEffect(() => {
     if (!adapterRef.current) return;
     adapterRef.current.setStations(canViewStations && showStations && stationLocations ? stationLocations : [], handleStationSelected);
@@ -198,7 +199,7 @@ export default function MapRoutePanel({
       <header className="main-section-head"><h2>경로 지도</h2><span>장소 선택 후 거리와 도착시각을 확인하세요.</span></header>
       <div className="main-map map-route-panel__map">
         <div className="map-route-panel__canvas" ref={containerRef} aria-label="Kakao 지도" />
-        {sdkStatus !== "ready" && <img className={mapType === "위성" ? "satellite" : ""} style={{ transform: `scale(${fallbackScale})` }} src={fallbackImage} alt="천호동 이동 경로와 추천 대여소 지도" />}
+        {sdkStatus !== "ready" && <img className={mapType === "위성" ? "satellite" : ""} src={fallbackImage} alt="천호동 이동 경로와 추천 대여소 지도" />}
         {sdkStatus === "missing-key" && <p className="map-route-panel__message" style={{ top: 63, bottom: "auto", left: 14 }}>지도 SDK 키가 없어 예시 지도를 표시합니다.</p>}
         {sdkStatus === "failed" && <p className="map-route-panel__message" style={{ top: 63, bottom: "auto", left: 14 }}>지도 SDK를 불러오지 못해 예시 지도를 표시합니다.</p>}
         <div className="main-map-tabs">{["지도", "위성"].map((type) => <button className={mapType === type ? "active" : ""} type="button" aria-pressed={mapType === type} key={type} onClick={() => setMapType(type)}>{type}</button>)}</div>
@@ -208,11 +209,11 @@ export default function MapRoutePanel({
         <button className="main-redraw" type="button" aria-label="내 위치 확인" disabled={locationState === "loading"} onClick={locate}>
           <img src={currentLocationButton} alt="" aria-hidden="true" />
         </button>
-        <div className="main-zoom"><button type="button" aria-label="지도 확대" onClick={() => setMapLevel((level) => Math.max(1, level - 1))}>＋</button><button type="button" aria-label="지도 축소" onClick={() => setMapLevel((level) => Math.min(14, level + 1))}>−</button></div>
+        <div className="main-zoom"><button type="button" aria-label="지도 확대" title={sdkStatus === "ready" ? undefined : "예시 지도에서는 확대할 수 없습니다."} disabled={sdkStatus !== "ready"} onClick={() => setMapLevel((level) => Math.max(1, level - 1))}>＋</button><button type="button" aria-label="지도 축소" title={sdkStatus === "ready" ? undefined : "예시 지도에서는 축소할 수 없습니다."} disabled={sdkStatus !== "ready"} onClick={() => setMapLevel((level) => Math.min(14, level + 1))}>−</button></div>
         <button className="map-route-panel__estimate" type="button" disabled={routeState === "loading"} onClick={requestRoute}>{routeState === "loading" ? "경로 확인 중" : "경로 확인"}</button>
         {message && <p className="map-route-panel__message" role="status">{message}</p>}
-        {route && <dl className="map-route-panel__summary"><div><dt>거리</dt><dd>{route.distanceMeters.toLocaleString()}m</dd></div><div><dt>예상 이동시간</dt><dd>{Math.ceil(route.durationSeconds / 60)}분</dd></div><div><dt>도착시각</dt><dd>{route.arrivalAt}</dd></div></dl>}
       </div>
+      {route && <dl className="map-route-panel__summary" aria-label="경로 정보"><div><dt>거리</dt><dd>{route.distanceMeters.toLocaleString()}m</dd></div><div><dt>예상 이동시간</dt><dd>{Math.ceil(route.durationSeconds / 60)}분</dd></div><div><dt>도착시각</dt><dd>{route.arrivalAt}</dd></div></dl>}
     </section>
   );
 }
