@@ -9,6 +9,7 @@ public class MapApiDtos {
 
     public record StationLocationResponseDto(
         String stationId,
+        String stationNumber,
         String name,
         BigDecimal latitude,
         BigDecimal longitude

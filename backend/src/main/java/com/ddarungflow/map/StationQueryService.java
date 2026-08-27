@@ -36,7 +36,7 @@ public class StationQueryService {
     public List<MapApiDtos.StationLocationResponseDto> findAllActiveLocations() {
         return stationRepository.findByActiveTrue().stream()
             .map(station -> new MapApiDtos.StationLocationResponseDto(
-                station.getStationId(), station.getName(), station.getLatitude(), station.getLongitude()
+                station.getStationId(), station.getStationNumber(), station.getName(), station.getLatitude(), station.getLongitude()
             ))
             .toList();
     }
