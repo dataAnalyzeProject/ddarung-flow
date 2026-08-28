@@ -498,6 +498,7 @@ export default function MainPage({ onNavigate }) {
       return (
         <main className="main-shell">
           <PremiumSandboxPage
+            accessState={guideAccessState}
             authState={authState}
             user={user}
             onNavigate={onNavigate}

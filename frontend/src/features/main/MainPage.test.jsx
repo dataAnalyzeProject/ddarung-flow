@@ -566,7 +566,7 @@ describe("시안 6 메인 로그인 통합", () => {
   });
 });
 
-describe("프리미엄 가이드 접근 통합", () => {
+describe("서울자전거 따릉이 이용권 결제 및 가이드 접근 통합", () => {
   beforeEach(() => {
     sessionStorage.clear();
     jest.clearAllMocks();
@@ -596,12 +596,12 @@ describe("프리미엄 가이드 접근 통합", () => {
     render(<MainPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: `${candidate.stationName} 상세보기` }));
-    expect(await screen.findByText("프리미엄 월간")).toBeInTheDocument();
+    expect(await screen.findByText("따릉이 30일 정기권")).toBeInTheDocument();
     expect(fetchSubscription).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole("button", { name: "월간 선택" }));
+    fireEvent.click(screen.getByRole("button", { name: "30일 이용권 결제하기 (2,900원)" }));
     await waitFor(() => expect(startCheckout).toHaveBeenCalledWith("PREMIUM_MONTHLY_30D"));
-    expect(screen.getByText("결제 확인 중입니다.")).toBeInTheDocument();
+    expect(screen.getByText("결제 확인 요청이 준비되었습니다. sandbox 인수 환경에서 완료를 확인합니다.")).toBeInTheDocument();
   });
 
   test("ACTIVE 사용자는 기존 라이딩 가이드 본문을 연다", async () => {
@@ -619,8 +619,10 @@ describe("프리미엄 가이드 접근 통합", () => {
     const firstRender = render(<MainPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: `${candidate.stationName} 상세보기` }));
-    expect(await screen.findByText("로그인 후 상세 가이드를 볼 수 있습니다.")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "로그인하고 계속" }));
+    expect(await screen.findByText("따릉이 30일 정기권")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "30일 이용권 결제하기 (2,900원)" }));
+    expect(await screen.findByText("따릉이 이용권을 결제하시려면 로그인이 필요합니다.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "로그인하기" }));
     expect(sessionStorage.getItem(PENDING_GUIDE_KEY)).toBe("1");
     expect(loadPendingPrediction()).toEqual(expect.objectContaining({ requiredBikeCount: 1 }));
 
@@ -629,7 +631,7 @@ describe("프리미엄 가이드 접근 통합", () => {
     getCurrentUser.mockResolvedValue({ authenticated: true, user: { displayName: "김따릉", provider: "kakao" } });
     render(<MainPage />);
 
-    expect(await screen.findByRole("heading", { name: "라이딩 가이드 접근 안내" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "서울자전거 따릉이 정기 이용권" })).toBeInTheDocument();
     expect(sessionStorage.getItem(PENDING_GUIDE_KEY)).toBeNull();
   });
 
@@ -639,8 +641,8 @@ describe("프리미엄 가이드 접근 통합", () => {
     render(<MainPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: `${candidate.stationName} 상세보기` }));
-    expect(await screen.findByText("이용 기간이 종료되었습니다. 계속 이용하시려면 요금제를 선택해 주세요.")).toBeInTheDocument();
-    expect(screen.getByText("프리미엄 월간")).toBeInTheDocument();
+    expect(await screen.findByText("이용권 기간이 만료되었습니다. 이용권을 결제하시면 따릉이를 다시 이용하실 수 있습니다.")).toBeInTheDocument();
+    expect(screen.getByText("따릉이 30일 정기권")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: `${candidate.stationName} 라이딩 가이드` })).not.toBeInTheDocument();
   });
 
@@ -653,12 +655,12 @@ describe("프리미엄 가이드 접근 통합", () => {
     render(<MainPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: `${candidate.stationName} 상세보기` }));
-    await screen.findByText("프리미엄 월간");
-    fireEvent.click(screen.getByRole("button", { name: "월간 선택" }));
+    await screen.findByText("따릉이 30일 정기권");
+    fireEvent.click(screen.getByRole("button", { name: "30일 이용권 결제하기 (2,900원)" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(notice);
-    expect(screen.getByRole("button", { name: "월간 선택" })).toBeEnabled();
-    expect(screen.queryByText("결제 확인 중입니다.")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "30일 이용권 결제하기 (2,900원)" })).toBeEnabled();
+    expect(screen.queryByText("결제 확인 요청이 준비되었습니다. sandbox 인수 환경에서 완료를 확인합니다.")).not.toBeInTheDocument();
   });
 
   test("결제창을 닫으면 FREE 안내와 재시도 버튼으로 돌아간다", async () => {
@@ -666,15 +668,15 @@ describe("프리미엄 가이드 접근 통합", () => {
     render(<MainPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: `${candidate.stationName} 상세보기` }));
-    await screen.findByText("프리미엄 월간");
-    fireEvent.click(screen.getByRole("button", { name: "월간 선택" }));
+    await screen.findByText("따릉이 30일 정기권");
+    fireEvent.click(screen.getByRole("button", { name: "30일 이용권 결제하기 (2,900원)" }));
     await waitFor(() => expect(requestTossCheckout).toHaveBeenCalledTimes(1));
 
     requestTossCheckout.mock.calls[0][1].onCancel();
 
     expect(await screen.findByRole("alert")).toHaveTextContent("결제가 취소되었습니다. 다시 시도해 주세요.");
-    expect(screen.getByRole("button", { name: "월간 선택" })).toBeEnabled();
-    expect(screen.queryByText("결제 확인 중입니다.")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "30일 이용권 결제하기 (2,900원)" })).toBeEnabled();
+    expect(screen.queryByText("결제 확인 요청이 준비되었습니다. sandbox 인수 환경에서 완료를 확인합니다.")).not.toBeInTheDocument();
   });
 
   test("성공 redirect는 서버 확인 뒤 ACTIVE 가이드를 연다", async () => {
@@ -697,7 +699,7 @@ describe("프리미엄 가이드 접근 통합", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: `${candidate.stationName} 상세보기` }));
     expect(await screen.findByRole("alert")).toHaveTextContent("구독 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.");
-    expect(screen.getByText("프리미엄 월간")).toBeInTheDocument();
+    expect(screen.getByText("따릉이 30일 정기권")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: `${candidate.stationName} 라이딩 가이드` })).not.toBeInTheDocument();
   });
 });

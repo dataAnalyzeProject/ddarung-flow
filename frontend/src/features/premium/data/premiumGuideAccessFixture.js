@@ -2,7 +2,7 @@
 // 4가지 접근 상태 상수
 export const accessStatesFixture = ['ANONYMOUS', 'FREE', 'EXPIRED', 'PROCESSING', 'ACTIVE'];
 
-// 2가지 프리미엄 따릉이 정기 이용권 규격 데이터
+// 2가지 서울자전거 따릉이 공식 정기 이용권 규격 데이터
 export const premiumPlansFixture = [
   {
     planCode: 'PREMIUM_MONTHLY_30D',
