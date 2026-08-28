@@ -17,11 +17,11 @@
             "type": "array",
             "items": {
               "type": "object", "additionalProperties": false,
-              "required": ["name", "valueType", "value"],
+              "required": ["name", "type", "value"],
               "properties": {
                 "name": { "type": "string" },
-                "valueType": { "type": "string", "enum": ["string", "number", "boolean"] },
-                "value": { "type": ["string", "number", "boolean"] }
+                "type": { "type": "string", "enum": ["STRING", "INTEGER", "BOOLEAN", "STRING_ARRAY"] },
+                "value": { "oneOf": [ { "type": "string" }, { "type": "integer" }, { "type": "boolean" }, { "type": "array", "items": { "type": "string" } } ] }
               }
             }
           }

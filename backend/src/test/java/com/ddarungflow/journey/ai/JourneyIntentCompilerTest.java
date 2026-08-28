@@ -12,7 +12,7 @@ class JourneyIntentCompilerTest {
     @Test
     void compilesCompleteIntent() {
         JourneyIntent result = compiler.compile("""
-                {"origin":{"displayName":"성수역","placeId":"ORIGIN_A"},"destination":null,"startAt":"2026-08-28T18:30:00+09:00","totalMinutes":60,"requiredBikeCount":2,"preferences":{"lowSlope":4},"hardConstraints":{},"missingFields":[],"needsClarification":false}
+                {"origin":{"displayName":"성수역","placeId":"ORIGIN_A"},"destination":null,"startAt":"2026-08-28T18:30:00+09:00","totalMinutes":60,"requiredBikeCount":2,"preferences":{"stability":3,"lowSlope":4,"bikeLane":3,"scenery":3,"culture":3,"cafe":3,"avoidCrowds":3},"hardConstraints":{"maxWalkMinutes":null,"avoidRain":null,"returnBy":null},"missingFields":[],"needsClarification":false}
                 """);
 
         assertThat(result.origin().displayName()).isEqualTo("성수역");
@@ -22,7 +22,7 @@ class JourneyIntentCompilerTest {
     @Test
     void keepsMissingFieldsForClarificationInsteadOfInventingValues() {
         JourneyIntent result = compiler.compile("""
-                {"origin":{"displayName":"성수역","placeId":"ORIGIN_A"},"destination":null,"startAt":null,"totalMinutes":null,"requiredBikeCount":null,"preferences":{},"hardConstraints":{},"missingFields":["startAt"],"needsClarification":true}
+                {"origin":{"displayName":"성수역","placeId":"ORIGIN_A"},"destination":null,"startAt":null,"totalMinutes":null,"requiredBikeCount":null,"preferences":{"stability":3,"lowSlope":3,"bikeLane":3,"scenery":3,"culture":3,"cafe":3,"avoidCrowds":3},"hardConstraints":{"maxWalkMinutes":null,"avoidRain":null,"returnBy":null},"missingFields":["startAt"],"needsClarification":true}
                 """);
 
         assertThat(result.needsClarification()).isTrue();
@@ -32,14 +32,23 @@ class JourneyIntentCompilerTest {
     @Test
     void rejectsOutOfRangeBikeCountAndMalformedOutput() {
         assertThatThrownBy(() -> compiler.compile("""
-                {"origin":{"displayName":"성수역","placeId":"ORIGIN_A"},"destination":null,"startAt":"2026-08-28T18:30:00+09:00","totalMinutes":60,"requiredBikeCount":6,"preferences":{},"hardConstraints":{},"missingFields":[],"needsClarification":false}
+                {"origin":{"displayName":"성수역","placeId":"ORIGIN_A"},"destination":null,"startAt":"2026-08-28T18:30:00+09:00","totalMinutes":60,"requiredBikeCount":6,"preferences":{"stability":3,"lowSlope":3,"bikeLane":3,"scenery":3,"culture":3,"cafe":3,"avoidCrowds":3},"hardConstraints":{"maxWalkMinutes":null,"avoidRain":null,"returnBy":null},"missingFields":[],"needsClarification":false}
                 """))
                 .extracting(exception -> ((JourneyAiException) exception).code())
                 .isEqualTo(JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID);
         assertThatThrownBy(() -> compiler.compile("not-json"))
                 .isInstanceOf(JourneyAiException.class);
         assertThatThrownBy(() -> compiler.compile("""
-                {"origin":{"displayName":"성수역","placeId":"ORIGIN_A"},"destination":null,"startAt":"2026-08-28T18:30:00+09:00","totalMinutes":60,"requiredBikeCount":2,"preferences":{},"hardConstraints":{},"needsClarification":false}
+                {"origin":{"displayName":"성수역","placeId":"ORIGIN_A"},"destination":null,"startAt":"2026-08-28T18:30:00+09:00","totalMinutes":60,"requiredBikeCount":2,"preferences":{"stability":3,"lowSlope":3,"bikeLane":3,"scenery":3,"culture":3,"cafe":3,"avoidCrowds":3},"hardConstraints":{"maxWalkMinutes":null,"avoidRain":null,"returnBy":null},"needsClarification":false}
+                """))
+                .extracting(exception -> ((JourneyAiException) exception).code())
+                .isEqualTo(JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID);
+    }
+
+    @Test
+    void rejectsAdditionalFieldsThroughTheCheckedInJsonSchema() {
+        assertThatThrownBy(() -> compiler.compile("""
+                {"origin":{"displayName":"성수역","placeId":"ORIGIN_A","latitude":37},"destination":null,"startAt":"2026-08-28T18:30:00+09:00","totalMinutes":60,"requiredBikeCount":2,"preferences":{"stability":3,"lowSlope":3,"bikeLane":3,"scenery":3,"culture":3,"cafe":3,"avoidCrowds":3},"hardConstraints":{"maxWalkMinutes":null,"avoidRain":null,"returnBy":null},"missingFields":[],"needsClarification":false}
                 """))
                 .extracting(exception -> ((JourneyAiException) exception).code())
                 .isEqualTo(JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID);

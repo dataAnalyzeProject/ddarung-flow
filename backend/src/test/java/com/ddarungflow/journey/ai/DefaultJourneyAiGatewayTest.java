@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -24,7 +23,10 @@ class DefaultJourneyAiGatewayTest {
     void returnsOnlyValidatedToolRequestsAndDoesNotExecuteThem() throws Exception {
         var gateway = new DefaultJourneyAiGateway(JourneyAiProperties.disabled(), mapper, mapper.readTree("{}"));
 
-        assertThat(gateway.validateToolPlan(List.of(new ToolCallRequest("tool-1", "get_cycle_routes", Map.of("origin", "ORIGIN_A")))))
+        assertThat(gateway.validateToolPlan(List.of(new ToolCallRequest("tool-1", "get_cycle_routes", List.of(
+                new ToolArgument("originPlaceId", ToolArgumentType.STRING, "ORIGIN_A"),
+                new ToolArgument("destinationPlaceId", ToolArgumentType.STRING, "DESTINATION_B")
+        )))))
                 .extracting(ToolCallRequest::callId)
                 .containsExactly("tool-1");
     }

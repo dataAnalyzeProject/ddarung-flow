@@ -14,11 +14,17 @@ class PiiBoundaryValidatorTest {
     }
 
     @Test
-    void blocksEmailPhoneCoordinatesAndPersonalLabelsBeforeProviderUse() {
+    void blocksEmailPhoneCoordinatesDetailedAddressesAndPersonalLabelsBeforeProviderUse() {
         assertBlocked("name@example.com에서 출발");
         assertBlocked("010-1234-5678로 알려줘");
         assertBlocked("37.544, 127.055에서 출발");
         assertBlocked("집에서 출발");
+        assertBlocked("성수이로 12길 3에서 출발");
+    }
+
+    @Test
+    void doesNotTreatRestaurantAsThePersonalHomeLabel() {
+        assertThatCode(() -> validator.rejectSensitiveInput("성수 맛집을 포함한 코스")).doesNotThrowAnyException();
     }
 
     private void assertBlocked(String input) {

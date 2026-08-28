@@ -12,15 +12,24 @@ import java.util.Map;
 
 public class JourneyIntentCompiler {
     private final ObjectMapper objectMapper;
+    private final JsonSchemaValidator schemaValidator;
+    private final JsonNode intentSchema;
 
     public JourneyIntentCompiler(ObjectMapper objectMapper) {
+        this(objectMapper, JourneyAiSchemas.intent(objectMapper));
+    }
+
+    JourneyIntentCompiler(ObjectMapper objectMapper, JsonNode intentSchema) {
         this.objectMapper = objectMapper;
+        this.intentSchema = intentSchema;
+        this.schemaValidator = new JsonSchemaValidator();
     }
 
     public JourneyIntent compile(String structuredOutput) {
         try {
             JsonNode root = objectMapper.readTree(structuredOutput);
             if (root == null || !root.isObject()) throw invalid("intent must be a JSON object");
+            schemaValidator.validate(root, intentSchema);
             List<String> missingFields = strings(root.path("missingFields"), "missingFields");
             boolean clarification = requiredBoolean(root, "needsClarification");
             JourneyIntent intent = new JourneyIntent(

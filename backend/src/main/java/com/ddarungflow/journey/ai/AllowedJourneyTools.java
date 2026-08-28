@@ -1,5 +1,7 @@
 package com.ddarungflow.journey.ai;
 
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -13,17 +15,29 @@ public final class AllowedJourneyTools {
         if (!NAMES.contains(request.toolName())) {
             throw new JourneyAiException(JourneyAiErrorCode.AI_TOOL_NOT_ALLOWED, "tool is not allowlisted");
         }
-        validateValue(request.arguments());
+        Map<String, ToolArgumentType> expected = definitions().get(request.toolName());
+        Map<String, ToolArgument> actual = new LinkedHashMap<>();
+        for (ToolArgument argument : request.arguments()) {
+            if (actual.put(argument.name(), argument) != null || expected.get(argument.name()) != argument.type()) throw invalid();
+        }
+        if (!actual.keySet().equals(expected.keySet())) throw invalid();
         return request;
     }
 
     public Set<String> names() { return NAMES; }
 
-    private void validateValue(Object value) {
-        if (value == null || value instanceof String || value instanceof Boolean || value instanceof Integer || value instanceof Long || value instanceof Double) return;
-        if (value instanceof Map<?, ?> map) { for (Map.Entry<?, ?> entry : map.entrySet()) { if (!(entry.getKey() instanceof String)) throw invalid(); validateValue(entry.getValue()); } return; }
-        if (value instanceof Iterable<?> values) { for (Object item : values) validateValue(item); return; }
-        throw invalid();
+    private Map<String, Map<String, ToolArgumentType>> definitions() {
+        return Map.of(
+                "resolve_places", Map.of("query", ToolArgumentType.STRING),
+                "get_rental_candidates", Map.of("originPlaceId", ToolArgumentType.STRING, "departureAt", ToolArgumentType.STRING, "requiredBikeCount", ToolArgumentType.INTEGER),
+                "get_cycle_routes", Map.of("originPlaceId", ToolArgumentType.STRING, "destinationPlaceId", ToolArgumentType.STRING),
+                "get_destination_candidates", Map.of("originPlaceId", ToolArgumentType.STRING, "startAt", ToolArgumentType.STRING, "totalMinutes", ToolArgumentType.INTEGER),
+                "get_return_candidates", Map.of("destinationPlaceId", ToolArgumentType.STRING, "arrivalAt", ToolArgumentType.STRING, "requiredBikeCount", ToolArgumentType.INTEGER),
+                "simulate_journey", Map.of("candidateIds", ToolArgumentType.STRING_ARRAY, "scenario", ToolArgumentType.STRING),
+                "rank_journeys", Map.of("candidateIds", ToolArgumentType.STRING_ARRAY),
+                "get_next_best_question", Map.of("candidateIds", ToolArgumentType.STRING_ARRAY),
+                "compare_counterfactual", Map.of("candidateIds", ToolArgumentType.STRING_ARRAY)
+        );
     }
 
     private JourneyAiException invalid() { return new JourneyAiException(JourneyAiErrorCode.AI_TOOL_ARGUMENT_INVALID, "tool arguments must be JSON-compatible"); }

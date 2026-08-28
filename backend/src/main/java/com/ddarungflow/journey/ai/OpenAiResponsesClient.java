@@ -7,6 +7,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Thin Responses API transport. It does not log prompts or responses, and is not wired until E0.
@@ -14,16 +16,24 @@ import java.net.http.HttpResponse;
 public class OpenAiResponsesClient {
     private final JourneyAiProperties properties;
     private final ObjectMapper objectMapper;
-    private final HttpClient httpClient;
+    private final ResponseTransport transport;
 
     public OpenAiResponsesClient(JourneyAiProperties properties, ObjectMapper objectMapper) {
-        this(properties, objectMapper, HttpClient.newBuilder().connectTimeout(properties.timeout()).build());
+        this(properties, objectMapper, defaultTransport(properties));
     }
 
-    OpenAiResponsesClient(JourneyAiProperties properties, ObjectMapper objectMapper, HttpClient httpClient) {
+    private static ResponseTransport defaultTransport(JourneyAiProperties properties) {
+        HttpClient httpClient = HttpClient.newBuilder().connectTimeout(properties.timeout()).build();
+        return request -> {
+            var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            return new TransportResponse(response.statusCode(), response.body());
+        };
+    }
+
+    OpenAiResponsesClient(JourneyAiProperties properties, ObjectMapper objectMapper, ResponseTransport transport) {
         this.properties = properties;
         this.objectMapper = objectMapper;
-        this.httpClient = httpClient;
+        this.transport = transport;
     }
 
     public JsonNode requestStructuredOutput(String input, String schemaName, JsonNode schema) {
@@ -36,12 +46,9 @@ public class OpenAiResponsesClient {
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(requestBody(input, schemaName, schema)))
                     .build();
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            TransportResponse response = transport.send(request);
             if (response.statusCode() != 200) throw statusError(response.statusCode());
-            JsonNode parsed = objectMapper.readTree(response.body());
-            JsonNode text = parsed.path("output").path(0).path("content").path(0).path("text");
-            if (!text.isTextual()) throw new JourneyAiException(JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID, "provider response has no structured output");
-            return objectMapper.readTree(text.asText());
+            return extractStructuredOutput(response.body());
         } catch (JourneyAiException exception) {
             throw exception;
         } catch (InterruptedException exception) {
@@ -49,6 +56,35 @@ public class OpenAiResponsesClient {
             throw new JourneyAiException(JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE, "provider request interrupted", exception);
         } catch (Exception exception) {
             throw new JourneyAiException(JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE, "provider request failed", exception);
+        }
+    }
+
+    JsonNode extractStructuredOutput(String body) {
+        try {
+            JsonNode response = objectMapper.readTree(body);
+            if (response == null || !response.isObject()) throw schemaInvalid("provider response is not an object");
+            if ("incomplete".equals(response.path("status").asText())) {
+                throw new JourneyAiException(JourneyAiErrorCode.AI_RESPONSE_INCOMPLETE, "provider response is incomplete");
+            }
+            if (!"completed".equals(response.path("status").asText())) throw schemaInvalid("provider response is not completed");
+            List<String> texts = new ArrayList<>();
+            for (JsonNode output : response.path("output")) {
+                if ("reasoning".equals(output.path("type").asText())) continue;
+                if ("refusal".equals(output.path("type").asText())) throw refusal();
+                if (!"message".equals(output.path("type").asText())) continue;
+                for (JsonNode content : output.path("content")) {
+                    if ("refusal".equals(content.path("type").asText())) throw refusal();
+                    if ("output_text".equals(content.path("type").asText()) && content.path("text").isTextual()) texts.add(content.path("text").asText());
+                }
+            }
+            if (texts.size() != 1) throw schemaInvalid("provider response must contain exactly one output_text message");
+            JsonNode structured = objectMapper.readTree(texts.getFirst());
+            if (structured == null) throw schemaInvalid("provider output text is not JSON");
+            return structured;
+        } catch (JourneyAiException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new JourneyAiException(JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID, "provider response is malformed", exception);
         }
     }
 
@@ -69,4 +105,14 @@ public class OpenAiResponsesClient {
         String message = status == 429 ? "provider rate limited" : "provider returned " + status;
         return new JourneyAiException(JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE, message);
     }
+
+    private JourneyAiException refusal() { return new JourneyAiException(JourneyAiErrorCode.AI_PROVIDER_REFUSAL, "provider refused the response"); }
+    private JourneyAiException schemaInvalid(String message) { return new JourneyAiException(JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID, message); }
+
+    @FunctionalInterface
+    interface ResponseTransport {
+        TransportResponse send(HttpRequest request) throws Exception;
+    }
+
+    record TransportResponse(int statusCode, String body) { }
 }
