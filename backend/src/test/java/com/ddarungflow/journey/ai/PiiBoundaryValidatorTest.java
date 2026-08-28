@@ -20,11 +20,16 @@ class PiiBoundaryValidatorTest {
         assertBlocked("37.544, 127.055에서 출발");
         assertBlocked("집에서 출발");
         assertBlocked("성수이로 12길 3에서 출발");
+        assertBlocked("서울숲푸르지오 101동 1203호에서 출발");
+        assertBlocked("성수동 123번지 101호");
+        assertBlocked("OO아파트 103동 502호");
     }
 
     @Test
     void doesNotTreatRestaurantAsThePersonalHomeLabel() {
         assertThatCode(() -> validator.rejectSensitiveInput("성수 맛집을 포함한 코스")).doesNotThrowAnyException();
+        assertThatCode(() -> validator.rejectSensitiveInput("서울숲 근처 카페")).doesNotThrowAnyException();
+        assertThatCode(() -> validator.rejectSensitiveInput("ORIGIN_A에서 출발")).doesNotThrowAnyException();
     }
 
     private void assertBlocked(String input) {

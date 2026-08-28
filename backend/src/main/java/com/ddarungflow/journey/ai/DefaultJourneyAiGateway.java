@@ -17,10 +17,14 @@ public class DefaultJourneyAiGateway implements JourneyAiGateway {
     private final AllowedJourneyTools allowedTools = new AllowedJourneyTools();
 
     public DefaultJourneyAiGateway(JourneyAiProperties properties, ObjectMapper objectMapper, JsonNode intentSchema) {
+        this(properties, objectMapper, intentSchema, new OpenAiResponsesClient(properties, objectMapper));
+    }
+
+    DefaultJourneyAiGateway(JourneyAiProperties properties, ObjectMapper objectMapper, JsonNode intentSchema, OpenAiResponsesClient client) {
         this.properties = properties;
         this.piiBoundaryValidator = new PiiBoundaryValidator();
-        this.intentCompiler = new JourneyIntentCompiler(objectMapper);
-        this.client = new OpenAiResponsesClient(properties, objectMapper);
+        this.intentCompiler = new JourneyIntentCompiler(objectMapper, intentSchema);
+        this.client = client;
         this.intentSchema = intentSchema;
     }
 
