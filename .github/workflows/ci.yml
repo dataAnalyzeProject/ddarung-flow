@@ -35,6 +35,7 @@ jobs:
               echo 'backend=true'
               echo 'pipeline=true'
               echo 'inference=true'
+              echo 'workflow_validation=true'
             } >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -161,9 +162,12 @@ jobs:
             esac
           }
 
-          test "$(read_journey_enabled infra/staging/journey-release-flags.env)" = false
+          checked_in_value="$(read_journey_enabled infra/staging/journey-release-flags.env)"
+          [[ "$checked_in_value" == true || "$checked_in_value" == false ]]
           flag_test_file=$(mktemp)
           trap 'rm -f "$flag_test_file"' EXIT
+          printf 'JOURNEY_ENABLED=false\n' > "$flag_test_file"
+          test "$(read_journey_enabled "$flag_test_file")" = false
           printf 'JOURNEY_ENABLED=true\n' > "$flag_test_file"
           test "$(read_journey_enabled "$flag_test_file")" = true
           for invalid_value in 'JOURNEY_ENABLED=' 'JOURNEY_ENABLED=TRUE' 'JOURNEY_ENABLED=1' 'JOURNEY_ENABLED=yes' 'JOURNEY_ENABLED=false '; do
@@ -173,6 +177,11 @@ jobs:
               exit 1
             fi
           done
+          printf 'JOURNEY_ENABLED=false\nJOURNEY_ENABLED=true\n' > "$flag_test_file"
+          if read_journey_enabled "$flag_test_file" >/dev/null; then
+            echo 'Multiple Journey release flag lines were accepted.' >&2
+            exit 1
+          fi
       - name: Lint deployment workflows
         run: |
           docker run --rm \

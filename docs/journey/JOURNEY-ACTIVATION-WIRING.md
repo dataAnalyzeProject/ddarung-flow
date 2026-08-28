@@ -26,7 +26,7 @@ docker compose `
   config --quiet
 ```
 
-CI validates the checked-in `false` value and proves that `true` is accepted while empty, upper-case, numeric, affirmative-word, and whitespace-padded values are rejected. A flag-file change selects frontend and backend checks plus workflow validation; the deployment workflow rebuilds the frontend under the candidate SHA and verifies frontend/backend flag equality in the rendered candidate.
+CI accepts either checked-in `true` or `false`; this wiring PR keeps the default at `false`, and a future `true` change requires a separate approved PR. It proves temporary `false` and `true` values are accepted while empty, upper-case, numeric, affirmative-word, whitespace-padded, and multi-line values are rejected. A flag-file change selects frontend and backend checks plus workflow validation; the deployment workflow rebuilds the frontend under the candidate SHA and verifies frontend/backend flag equality in the rendered candidate.
 
 ## Result status
 
