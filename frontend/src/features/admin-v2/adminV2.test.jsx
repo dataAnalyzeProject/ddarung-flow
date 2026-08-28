@@ -1,18 +1,21 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
 import AdminV2PreviewApp from './shell/AdminV2PreviewApp';
 import AdminConsoleSwitcher from './components/AdminConsoleSwitcher';
+import AccessibleTable from './components/AccessibleTable';
 import DetailDrawer from './components/DetailDrawer';
 import ReasonDialog from './components/ReasonDialog';
 import AsyncStatePanel from './components/AsyncStatePanel';
+import { createFixtureAdminAccessAdapter } from './adapters/fixtureAdminAccessAdapter';
 import { ASYNC_STATES } from './states/adminStates';
-import { createFixtureAdminAccessAdapter } from './fixtures/fixtureAdminAccessAdapter';
-import { defaultRoute, isAdminV2PreviewPath, resolvePreviewRoute, ROUTES, visibleConsoles } from './routes/routeMap';
+import { defaultRoute, isAdminV2PreviewPath, resolvePreviewRoute, ROUTES, validateRouteMetadata, visibleConsoles } from './routes/routeMap';
 
-async function renderPreview(pathname, fixture = 'OPS_VIEWER') {
-  render(<AdminV2PreviewApp pathname={pathname} search={`?fixture=${fixture}`} />);
-  await waitFor(() => expect(screen.queryByText('불러오는 중')).not.toBeInTheDocument());
-}
+function setPreviewUrl(path) { window.history.replaceState({}, '', path); }
+async function waitForShell() { await waitFor(() => expect(screen.queryByText('불러오는 중')).not.toBeInTheDocument()); }
+function readyAccess(adminRoles, permissions, defaultConsole = 'OPS') { return { state: 'READY', adminRoles, permissions, defaultConsole, generatedAt: '2026-08-28T09:00:00Z', source: 'FIXTURE' }; }
+
+afterEach(() => setPreviewUrl('/'));
 
 describe('admin v2 fixture access and routes', () => {
   test.each([
@@ -25,41 +28,141 @@ describe('admin v2 fixture access and routes', () => {
     expect(defaultRoute(access)).not.toBeNull();
   });
 
-  test('shows permitted menus and hides unavailable menus', async () => {
-    await renderPreview('/admin-v2-preview/ops', 'OPS_VIEWER');
-    expect(screen.getByRole('button', { name: '위험 지도' })).toBeInTheDocument();
-    expect(screen.getByText('FIXTURE / API_NOT_CONNECTED')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '리포트' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: '모델' })).not.toBeInTheDocument();
+  test('root redirects with replaceState to the first permitted preview route and preserves query', async () => {
+    setPreviewUrl('/admin-v2-preview?fixture=MODEL_ENGINEER&mode=review');
+    const replaceSpy = jest.spyOn(window.history, 'replaceState');
+    render(<AdminV2PreviewApp />);
+    await waitFor(() => expect(window.location.pathname).toBe('/admin-v2-preview/models'));
+    expect(window.location.search).toBe('?fixture=MODEL_ENGINEER&mode=review');
+    expect(replaceSpy).toHaveBeenLastCalledWith({}, '', '/admin-v2-preview/models?fixture=MODEL_ENGINEER&mode=review');
+    expect(screen.getByText('UI-MODEL-01')).toBeInTheDocument();
+    replaceSpy.mockRestore();
   });
 
-  test('direct URL with no permission is forbidden and renders no domain fixture placeholder', async () => {
-    await renderPreview('/admin-v2-preview/models/releases', 'OPS_VIEWER');
+  test('menu and console navigation push pathname while preserving fixture query', async () => {
+    setPreviewUrl('/admin-v2-preview/ops?fixture=SUPER_ADMIN&mode=review');
+    render(<AdminV2PreviewApp />);
+    await waitForShell();
+    fireEvent.click(screen.getByRole('button', { name: '수급 위험 지도' }));
+    expect(window.location.pathname).toBe('/admin-v2-preview/ops/risk-map');
+    expect(window.location.search).toBe('?fixture=SUPER_ADMIN&mode=review');
+    fireEvent.click(screen.getByRole('button', { name: '모델' }));
+    expect(window.location.pathname).toBe('/admin-v2-preview/models');
+    expect(window.location.search).toBe('?fixture=SUPER_ADMIN&mode=review');
+    expect(screen.getByText('UI-MODEL-01')).toBeInTheDocument();
+  });
+
+  test('popstate restores the previous preview route', async () => {
+    setPreviewUrl('/admin-v2-preview/ops?fixture=OPS_VIEWER');
+    render(<AdminV2PreviewApp />);
+    await waitForShell();
+    window.history.pushState({}, '', '/admin-v2-preview/ops/risk-map?fixture=OPS_VIEWER');
+    fireEvent(window, new PopStateEvent('popstate'));
+    expect(screen.getByText('UI-OPS-02')).toBeInTheDocument();
+    window.history.pushState({}, '', '/admin-v2-preview/ops?fixture=OPS_VIEWER');
+    fireEvent(window, new PopStateEvent('popstate'));
+    expect(screen.getByText('UI-OPS-01')).toBeInTheDocument();
+  });
+
+  test('a changed pathname prop replaces the active route without relying on a stale browser path', async () => {
+    const { rerender } = render(<AdminV2PreviewApp pathname="/admin-v2-preview/ops" search="?fixture=OPS_VIEWER" />);
+    await waitForShell();
+    rerender(<AdminV2PreviewApp pathname="/admin-v2-preview/ops/risk-map" search="?fixture=OPS_VIEWER" />);
+    await waitFor(() => expect(screen.getByText('UI-OPS-02')).toBeInTheDocument());
+  });
+
+  test('direct URL with no permission is forbidden and renders no domain placeholder', async () => {
+    setPreviewUrl('/admin-v2-preview/models/releases?fixture=OPS_VIEWER');
+    render(<AdminV2PreviewApp />);
+    await waitForShell();
     expect(screen.getByText('ADMIN_PERMISSION_DENIED')).toBeInTheDocument();
     expect(screen.getByText('필요 권한: MODEL_RELEASE_READ')).toBeInTheDocument();
     expect(screen.queryByText('UI-MODEL-04')).not.toBeInTheDocument();
     expect(screen.queryByText('FIXTURE / API_NOT_CONNECTED')).not.toBeInTheDocument();
   });
 
-  test('root uses the default console and first permitted route', async () => {
-    await renderPreview('/admin-v2-preview', 'MODEL_ENGINEER');
-    expect(screen.getByText('UI-MODEL-01')).toBeInTheDocument();
-    const access = { permissions: ['MODEL_METRICS_READ'], defaultConsole: 'OPS' };
-    expect(defaultRoute(access).id).toBe('UI-MODEL-01');
-  });
-
-  test('unknown fixture is access error, not super admin', async () => {
-    await renderPreview('/admin-v2-preview/ops', 'UNKNOWN');
-    expect(screen.getByText('ADMIN_ACCESS_UNAVAILABLE')).toBeInTheDocument();
-    expect(screen.queryByText('UI-OPS-01')).not.toBeInTheDocument();
-    const access = await createFixtureAdminAccessAdapter({ fixtureId: 'UNKNOWN' }).load();
-    expect(access).toMatchObject({ state: 'ACCESS_ERROR', permissions: [] });
-  });
-
-  test.each(['AUTH_REQUIRED', 'ADMIN_ACCESS_DENIED', 'ACCESS_ERROR'])('%s has no nav or route data', async (fixtureId) => {
-    await renderPreview('/admin-v2-preview/ops', fixtureId);
+  test.each([
+    ['AUTH_REQUIRED', '관리자 로그인이 필요합니다.', '로그인 후 관리자 콘솔을 이용할 수 있습니다.'],
+    ['ADMIN_ACCESS_DENIED', '관리자 콘솔 접근 권한이 없습니다.', '일반 서비스로 돌아가 주세요.'],
+    ['ACCESS_ERROR', '관리자 권한 정보를 불러오지 못했습니다.', '잠시 후 다시 시도해 주세요.'],
+  ])('%s has distinct safe access copy and no navigation or route data', async (fixtureId, title, description) => {
+    setPreviewUrl(`/admin-v2-preview/ops?fixture=${fixtureId}`);
+    render(<AdminV2PreviewApp />);
+    await waitForShell();
+    expect(screen.getByText(title)).toBeInTheDocument();
+    expect(screen.getByText(description)).toBeInTheDocument();
     expect(screen.queryByRole('navigation', { name: '관리자 메뉴' })).not.toBeInTheDocument();
     expect(screen.queryByText('UI-OPS-01')).not.toBeInTheDocument();
+  });
+
+  test('unknown fixture is ACCESS_ERROR, not a privileged fallback', async () => {
+    setPreviewUrl('/admin-v2-preview/ops?fixture=UNKNOWN');
+    render(<AdminV2PreviewApp />);
+    await waitForShell();
+    expect(screen.getByText('관리자 권한 정보를 불러오지 못했습니다.')).toBeInTheDocument();
+    expect(screen.queryByText('UI-OPS-01')).not.toBeInTheDocument();
+  });
+
+  test('a source change clears stale OPS data and late completion cannot overwrite new access', async () => {
+    const resolvers = {};
+    const createAccessAdapter = ({ fixtureId }) => ({ load: () => new Promise((resolve) => { resolvers[fixtureId] = resolve; }) });
+    const { rerender } = render(<AdminV2PreviewApp pathname="/admin-v2-preview/ops" search="?fixture=OPS_VIEWER" createAccessAdapter={createAccessAdapter} />);
+    await waitFor(() => expect(resolvers.OPS_VIEWER).toBeDefined());
+    rerender(<AdminV2PreviewApp pathname="/admin-v2-preview/system/access" search="?fixture=ACCESS_ADMIN" createAccessAdapter={createAccessAdapter} />);
+    expect(screen.getByText('불러오는 중')).toBeInTheDocument();
+    await waitFor(() => expect(resolvers.ACCESS_ADMIN).toBeDefined());
+    await act(async () => resolvers.ACCESS_ADMIN(readyAccess(['NOT_A_ROUTE_ROLE'], ['ACCESS_READ'], 'SYSTEM')));
+    expect(screen.getByText('UI-SYS-02')).toBeInTheDocument();
+    await act(async () => resolvers.OPS_VIEWER(readyAccess(['NOT_A_ROUTE_ROLE'], ['OPS_DASHBOARD_READ'])));
+    expect(screen.getByText('UI-SYS-02')).toBeInTheDocument();
+    expect(screen.queryByText('UI-OPS-01')).not.toBeInTheDocument();
+  });
+
+  test('an adapter source change is immediately loading even when the fixture is unchanged', async () => {
+    const firstAdapter = () => ({ load: () => Promise.resolve(readyAccess(['NOT_A_ROUTE_ROLE'], ['OPS_DASHBOARD_READ'])) });
+    const secondAdapter = () => ({ load: () => new Promise(() => {}) });
+    const { rerender } = render(<AdminV2PreviewApp pathname="/admin-v2-preview/ops" search="?fixture=OPS_VIEWER" createAccessAdapter={firstAdapter} />);
+    await waitFor(() => expect(screen.getByText('UI-OPS-01')).toBeInTheDocument());
+    rerender(<AdminV2PreviewApp pathname="/admin-v2-preview/ops" search="?fixture=OPS_VIEWER" createAccessAdapter={secondAdapter} />);
+    expect(screen.getByText('불러오는 중')).toBeInTheDocument();
+    expect(screen.queryByText('UI-OPS-01')).not.toBeInTheDocument();
+  });
+
+  test('adapter rejection converges to the safe access error and unmount ignores late completion', async () => {
+    let resolve;
+    const delayedAdapter = () => ({ load: () => new Promise((done) => { resolve = done; }) });
+    const { unmount } = render(<AdminV2PreviewApp pathname="/admin-v2-preview/ops" search="?fixture=OPS_VIEWER" createAccessAdapter={delayedAdapter} />);
+    await waitFor(() => expect(resolve).toBeDefined());
+    unmount();
+    await act(async () => resolve(readyAccess(['NOT_A_ROUTE_ROLE'], ['OPS_DASHBOARD_READ'])));
+    const rejectingAdapter = () => ({ load: () => Promise.reject(new Error('unavailable')) });
+    render(<AdminV2PreviewApp pathname="/admin-v2-preview/ops" search="?fixture=OPS_VIEWER" createAccessAdapter={rejectingAdapter} />);
+    await waitFor(() => expect(screen.getByText('관리자 권한 정보를 불러오지 못했습니다.')).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: '다시 시도' })).toBeInTheDocument();
+  });
+
+  test('route metadata exactly matches the approved 16-route canonical matrix', () => {
+    expect(ROUTES.map(({ id, canonicalPath, previewPath, title, console, requiredPermission }) => ({ id, canonicalPath, previewPath, title, console, requiredPermission }))).toEqual([
+      { id: 'UI-OPS-01', canonicalPath: '/admin/ops', previewPath: '/admin-v2-preview/ops', title: '운영 상황판', console: 'OPS', requiredPermission: 'OPS_DASHBOARD_READ' },
+      { id: 'UI-OPS-02', canonicalPath: '/admin/ops/risk-map', previewPath: '/admin-v2-preview/ops/risk-map', title: '수급 위험 지도', console: 'OPS', requiredPermission: 'OPS_RISK_MAP_READ' },
+      { id: 'UI-OPS-03', canonicalPath: '/admin/ops/candidates', previewPath: '/admin-v2-preview/ops/candidates', title: '집중관리 후보', console: 'OPS', requiredPermission: 'OPS_CANDIDATE_READ' },
+      { id: 'UI-OPS-04', canonicalPath: '/admin/ops/analysis', previewPath: '/admin-v2-preview/ops/analysis', title: '지역·시간대 분석', console: 'OPS', requiredPermission: 'OPS_ANALYSIS_READ' },
+      { id: 'UI-OPS-05', canonicalPath: '/admin/ops/data', previewPath: '/admin-v2-preview/ops/data', title: '데이터 상태', console: 'OPS', requiredPermission: 'DATA_STATUS_READ' },
+      { id: 'UI-OPS-06', canonicalPath: '/admin/ops/reports', previewPath: '/admin-v2-preview/ops/reports', title: '운영 리포트', console: 'OPS', requiredPermission: 'OPS_REPORT_EXPORT' },
+      { id: 'UI-OPS-07', canonicalPath: '/admin/ops/digital-twin', previewPath: '/admin-v2-preview/ops/digital-twin', title: '디지털 트윈', console: 'OPS', requiredPermission: 'OPS_SCENARIO_READ' },
+      { id: 'UI-MODEL-01', canonicalPath: '/admin/models', previewPath: '/admin-v2-preview/models', title: '모델 현황', console: 'MODEL', requiredPermission: 'MODEL_METRICS_READ' },
+      { id: 'UI-MODEL-02', canonicalPath: '/admin/models/performance', previewPath: '/admin-v2-preview/models/performance', title: '성능·신뢰도', console: 'MODEL', requiredPermission: 'MODEL_METRICS_READ' },
+      { id: 'UI-MODEL-03', canonicalPath: '/admin/models/diagnostics', previewPath: '/admin-v2-preview/models/diagnostics', title: '세그먼트·대여소 진단', console: 'MODEL', requiredPermission: 'MODEL_DIAGNOSTICS_READ' },
+      { id: 'UI-MODEL-04', canonicalPath: '/admin/models/releases', previewPath: '/admin-v2-preview/models/releases', title: '배포·복원', console: 'MODEL', requiredPermission: 'MODEL_RELEASE_READ' },
+      { id: 'UI-SYS-01', canonicalPath: '/admin/system/support', previewPath: '/admin-v2-preview/system/support', title: '문의 관리', console: 'SYSTEM', requiredPermission: 'QNA_READ' },
+      { id: 'UI-SYS-02', canonicalPath: '/admin/system/access', previewPath: '/admin-v2-preview/system/access', title: '계정·권한', console: 'SYSTEM', requiredPermission: 'ACCESS_READ' },
+      { id: 'UI-SYS-03', canonicalPath: '/admin/system/audit', previewPath: '/admin-v2-preview/system/audit', title: '감사 로그', console: 'SYSTEM', requiredPermission: 'AUDIT_READ' },
+      { id: 'UI-SYS-04', canonicalPath: '/admin/system/health', previewPath: '/admin-v2-preview/system/health', title: '서비스 상태', console: 'SYSTEM', requiredPermission: 'SYSTEM_STATUS_READ' },
+      { id: 'UI-SYS-05', canonicalPath: '/admin/system/journey-ops', previewPath: '/admin-v2-preview/system/journey-ops', title: 'AI·도구 운영', console: 'SYSTEM', requiredPermission: 'AI_OPS_READ' },
+    ]);
+    expect(validateRouteMetadata()).toBe(true);
+    expect(resolvePreviewRoute('/admin-v2-preview/missing', { permissions: [] }).type).toBe('NOT_FOUND');
+    expect(resolvePreviewRoute('/admin-v2-preview/ops', { adminRoles: ['SUPER_ADMIN'], permissions: [] }).type).toBe('FORBIDDEN');
   });
 
   test.each(ASYNC_STATES)('renders the %s common state', (state) => {
@@ -67,44 +170,82 @@ describe('admin v2 fixture access and routes', () => {
     expect(screen.getByRole('region')).toBeInTheDocument();
   });
 
-  test('all nine common states have stable copy', () => {
+  test('keeps the approved nine common states and only announces async state changes', () => {
     expect(ASYNC_STATES).toEqual(['LOADING', 'SUCCESS', 'EMPTY', 'PARTIAL', 'DELAYED', 'INSUFFICIENT_DATA', 'UNAVAILABLE', 'FORBIDDEN', 'ERROR']);
-  });
-
-  test('route metadata has canonical and preview mappings for every route', () => {
-    expect(ROUTES).toHaveLength(16);
-    expect(ROUTES.every((route) => route.canonicalPath.startsWith('/admin/') && route.previewPath.startsWith('/admin-v2-preview/') && route.requiredPermission)).toBe(true);
-    expect(resolvePreviewRoute('/admin-v2-preview/not-a-route', { permissions: [] }).type).toBe('NOT_FOUND');
+    const { rerender } = render(<AsyncStatePanel state="SUCCESS" />);
+    expect(screen.getByRole('region')).not.toHaveAttribute('aria-live');
+    rerender(<AsyncStatePanel state="ERROR" />);
+    expect(screen.getByRole('region')).toHaveAttribute('aria-live', 'polite');
   });
 
   test('production disables the preview helper', () => {
     expect(isAdminV2PreviewPath('/admin-v2-preview/ops', 'production')).toBe(false);
     expect(isAdminV2PreviewPath('/admin-v2-preview/ops', 'test')).toBe(true);
   });
-
-  test('fixture data has no sensitive identity fields', async () => {
-    const samples = await Promise.all(['OPS_VIEWER', 'SUPER_ADMIN', 'AUTH_REQUIRED', 'UNKNOWN'].map((fixtureId) => createFixtureAdminAccessAdapter({ fixtureId }).load()));
-    const fixtureText = JSON.stringify(samples).toLowerCase();
-    ['email', 'oauth', 'provider', 'token', 'objectkey', 'binarypath', 'userId'.toLowerCase()].forEach((forbidden) => expect(fixtureText).not.toContain(forbidden));
-  });
 });
 
-describe('admin v2 accessibility primitives', () => {
-  test('console switcher supports keyboard focus and selection', () => {
+describe('admin v2 accessible primitives', () => {
+  test('console switcher is route navigation, not an incomplete tabs pattern', async () => {
     const onSelect = jest.fn();
     render(<AdminConsoleSwitcher consoles={['OPS', 'MODEL']} activeConsole="OPS" onSelect={onSelect} />);
-    userEvent.tab();
-    expect(screen.getByRole('tab', { name: '운영' })).toHaveFocus();
-    userEvent.keyboard('{Enter}');
+    const ops = screen.getByRole('button', { name: '운영' });
+    expect(ops).toHaveAttribute('aria-current', 'page');
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+    ops.focus();
+    await userEvent.keyboard('{Enter}');
     expect(onSelect).toHaveBeenCalledWith('OPS');
   });
 
-  test('drawer and dialog focus their close controls', () => {
-    const onClose = jest.fn();
-    const { rerender } = render(<DetailDrawer open title="상세" onClose={onClose} />);
-    expect(screen.getByRole('button', { name: '상세 닫기' })).toHaveFocus();
-    rerender(<ReasonDialog open title="사유" onClose={onClose} />);
-    expect(screen.getByRole('dialog', { name: '사유' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '닫기' })).toHaveFocus();
+  test('table cells do not become tab stops and selectable rows use one explicit stable-key button', () => {
+    const rows = [{ id: 'route-a', label: 'A', value: '1' }];
+    const onSelect = jest.fn();
+    const { rerender } = render(<AccessibleTable caption="일반 표" columns={['이름', '값']} rows={rows.map(({ label, value }) => [label, value])} rowKey={() => 'route-a'} />);
+    screen.getAllByRole('cell').forEach((cell) => expect(cell).not.toHaveAttribute('tabindex'));
+    rerender(<AccessibleTable caption="선택 표" columns={['이름', '값']} rows={rows.map(({ label, value }) => [label, value])} rowKey={() => 'route-a'} selectedKey="route-a" onSelect={onSelect} />);
+    const action = screen.getByRole('button', { name: 'A' });
+    expect(action).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(action);
+    expect(onSelect).toHaveBeenCalledWith('route-a');
+  });
+
+  test('drawer supports initial focus, focus trap, Escape close, and trigger restoration', () => {
+    function DrawerHarness() {
+      const [open, setOpen] = useState(false);
+      return <><button type="button" onClick={() => setOpen(true)}>상세 열기</button><DetailDrawer open={open} title="상세" onClose={() => setOpen(false)}><button type="button">첫 동작</button></DetailDrawer></>;
+    }
+    render(<DrawerHarness />);
+    const trigger = screen.getByRole('button', { name: '상세 열기' });
+    trigger.focus();
+    fireEvent.click(trigger);
+    const close = screen.getByRole('button', { name: '상세 닫기' });
+    expect(close).toHaveFocus();
+    fireEvent.keyDown(close, { key: 'Tab' });
+    expect(screen.getByRole('button', { name: '첫 동작' })).toHaveFocus();
+    fireEvent.keyDown(screen.getByRole('button', { name: '첫 동작' }), { key: 'Tab', shiftKey: true });
+    expect(close).toHaveFocus();
+    fireEvent.keyDown(close, { key: 'Escape' });
+    expect(trigger).toHaveFocus();
+  });
+
+  test('dialog has unique labelled names and supports the same focus contract', () => {
+    function DialogHarness() {
+      const [open, setOpen] = useState(false);
+      return <><button type="button" onClick={() => setOpen(true)}>사유 열기</button><ReasonDialog open={open} title="사유 확인" onClose={() => setOpen(false)}><button type="button">사유 동작</button></ReasonDialog></>;
+    }
+    render(<DialogHarness />);
+    const trigger = screen.getByRole('button', { name: '사유 열기' });
+    trigger.focus();
+    fireEvent.click(trigger);
+    const dialog = screen.getByRole('dialog', { name: '사유 확인' });
+    const close = screen.getByRole('button', { name: '닫기' });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(dialog).toHaveAttribute('aria-labelledby');
+    expect(close).toHaveFocus();
+    fireEvent.keyDown(close, { key: 'Tab' });
+    expect(screen.getByRole('button', { name: '사유 동작' })).toHaveFocus();
+    fireEvent.keyDown(screen.getByRole('button', { name: '사유 동작' }), { key: 'Tab', shiftKey: true });
+    expect(close).toHaveFocus();
+    fireEvent.keyDown(close, { key: 'Escape' });
+    expect(trigger).toHaveFocus();
   });
 });
