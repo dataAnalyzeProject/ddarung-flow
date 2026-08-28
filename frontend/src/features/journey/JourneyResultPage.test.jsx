@@ -1,8 +1,11 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import JourneyResultPage from './JourneyResultPage';
+import { getJourney, replanJourney, saveJourney } from './api/journeyApi';
+jest.mock('./api/journeyApi', () => ({ getJourney: jest.fn(), replanJourney: jest.fn(), getCounterfactuals: jest.fn(), saveJourney: jest.fn() }));
 
-test('does not expose fixture probabilities while production integration is disabled', () => {
-  render(<JourneyResultPage onNavigate={jest.fn()} />);
-  expect(screen.getByRole('status')).toHaveTextContent('UNAVAILABLE');
-  expect(screen.queryByText('84%')).not.toBeInTheDocument();
-});
+const decision = (status = 'READY') => ({ decisionId: 'd1', revision: 1, status, normalizedIntent: { origin: { placeId: 'o', displayName: '출발' }, destination: null, requiredBikeCount: 1, maxJourneyMinutes: 60 }, candidates: [{ candidateId: 'a', archetype: 'STABLE', rentalProbability: null, returnProbability: 70, unavailableFields: ['rentalProbability'] }], provenance: { dataAsOf: '2026-08-28T10:00:00+09:00' } });
+beforeEach(() => jest.clearAllMocks());
+test('loads decision and never renders a null probability as zero', async () => { getJourney.mockResolvedValue(decision()); render(<JourneyResultPage decisionId="d1" onNavigate={jest.fn()} />); expect(screen.getByRole('status')).toHaveTextContent('불러오는 중'); await waitFor(() => expect(screen.getByText('준비됨')).toBeInTheDocument()); expect(screen.queryByText('0%')).not.toBeInTheDocument(); expect(screen.getByText('미제공: rentalProbability')).toBeInTheDocument(); });
+test.each(['CLARIFICATION_REQUIRED', 'PARTIAL', 'UNAVAILABLE', 'EXPIRED'])('shows %s state', async (status) => { getJourney.mockResolvedValue(decision(status)); render(<JourneyResultPage decisionId="d1" onNavigate={jest.fn()} />); await waitFor(() => expect(screen.getByText(status === 'PARTIAL' ? '부분 결과' : status === 'UNAVAILABLE' ? '이용 불가' : status === 'EXPIRED' ? '만료됨' : '추가 확인 필요')).toBeInTheDocument()); });
+test('keeps a late response from replacing a newer decision and reports revision conflict', async () => { let first; getJourney.mockImplementation(() => new Promise((resolve) => { first = resolve; })); const view = render(<JourneyResultPage decisionId="d1" onNavigate={jest.fn()} />); getJourney.mockResolvedValue({ ...decision(), decisionId: 'd2' }); view.rerender(<JourneyResultPage decisionId="d2" onNavigate={jest.fn()} />); await screen.findByText('준비됨'); await act(async () => { first({ ...decision(), status: 'PARTIAL' }); }); expect(screen.getByText('준비됨')).toBeInTheDocument(); replanJourney.mockRejectedValue({ code: 'JOURNEY_REVISION_CONFLICT' }); await act(async () => { screen.getByText('재계획').click(); }); await screen.findByRole('alert'); expect(screen.getByRole('alert')).toHaveTextContent('다른 재계획'); });
+test('saves structured input with an idempotency key', async () => { getJourney.mockResolvedValue(decision()); saveJourney.mockResolvedValue({}); render(<JourneyResultPage decisionId="d1" onNavigate={jest.fn()} />); await screen.findByText('준비됨'); screen.getByText('저장').click(); await waitFor(() => expect(saveJourney).toHaveBeenCalledWith(expect.objectContaining({ destination: null, origin: expect.anything() }), expect.any(String))); });
