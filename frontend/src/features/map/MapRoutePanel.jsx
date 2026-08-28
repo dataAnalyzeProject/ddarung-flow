@@ -36,6 +36,7 @@ export default function MapRoutePanel({
   );
   const [mapType, setMapType] = useState("지도");
   const [mapLevel, setMapLevel] = useState(5);
+  const mapLevelTimerRef = useRef(null);
   const [current, setCurrent] = useState(null);
   const [locationState, setLocationState] = useState("idle");
   const [message, setMessage] = useState("");
@@ -111,7 +112,11 @@ export default function MapRoutePanel({
     stationRequestRef.current += 1;
     setShowStations(false);
   }, [canViewStations]);
-  useEffect(() => { adapterRef.current?.setLevel(mapLevel); }, [mapLevel]);
+  useEffect(() => {
+    clearTimeout(mapLevelTimerRef.current);
+    mapLevelTimerRef.current = setTimeout(() => adapterRef.current?.setLevel(mapLevel), 180);
+    return () => clearTimeout(mapLevelTimerRef.current);
+  }, [mapLevel]);
   useEffect(() => { adapterRef.current?.setMapType(mapType === "위성"); }, [mapType]);
 
   // Route estimation is intentionally triggered when both selected places or the travel mode changes.
