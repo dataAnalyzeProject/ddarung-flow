@@ -97,6 +97,14 @@ class MapPredictionServiceTest {
         assertThat(dto.predictionStatus()).isEqualTo(PredictionApiDtos.PredictionStatus.NORMAL);
         assertThat(dto.predictionProbability()).isEqualByComparingTo("0.75");
         assertThat(dto.availabilityLevel()).isEqualTo(PredictionApiDtos.AvailabilityLevel.HIGH);
+        assertThat(dto.horizonOutlook()).hasSize(4);
+        assertThat(dto.horizonOutlook()).allSatisfy(outlook -> {
+            assertThat(outlook.predictionTargetAt()).isEqualTo(dto.featureAsOf().plusMinutes(outlook.horizonMinutes()));
+            assertThat(outlook.availabilityLevel()).isEqualTo(MapPredictionService.toAvailabilityLevel(outlook.probability()));
+        });
+        assertThat(dto.horizonOutlook()).filteredOn(PredictionApiDtos.HorizonOutlook::isSelected)
+            .singleElement().extracting(PredictionApiDtos.HorizonOutlook::horizonMinutes)
+            .isEqualTo(dto.horizonMinutes());
     }
 
     @Test
@@ -207,6 +215,7 @@ class MapPredictionServiceTest {
         assertThat(dto.predictionStatus()).isEqualTo(PredictionApiDtos.PredictionStatus.TOO_SOON);
         assertThat(dto.predictionProbability()).isNull();
         assertThat(dto.probabilities()).isNull();
+        assertThat(dto.horizonOutlook()).isNull();
     }
 
     @Test

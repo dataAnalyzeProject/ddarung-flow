@@ -51,7 +51,18 @@ def calibration_bins(rows):
 
 def build_performance_payload(rows):
     reference = [row for row in rows if (int(row["horizonMinutes"]), int(row["requiredBikeCount"])) == (REFERENCE_HORIZON, REFERENCE_QUANTITY)]
-    return {"evaluation": {"method": "FIXED_WINDOW_REPLAY", "referenceHorizonMinutes": REFERENCE_HORIZON, "referenceRequiredBikeCount": REFERENCE_QUANTITY, "minSampleThreshold": DEFAULT_MIN_SAMPLES, "monotonicityViolations": 0}, "combinations": evaluate_combinations(rows), "segments": evaluate_segments(rows), "calibrationBins": calibration_bins(reference)}
+    combination_calibration = [
+        {
+            "horizonMinutes": horizon,
+            "requiredBikeCount": quantity,
+            "bins": calibration_bins([
+                row for row in rows
+                if (int(row["horizonMinutes"]), int(row["requiredBikeCount"])) == (horizon, quantity)
+            ]),
+        }
+        for horizon in HORIZONS for quantity in QUANTITIES
+    ]
+    return {"evaluation": {"method": "FIXED_WINDOW_REPLAY", "referenceHorizonMinutes": REFERENCE_HORIZON, "referenceRequiredBikeCount": REFERENCE_QUANTITY, "minSampleThreshold": DEFAULT_MIN_SAMPLES, "monotonicityViolations": 0}, "combinations": evaluate_combinations(rows), "segments": evaluate_segments(rows), "calibrationBins": calibration_bins(reference), "combinationCalibration": combination_calibration}
 
 def assert_brier_matches_reference(combinations, reference_combinations, tolerance=1e-9):
     actual = {(row["horizonMinutes"], row["requiredBikeCount"]): row["brierScore"] for row in combinations}

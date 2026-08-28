@@ -1,6 +1,6 @@
 :root{--admin-navy:#061d45;--admin-blue:#176eea;--admin-green:#14a971;--admin-ink:#132b51;--admin-muted:#70829d;--admin-line:#e1e8f1;--admin-bg:#f5f8fc}
 .admin-shell{min-width:0;min-height:100vh;display:grid;grid-template-columns:236px minmax(0,1fr);background:var(--admin-bg);color:var(--admin-ink);font-family:"Pretendard","Noto Sans KR","Segoe UI",sans-serif}
-.admin-sidebar{position:relative;display:flex;min-height:100vh;flex-direction:column;overflow:hidden;background:linear-gradient(160deg,#041a42,#063068 61%,#06204c);color:#fff}
+.admin-sidebar{position:fixed;top:0;bottom:0;left:0;display:flex;width:236px;height:100vh;min-height:100vh;flex-direction:column;overflow:hidden;background:linear-gradient(160deg,#041a42,#063068 61%,#06204c);color:#fff}
 .admin-sidebar:after{position:absolute;right:-50px;bottom:68px;width:250px;height:250px;border:1px solid #3d79a755;border-radius:50%;content:""}
 .admin-brand{z-index:1;display:flex;align-items:center;gap:10px;margin:26px 20px 0}
 .admin-brand img{width:104px;height:32px;object-fit:contain}
@@ -22,7 +22,7 @@
 .admin-side-actions{z-index:1;display:grid;gap:3px;padding:15px 23px 24px;border-top:1px solid #7da0ca35}
 .admin-side-actions button{height:28px;color:#d2e0f5;font-size:12px}
 .admin-side-actions button:hover,.admin-side-actions button:focus-visible{color:#57ddb4;outline:none}
-.admin-workspace{min-width:0}
+.admin-workspace{min-width:0;grid-column:2}
 .admin-topbar{height:62px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;border-bottom:1px solid var(--admin-line);background:#fff}
 .admin-topbar p{margin:0;color:#8291a7;font-size:14px;font-weight:600}
 .admin-topbar p strong{color:var(--admin-ink);font-size:16px}

@@ -16,6 +16,7 @@ export function adaptCandidateResponse(candidateDtos, { requestedAt, requiredBik
     horizonMinutes: dto.horizonMinutes,
     availabilityLevel: dto.availabilityLevel,
     selectedProbability: dto.predictionProbability,
+    horizonOutlook: dto.horizonOutlook ?? null,
     probabilities: dto.probabilities
       ? {
           atLeast1: dto.probabilities.atLeast1,

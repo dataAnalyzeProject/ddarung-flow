@@ -18,12 +18,13 @@ async function mutation(path, method, body) {
   });
 }
 
-export function loadArchive() {
-  return Promise.all([
+export async function loadArchive() {
+  const [favorites, savedRoutes, predictionHistories] = await Promise.all([
     request("/api/v1/favorites"),
     request("/api/v1/saved-routes"),
     request("/api/v1/prediction-histories"),
   ]);
+  return [favorites, savedRoutes, predictionHistories.items, predictionHistories.scoreSummary];
 }
 
 export const saveFavorite = (station) => mutation("/api/v1/favorites", "POST", station);

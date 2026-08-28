@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import RidingGuidePage from "./RidingGuidePage";
 import {
   airQualityDelayedFixture,
@@ -11,6 +11,25 @@ import { ridingGuideStateFixtures } from "./data/ridingGuideFixture";
 import ArrivalWeatherCard from "./components/ArrivalWeatherCard";
 import DataStatusFooter from "./components/DataStatusFooter";
 import PredictionSummaryCard from "./components/PredictionSummaryCard";
+import { fetchPredictionReliability } from "./predictionReliabilityApi";
+
+jest.mock("./predictionReliabilityApi", () => ({
+  fetchPredictionReliability: jest.fn(),
+}));
+
+const reliabilityCandidate = {
+  stationId: "ST-3",
+  selectedProbability: 0.72,
+  horizonMinutes: 120,
+  requiredBikeCount: 3,
+  predictionStatus: "NORMAL",
+  probabilities: { atLeast1: 0.85, atLeast2: 0.72, atLeast3: 0.61, atLeast4: 0.47, atLeast5: 0.34 },
+  modelVersion: "availability-v1",
+};
+
+beforeEach(() => {
+  fetchPredictionReliability.mockResolvedValue(null);
+});
 
 describe("라이딩 가이드 화면", () => {
   test("선택한 대여소명과 고정 안내 데이터를 표시한다", () => {
@@ -59,6 +78,36 @@ describe("라이딩 가이드 화면", () => {
     fireEvent.click(screen.getByRole("button", { name: "대여 예측 메인으로 이동" }));
 
     expect(onBack).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("예측 신뢰도 공개", () => {
+  test("접힌 상세 영역에서 실측 적중률과 신뢰도를 표시한다", async () => {
+    fetchPredictionReliability.mockResolvedValue({
+      reliabilityLevel: "MEDIUM",
+      band: { accuracyRate: 0.83, sampleCount: 41207 },
+      disclosure: "겨울 8일 구간 평가 결과이며 계절성은 반영되지 않았습니다.",
+    });
+    render(<PredictionSummaryCard candidate={reliabilityCandidate} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "1~5대 누적확률 보기" }));
+
+    await waitFor(() => expect(screen.getByText("83%")).toBeInTheDocument());
+    expect(screen.getByText("●●●○○ 보통")).toBeInTheDocument();
+    expect(screen.getByText("겨울 8일 구간 평가 결과이며 계절성은 반영되지 않았습니다.")).toBeInTheDocument();
+  });
+
+  test("UNKNOWN은 적중률 대신 표본 부족 문구를, 404는 신뢰도 블록을 숨긴다", async () => {
+    fetchPredictionReliability.mockResolvedValue({ reliabilityLevel: "UNKNOWN", band: {} });
+    const { rerender } = render(<PredictionSummaryCard candidate={reliabilityCandidate} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "1~5대 누적확률 보기" }));
+    await waitFor(() => expect(screen.getByText("검증 표본이 부족합니다")).toBeInTheDocument());
+    expect(screen.queryByText("이 구간 실측 적중률")).not.toBeInTheDocument();
+
+    fetchPredictionReliability.mockRejectedValue(Object.assign(new Error("not found"), { status: 404 }));
+    rerender(<PredictionSummaryCard candidate={{ ...reliabilityCandidate, stationId: "ST-4" }} />);
+    await waitFor(() => expect(screen.queryByText("검증 표본이 부족합니다")).not.toBeInTheDocument());
   });
 });
 
