@@ -79,6 +79,24 @@ class MapControllerTest {
         public PlaceController placeController(com.ddarungflow.map.KakaoMapClient kakaoMapClient) {
             return new PlaceController(kakaoMapClient);
         }
+
+        @org.springframework.context.annotation.Bean
+        @org.springframework.context.annotation.Primary
+        public com.ddarungflow.map.MapPredictionService mapPredictionService(
+            com.ddarungflow.map.RouteCandidateService routeCandidateService,
+            StationInventoryCurrentRepository inventoryRepository,
+            com.ddarungflow.inference.InferenceClient inferenceClient
+        ) {
+            return new com.ddarungflow.map.MapPredictionService(
+                routeCandidateService,
+                inventoryRepository,
+                inferenceClient,
+                java.time.Clock.fixed(
+                    java.time.Instant.parse("2026-08-15T09:50:00Z"),
+                    java.time.ZoneOffset.ofHours(9)
+                )
+            );
+        }
     }
 
     @Autowired
