@@ -105,6 +105,38 @@ test("renders the fixture-only admin preview without checking a session outside 
   expect(getCurrentUser).not.toHaveBeenCalled();
 });
 
+test('renders the admin-v2 OPS preview without checking a session', async () => {
+  window.history.replaceState({}, '', '/admin-v2-preview/ops?fixture=OPS_VIEWER');
+
+  render(<App />);
+
+  expect(await screen.findByText('UI-OPS-01')).toBeInTheDocument();
+  expect(screen.getByText('FIXTURE / API_NOT_CONNECTED')).toBeInTheDocument();
+  expect(getCurrentUser).not.toHaveBeenCalled();
+});
+
+test('redirects the admin-v2 root to the permitted model route and preserves its query', async () => {
+  window.history.replaceState({}, '', '/admin-v2-preview?fixture=MODEL_ENGINEER');
+
+  render(<App />);
+
+  await waitFor(() => expect(window.location.pathname).toBe('/admin-v2-preview/models'));
+  expect(window.location.search).toBe('?fixture=MODEL_ENGINEER');
+  expect(screen.getByText('UI-MODEL-01')).toBeInTheDocument();
+  expect(getCurrentUser).not.toHaveBeenCalled();
+});
+
+test('renders forbidden admin-v2 routes without auth or domain placeholder data', async () => {
+  window.history.replaceState({}, '', '/admin-v2-preview/models/releases?fixture=OPS_VIEWER');
+
+  render(<App />);
+
+  expect(await screen.findByText('ADMIN_PERMISSION_DENIED')).toBeInTheDocument();
+  expect(screen.queryByText('UI-MODEL-04')).not.toBeInTheDocument();
+  expect(screen.queryByText('FIXTURE / API_NOT_CONNECTED')).not.toBeInTheDocument();
+  expect(getCurrentUser).not.toHaveBeenCalled();
+});
+
 test("shows the intro before the main page on the first visit", async () => {
   window.history.replaceState({}, "", "/");
 

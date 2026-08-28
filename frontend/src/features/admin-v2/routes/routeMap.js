@@ -1,20 +1,20 @@
-import OperationsOverview from '../operations/overview';
-import OperationsRiskMap from '../operations/risk-map';
-import OperationsCandidates from '../operations/candidates';
-import OperationsAnalysis from '../operations/analysis';
-import OperationsData from '../operations/data';
-import OperationsReports from '../operations/reports';
-import OperationsDigitalTwin from '../operations/digital-twin';
-import ModelOverview from '../model/overview';
-import ModelPerformance from '../model/performance';
-import ModelDiagnostics from '../model/diagnostics';
-import ModelReleases from '../model/releases';
-import SystemSupport from '../system/support';
-import SystemAccess from '../system/access';
-import SystemAudit from '../system/audit';
-import SystemHealth from '../system/health';
-import SystemJourneyOps from '../system/journey-ops';
-import { CONSOLE_ORDER, hasPermission, PERMISSIONS } from '../permissions/permissions';
+import OperationsOverview from '../operations/overview/index.jsx';
+import OperationsRiskMap from '../operations/risk-map/index.jsx';
+import OperationsCandidates from '../operations/candidates/index.jsx';
+import OperationsAnalysis from '../operations/analysis/index.jsx';
+import OperationsData from '../operations/data/index.jsx';
+import OperationsReports from '../operations/reports/index.jsx';
+import OperationsDigitalTwin from '../operations/digital-twin/index.jsx';
+import ModelOverview from '../model/overview/index.jsx';
+import ModelPerformance from '../model/performance/index.jsx';
+import ModelDiagnostics from '../model/diagnostics/index.jsx';
+import ModelReleases from '../model/releases/index.jsx';
+import SystemSupport from '../system/support/index.jsx';
+import SystemAccess from '../system/access/index.jsx';
+import SystemAudit from '../system/audit/index.jsx';
+import SystemHealth from '../system/health/index.jsx';
+import SystemJourneyOps from '../system/journey-ops/index.jsx';
+import { CONSOLE_ORDER, hasPermission, PERMISSIONS } from '../permissions/permissions.js';
 
 export const PREVIEW_PREFIX = '/admin-v2-preview';
 export const ROUTES = [

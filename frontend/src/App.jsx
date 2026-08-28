@@ -8,6 +8,8 @@ import LoginPage from './features/login/LoginPage';
 import IntroPage from './features/intro/IntroPage';
 import AdminAccessGate from './features/admin/AdminAccessGate';
 import AdminApp from './features/admin/AdminApp';
+import AdminV2PreviewApp from './features/admin-v2/shell/AdminV2PreviewApp';
+import { isAdminV2PreviewPath } from './features/admin-v2/routes/routeMap';
 import StationDetailPage from './features/station-detail/StationDetailPage';
 import JourneyPlannerPage from './features/journey/JourneyPlannerPage';
 import JourneyResultPage from './features/journey/JourneyResultPage';
@@ -35,7 +37,9 @@ export function navigationTarget(nextRoute, nextStationId) {
 
 function App() {
   const isLoginPath = window.location.pathname === '/login';
-  const isAdminPreviewPath = process.env.NODE_ENV !== 'production' && new URLSearchParams(window.location.search).has('adminPreview');
+  const isLegacyAdminPreviewPath = process.env.NODE_ENV !== 'production' && new URLSearchParams(window.location.search).has('adminPreview');
+  const isAdminV2Preview = isAdminV2PreviewPath(window.location.pathname);
+  const skipSessionCheck = isLegacyAdminPreviewPath || isAdminV2Preview;
   const [{ route, stationId }, setRoute] = useState(routeFromHash);
   const [authState, setAuthState] = useState('loading');
   const [user, setUser] = useState(null);
@@ -50,7 +54,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (isAdminPreviewPath) return undefined;
+    if (skipSessionCheck) return undefined;
     let cancelled = false;
 
     getCurrentUser()
@@ -66,7 +70,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [isAdminPreviewPath]);
+  }, [skipSessionCheck]);
 
   const handleLogout = async () => {
     setAuthState('logging-out');
@@ -93,7 +97,11 @@ function App() {
     return <LoginPage />;
   }
 
-  if (isAdminPreviewPath) {
+  if (isAdminV2Preview) {
+    return <AdminV2PreviewApp />;
+  }
+
+  if (isLegacyAdminPreviewPath) {
     return <AdminApp />;
   }
 

@@ -1,4 +1,4 @@
-import { permissionsForRoles } from '../permissions/permissions';
+import { permissionsForRoles } from '../permissions/permissions.js';
 
 const FIXTURE_TIME = '2026-08-28T09:00:00Z';
 const READY_FIXTURES = {
