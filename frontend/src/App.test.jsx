@@ -20,6 +20,27 @@ beforeEach(() => {
 
 afterEach(() => {
   jest.restoreAllMocks();
+  delete process.env.REACT_APP_JOURNEY_ENABLED;
+});
+
+test('keeps Journey routes on the main screen while the feature is off', async () => {
+  window.history.replaceState({}, '', '/#journey/result/decision-1');
+  window.localStorage.setItem(INTRO_SEEN_KEY, 'true');
+
+  render(<App />);
+
+  await waitFor(() => expect(document.querySelector('.main-shell')).toBeInTheDocument());
+  expect(screen.queryByText('여정을 불러오는 중입니다.')).not.toBeInTheDocument();
+});
+
+test('renders the Journey planner only when the feature is explicitly enabled', async () => {
+  process.env.REACT_APP_JOURNEY_ENABLED = 'true';
+  window.history.replaceState({}, '', '/#journey');
+  window.localStorage.setItem(INTRO_SEEN_KEY, 'true');
+
+  render(<App />);
+
+  expect(await screen.findByRole('heading', { name: '여정 조건을 입력하세요' })).toBeInTheDocument();
 });
 
 test("shows the selected draft 6 as the main page", async () => {
