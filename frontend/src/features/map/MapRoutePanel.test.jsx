@@ -46,6 +46,26 @@ describe("INT-3.6 MapRoutePanel", () => {
     expect(createKakaoMapAdapter.mock.calls[0][3]).toEqual(expect.objectContaining({ onStationDetail }));
   });
 
+  test("연속 확대 클릭은 마지막 지도 레벨만 전달한다", async () => {
+    jest.useFakeTimers();
+    process.env.REACT_APP_KAKAO_MAP_APP_KEY = "test-key";
+    const adapter = { setCenter: jest.fn(), setLevel: jest.fn(), setMapType: jest.fn(), setPoints: jest.fn(), setRoutePath: jest.fn(), setStations: jest.fn() };
+    createKakaoMapAdapter.mockReturnValue(adapter);
+    loadKakaoMapSdk.mockResolvedValue({});
+    renderPanel();
+    await waitFor(() => expect(createKakaoMapAdapter).toHaveBeenCalled());
+    adapter.setLevel.mockClear();
+
+    fireEvent.click(screen.getByRole("button", { name: "지도 확대" }));
+    fireEvent.click(screen.getByRole("button", { name: "지도 확대" }));
+    fireEvent.click(screen.getByRole("button", { name: "지도 확대" }));
+    act(() => jest.advanceTimersByTime(180));
+
+    expect(adapter.setLevel).toHaveBeenCalledTimes(1);
+    expect(adapter.setLevel).toHaveBeenCalledWith(2);
+    jest.useRealTimers();
+  });
+
   afterEach(() => {
     Object.defineProperty(navigator, "geolocation", { configurable: true, value: originalGeolocation });
     if (originalMapAppKey === undefined) delete process.env.REACT_APP_KAKAO_MAP_APP_KEY;
