@@ -1,4 +1,9 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import JourneyPlannerPage from './JourneyPlannerPage';
-test('keeps input and asks anonymous users to log in without automatic execution', () => { render(<JourneyPlannerPage authState="anonymous" onNavigate={jest.fn()} />); fireEvent.click(screen.getByRole('button',{name:'여정 만들기'})); expect(screen.getByRole('status')).toHaveTextContent('로그인 후'); });
-test('moves authenticated users to the fixture result', () => { const onNavigate=jest.fn(); render(<JourneyPlannerPage authState="authenticated" onNavigate={onNavigate} />); fireEvent.click(screen.getByRole('button',{name:'여정 만들기'})); expect(onNavigate).toHaveBeenCalledWith('journey-result','phase-a-fixture'); });
+import { planJourney } from './api/journeyApi';
+jest.mock('./api/journeyApi', () => ({ planJourney: jest.fn() }));
+
+beforeEach(() => { sessionStorage.clear(); jest.clearAllMocks(); });
+test('keeps input and asks anonymous users to log in without automatic execution', () => { render(<JourneyPlannerPage authState="anonymous" onNavigate={jest.fn()} />); fireEvent.change(screen.getByLabelText('출발 장소'), { target: { value: '성수역' } }); fireEvent.click(screen.getByRole('button',{name:'여정 만들기'})); expect(screen.getByRole('status')).toHaveTextContent('입력을 보존'); expect(planJourney).not.toHaveBeenCalled(); expect(sessionStorage.getItem('ddarung.journey.planner-input')).toContain('성수역'); });
+test('restores input but does not plan after login until the user submits', () => { sessionStorage.setItem('ddarung.journey.planner-input', JSON.stringify({ origin: { placeId: 'A', displayName: '성수역' } })); render(<JourneyPlannerPage authState="authenticated" onNavigate={jest.fn()} />); expect(screen.getByLabelText('출발 장소')).toHaveValue('성수역'); expect(planJourney).not.toHaveBeenCalled(); });
+test('sends nullable destination and actual API decisionId', async () => { planJourney.mockResolvedValue({ decisionId: 'actual-id' }); const onNavigate=jest.fn(); render(<JourneyPlannerPage authState="authenticated" onNavigate={onNavigate} />); fireEvent.change(screen.getByLabelText('출발 장소'), { target: { value: '성수역' } }); fireEvent.change(screen.getByLabelText('필요한 자전거 수'), { target: { value: '5' } }); fireEvent.click(screen.getByRole('button',{name:'여정 만들기'})); await waitFor(() => expect(onNavigate).toHaveBeenCalledWith('journey-result','actual-id')); expect(planJourney).toHaveBeenCalledWith(expect.objectContaining({ destination: null, requiredBikeCount: 5 })); });
