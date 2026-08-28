@@ -6,7 +6,7 @@ COPY gradlew gradlew.bat settings.gradle build.gradle ./
 COPY gradle ./gradle
 RUN chmod +x gradlew
 
-COPY src ./src
+COPY src/main ./src/main
 RUN ./gradlew bootJar --no-daemon
 
 FROM eclipse-temurin:21-jre-jammy AS runtime
