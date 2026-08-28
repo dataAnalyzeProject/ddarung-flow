@@ -62,3 +62,17 @@ server:
         http-only: true
         secure: ${SESSION_COOKIE_SECURE:false}
         same-site: ${SESSION_COOKIE_SAME_SITE:lax}
+
+journey:
+  ai:
+    enabled: ${JOURNEY_AI_ENABLED:false}
+    responses-uri: ${JOURNEY_AI_RESPONSES_URI:https://api.openai.com/v1/responses}
+    api-key: ${JOURNEY_AI_API_KEY:}
+    model: ${JOURNEY_AI_MODEL:}
+    timeout: ${JOURNEY_AI_TIMEOUT:10s}
+  return-prediction:
+    enabled: ${RETURN_PREDICTION_ENABLED:false}
+    base-url: ${RETURN_PREDICTION_BASE_URL:http://return-inference:8082}
+    timeout: ${RETURN_PREDICTION_TIMEOUT:2s}
+    max-response-age: ${RETURN_PREDICTION_MAX_RESPONSE_AGE:15m}
+  phase-a-fixture-enabled: false
