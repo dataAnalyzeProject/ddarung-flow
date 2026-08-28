@@ -43,7 +43,29 @@ describe("INT-3.6 MapRoutePanel", () => {
     loadKakaoMapSdk.mockResolvedValue({});
     renderPanel({ onStationDetail });
     await waitFor(() => expect(createKakaoMapAdapter).toHaveBeenCalled());
-    expect(createKakaoMapAdapter.mock.calls[0][3]).toEqual(expect.objectContaining({ onStationDetail }));
+    const mapOptions = createKakaoMapAdapter.mock.calls[0][3];
+    expect(mapOptions).toEqual(expect.objectContaining({ onStationDetail: expect.any(Function) }));
+    mapOptions.onStationDetail("station-1");
+    expect(onStationDetail).toHaveBeenCalledWith("station-1");
+  });
+
+  test("상위 화면의 상세 콜백이 바뀌어도 지도 어댑터를 다시 만들지 않는다", async () => {
+    process.env.REACT_APP_KAKAO_MAP_APP_KEY = "test-key";
+    const adapter = { setCenter: jest.fn(), setLevel: jest.fn(), setMapType: jest.fn(), setPoints: jest.fn(), setRoutePath: jest.fn(), setStations: jest.fn() };
+    const firstCallback = jest.fn();
+    const secondCallback = jest.fn();
+    createKakaoMapAdapter.mockReturnValue(adapter);
+    loadKakaoMapSdk.mockResolvedValue({});
+    const view = renderPanel({ onStationDetail: firstCallback });
+    await waitFor(() => expect(createKakaoMapAdapter).toHaveBeenCalledTimes(1));
+    const mapOptions = createKakaoMapAdapter.mock.calls[0][3];
+
+    view.rerender(<MapRoutePanel travelMode="도보" selectedPlaces={{ origin: null, destination: null }} fallbackImage="fallback.png" canViewStations onStationDetail={secondCallback} />);
+
+    expect(createKakaoMapAdapter).toHaveBeenCalledTimes(1);
+    mapOptions.onStationDetail("station-1");
+    expect(firstCallback).not.toHaveBeenCalled();
+    expect(secondCallback).toHaveBeenCalledWith("station-1");
   });
 
   test("연속 확대 클릭은 마지막 지도 레벨만 전달한다", async () => {

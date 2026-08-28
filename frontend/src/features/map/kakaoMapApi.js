@@ -50,6 +50,8 @@ export function createKakaoMapAdapter(container, maps, center = { latitude: 37.5
   let stationClusterer = null;
   let stationOverlay = null;
   let routePolyline = null;
+  let zoomInProgress = false;
+  let pendingLevel = null;
 
   const createMarkerImage = (src, width, height) => {
     if (!src || !maps.MarkerImage) return undefined;
@@ -105,6 +107,20 @@ export function createKakaoMapAdapter(container, maps, center = { latitude: 37.5
     onStationSelected?.(station);
   };
 
+  const applyLevel = (level) => {
+    zoomInProgress = true;
+    const handleIdle = () => {
+      maps.event?.removeListener?.(map, "idle", handleIdle);
+      zoomInProgress = false;
+      const nextLevel = pendingLevel;
+      pendingLevel = null;
+      if (nextLevel !== null && nextLevel !== level) applyLevel(nextLevel);
+    };
+    if (maps.event?.addListener) maps.event.addListener(map, "idle", handleIdle);
+    map.setLevel(level, { animate: { duration: 180 } });
+    if (!maps.event?.addListener) zoomInProgress = false;
+  };
+
   return {
     setCenter(point) { if (point) map.setCenter(toLatLng(point)); },
     setPoints({ current, origin, destination }) {
@@ -143,7 +159,13 @@ export function createKakaoMapAdapter(container, maps, center = { latitude: 37.5
       else stationMarkers.forEach((marker) => marker.setMap(map));
     },
     showStationOverlay(station) { createStationOverlay(station); },
-    setLevel(level) { map.setLevel(level); },
+    setLevel(level) {
+      if (zoomInProgress) {
+        pendingLevel = level;
+        return;
+      }
+      applyLevel(level);
+    },
     setMapType(satellite) { map.setMapTypeId(satellite ? maps.MapTypeId.HYBRID : maps.MapTypeId.ROADMAP); },
   };
 }
