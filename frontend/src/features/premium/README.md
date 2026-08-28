@@ -133,6 +133,8 @@ C:\Users\M\Documents\GitHub\ddarung-flow>
 
 > Trailing whitespace(끝 공백) 에러 출력 없이 100% 정상 통과.
 
+---
+
 # [EXP-FE-5.4-UI] 프리미엄 가이드 접근 fixture UI
 
 ## 🔗 모듈 개요
@@ -193,8 +195,11 @@ C:\Users\M\Documents\GitHub\ddarung-flow>
 ```bash
 # 프리미엄 가이드 접근 패널 단위 테스트 독립 실행
 npm test -- --testPathPattern=PremiumGuideAccessPanel.test.jsx --watchAll=false
+```
+
 테스트 실행 통과 결과 (8/8 PASS 🟢)
-text
+
+```text
 PASS src/features/premium/PremiumGuideAccessPanel.test.jsx
   PremiumGuideAccessPanel 컴포넌트 단위 테스트
     ✓ ANONYMOUS 상태에서는 잠금 안내를 보여주고 로그인 버튼 클릭 시 onLogin을 1회 호출한다 (74 ms)
@@ -209,4 +214,97 @@ Test Suites: 1 passed, 1 total
 Tests:       8 passed, 8 total
 Snapshots:   0 total
 Time:        1.062 s
+```
+
+---
+
+# [EXP-FE-PREMIUM-V2] 서울자전거 따릉이 이용권 결제 연동 및 SSOT 상태 머신
+
+## 🔗 모듈 개요
+
+- **컴포넌트**: `PremiumSandboxPage`
+- **목적**: 서울자전거 따릉이 공식 정기 이용권(30일권 ₩2,900 / 365일권 ₩29,000)을 조회하고, 토스페이먼츠(Toss Payments) 안전 결제창을 통해 결제 및 승인을 수행하며, 백엔드 SSOT(Single Source of Truth)와 실시간으로 구독 상태를 동기화하는 모듈입니다.
+
+---
+
+## 📁 관련 파일 구성
+
+| 파일 경로                                                                  | 역할 및 책임                                                                                                   |
+| :------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------- |
+| [`PremiumSandboxPage.jsx`](./PremiumSandboxPage.jsx)                       | 이용권 현황, 혜택 안내, 요금제 카드, 토스 결제 승인 및 5대 라이프사이클을 총괄하는 핵심 페이지 컴포넌트        |
+| [`PremiumSandboxPage.css`](./PremiumSandboxPage.css)                       | 순백색 패밀리룩, 14px 모던 라운드, 선택 플랜 `.current` 하이라이트 및 반응형 스타일링                          |
+| [`subscriptionApi.js`](./subscriptionApi.js)                               | 백엔드 구독 조회(`/me/subscription`), 결제 준비(`/payments/checkout`), 승인(`/payments/confirm`) API 통신 모듈 |
+| [`tossCheckout.js`](./tossCheckout.js)                                     | Toss Payments SDK 로드 및 결제창(`requestPayment`) 호출 래퍼 모듈                                              |
+| [`data/premiumGuideAccessFixture.js`](./data/premiumGuideAccessFixture.js) | 30일권(`PREMIUM_MONTHLY_30D`) 및 365일권(`PREMIUM_YEARLY_365D`) 공식 요금제 규격 데이터                        |
+| [`PremiumSandboxPage.test.jsx`](./PremiumSandboxPage.test.jsx)             | D-Day 계산기, SSOT E2E 라이프사이클, 부모 위임 제어 등 21개 항목 정밀 단위 테스트                              |
+
+---
+
+## 📌 핵심 기능 및 상태 머신 아키텍처
+
+### 1️⃣ 순수 달력 일자(Calendar Day) 기준 D-Day 계산기 (`formatRemainingPeriod`)
+
+- 시/분/초 오차를 배제하고 `00:00:00` 기준 순수 날짜 차이를 계산합니다.
+- **당일 만료**: `오늘 만료 (YYYY.MM.DD까지 이용 가능)`
+- **잔여 기간**: `남은 기간: D-1`, `남은 기간: D-30`, `남은 기간: D-365`
+- **만료/과거**: `이용 기간 만료`
+- **잘못된 입력/null**: `null` 반환 (화면 크래시 방어)
+
+### 2️⃣ 백엔드 SSOT(Single Source of Truth) 확립
+
+- 브라우저 `sessionStorage`에 기대지 않고, 백엔드가 `orderId`로 관리하는 DB를 진실의 원천으로 사용합니다.
+- `confirmPayment` 승인 ➔ `fetchSubscription()`을 즉시 호출하여 공식 `planId`와 `endsAt`을 수신합니다.
+
+### 3️⃣ 개별 플랜 카드 `current` 격리
+
+- `isSubscribed === true`라도 전체 카드가 아닌, **유저가 실제로 구매한 단 1개의 특정 플랜 카드(`plan.planCode === activePlanId`)에만 `current` 테두리/하이라이트를 부여**합니다.
+
+### 4️⃣ 선택한 이용권(`selectedPlanCode`) 5대 라이프사이클
+
+1. **결제 전 (선택)**: 상단 카드에 `선택한 이용권: 👉 따릉이 30일 정기권 (30일 · 2,900원)` 표시
+2. **결제 처리 중**: `선택한 이용권` + `[ ⏳ 연결 중… ]`
+3. **결제 승인 + 상세 동기화**: `selectedPlanCode` 소멸 ➔ `⭐ 따릉이 30일 정기권` `📅 D-30` `[ 이용권 보유 ]`
+4. **결제 승인 + 상세 지연**: `selectedPlanCode` 소멸 ➔ `⭐ 따릉이 정기 이용권 (보유 중)` + `[상태 새로고침]`
+5. **결제 취소 / 실패**: `selectedPlanCode` 즉시 제거(null) ➔ `현재 이용권 상태: 미보유 (이용권 결제 필요)`
+
+### 5️⃣ 제어 컴포넌트(Controlled) 위임 지원
+
+- `onSelectPlan`이 주어지면 결제 제어권을 부모(`MainPage`)에 위임하며, 부모의 `accessState` 전이에 따라 자식의 임시 선택 상태가 자동으로 소멸 동기화됩니다.
+
+---
+
+## 🧩 Props 및 인터페이스 명세 (`PremiumSandboxPage`)
+
+| Prop 이름      | 타입       | 기본값                | 설명                                                                               |
+| :------------- | :--------- | :-------------------- | :--------------------------------------------------------------------------------- |
+| `accessState`  | `string`   | `undefined`           | 부모가 주입하는 강제 접근 상태 (`'FREE'`, `'ACTIVE'`, `'EXPIRED'`, `'PROCESSING'`) |
+| `authState`    | `string`   | `'anonymous'`         | 사용자 인증 상태 (`'authenticated'` / `'anonymous'`)                               |
+| `user`         | `object`   | `undefined`           | 로그인 사용자 정보 (예: `{ name, subscription: { planId, endsAt } }`)              |
+| `plans`        | `Array`    | `premiumPlansFixture` | 요금제 카드 목록 데이터 배열                                                       |
+| `onSelectPlan` | `function` | `undefined`           | 부모 컴포넌트에 결제 프로세스를 위임할 때 호출되는 콜백                            |
+| `onLogin`      | `function` | `undefined`           | 비로그인 상태에서 로그인 유도 시 호출되는 콜백                                     |
+| `onNavigate`   | `function` | `undefined`           | 헤더 네비게이션 이동 콜백                                                          |
+| `onLogout`     | `function` | `undefined`           | 로그아웃 콜백                                                                      |
+
+---
+
+## 🧪 테스트 실행 가이드 및 결과 (`Jest / RTL`)
+
+```bash
+# 프리미엄 모듈 전용 테스트 실행
+npm test -- --testPathPattern=premium --watchAll=false
+```
+
+### 📊 테스트 통과 결과 (21 / 21 ALL PASS 🟢)
+
+```text
+PASS src/features/premium/tossCheckout.test.js
+PASS src/features/premium/subscriptionApi.test.js
+PASS src/features/premium/PremiumSandboxPage.test.jsx
+
+Test Suites: 3 passed, 3 total
+Tests:       21 passed, 21 total
+Snapshots:   0 total
+Time:        2.001 s
+Ran all test suites matching /premium/i.
 ```

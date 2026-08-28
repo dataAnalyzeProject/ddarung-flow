@@ -1,53 +1,235 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import AppHeader from '../../shared/AppHeader';
-import { fetchSubscription, startCheckout } from './subscriptionApi';
+import { premiumPlansFixture } from './data/premiumGuideAccessFixture';
+import { fetchSubscription, startCheckout, confirmPayment } from './subscriptionApi';
 import { requestTossCheckout } from './tossCheckout';
 import './PremiumSandboxPage.css';
 
+// 달력 날짜(Calendar Day) 기준 정석 D-Day 계산기
+export function formatRemainingPeriod(endsAt) {
+  if (!endsAt) return null;
+  const now = new Date();
+  const end = new Date(endsAt);
+
+  // 1. 잘못된 날짜 형식 방어
+  if (isNaN(end.getTime())) return null;
+
+  // 2. 이미 시각 자체가 지나버린 과거 시점 방어
+  if (end.getTime() <= now.getTime()) return '이용 기간 만료';
+
+  const year = end.getFullYear();
+  const month = String(end.getMonth() + 1).padStart(2, '0');
+  const day = String(end.getDate()).padStart(2, '0');
+
+  // 3. 순수 달력 일자(00:00:00) 기준 D-Day 계산
+  const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const targetDate = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  const diffDays = Math.round((targetDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (diffDays <= 0) return `오늘 만료 (${year}.${month}.${day}까지 이용 가능)`;
+  return `남은 기간: D-${diffDays} (${year}.${month}.${day}까지 이용 가능)`;
+}
+
 export default function PremiumSandboxPage({
-  authState,
+  accessState,
+  authState = 'anonymous',
   user,
+  plans = premiumPlansFixture,
   onNavigate,
   onLogout,
   onLogin,
   onSelectPlan,
 }) {
-  const [subscription, setSubscription] = useState(null);
-  const [checkoutLoading, setCheckoutLoading] = useState(false);
-  const [feedbackState, setFeedbackState] = useState(null);
+  const [internalSubscription, setInternalSubscription] = useState(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [customFeedback, setCustomFeedback] = useState(null);
+  const [selectedPlanCode, setSelectedPlanCode] = useState(null);
 
-  // 1. 구독 상태 조회
+  // 최신 구독 상태 새로고침 헬퍼
+  const refreshSubscription = useCallback(async () => {
+    try {
+      const data = await fetchSubscription();
+      if (data) setInternalSubscription(data);
+      return data;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  // 0. 부모 제어 모드(Controlled): 부모의 accessState가 변경되면 자식 내부의 임시 선택 상태를 즉시 소멸 동기화
   useEffect(() => {
-    if (authState === 'authenticated') {
-      fetchSubscription()
-        .then((data) => {
-          setSubscription(data);
-          if (data?.status === 'ACTIVE') {
-            setFeedbackState({
-              type: 'success',
-              icon: '⭐',
-              message: '프리미엄 멤버십을 이용 중입니다. 모든 프리미엄 혜택이 적용되고 있습니다.',
-            });
-          } else if (data?.status === 'EXPIRED') {
-            setFeedbackState({
-              type: 'warning',
-              icon: '⌛',
-              message: '멤버십 이용 기간이 만료되었습니다. 플랜을 선택하여 혜택을 이어가세요.',
-            });
+    if (accessState) {
+      setSelectedPlanCode(null);
+    }
+  }, [accessState]);
+
+  // 1. 초기 마운트 시 구독 조회 및 토스 결제 콜백(?payment=processing) 처리
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const paymentStatus = searchParams.get('payment');
+    const paymentKey = searchParams.get('paymentKey');
+    const orderId = searchParams.get('orderId');
+    const amount = searchParams.get('amount');
+
+    // 토스 결제 완료 콜백 복귀 시 승인 요청 처리
+    if (paymentStatus === 'processing' && paymentKey && orderId && amount) {
+      setIsProcessing(true);
+      confirmPayment({ paymentKey, orderId, amount })
+        .then(async (confirmResult) => {
+          // 1. 백엔드 결제 승인 확인
+          if (confirmResult?.status === 'ACTIVE') {
+            // 결제 성공 시 선택 임시 상태 소멸 ➔ 정식 보유 상태로 완전 승격
+            setSelectedPlanCode(null);
+            setInternalSubscription({ status: 'ACTIVE' });
+
+            // 2. 백엔드 공식 상세 구독 객체(planId, endsAt) 후속 조회
+            try {
+              const latest = await fetchSubscription();
+              if (latest) {
+                setInternalSubscription(latest);
+                setCustomFeedback({
+                  type: 'success',
+                  icon: '⭐',
+                  message: '따릉이 이용권 결제가 성공적으로 완료되었습니다! 지금부터 자유롭게 이용하실 수 있습니다.',
+                });
+              } else {
+                throw new Error('FETCH_FAILED');
+              }
+            } catch {
+              const handleRetry = async () => {
+                const refreshed = await refreshSubscription();
+                if (refreshed) {
+                  setCustomFeedback({
+                    type: 'success',
+                    icon: '⭐',
+                    message: '따릉이 이용권 상세 정보가 성공적으로 동기화되었습니다.',
+                  });
+                } else {
+                  setCustomFeedback({
+                    type: 'error',
+                    icon: '⚠️',
+                    message: '상세 정보를 불러오지 못했습니다. 네트워크 상태를 확인한 후 다시 시도해 주세요.',
+                    action: {
+                      label: '다시 시도',
+                      onClick: handleRetry,
+                    },
+                  });
+                }
+              };
+
+              setCustomFeedback({
+                type: 'warning',
+                icon: 'ℹ️',
+                message: '결제는 정상 승인되었습니다! 상세 만료일을 불러오지 못한 경우 상태 새로고침을 눌러주세요.',
+                action: {
+                  label: '상태 새로고침',
+                  onClick: handleRetry,
+                },
+              });
+            }
+          } else {
+            throw new Error('PAYMENT_VERIFICATION_FAILED');
           }
         })
-        .catch(() => setSubscription(null));
+        .catch(() => {
+          setSelectedPlanCode(null);
+          setCustomFeedback({
+            type: 'error',
+            icon: '⚠️',
+            message: '결제 승인 처리 중 오류가 발생했습니다. 고객센터로 문의해 주세요.',
+          });
+        })
+        .finally(() => {
+          setIsProcessing(false);
+          // 브라우저 URL에서 결제 파라미터 정리
+          const cleanUrl = new URL(window.location.href);
+          cleanUrl.searchParams.delete('payment');
+          cleanUrl.searchParams.delete('paymentKey');
+          cleanUrl.searchParams.delete('orderId');
+          cleanUrl.searchParams.delete('amount');
+          window.history.replaceState({}, '', cleanUrl.toString());
+        });
+      return;
     }
-  }, [authState]);
 
-  // 2. 구독 결제 시작 핸들러
-  const handleSubscribe = async (planCode) => {
-    if (authState !== 'authenticated') {
-      // 👈 화면을 강제로 넘기지 않고, 배너에 [로그인하기] 버튼을 달아서 제공!
-      setFeedbackState({
+    if (paymentStatus === 'failed') {
+      setSelectedPlanCode(null); // 결제 실패 복귀 시 선택 상태 초기화
+      setCustomFeedback({
+        type: 'error',
+        icon: '⚠️',
+        message: '결제가 취소되었거나 승인에 실패했습니다. 다시 시도해 주세요.',
+      });
+      const cleanUrl = new URL(window.location.href);
+      cleanUrl.searchParams.delete('payment');
+      cleanUrl.searchParams.delete('code');
+      cleanUrl.searchParams.delete('message');
+      window.history.replaceState({}, '', cleanUrl.toString());
+      return;
+    }
+
+    // 일반 진입 시 구독 정보 조회
+    if (authState === 'authenticated' && !accessState) {
+      refreshSubscription();
+    }
+  }, [authState, accessState, refreshSubscription]);
+
+  // 2. 📌 단일 진실 원천 (Single Source of Truth) 도출
+  const effectiveStatus = useMemo(() => {
+    if (accessState) return accessState;
+    if (isProcessing) return 'PROCESSING';
+    if (authState !== 'authenticated') return 'ANONYMOUS';
+    if (internalSubscription?.status === 'ACTIVE') return 'ACTIVE';
+    if (internalSubscription?.status === 'EXPIRED') return 'EXPIRED';
+    return 'FREE';
+  }, [accessState, isProcessing, authState, internalSubscription]);
+
+  const isSubscribed = effectiveStatus === 'ACTIVE';
+  const isBusy = effectiveStatus === 'PROCESSING' || isProcessing;
+
+  // 부모의 user.subscription 또는 내부 internalSubscription 통합 참조
+  const activePlanId = internalSubscription?.planId || user?.subscription?.planId;
+  const activeEndsAt = internalSubscription?.endsAt || user?.subscription?.endsAt;
+  const hasSubscriptionDetails = Boolean(activePlanId && activeEndsAt);
+
+  // 3. 상태에 따른 통합 피드백 배너 정보 계산
+  const feedback = useMemo(() => {
+    if (customFeedback) return customFeedback;
+
+    switch (effectiveStatus) {
+      case 'PROCESSING':
+        return {
+          type: 'info',
+          icon: '⏳',
+          message: '결제 요청을 안전하게 처리하고 있습니다. 잠시만 기다려 주세요…',
+        };
+      case 'ACTIVE':
+        return {
+          type: 'success',
+          icon: '⭐',
+          message: '따릉이 이용권을 보유 중입니다. 서울시 전역 따릉이를 자유롭게 이용하실 수 있습니다.',
+        };
+      case 'EXPIRED':
+        return {
+          type: 'warning',
+          icon: '⌛',
+          message: '이용권 기간이 만료되었습니다. 이용권을 결제하시면 따릉이를 다시 이용하실 수 있습니다.',
+        };
+      case 'ANONYMOUS':
+        return null;
+      default:
+        return null;
+    }
+  }, [customFeedback, effectiveStatus]);
+
+  // 4. 결제 액션 디스패처 (부모 위임 vs 자체 결제 실행 분리)
+  const handlePlanSelect = async (planCode) => {
+    setSelectedPlanCode(planCode);
+
+    if (effectiveStatus === 'ANONYMOUS') {
+      setCustomFeedback({
         type: 'warning',
         icon: '🔒',
-        message: '프리미엄 멤버십을 구독하시려면 로그인이 필요합니다.',
+        message: '따릉이 이용권을 결제하시려면 로그인이 필요합니다.',
         action: {
           label: '로그인하기',
           onClick: () => {
@@ -59,49 +241,55 @@ export default function PremiumSandboxPage({
       return;
     }
 
+    // 부모(MainPage 등)에서 결제 제어권을 넘겨받은 경우 위임 (상태 종료는 부모 accessState 전이가 책임)
     if (onSelectPlan) {
       onSelectPlan({ planCode });
       return;
     }
 
-    setFeedbackState({
-      type: 'info',
-      icon: '⏳',
-      message: '결제 요청을 안전하게 처리하고 있습니다. 잠시만 기다려 주세요…',
-    });
-    setCheckoutLoading(true);
+    // 독립 페이지 모드: 자체 토스 결제 프로세스 실행 (종료 책임: 자신이 직접 가짐)
+    setCustomFeedback(null);
+    setIsProcessing(true);
 
     try {
       const checkout = await startCheckout(planCode);
       await requestTossCheckout(checkout, {
         onCancel: () => {
-          setFeedbackState({
+          setSelectedPlanCode(null); // 결제 취소 시 선택 상태 즉시 해제 (미보유 복귀)
+          setCustomFeedback({
             type: 'warning',
             icon: 'ℹ️',
-            message: '결제가 취소되었습니다. 원하실 때 언제든 다시 신청하실 수 있습니다.',
+            message: '결제가 취소되었습니다. 언제든 다시 신청하실 수 있습니다.',
           });
-          setCheckoutLoading(false);
+          setIsProcessing(false);
         },
       });
     } catch (error) {
+      setSelectedPlanCode(null); // 오류 발생 시 선택 상태 해제
       if (error.message === 'PAYMENT_NOT_ENABLED') {
-        setFeedbackState({
+        setCustomFeedback({
           type: 'info',
           icon: '🛠️',
           message: '현재 결제 시스템 점검 중입니다. 잠시 후 다시 이용해 주세요.',
         });
       } else {
-        setFeedbackState({
+        setCustomFeedback({
           type: 'error',
           icon: '⚠️',
           message: '결제를 완료하지 못했습니다. 결제 수단 한도나 카드 상태를 확인해 주세요.',
         });
       }
-      setCheckoutLoading(false);
+      setIsProcessing(false);
     }
   };
 
-  const isSubscribed = subscription?.status === 'ACTIVE';
+  const currentPlan = plans.find((p) => p.planCode === activePlanId);
+  const selectedPlan = plans.find((p) => p.planCode === selectedPlanCode);
+
+  const planDisplayName =
+    currentPlan?.name ||
+    internalSubscription?.planName ||
+    (isSubscribed ? '따릉이 정기 이용권 (보유 중)' : '미보유 (이용권 결제 필요)');
 
   return (
     <div className="premium-sandbox-shell">
@@ -110,78 +298,84 @@ export default function PremiumSandboxPage({
       <main className="premium-sandbox-main">
         {/* 1. 상단 히어로 영역 */}
         <section className="premium-sandbox__hero">
-          <span className="premium-sandbox__badge">DDARUNG FLOW MEMBERSHIP</span>
+          <span className="premium-sandbox__badge">SEOUL BIKE PASS</span>
           <h1 className="premium-sandbox__title">
             기다림 없는 따릉이 여정,<br />
-            <span>프리미엄 멤버십</span>으로 시작하세요
+            <span>서울자전거 따릉이 이용권</span>으로 함께하세요
           </h1>
           <p className="premium-sandbox__desc">
-            실시간 품절 예측부터 날씨·미세먼지 분석, 출퇴근 최적 경로까지 한 번에 누리세요.
+            따릉이 플로우에서 실시간 예측을 확인하고, 실제 탑승을 위한 따릉이 이용권을 간편하게 결제하세요.
           </p>
 
-          {/* 내 현재 멤버십 현황 카드 */}
+          {/* 내 현재 이용권 현황 카드 (선택한 이용권 & 보유 이용권 통합 노출) */}
           <div className="premium-sandbox__status-card">
             <div className="premium-sandbox__status-info">
-              <span className="premium-sandbox__status-label">현재 이용 중인 플랜</span>
+              <span className="premium-sandbox__status-label">
+                {isSubscribed ? '현재 이용권 보유 상태' : selectedPlan ? '선택한 이용권' : '현재 이용권 상태'}
+              </span>
               <strong className="premium-sandbox__status-plan">
-                {isSubscribed ? `⭐ ${subscription.planName || '프리미엄 멤버십'}` : '무료 플랜 (Free)'}
+                {isSubscribed
+                  ? `⭐ ${planDisplayName}`
+                  : selectedPlan
+                  ? `👉 ${selectedPlan.name} (${selectedPlan.priceDuration || `${selectedPlan.duration} · ${selectedPlan.price}`})`
+                  : '미보유 (이용권 결제 필요)'}
               </strong>
+              {/* 남은 기간 및 만료일 표시: 상세 정보(endsAt)가 온전히 확보되었을 때만 렌더링 */}
+              {isSubscribed && hasSubscriptionDetails && (
+                <span className="premium-sandbox__status-expiry">
+                  📅 {formatRemainingPeriod(activeEndsAt)}
+                </span>
+              )}
             </div>
             {isSubscribed ? (
-              <div className="premium-sandbox__status-badge active">이용 중</div>
+              <div className="premium-sandbox__status-badge active">이용권 보유</div>
+            ) : isBusy ? (
+              <div className="premium-sandbox__status-badge processing">연결 중…</div>
             ) : (
-              <div className="premium-sandbox__status-badge free">기본 혜택</div>
+              <div className="premium-sandbox__status-badge free">미보유</div>
             )}
           </div>
         </section>
 
-        {/* 2. 프리미엄 핵심 혜택 3종 그리드 */}
+        {/* 2. 따릉이 이용 안내 3종 그리드 */}
         <section className="premium-sandbox__benefits">
           <div className="premium-sandbox__benefit-card">
+            <div className="premium-sandbox__benefit-icon">🚲</div>
+            <h3>서울시 전역 2,700+ 대여소</h3>
+            <p>서울시 어디서나 원하는 대여소에서 자유롭게 대여하고 반납할 수 있습니다.</p>
+          </div>
+
+          <div className="premium-sandbox__benefit-card">
+            <div className="premium-sandbox__benefit-icon">🔄</div>
+            <h3>반납 후 무제한 재대여</h3>
+            <p>기본 대여 시간(1시간) 내에 반납 후 다시 대여하면 이용 기간 동안 무제한으로 탈 수 있습니다.</p>
+          </div>
+
+          <div className="premium-sandbox__benefit-card">
             <div className="premium-sandbox__benefit-icon">🎯</div>
-            <h3>실시간 품절 확률 예측</h3>
-            <p>90일간의 이동 패턴과 빅데이터를 분석하여 도착 시점의 대여 성공률을 15분 단위로 정밀 예측합니다.</p>
-          </div>
-
-          <div className="premium-sandbox__benefit-card">
-            <div className="premium-sandbox__benefit-icon">🌤️</div>
-            <h3>도착지 날씨 & 미세먼지</h3>
-            <p>라이딩 출발 전, 도착지의 풍속, 강수 확률, 미세먼지 수치를 측정소 기준으로 실시간 분석합니다.</p>
-          </div>
-
-          <div className="premium-sandbox__benefit-card">
-            <div className="premium-sandbox__benefit-icon">🚀</div>
-            <h3>자전거 도로 최적 경로</h3>
-            <p>안전한 자전거 전용 도로 우선 경로와 경사도, 도보 이동 시간을 반영한 최적의 코스를 안내합니다.</p>
+            <h3>실시간 대여소 예측 연동</h3>
+            <p>따릉이 플로우의 실시간 재고 예측과 최적 경로 안내를 함께 활용하여 쾌적하게 이동하세요.</p>
           </div>
         </section>
 
         {/* 3. 요금제 플랜 카드 선택 영역 */}
         <section className="premium-sandbox__pricing">
           <div className="premium-sandbox__pricing-header">
-            <h2>합리적인 멤버십 요금제</h2>
-            <p>언제든 위약금 없이 자유롭게 해지할 수 있습니다</p>
+            <h2>서울자전거 따릉이 정기 이용권</h2>
+            <p>30일 또는 365일 단위로 자동 갱신 없이 안전하게 결제하세요</p>
           </div>
 
-          {/* 👈 상태별 자연스러운 안내 알림 배너 (요금제 카드 바로 위 배치) */}
-          {feedbackState && (
-            <div className={`premium-feedback-banner ${feedbackState.type}`} role="status">
-              <span className="premium-feedback-banner__icon">{feedbackState.icon}</span>
-              <p className="premium-feedback-banner__text">{feedbackState.message}</p>
-              {feedbackState.action && (
-                <button
-                  type="button"
-                  className="premium-feedback-banner__action-btn"
-                  onClick={feedbackState.action.onClick}
-                >
-                  {feedbackState.action.label}
-                </button>
-              )}
+          {/* 상태별 실시간 안내 알림 배너 */}
+          {feedback && (
+            <div className={`premium-feedback-banner ${feedback.type}`} role="status">
+              <span className="premium-feedback-banner__icon">{feedback.icon}</span>
+              <p className="premium-feedback-banner__text">{feedback.message}</p>
+              {feedbackStateAction(feedback.action)}
               <button
                 type="button"
                 className="premium-feedback-banner__close"
                 aria-label="닫기"
-                onClick={() => setFeedbackState(null)}
+                onClick={() => setCustomFeedback(null)}
               >
                 ✕
               </button>
@@ -189,62 +383,44 @@ export default function PremiumSandboxPage({
           )}
 
           <div className="premium-sandbox__plans-grid">
-            {/* 월간 플랜 */}
-            <div className={`premium-sandbox__plan-card ${isSubscribed ? 'current' : ''}`}>
-              <div className="premium-sandbox__plan-head">
-                <h3>프리미엄 월간</h3>
-                <p className="premium-sandbox__plan-desc">30일 이용권 · 자동 갱신 없음</p>
-              </div>
-              <div className="premium-sandbox__plan-price">
-                <strong>₩2,900</strong>
-                <span>/ 30일</span>
-              </div>
-              <ul className="premium-sandbox__plan-features">
-                <li>✓ 실시간 잔여 대여 성공률 예측 무제한</li>
-                <li>✓ 라이딩 가이드 (날씨·미세먼지) 무제한</li>
-                <li>✓ 대여소 즐겨찾기 최대 20개 저장</li>
-                <li>✓ 30일 만료 후 자동 결제 없음</li>
-              </ul>
-              <button
-                type="button"
-                className="premium-sandbox__plan-btn"
-                disabled={isSubscribed || checkoutLoading}
-                onClick={() => handleSubscribe('MONTHLY')}
-              >
-                {isSubscribed ? '현재 이용 중' : checkoutLoading ? '연결 중…' : '월간 구독 시작하기'}
-              </button>
-            </div>
+            {plans.map((plan) => {
+              const isCurrentPlan = activePlanId === plan.planCode;
 
-            {/* 연간 플랜 */}
-            <div className={`premium-sandbox__plan-card premium-sandbox__plan-card--featured ${isSubscribed ? 'current' : ''}`}>
-              <div className="premium-sandbox__plan-ribbon">🔥 365일 패스</div>
-              <div className="premium-sandbox__plan-head">
-                <h3>연간 멤버십</h3>
-                <p className="premium-sandbox__plan-desc">1년 내내 끊김 없는 가장 경제적인 선택</p>
-              </div>
-              <div className="premium-sandbox__plan-price">
-                <strong>₩29,000</strong>
-                <span>/ 365일</span>
-              </div>
-              <ul className="premium-sandbox__plan-features">
-                <li>✓ 월간 멤버십의 모든 프리미엄 혜택 포함</li>
-                <li>✓ 365일 동안 추가 결제 없이 무제한 이용</li>
-                <li>✓ 신규 기능 우선 체험 권한 제공</li>
-                <li>✓ 1년 단위 자동 갱신</li>
-              </ul>
-              <button
-                type="button"
-                className="premium-sandbox__plan-btn premium-sandbox__plan-btn--featured"
-                disabled={isSubscribed || checkoutLoading}
-                onClick={() => handleSubscribe('ANNUAL')}
-              >
-                {isSubscribed ? '현재 이용 중' : checkoutLoading ? '연결 중…' : '연간 선택 (29,000원)'}
-              </button>
-            </div>
+              return (
+                <div
+                  key={plan.planCode}
+                  data-testid={`plan-card-${plan.planCode}`}
+                  className={`premium-sandbox__plan-card ${plan.isFeatured ? 'premium-sandbox__plan-card--featured' : ''} ${isCurrentPlan ? 'current' : ''}`}
+                >
+                  {plan.isFeatured && <div className="premium-sandbox__plan-ribbon">🔥 365일 패스</div>}
+                  <div className="premium-sandbox__plan-head">
+                    <h3>{plan.name}</h3>
+                    <p className="premium-sandbox__plan-desc">{plan.duration} 이용권 · {plan.policyText}</p>
+                  </div>
+                  <div className="premium-sandbox__plan-price">
+                    <strong>{plan.price}</strong>
+                    <span>/ {plan.duration}</span>
+                  </div>
+                  <ul className="premium-sandbox__plan-features">
+                    {plan.features.map((feature, idx) => (
+                      <li key={idx}>✓ {feature}</li>
+                    ))}
+                  </ul>
+                  <button
+                    type="button"
+                    className={`premium-sandbox__plan-btn ${plan.isFeatured ? 'premium-sandbox__plan-btn--featured' : ''}`}
+                    disabled={isSubscribed || isBusy}
+                    onClick={() => handlePlanSelect(plan.planCode)}
+                  >
+                    {isSubscribed ? '이용권 보유 중' : isBusy ? '연결 중…' : plan.buttonLabel}
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </section>
 
-        {/* 5. 하단 신뢰 및 보안 보증 바 */}
+        {/* 4. 하단 신뢰 및 보안 보증 바 */}
         <footer className="premium-sandbox__trust">
           <div className="premium-sandbox__trust-item">
             <span>🔒</span>
@@ -252,14 +428,27 @@ export default function PremiumSandboxPage({
           </div>
           <div className="premium-sandbox__trust-item">
             <span>⚡</span>
-            <p>결제 즉시 모든 프리미엄 기능 활성화</p>
+            <p>결제 즉시 따릉이 이용권 활성화</p>
           </div>
           <div className="premium-sandbox__trust-item">
             <span>🤝</span>
-            <p>언제든 마이페이지에서 간편 해지</p>
+            <p>기간 만료 후 자동 연장 없는 안전한 이용권</p>
           </div>
         </footer>
       </main>
     </div>
+  );
+}
+
+function feedbackStateAction(action) {
+  if (!action) return null;
+  return (
+    <button
+      type="button"
+      className="premium-feedback-banner__action-btn"
+      onClick={action.onClick}
+    >
+      {action.label}
+    </button>
   );
 }
