@@ -21,24 +21,31 @@ public class SavedJourneyService {
     static final int MAX_SAVED_JOURNEYS_PER_USER = 10;
 
     private final SavedJourneyRepository repository;
+    private final SavedJourneyIdempotencyKeyRepository idempotencyKeys;
     private final EntityManager entityManager;
 
     @Transactional
     public SavedJourneyEntity save(Long userId, String idempotencyKey, SavedJourneyDtos.SaveRequest request) {
         validate(userId, idempotencyKey, request);
-        String replayInputJson = canonicalJson(request);
-        String duplicateKey = sha256(replayInputJson);
+        SavedJourneyDtos.ReplayInput replayInput = replayInput(request);
+        String replayInputJson = canonicalJson(replayInput);
+        String requestHash = sha256(replayInputJson);
         lockUser(userId);
-        return repository.findByUserIdAndIdempotencyKey(userId, idempotencyKey)
-                .map(existing -> {
-                    if (!existing.getDuplicateKey().equals(duplicateKey)) throw new IdempotencyConflictException();
-                    return existing;
-                })
-                .orElseGet(() -> repository.findByUserIdAndDuplicateKey(userId, duplicateKey)
-                        .orElseGet(() -> {
-                            if (repository.countByUserId(userId) >= MAX_SAVED_JOURNEYS_PER_USER) throw new SavedJourneyLimitException();
-                            return repository.save(new SavedJourneyEntity(userId, displayName(request), replayInputJson, duplicateKey, idempotencyKey));
-                        }));
+        SavedJourneyIdempotencyKeyEntity existingKey = idempotencyKeys.findByUserIdAndIdempotencyKey(userId, idempotencyKey).orElse(null);
+        if (existingKey != null) {
+            if (!existingKey.getRequestHash().equals(requestHash)) throw new IdempotencyConflictException();
+            SavedJourneyEntity existing = existingKey.getSavedJourney();
+            existing.getDisplayName();
+            return existing;
+        }
+
+        SavedJourneyEntity saved = repository.findByUserIdAndDuplicateKey(userId, requestHash).orElse(null);
+        if (saved == null) {
+            if (repository.countByUserId(userId) >= MAX_SAVED_JOURNEYS_PER_USER) throw new SavedJourneyLimitException();
+            saved = repository.save(new SavedJourneyEntity(userId, displayName(request), replayInputJson, requestHash));
+        }
+        idempotencyKeys.save(new SavedJourneyIdempotencyKeyEntity(userId, idempotencyKey, requestHash, saved));
+        return saved;
     }
 
     public List<SavedJourneyEntity> list(Long userId) {
@@ -50,12 +57,13 @@ public class SavedJourneyService {
     public void delete(Long userId, String savedJourneyId) {
         if (userId == null || savedJourneyId == null || savedJourneyId.isBlank()) throw new IllegalArgumentException("저장 여정 ID가 필요합니다.");
         SavedJourneyEntity saved = repository.findByUserIdAndPublicId(userId, savedJourneyId).orElseThrow(SavedJourneyNotFoundException::new);
+        idempotencyKeys.deleteBySavedJourneyId(saved.getId());
         repository.delete(saved);
     }
 
-    public SavedJourneyDtos.SaveRequest replayInput(SavedJourneyEntity entity) {
+    public SavedJourneyDtos.ReplayInput replayInput(SavedJourneyEntity entity) {
         try {
-            return new ObjectMapper().readValue(entity.getReplayInputJson(), SavedJourneyDtos.SaveRequest.class);
+            return new ObjectMapper().readValue(entity.getReplayInputJson(), SavedJourneyDtos.ReplayInput.class);
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("저장된 Journey 입력을 읽을 수 없습니다.", exception);
         }
@@ -89,7 +97,12 @@ public class SavedJourneyService {
         }
     }
 
-    private String canonicalJson(SavedJourneyDtos.SaveRequest request) {
+    private SavedJourneyDtos.ReplayInput replayInput(SavedJourneyDtos.SaveRequest request) {
+        return new SavedJourneyDtos.ReplayInput(request.origin(), request.destination(), request.requiredBikeCount(),
+                request.totalJourneyMinutes(), request.maxJourneyMinutes(), request.preferences(), request.hardConstraints());
+    }
+
+    private String canonicalJson(SavedJourneyDtos.ReplayInput request) {
         try {
             return new ObjectMapper().configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true).writeValueAsString(request);
         } catch (JsonProcessingException exception) {

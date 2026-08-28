@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.Optional;
 
 public interface SavedJourneyRepository extends JpaRepository<SavedJourneyEntity, Long> {
-    Optional<SavedJourneyEntity> findByUserIdAndIdempotencyKey(Long userId, String idempotencyKey);
     Optional<SavedJourneyEntity> findByUserIdAndDuplicateKey(Long userId, String duplicateKey);
     long countByUserId(Long userId);
     List<SavedJourneyEntity> findByUserIdOrderByCreatedAtDesc(Long userId);

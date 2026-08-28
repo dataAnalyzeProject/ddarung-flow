@@ -11,9 +11,13 @@ public final class SavedJourneyDtos {
                               Integer totalJourneyMinutes, Integer maxJourneyMinutes, Map<String, String> preferences,
                               List<String> hardConstraints) { }
 
+    public record ReplayInput(PlaceInput origin, PlaceInput destination, Integer requiredBikeCount,
+                              Integer totalJourneyMinutes, Integer maxJourneyMinutes, Map<String, String> preferences,
+                              List<String> hardConstraints) { }
+
     public record PlaceInput(String providerId, String displayName, BigDecimal latitude, BigDecimal longitude) { }
 
-    public record SavedJourneyResponse(String savedJourneyId, String displayName, SaveRequest replayInput, String createdAt) { }
+    public record SavedJourneyResponse(String savedJourneyId, String displayName, ReplayInput replayInput, String createdAt) { }
 
     public record ErrorResponse(String code) { }
 }
