@@ -23,30 +23,112 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-images:
-    name: build-and-push-${{ matrix.component }}
+  detect-changes:
+    name: detect-image-changes
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
     environment: oci-staging
+    outputs:
+      latest: ${{ steps.candidate.outputs.latest }}
+      build_matrix: ${{ steps.matrix.outputs.build_matrix }}
+      frontend_tag: ${{ steps.matrix.outputs.frontend_tag }}
+      backend_tag: ${{ steps.matrix.outputs.backend_tag }}
+      inference_tag: ${{ steps.matrix.outputs.inference_tag }}
+      inventory_refresher_tag: ${{ steps.matrix.outputs.inventory_refresher_tag }}
+    env:
+      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+      OCI_REGISTRY: ${{ vars.OCI_REGISTRY }}
+      OCI_NAMESPACE: ${{ vars.OCI_NAMESPACE }}
+      OCI_REPOSITORY: ${{ vars.OCI_REPOSITORY }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+          fetch-depth: 2
+
+      - name: Verify deployment candidate
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
+          git fetch --no-tags origin main
+          test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
+          git merge-base --is-ancestor "$DEPLOY_SHA" origin/main
+          git rev-parse "$DEPLOY_SHA^" >/dev/null
+          if [ "$(git rev-parse origin/main)" = "$DEPLOY_SHA" ]; then
+            echo 'latest=true' >> "$GITHUB_OUTPUT"
+          else
+            echo "Skipping stale build candidate $DEPLOY_SHA; main already advanced."
+            echo 'latest=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Log in to OCIR
+        if: steps.candidate.outputs.latest == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.OCI_REGISTRY }}
+          username: ${{ secrets.OCIR_USERNAME }}
+          password: ${{ secrets.OCIR_AUTH_TOKEN }}
+
+      - id: matrix
+        name: Select image tags and build matrix
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.candidate.outputs.latest }}" != true ]; then
+            echo 'build_matrix=[]' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          parent_sha=$(git rev-parse "$DEPLOY_SHA^")
+          image_base="$OCI_REGISTRY/$OCI_NAMESPACE/$OCI_REPOSITORY"
+          components=(frontend backend inference inventory-refresher)
+          contexts=(./frontend ./backend ./infra/inference .)
+          dockerfiles=(./frontend/Dockerfile ./backend/Dockerfile ./infra/inference/Dockerfile ./infra/inventory-refresher/Dockerfile)
+          paths=(frontend backend infra/inference pipeline)
+          matrix='[]'
+
+          for index in "${!components[@]}"; do
+            component=${components[$index]}
+            context=${contexts[$index]}
+            dockerfile=${dockerfiles[$index]}
+            path=${paths[$index]}
+            tag="$parent_sha"
+            changed=false
+            if ! git diff --quiet "$parent_sha" "$DEPLOY_SHA" -- "$path"; then
+              changed=true
+              tag="$DEPLOY_SHA"
+            elif ! docker manifest inspect "$image_base/$component:$parent_sha" >/dev/null 2>&1; then
+              echo "Reusable image is unavailable; rebuilding $component for $DEPLOY_SHA."
+              changed=true
+              tag="$DEPLOY_SHA"
+            fi
+            if [ "$changed" = true ]; then
+              matrix=$(jq -c --arg component "$component" --arg context "$context" --arg dockerfile "$dockerfile" --arg tag "$tag" '. + [{component: $component, context: $context, dockerfile: $dockerfile, tag: $tag}]' <<< "$matrix")
+            fi
+            output_name=${component//-/_}
+            printf '%s_tag=%s\n' "$output_name" "$tag" >> "$GITHUB_OUTPUT"
+          done
+          printf 'build_matrix=%s\n' "$matrix" >> "$GITHUB_OUTPUT"
+
+  build-images:
+    name: build-and-push-${{ matrix.component }}
+    needs: detect-changes
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      needs.detect-changes.outputs.latest == 'true'
+    runs-on: ubuntu-latest
+    environment: oci-staging
     strategy:
       fail-fast: true
       matrix:
-        include:
-          - component: frontend
-            context: ./frontend
-            dockerfile: ./frontend/Dockerfile
-          - component: backend
-            context: ./backend
-            dockerfile: ./backend/Dockerfile
-          - component: inference
-            context: ./infra/inference
-            dockerfile: ./infra/inference/Dockerfile
-          - component: inventory-refresher
-            context: .
-            dockerfile: ./infra/inventory-refresher/Dockerfile
+        include: ${{ fromJSON(needs.detect-changes.outputs.build_matrix) }}
     env:
       DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
       OCI_REGISTRY: ${{ vars.OCI_REGISTRY }}
@@ -105,7 +187,7 @@ jobs:
           file: ${{ matrix.dockerfile }}
           platforms: linux/arm64
           push: true
-          tags: ${{ env.OCI_REGISTRY }}/${{ env.OCI_NAMESPACE }}/${{ env.OCI_REPOSITORY }}/${{ matrix.component }}:${{ env.DEPLOY_SHA }}
+          tags: ${{ env.OCI_REGISTRY }}/${{ env.OCI_NAMESPACE }}/${{ env.OCI_REPOSITORY }}/${{ matrix.component }}:${{ matrix.tag }}
           build-args: |
             ${{ matrix.component == 'frontend' && format('REACT_APP_API_BASE_URL={0}', env.STAGING_PUBLIC_URL) || '' }}
             ${{ matrix.component == 'frontend' && format('REACT_APP_KAKAO_MAP_APP_KEY={0}', env.KAKAO_MAP_APP_KEY) || '' }}
@@ -115,8 +197,14 @@ jobs:
 
   deploy:
     name: deploy-oci-staging
-    needs: build-images
+    needs:
+      - detect-changes
+      - build-images
     if: >-
+      always() &&
+      needs.detect-changes.result == 'success' &&
+      needs.detect-changes.outputs.latest == 'true' &&
+      (needs.build-images.result == 'success' || needs.build-images.result == 'skipped') &&
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'main'
@@ -132,6 +220,10 @@ jobs:
       SSH_HOST: ${{ secrets.STAGING_SSH_HOST }}
       SSH_USER: ${{ secrets.STAGING_SSH_USER }}
       TOSS_PAYMENTS_CLIENT_KEY: ${{ secrets.TOSS_PAYMENTS_CLIENT_KEY }}
+      FRONTEND_TAG: ${{ needs.detect-changes.outputs.frontend_tag }}
+      BACKEND_TAG: ${{ needs.detect-changes.outputs.backend_tag }}
+      INFERENCE_TAG: ${{ needs.detect-changes.outputs.inference_tag }}
+      INVENTORY_REFRESHER_TAG: ${{ needs.detect-changes.outputs.inventory_refresher_tag }}
 
     steps:
       - name: Check required deployment configuration
@@ -167,7 +259,22 @@ jobs:
           test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
           git merge-base --is-ancestor "$DEPLOY_SHA" origin/main
 
+      - name: Stop stale deployment candidates
+        id: fresh
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          latest_main=$(git rev-parse origin/main)
+          if [ "$latest_main" != "$DEPLOY_SHA" ]; then
+            echo "Skipping stale deployment candidate $DEPLOY_SHA; latest main is $latest_main."
+            echo 'deploy=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo 'deploy=true' >> "$GITHUB_OUTPUT"
+
       - name: Configure verified SSH access
+        if: steps.fresh.outputs.deploy == 'true'
         shell: bash
         env:
           SSH_PRIVATE_KEY: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
@@ -182,6 +289,7 @@ jobs:
           ssh-keygen -F "$SSH_HOST" -f "$HOME/.ssh/known_hosts" >/dev/null
 
       - name: Prepare immutable release files
+        if: steps.fresh.outputs.deploy == 'true'
         shell: bash
         env:
           GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
@@ -223,10 +331,10 @@ jobs:
 
           image_base="$OCI_REGISTRY/$OCI_NAMESPACE/$OCI_REPOSITORY"
           {
-            printf 'FRONTEND_IMAGE=%s/frontend:%s\n' "$image_base" "$DEPLOY_SHA"
-            printf 'BACKEND_IMAGE=%s/backend:%s\n' "$image_base" "$DEPLOY_SHA"
-            printf 'INFERENCE_IMAGE=%s/inference:%s\n' "$image_base" "$DEPLOY_SHA"
-            printf 'INVENTORY_REFRESHER_IMAGE=%s/inventory-refresher:%s\n' "$image_base" "$DEPLOY_SHA"
+            printf 'FRONTEND_IMAGE=%s/frontend:%s\n' "$image_base" "$FRONTEND_TAG"
+            printf 'BACKEND_IMAGE=%s/backend:%s\n' "$image_base" "$BACKEND_TAG"
+            printf 'INFERENCE_IMAGE=%s/inference:%s\n' "$image_base" "$INFERENCE_TAG"
+            printf 'INVENTORY_REFRESHER_IMAGE=%s/inventory-refresher:%s\n' "$image_base" "$INVENTORY_REFRESHER_TAG"
             printf 'REACT_APP_API_BASE_URL=%s\n' "$STAGING_PUBLIC_URL"
             printf 'REACT_APP_TOSS_PAYMENTS_CLIENT_KEY=%s\n' "$TOSS_PAYMENTS_CLIENT_KEY"
             printf 'PAYMENT_MODE=sandbox\n'
@@ -260,6 +368,7 @@ jobs:
           chmod 600 oauth.candidate.env
 
       - name: Upload candidate release
+        if: steps.fresh.outputs.deploy == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -271,6 +380,7 @@ jobs:
           scp -i "$HOME/.ssh/id_staging" -o BatchMode=yes -o StrictHostKeyChecking=yes oauth.candidate.env "$target:$REMOTE_APP_DIR/oauth.candidate.env"
 
       - name: Deploy and automatically roll back on failed smoke
+        if: steps.fresh.outputs.deploy == 'true'
         shell: bash
         run: |
           set -euo pipefail

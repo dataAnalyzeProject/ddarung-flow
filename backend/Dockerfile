@@ -1,4 +1,4 @@
-FROM eclipse-temurin:21-jdk-jammy AS build
+FROM --platform=$BUILDPLATFORM eclipse-temurin:21-jdk-jammy AS build
 
 WORKDIR /app
 

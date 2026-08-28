@@ -12,8 +12,61 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.paths.outputs.frontend }}
+      backend: ${{ steps.paths.outputs.backend }}
+      pipeline: ${{ steps.paths.outputs.pipeline }}
+      inference: ${{ steps.paths.outputs.inference }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - id: paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = push ]; then
+            {
+              echo 'frontend=true'
+              echo 'backend=true'
+              echo 'pipeline=true'
+              echo 'inference=true'
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          base_sha='${{ github.event.pull_request.base.sha }}'
+          head_sha='${{ github.event.pull_request.head.sha }}'
+          all=false
+          frontend=false
+          backend=false
+          pipeline=false
+          inference=false
+          while IFS= read -r path; do
+            case "$path" in
+              frontend/*) frontend=true ;;
+              backend/*) backend=true ;;
+              pipeline/*) pipeline=true ;;
+              infra/inference/*|infra/staging/*) inference=true ;;
+              *) all=true ;;
+            esac
+          done < <(git diff --name-only "$base_sha" "$head_sha")
+          if [ "$all" = true ]; then
+            frontend=true
+            backend=true
+            pipeline=true
+            inference=true
+          fi
+          printf 'frontend=%s\nbackend=%s\npipeline=%s\ninference=%s\n' \
+            "$frontend" "$backend" "$pipeline" "$inference" >> "$GITHUB_OUTPUT"
+
   frontend:
     name: frontend
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -31,6 +84,8 @@ jobs:
 
   backend:
     name: backend
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -46,6 +101,8 @@ jobs:
 
   pipeline:
     name: pipeline
+    needs: changes
+    if: needs.changes.outputs.pipeline == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -59,6 +116,8 @@ jobs:
 
   inference:
     name: inference
+    needs: changes
+    if: needs.changes.outputs.inference == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
