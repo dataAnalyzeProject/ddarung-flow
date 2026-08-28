@@ -79,8 +79,9 @@ public class RetentionController {
     }
 
     @GetMapping("/prediction-histories")
-    public List<RetentionDtos.PredictionHistoryResponse> getPredictionHistories(@AuthenticationPrincipal PrincipalDetails principal) {
-        return retentionService.getPredictionHistories(userId(principal)).stream().map(this::predictionHistoryResponse).toList();
+    public RetentionDtos.PredictionHistoriesResponse getPredictionHistories(@AuthenticationPrincipal PrincipalDetails principal) {
+        Long userId = userId(principal);
+        return new RetentionDtos.PredictionHistoriesResponse(retentionService.getPredictionHistories(userId).stream().map(this::predictionHistoryResponse).toList(), scoreSummary(retentionService.getPredictionScoreSummary(userId)));
     }
 
     @DeleteMapping("/prediction-histories/{id}")
@@ -127,6 +128,18 @@ public class RetentionController {
 
     private RetentionDtos.PredictionHistoryResponse predictionHistoryResponse(PredictionHistory history) {
         return new RetentionDtos.PredictionHistoryResponse(history.getId(), history.getQueryCondition(),
-                history.getSummaryResult(), history.getQueriedAt().toString());
+                history.getSummaryResult(), history.getQueriedAt().toString(), history.getStationId(), history.getStationName(),
+                history.getAvailabilityLevel(), history.getPredictionStatus(), history.getPredictionTargetAt() == null ? null : history.getPredictionTargetAt().toString(),
+                history.getRequiredBikeCount(), history.getActualBikeCount(), history.getOutcome(), history.getScoredAt() == null ? null : history.getScoredAt().toString());
+    }
+
+    private RetentionDtos.PredictionScoreSummary scoreSummary(RetentionService.RetentionScoreSummary summary) {
+        if (summary == null) return null;
+        Map<String, RetentionDtos.PredictionScoreLevelSummary> byLevel = new java.util.LinkedHashMap<>();
+        for (String level : List.of("HIGH", "MEDIUM", "LOW")) {
+            RetentionService.ScoreLevel score = summary.byLevel().getOrDefault(level, new RetentionService.ScoreLevel(0, 0));
+            byLevel.put(level, new RetentionDtos.PredictionScoreLevelSummary(score.scoredCount(), score.hitCount()));
+        }
+        return new RetentionDtos.PredictionScoreSummary(summary.scoredCount(), summary.hitCount(), summary.hitRate(), byLevel);
     }
 }

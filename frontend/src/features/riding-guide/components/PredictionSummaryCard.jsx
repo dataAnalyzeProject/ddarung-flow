@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AVAILABILITY_LABEL } from "../data/ridingGuideLabels";
 import { formatClockTime, formatInventoryCount, formatPercent } from "../data/ridingGuideFormatters";
+import { fetchPredictionReliability } from "../predictionReliabilityApi";
 
 // 오른쪽 "대여 예측 요약" 카드는 왼쪽 종합 카드와 같은 퍼센트·등급을 중복 표시하지 않고,
 // 이미 있는 필드만으로 "왜 이 결과가 나왔는지"를 문장으로 풀어준다.
@@ -44,6 +45,29 @@ export function buildPredictionNarrative(candidate) {
 
 function PredictionEvidence({ candidate, requiredBikeCount }) {
   const [expanded, setExpanded] = useState(false);
+  const [reliability, setReliability] = useState(null);
+
+  useEffect(() => {
+    if (!expanded || candidate?.selectedProbability == null || candidate?.horizonMinutes == null || requiredBikeCount == null) return undefined;
+    let cancelled = false;
+    setReliability(null);
+    fetchPredictionReliability({
+      horizonMinutes: candidate.horizonMinutes,
+      requiredBikeCount,
+      stationId: candidate.stationId,
+      probability: candidate.selectedProbability,
+    })
+      .then((response) => {
+        if (!cancelled) setReliability(response);
+      })
+      .catch(() => {
+        if (!cancelled) setReliability(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [candidate?.horizonMinutes, candidate?.selectedProbability, candidate?.stationId, expanded, requiredBikeCount]);
+
   if (!candidate) return null;
 
   const status = candidate.predictionStatus;
@@ -96,6 +120,25 @@ function PredictionEvidence({ candidate, requiredBikeCount }) {
                 <div>
                   <dt>모델 버전</dt>
                   <dd>{candidate.modelVersion}</dd>
+                </div>
+              )}
+              {reliability && (
+                <div className="guide-reliability" aria-label="예측 신뢰도">
+                  {reliability.reliabilityLevel === "UNKNOWN" ? (
+                    <p>검증 표본이 부족합니다</p>
+                  ) : (
+                    <>
+                      <div>
+                        <dt>이 구간 실측 적중률</dt>
+                        <dd>{formatPercent(reliability.band?.accuracyRate)} <small>(표본 {reliability.band?.sampleCount?.toLocaleString()}건)</small></dd>
+                      </div>
+                      <div>
+                        <dt>예측 신뢰도</dt>
+                        <dd>{reliability.reliabilityLevel === "HIGH" ? "●●●●● 높음" : reliability.reliabilityLevel === "MEDIUM" ? "●●●○○ 보통" : "●○○○○ 낮음"}</dd>
+                      </div>
+                      <p>{reliability.disclosure}</p>
+                    </>
+                  )}
                 </div>
               )}
             </dl>

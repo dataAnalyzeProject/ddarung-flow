@@ -19,4 +19,16 @@ public interface PredictionHistoryRepository extends JpaRepository<PredictionHis
     Optional<PredictionHistory> findByUserIdAndId(Long userId, Long id);
 
     long countByUserId(Long userId);
+
+    @org.springframework.data.jpa.repository.Query("select h.availabilityLevel as level, count(h) as scoredCount, "
+            + "sum(case when h.outcome = 'HIT' then 1 else 0 end) as hitCount "
+            + "from PredictionHistory h where h.userId = :userId and h.outcome in ('HIT', 'MISS') "
+            + "group by h.availabilityLevel")
+    List<ScoreSummaryRow> summarizeScoresByUserId(@org.springframework.data.repository.query.Param("userId") Long userId);
+
+    interface ScoreSummaryRow {
+        String getLevel();
+        long getScoredCount();
+        long getHitCount();
+    }
 }

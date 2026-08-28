@@ -11,6 +11,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -30,5 +32,16 @@ class SecurityConfigTest {
                         .content("{\"eventType\":\"PAYMENT_STATUS_CHANGED\",\"data\":{\"paymentKey\":\"\"}}"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("PAYMENT_VERIFICATION_FAILED"));
+    }
+
+    @Test
+    void anonymousPredictionReliabilityReturnsJsonAuthRequiredInsteadOfRedirect() throws Exception {
+        mockMvc.perform(get("/api/v1/prediction-reliability")
+                        .queryParam("horizonMinutes", "120")
+                        .queryParam("requiredBikeCount", "3")
+                        .queryParam("probability", "0.72"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().doesNotExist("Location"))
+                .andExpect(jsonPath("$.code").value("AUTH_REQUIRED"));
     }
 }

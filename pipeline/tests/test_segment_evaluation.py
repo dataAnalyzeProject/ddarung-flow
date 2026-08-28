@@ -17,8 +17,12 @@ def test_combinations_are_calculated_for_all_twenty_and_reference_metrics_are_re
                 rows.append({"horizonMinutes": horizon, "requiredBikeCount": quantity, "stationId": "ST-1", "timestamp": "2026-08-24T07:00:00Z", "stationSize": "SMALL", "inventoryLevel": "ZERO", "flowType": "OUTFLOW", "probability": .2 if index % 2 == 0 else .8, "actual": 0 if index % 2 == 0 else 1})
     payload = build_performance_payload(rows)
     assert len(payload["combinations"]) == 20
+    assert len(payload["combinationCalibration"]) == 20
+    assert all(len(item["bins"]) == 10 for item in payload["combinationCalibration"])
     reference = next(row for row in payload["combinations"] if row["horizonMinutes"] == 120 and row["requiredBikeCount"] == 3)
     assert reference["sampleCount"] == 1000 and reference["brierScore"] == pytest.approx(.04)
+    reference_calibration = next(item for item in payload["combinationCalibration"] if item["horizonMinutes"] == 120 and item["requiredBikeCount"] == 3)
+    assert payload["calibrationBins"] == reference_calibration["bins"]
     assert all(row["status"] == "OK" for row in payload["segments"])
     station = next(row for row in payload["segments"] if row["axis"] == "STATION")
     assert station["segmentValue"] == "ST-1" and station["sampleCount"] == 1000
@@ -26,6 +30,16 @@ def test_combinations_are_calculated_for_all_twenty_and_reference_metrics_are_re
     assert_brier_matches_reference(reference, reference)
     changed = [dict(row) for row in payload["combinations"]]; changed[0]["brierScore"] += 1e-8
     with pytest.raises(ValueError): assert_brier_matches_reference(payload["combinations"], changed)
+
+def test_combination_calibration_keeps_empty_bins_as_null_actual_rate():
+    rows = []
+    for horizon in (60, 120, 180, 240):
+        for quantity in (1, 2, 3, 4, 5):
+            rows.extend({"horizonMinutes": horizon, "requiredBikeCount": quantity, "stationId": "ST-1", "timestamp": "2026-08-24T07:00:00Z", "stationSize": "SMALL", "inventoryLevel": "ZERO", "flowType": "OUTFLOW", "probability": .2, "actual": 1} for _ in range(1000))
+    payload = build_performance_payload(rows)
+    bins = next(item["bins"] for item in payload["combinationCalibration"] if item["horizonMinutes"] == 60 and item["requiredBikeCount"] == 1)
+    assert next(item for item in bins if item["binLowerPercent"] == 0)["actualRate"] is None
+    assert next(item for item in bins if item["binLowerPercent"] == 20)["actualRate"] == pytest.approx(1)
 
 def test_sha_rejected_before_database_access():
     with pytest.raises(ValueError): publish_performance_run(None, {"artifactSha256":"BAD"})

@@ -35,3 +35,10 @@ test("renders a retryable error when session lookup fails", async () => {
   render(<AdminAccessGate />);
   await waitFor(() => expect(screen.getByTestId("admin-access-error")).toBeInTheDocument());
 });
+
+test("renders login guidance when session lookup returns 401", async () => {
+  getCurrentUser.mockRejectedValue(Object.assign(new Error("unauthorized"), { status: 401 }));
+  render(<AdminAccessGate />);
+  expect(await screen.findByTestId("admin-access-anonymous")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "로그인으로 이동" })).toHaveAttribute("href", "/login");
+});
