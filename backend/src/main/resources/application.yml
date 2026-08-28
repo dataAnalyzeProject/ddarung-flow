@@ -64,6 +64,7 @@ server:
         same-site: ${SESSION_COOKIE_SAME_SITE:lax}
 
 journey:
+  enabled: ${JOURNEY_ENABLED:false}
   ai:
     enabled: ${JOURNEY_AI_ENABLED:false}
     responses-uri: ${OPENAI_RESPONSES_URI:https://api.openai.com/v1/responses}
