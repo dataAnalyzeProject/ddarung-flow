@@ -8,7 +8,7 @@ public record ReturnPredictionResult(Status status, Failure failure, Double sele
     public enum Status { NORMAL, MISSING, UNAVAILABLE }
     public enum Failure { FEATURE_DISABLED, MODEL_NOT_CONFIGURED, TIMEOUT, CONNECTION_FAILURE, INVALID_REQUEST,
         PROVIDER_FAILURE, MALFORMED_RESPONSE, PROBABILITY_RANGE_VIOLATION, MONOTONICITY_VIOLATION,
-        SELECTED_PROBABILITY_MISMATCH, STALE_RESPONSE }
+        SELECTED_PROBABILITY_MISMATCH, STATION_ID_MISMATCH, PREDICTION_TARGET_MISMATCH, STALE_RESPONSE }
 
     public static ReturnPredictionResult unavailable(Failure failure) {
         return new ReturnPredictionResult(Status.UNAVAILABLE, failure, null, null, null, null, null, null);

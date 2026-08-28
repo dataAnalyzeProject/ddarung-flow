@@ -18,6 +18,9 @@ final class ReturnPredictionResponseValidator {
                 || response.featureAsOf() == null || response.predictionTargetAt() == null) return ReturnPredictionResult.Failure.MALFORMED_RESPONSE;
         if (response.modelVersion() != null && response.modelVersion().isBlank()) return ReturnPredictionResult.Failure.MALFORMED_RESPONSE;
         if (response.dataQuality() != null && response.dataQuality().isBlank()) return ReturnPredictionResult.Failure.MALFORMED_RESPONSE;
+        if (!request.stationId().equals(response.stationId())) return ReturnPredictionResult.Failure.STATION_ID_MISMATCH;
+        OffsetDateTime requestedTarget = request.arrivalAt() != null ? request.arrivalAt() : request.predictionTargetAt();
+        if (!response.predictionTargetAt().isEqual(requestedTarget)) return ReturnPredictionResult.Failure.PREDICTION_TARGET_MISMATCH;
         if (!response.featureAsOf().isEqual(request.featureAsOf()) || response.predictionTargetAt().isBefore(response.featureAsOf())
                 || response.featureAsOf().isBefore(OffsetDateTime.now(clock).minus(maxResponseAge))) return ReturnPredictionResult.Failure.STALE_RESPONSE;
         if (!"NORMAL".equals(response.status())) return null;

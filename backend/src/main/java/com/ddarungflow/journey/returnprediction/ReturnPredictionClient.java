@@ -5,9 +5,15 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 
 import java.net.SocketTimeoutException;
+import java.net.http.HttpClient;
 import java.time.Clock;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 public final class ReturnPredictionClient implements ReturnPredictionPort {
     private final ReturnPredictionProperties properties;
@@ -15,7 +21,7 @@ public final class ReturnPredictionClient implements ReturnPredictionPort {
     private final ReturnPredictionResponseValidator validator;
 
     public ReturnPredictionClient(RestClient.Builder builder, ReturnPredictionProperties properties) {
-        this(builder.baseUrl(properties.baseUrl()).build(), properties, Clock.systemUTC());
+        this(configuredClient(builder, properties), properties, Clock.systemUTC());
     }
 
     ReturnPredictionClient(RestClient client, ReturnPredictionProperties properties, Clock clock) {
@@ -40,7 +46,7 @@ public final class ReturnPredictionClient implements ReturnPredictionPort {
         if (!properties.enabled()) return ReturnPredictionResult.unavailable(ReturnPredictionResult.Failure.FEATURE_DISABLED);
         if (request == null || request.invalidField() != null) return ReturnPredictionResult.unavailable(ReturnPredictionResult.Failure.INVALID_REQUEST);
         try {
-            PredictResponse response = client.post().uri("/predict").body(request).retrieve().body(PredictResponse.class);
+            PredictResponse response = postWithinTimeout(request);
             ReturnPredictionResult.Failure invalid = validator.validate(request, response);
             if (invalid != null) return ReturnPredictionResult.unavailable(invalid);
             if ("MISSING".equals(response.status())) return ReturnPredictionResult.missing(response.featureAsOf(), response.predictionTargetAt(), response.modelVersion(), response.dataQuality());
@@ -50,6 +56,8 @@ public final class ReturnPredictionClient implements ReturnPredictionPort {
             return mapHttp(error.getStatusCode(), error.getResponseBodyAsString());
         } catch (ResourceAccessException error) {
             return ReturnPredictionResult.unavailable(hasCause(error, SocketTimeoutException.class) ? ReturnPredictionResult.Failure.TIMEOUT : ReturnPredictionResult.Failure.CONNECTION_FAILURE);
+        } catch (RequestTimedOutException error) {
+            return ReturnPredictionResult.unavailable(ReturnPredictionResult.Failure.TIMEOUT);
         } catch (RestClientException error) {
             return ReturnPredictionResult.unavailable(ReturnPredictionResult.Failure.MALFORMED_RESPONSE);
         }
@@ -65,4 +73,30 @@ public final class ReturnPredictionClient implements ReturnPredictionPort {
         for (Throwable current = error; current != null; current = current.getCause()) if (expected.isInstance(current)) return true;
         return false;
     }
+
+    private static RestClient configuredClient(RestClient.Builder builder, ReturnPredictionProperties properties) {
+        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(
+                HttpClient.newBuilder().connectTimeout(properties.timeout()).build());
+        requestFactory.setReadTimeout(properties.timeout());
+        return builder.baseUrl(properties.baseUrl()).requestFactory(requestFactory).build();
+    }
+
+    private PredictResponse postWithinTimeout(PredictRequest request) {
+        FutureTask<PredictResponse> task = new FutureTask<>(() -> client.post().uri("/predict").body(request).retrieve().body(PredictResponse.class));
+        Thread.startVirtualThread(task);
+        try {
+            return task.get(properties.timeout().toNanos(), TimeUnit.NANOSECONDS);
+        } catch (TimeoutException error) {
+            task.cancel(true);
+            throw new RequestTimedOutException();
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            throw new RequestTimedOutException();
+        } catch (ExecutionException error) {
+            if (error.getCause() instanceof RuntimeException runtimeException) throw runtimeException;
+            throw new IllegalStateException(error.getCause());
+        }
+    }
+
+    private static final class RequestTimedOutException extends RuntimeException { }
 }

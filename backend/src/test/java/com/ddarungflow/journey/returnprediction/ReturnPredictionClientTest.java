@@ -6,9 +6,12 @@ import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 
+import com.sun.net.httpserver.HttpServer;
 import java.net.ConnectException;
+import java.net.InetSocketAddress;
 import java.net.SocketTimeoutException;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -69,6 +72,25 @@ class ReturnPredictionClientTest {
         assertThat(connection.client.predict(request(2)).failure()).isEqualTo(ReturnPredictionResult.Failure.CONNECTION_FAILURE);
     }
 
+    @Test void configuredReadTimeoutStopsARealDelayedProviderResponse() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/predict", exchange -> {
+            try { Thread.sleep(250); } catch (InterruptedException exception) { Thread.currentThread().interrupt(); }
+            byte[] body = "{}".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+        server.start();
+        try {
+            ReturnPredictionClient client = new ReturnPredictionClient(RestClient.builder(), new ReturnPredictionProperties(true,
+                    "http://127.0.0.1:" + server.getAddress().getPort(), Duration.ofMillis(50), Duration.ofMinutes(15)));
+            assertThat(client.predict(request(2)).failure()).isEqualTo(ReturnPredictionResult.Failure.TIMEOUT);
+        } finally {
+            server.stop(0);
+        }
+    }
+
     @Test void providerAndInvalidRequestAreTyped() {
         Fixture provider = fixture();
         provider.server.expect(requestTo("http://return/predict")).andRespond(response(INTERNAL_SERVER_ERROR, "{}"));
@@ -87,7 +109,7 @@ class ReturnPredictionClientTest {
 
     @Test void missingAndUnavailableNeverCarryZeroProbability() {
         Fixture missing = fixture();
-        missing.server.expect(requestTo("http://return/predict")).andRespond(success("{\"status\":\"MISSING\",\"featureAsOf\":\"2026-08-28T18:20:00+09:00\",\"predictionTargetAt\":\"2026-08-28T19:00:00+09:00\"}"));
+        missing.server.expect(requestTo("http://return/predict")).andRespond(success("{\"stationId\":\"ST-1\",\"status\":\"MISSING\",\"featureAsOf\":\"2026-08-28T18:20:00+09:00\",\"predictionTargetAt\":\"2026-08-28T19:00:00+09:00\"}"));
         ReturnPredictionResult result = missing.client.predict(request(2));
         assertThat(result.status()).as("%s", result).isEqualTo(ReturnPredictionResult.Status.MISSING);
         assertThat(result.selectedProbability()).isNull();
@@ -98,6 +120,11 @@ class ReturnPredictionClientTest {
         Fixture fixture = fixture();
         fixture.server.expect(requestTo("http://return/predict")).andRespond(success(normal(2).replace("2026-08-28T18:20:00+09:00", "2026-08-28T17:00:00+09:00")));
         assertThat(fixture.client.predict(request(2)).failure()).isEqualTo(ReturnPredictionResult.Failure.STALE_RESPONSE);
+    }
+
+    @Test void stationAndPredictionTargetMustMatchTheRequest() {
+        assertFailure(normal(2).replace("\"stationId\":\"ST-1\"", "\"stationId\":\"ST-2\""), ReturnPredictionResult.Failure.STATION_ID_MISMATCH);
+        assertFailure(normal(2).replace("\"predictionTargetAt\":\"2026-08-28T19:00:00+09:00\"", "\"predictionTargetAt\":\"2026-08-28T19:10:00+09:00\""), ReturnPredictionResult.Failure.PREDICTION_TARGET_MISMATCH);
     }
 
     private void assertFailure(String body, ReturnPredictionResult.Failure expected) {
