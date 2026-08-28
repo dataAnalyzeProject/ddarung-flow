@@ -57,6 +57,12 @@ test("dashboard shows API operating data instead of fixture data", async () => {
   expect(screen.getByText("평가 artifact ceeccc… · 현재 서비스 운영 모델과 다를 수 있습니다")).toBeInTheDocument();
 });
 
+test("dashboard renders the data freshness card with a clock icon", async () => {
+  renderPage("dashboard", "ADMIN");
+  await screen.findByText("데이터 신선도");
+  expect(screen.getByTestId("data-freshness-icon").tagName).toBe("svg");
+});
+
 test("dashboard shows actual and predicted calibration series with a legend", async () => {
   renderPage("dashboard", "ADMIN");
   expect(await screen.findByLabelText("신뢰도 곡선 범례")).toHaveTextContent("실제 비율예측 확률");
