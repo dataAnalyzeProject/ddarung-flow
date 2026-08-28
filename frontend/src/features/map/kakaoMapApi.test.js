@@ -16,7 +16,10 @@ function createMapsMock() {
     MarkerClusterer: jest.fn(() => ({ clear: jest.fn() })),
     CustomOverlay: jest.fn(() => ({ setMap: jest.fn() })),
     MapTypeId: { HYBRID: "hybrid", ROADMAP: "roadmap" },
-    event: { addListener: jest.fn((marker, name, listener) => { marker[name] = listener; }) },
+    event: {
+      addListener: jest.fn((marker, name, listener) => { marker[name] = listener; }),
+      removeListener: jest.fn((marker, name) => { delete marker[name]; }),
+    },
   };
 }
 
@@ -85,4 +88,19 @@ test("경로를 맞춘 뒤 마커를 갱신해도 지도 중심을 목적지로 
 
   expect(map.setBounds).toHaveBeenCalledTimes(1);
   expect(map.setCenter).not.toHaveBeenCalled();
+});
+
+test("확대·축소 전환 중에는 마지막 레벨만 idle 뒤에 적용한다", () => {
+  const maps = createMapsMock();
+  const adapter = createKakaoMapAdapter(document.createElement("div"), maps);
+  const map = maps.Map.mock.results[0].value;
+
+  adapter.setLevel(4);
+  adapter.setLevel(3);
+
+  expect(map.setLevel).toHaveBeenCalledTimes(1);
+  expect(map.setLevel).toHaveBeenCalledWith(4, { animate: { duration: 180 } });
+  map.idle();
+  expect(map.setLevel).toHaveBeenCalledTimes(2);
+  expect(map.setLevel).toHaveBeenLastCalledWith(3, { animate: { duration: 180 } });
 });

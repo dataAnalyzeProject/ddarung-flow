@@ -37,6 +37,7 @@ export default function MapRoutePanel({
   const [mapType, setMapType] = useState("지도");
   const [mapLevel, setMapLevel] = useState(5);
   const mapLevelTimerRef = useRef(null);
+  const stationDetailHandlerRef = useRef(onStationDetail);
   const [current, setCurrent] = useState(null);
   const [locationState, setLocationState] = useState("idle");
   const [message, setMessage] = useState("");
@@ -53,6 +54,11 @@ export default function MapRoutePanel({
   const points = useMemo(() => ({ current, origin: selected.origin, destination: selected.destination }), [current, selected.origin, selected.destination]);
   const originKey = selected.origin?.placeId || `${selected.origin?.latitude || ""},${selected.origin?.longitude || ""}`;
   const destinationKey = selected.destination?.placeId || `${selected.destination?.latitude || ""},${selected.destination?.longitude || ""}`;
+  stationDetailHandlerRef.current = onStationDetail;
+
+  const handleStationDetail = useCallback((stationId) => {
+    stationDetailHandlerRef.current?.(stationId);
+  }, []);
 
   const handleStationSelected = useCallback(async (location) => {
     const requestId = stationRequestRef.current + 1;
@@ -82,13 +88,13 @@ export default function MapRoutePanel({
         adapterRef.current = createKakaoMapAdapter(containerRef.current, maps, undefined, {
           currentMarkerImage: currentLocationMarker,
           stationMarkerImage: bikeStationMarker,
-          onStationDetail,
+          onStationDetail: handleStationDetail,
         });
         setSdkStatus("ready");
       })
       .catch((error) => active && setSdkStatus(error.message === "KAKAO_MAP_KEY_MISSING" ? "missing-key" : "failed"));
     return () => { active = false; };
-  }, [onStationDetail]);
+  }, [handleStationDetail]);
 
   useEffect(() => {
     adapterRef.current?.setPoints(points);
