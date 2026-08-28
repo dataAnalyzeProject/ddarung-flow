@@ -1,185 +1,454 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import AppHeader from '../../shared/AppHeader';
+import { premiumPlansFixture } from './data/premiumGuideAccessFixture';
+import { fetchSubscription, startCheckout, confirmPayment } from './subscriptionApi';
+import { requestTossCheckout } from './tossCheckout';
 import './PremiumSandboxPage.css';
 
-// 6가지 상태별 우측 카드 안내 문구 매핑
-const STATUS_DETAILS = {
-  PREPARING: {
-    title: '결제 준비',
-    description: '테스트 checkout을 시작할 수 있습니다. 실제 결제사 API에는 요청하지 않습니다.',
-    hint: 'PREPARING: 버튼 클릭 시 onCheckout callback을 확인합니다.',
-  },
-  PROCESSING: {
-    title: '처리 중',
-    description: '중복 시작을 막고 callback 결과를 기다리는 fixture 상태입니다.',
-    hint: 'PROCESSING: 버튼이 disabled이며 어떠한 callback도 발생하지 않습니다.',
-  },
-  SUCCESS: {
-    title: 'sandbox 완료',
-    description: 'fixture 구독 상태만 표시합니다. 실제 구독·과금은 생성하지 않습니다.',
-    hint: 'SUCCESS: 결과 진입 시 onCallbackResult, 버튼 클릭 시 onRefreshSubscription callback을 확인합니다.',
-  },
-  CANCELLED: {
-    title: '사용자 취소',
-    description: '테스트 흐름이 취소된 상태입니다. 실제 주문은 없습니다.',
-    hint: 'CANCELLED: 결과 진입 시 onCallbackResult, 버튼 클릭 시 onRetry callback을 확인합니다.',
-  },
-  FAILED: {
-    title: '테스트 실패',
-    description: '안전한 오류 안내만 표시합니다. 오류 원문이나 비밀값은 표시하지 않습니다.',
-    hint: 'FAILED: 결과 진입 시 onCallbackResult, 버튼 클릭 시 onRetry callback을 확인합니다.',
-  },
-  PAYMENT_NOT_ENABLED: {
-    title: '운영 결제 비활성',
-    description: '이 환경에서는 결제를 시작할 수 없습니다. 실제 결제 기능은 제공하지 않습니다.',
-    hint: 'PAYMENT_NOT_ENABLED: 결제 비활성 상태로 어떠한 callback도 호출하지 않습니다.',
-  },
-};
+// 달력 날짜(Calendar Day) 기준 정석 D-Day 계산기
+export function formatRemainingPeriod(endsAt) {
+  if (!endsAt) return null;
+  const now = new Date();
+  const end = new Date(endsAt);
+
+  // 1. 잘못된 날짜 형식 방어
+  if (isNaN(end.getTime())) return null;
+
+  // 2. 이미 시각 자체가 지나버린 과거 시점 방어
+  if (end.getTime() <= now.getTime()) return '이용 기간 만료';
+
+  const year = end.getFullYear();
+  const month = String(end.getMonth() + 1).padStart(2, '0');
+  const day = String(end.getDate()).padStart(2, '0');
+
+  // 3. 순수 달력 일자(00:00:00) 기준 D-Day 계산
+  const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const targetDate = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  const diffDays = Math.round((targetDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (diffDays <= 0) return `오늘 만료 (${year}.${month}.${day}까지 이용 가능)`;
+  return `남은 기간: D-${diffDays} (${year}.${month}.${day}까지 이용 가능)`;
+}
 
 export default function PremiumSandboxPage({
-  status = 'PREPARING',
-  subscription = null,
-  onCheckout,
-  onCallbackResult,
-  onRefreshSubscription,
-  onRetry,
+  accessState,
+  authState = 'anonymous',
+  user,
+  plans = premiumPlansFixture,
+  onNavigate,
+  onLogout,
+  onLogin,
+  onSelectPlan,
 }) {
-  const currentDetail = STATUS_DETAILS[status] ?? STATUS_DETAILS.PREPARING;
+  const [internalSubscription, setInternalSubscription] = useState(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [customFeedback, setCustomFeedback] = useState(null);
+  const [selectedPlanCode, setSelectedPlanCode] = useState(null);
 
-  // 1. 실시간 callback 호출 카운트 상태 관리
-  const [callbackCounts, setCallbackCounts] = useState({
-    checkout: 0,
-    callbackResult: 0,
-    refresh: 0,
-    retry: 0,
-  });
-
-  // 2. 버튼 클릭 핸들러들
-  const handleCheckout = useCallback(() => {
-    setCallbackCounts(prev => ({ ...prev, checkout: prev.checkout + 1 }));
-    onCheckout?.();
-  }, [onCheckout]);
-
-  const handleCallbackResult = useCallback(() => {
-    setCallbackCounts(prev => ({ ...prev, callbackResult: prev.callbackResult + 1 }));
-    onCallbackResult?.(status);
-  }, [onCallbackResult, status]);
-
-  const handleRefreshSubscription = useCallback(() => {
-    setCallbackCounts(prev => ({ ...prev, refresh: prev.refresh + 1 }));
-    onRefreshSubscription?.();
-  }, [onRefreshSubscription]);
-
-  const handleRetry = useCallback(() => {
-    setCallbackCounts(prev => ({ ...prev, retry: prev.retry + 1 }));
-    onRetry?.();
-  }, [onRetry]);
-
-  // 3. 결과 상태(SUCCESS, CANCELLED, FAILED) 진입 시 onCallbackResult 카운트 & 호출
-  const lastReportedStatusRef = useRef(null);
-  useEffect(() => {
-    if (
-      lastReportedStatusRef.current !== status &&
-      ['SUCCESS', 'CANCELLED', 'FAILED'].includes(status)
-    ) {
-      handleCallbackResult();
+  // 최신 구독 상태 새로고침 헬퍼
+  const refreshSubscription = useCallback(async () => {
+    try {
+      const data = await fetchSubscription();
+      if (data) setInternalSubscription(data);
+      return data;
+    } catch {
+      return null;
     }
-    lastReportedStatusRef.current = status;
-  }, [status, handleCallbackResult]);
+  }, []);
+
+  // 0. 부모 제어 모드(Controlled): 부모의 accessState가 변경되면 자식 내부의 임시 선택 상태를 즉시 소멸 동기화
+  useEffect(() => {
+    if (accessState) {
+      setSelectedPlanCode(null);
+    }
+  }, [accessState]);
+
+  // 1. 초기 마운트 시 구독 조회 및 토스 결제 콜백(?payment=processing) 처리
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const paymentStatus = searchParams.get('payment');
+    const paymentKey = searchParams.get('paymentKey');
+    const orderId = searchParams.get('orderId');
+    const amount = searchParams.get('amount');
+
+    // 토스 결제 완료 콜백 복귀 시 승인 요청 처리
+    if (paymentStatus === 'processing' && paymentKey && orderId && amount) {
+      setIsProcessing(true);
+      confirmPayment({ paymentKey, orderId, amount })
+        .then(async (confirmResult) => {
+          // 1. 백엔드 결제 승인 확인
+          if (confirmResult?.status === 'ACTIVE') {
+            // 결제 성공 시 선택 임시 상태 소멸 ➔ 정식 보유 상태로 완전 승격
+            setSelectedPlanCode(null);
+            setInternalSubscription({ status: 'ACTIVE' });
+
+            // 2. 백엔드 공식 상세 구독 객체(planId, endsAt) 후속 조회
+            try {
+              const latest = await fetchSubscription();
+              if (latest) {
+                setInternalSubscription(latest);
+                setCustomFeedback({
+                  type: 'success',
+                  icon: '⭐',
+                  message: '따릉이 이용권 결제가 성공적으로 완료되었습니다! 지금부터 자유롭게 이용하실 수 있습니다.',
+                });
+              } else {
+                throw new Error('FETCH_FAILED');
+              }
+            } catch {
+              const handleRetry = async () => {
+                const refreshed = await refreshSubscription();
+                if (refreshed) {
+                  setCustomFeedback({
+                    type: 'success',
+                    icon: '⭐',
+                    message: '따릉이 이용권 상세 정보가 성공적으로 동기화되었습니다.',
+                  });
+                } else {
+                  setCustomFeedback({
+                    type: 'error',
+                    icon: '⚠️',
+                    message: '상세 정보를 불러오지 못했습니다. 네트워크 상태를 확인한 후 다시 시도해 주세요.',
+                    action: {
+                      label: '다시 시도',
+                      onClick: handleRetry,
+                    },
+                  });
+                }
+              };
+
+              setCustomFeedback({
+                type: 'warning',
+                icon: 'ℹ️',
+                message: '결제는 정상 승인되었습니다! 상세 만료일을 불러오지 못한 경우 상태 새로고침을 눌러주세요.',
+                action: {
+                  label: '상태 새로고침',
+                  onClick: handleRetry,
+                },
+              });
+            }
+          } else {
+            throw new Error('PAYMENT_VERIFICATION_FAILED');
+          }
+        })
+        .catch(() => {
+          setSelectedPlanCode(null);
+          setCustomFeedback({
+            type: 'error',
+            icon: '⚠️',
+            message: '결제 승인 처리 중 오류가 발생했습니다. 고객센터로 문의해 주세요.',
+          });
+        })
+        .finally(() => {
+          setIsProcessing(false);
+          // 브라우저 URL에서 결제 파라미터 정리
+          const cleanUrl = new URL(window.location.href);
+          cleanUrl.searchParams.delete('payment');
+          cleanUrl.searchParams.delete('paymentKey');
+          cleanUrl.searchParams.delete('orderId');
+          cleanUrl.searchParams.delete('amount');
+          window.history.replaceState({}, '', cleanUrl.toString());
+        });
+      return;
+    }
+
+    if (paymentStatus === 'failed') {
+      setSelectedPlanCode(null); // 결제 실패 복귀 시 선택 상태 초기화
+      setCustomFeedback({
+        type: 'error',
+        icon: '⚠️',
+        message: '결제가 취소되었거나 승인에 실패했습니다. 다시 시도해 주세요.',
+      });
+      const cleanUrl = new URL(window.location.href);
+      cleanUrl.searchParams.delete('payment');
+      cleanUrl.searchParams.delete('code');
+      cleanUrl.searchParams.delete('message');
+      window.history.replaceState({}, '', cleanUrl.toString());
+      return;
+    }
+
+    // 일반 진입 시 구독 정보 조회
+    if (authState === 'authenticated' && !accessState) {
+      refreshSubscription();
+    }
+  }, [authState, accessState, refreshSubscription]);
+
+  // 2. 📌 단일 진실 원천 (Single Source of Truth) 도출
+  const effectiveStatus = useMemo(() => {
+    if (accessState) return accessState;
+    if (isProcessing) return 'PROCESSING';
+    if (authState !== 'authenticated') return 'ANONYMOUS';
+    if (internalSubscription?.status === 'ACTIVE') return 'ACTIVE';
+    if (internalSubscription?.status === 'EXPIRED') return 'EXPIRED';
+    return 'FREE';
+  }, [accessState, isProcessing, authState, internalSubscription]);
+
+  const isSubscribed = effectiveStatus === 'ACTIVE';
+  const isBusy = effectiveStatus === 'PROCESSING' || isProcessing;
+
+  // 부모의 user.subscription 또는 내부 internalSubscription 통합 참조
+  const activePlanId = internalSubscription?.planId || user?.subscription?.planId;
+  const activeEndsAt = internalSubscription?.endsAt || user?.subscription?.endsAt;
+  const hasSubscriptionDetails = Boolean(activePlanId && activeEndsAt);
+
+  // 3. 상태에 따른 통합 피드백 배너 정보 계산
+  const feedback = useMemo(() => {
+    if (customFeedback) return customFeedback;
+
+    switch (effectiveStatus) {
+      case 'PROCESSING':
+        return {
+          type: 'info',
+          icon: '⏳',
+          message: '결제 요청을 안전하게 처리하고 있습니다. 잠시만 기다려 주세요…',
+        };
+      case 'ACTIVE':
+        return {
+          type: 'success',
+          icon: '⭐',
+          message: '따릉이 이용권을 보유 중입니다. 서울시 전역 따릉이를 자유롭게 이용하실 수 있습니다.',
+        };
+      case 'EXPIRED':
+        return {
+          type: 'warning',
+          icon: '⌛',
+          message: '이용권 기간이 만료되었습니다. 이용권을 결제하시면 따릉이를 다시 이용하실 수 있습니다.',
+        };
+      case 'ANONYMOUS':
+        return null;
+      default:
+        return null;
+    }
+  }, [customFeedback, effectiveStatus]);
+
+  // 4. 결제 액션 디스패처 (부모 위임 vs 자체 결제 실행 분리)
+  const handlePlanSelect = async (planCode) => {
+    setSelectedPlanCode(planCode);
+
+    if (effectiveStatus === 'ANONYMOUS') {
+      setCustomFeedback({
+        type: 'warning',
+        icon: '🔒',
+        message: '따릉이 이용권을 결제하시려면 로그인이 필요합니다.',
+        action: {
+          label: '로그인하기',
+          onClick: () => {
+            if (onLogin) onLogin();
+            else window.location.assign(`/login?returnTo=${encodeURIComponent('#premium')}`);
+          },
+        },
+      });
+      return;
+    }
+
+    // 부모(MainPage 등)에서 결제 제어권을 넘겨받은 경우 위임 (상태 종료는 부모 accessState 전이가 책임)
+    if (onSelectPlan) {
+      onSelectPlan({ planCode });
+      return;
+    }
+
+    // 독립 페이지 모드: 자체 토스 결제 프로세스 실행 (종료 책임: 자신이 직접 가짐)
+    setCustomFeedback(null);
+    setIsProcessing(true);
+
+    try {
+      const checkout = await startCheckout(planCode);
+      await requestTossCheckout(checkout, {
+        onCancel: () => {
+          setSelectedPlanCode(null); // 결제 취소 시 선택 상태 즉시 해제 (미보유 복귀)
+          setCustomFeedback({
+            type: 'warning',
+            icon: 'ℹ️',
+            message: '결제가 취소되었습니다. 언제든 다시 신청하실 수 있습니다.',
+          });
+          setIsProcessing(false);
+        },
+      });
+    } catch (error) {
+      setSelectedPlanCode(null); // 오류 발생 시 선택 상태 해제
+      if (error.message === 'PAYMENT_NOT_ENABLED') {
+        setCustomFeedback({
+          type: 'info',
+          icon: '🛠️',
+          message: '현재 결제 시스템 점검 중입니다. 잠시 후 다시 이용해 주세요.',
+        });
+      } else {
+        setCustomFeedback({
+          type: 'error',
+          icon: '⚠️',
+          message: '결제를 완료하지 못했습니다. 결제 수단 한도나 카드 상태를 확인해 주세요.',
+        });
+      }
+      setIsProcessing(false);
+    }
+  };
+
+  const currentPlan = plans.find((p) => p.planCode === activePlanId);
+  const selectedPlan = plans.find((p) => p.planCode === selectedPlanCode);
+
+  const planDisplayName =
+    currentPlan?.name ||
+    internalSubscription?.planName ||
+    (isSubscribed ? '따릉이 정기 이용권 (보유 중)' : '미보유 (이용권 결제 필요)');
 
   return (
-    <main className="premium-sandbox" data-status={status}>
-      {/* 1. 상단 타이틀 영역 */}
-      <div className="premium-sandbox__header-title">
-        <p className="premium-sandbox__subtitle">PREMIUM SANDBOX</p>
-        <h1>프리미엄 30일 sandbox 체험</h1>
-        <p className="premium-sandbox__desc">
-          이 화면은 테스트용 상태 UI입니다. 실제 결제와 과금은 진행되지 않습니다.
-        </p>
-      </div>
+    <div className="premium-sandbox-shell">
+      <AppHeader authState={authState} user={user} onNavigate={onNavigate} onLogout={onLogout} />
 
-      {/* 2. 필수 공통 안전 배지 바 */}
-      <div className="premium-sandbox__notice-banner">
-        <span>SANDBOX TEST · 실제 결제 없음</span>
-        <span className="premium-sandbox__status-badge">{status}</span>
-      </div>
+      <main className="premium-sandbox-main">
+        {/* 1. 상단 히어로 영역 */}
+        <section className="premium-sandbox__hero">
+          <span className="premium-sandbox__badge">SEOUL BIKE PASS</span>
+          <h1 className="premium-sandbox__title">
+            기다림 없는 따릉이 여정,<br />
+            <span>서울자전거 따릉이 이용권</span>으로 함께하세요
+          </h1>
+          <p className="premium-sandbox__desc">
+            따릉이 플로우에서 실시간 예측을 확인하고, 실제 탑승을 위한 따릉이 이용권을 간편하게 결제하세요.
+          </p>
 
-      {/* 3. 본문 2열 카드 영역 */}
-      <div className="premium-sandbox__container">
-        {/* 좌측 카드: 테스트 상품 */}
-        <div className="premium-sandbox__card">
-          <h2>테스트 상품</h2>
-          <p className="premium-sandbox__card-subtitle">테스트 fixture에서만 표시하는 고정 정보</p>
-
-          <div className="premium-sandbox__product-box">
-            <h3>프리미엄 30일 sandbox 체험</h3>
-            <p>테스트 상태 확인용 · 실제 결제 수단 입력 없음</p>
-          </div>
-
-          <div className="premium-sandbox__action-area">
-            {status === 'PREPARING' && (
-              <button type="button" onClick={handleCheckout}>
-                sandbox checkout 시작
-              </button>
-            )}
-            {status === 'PROCESSING' && (
-              <button type="button" disabled>
-                처리 중...
-              </button>
-            )}
-            {status === 'SUCCESS' && (
-              <button type="button" onClick={handleRefreshSubscription}>
-                구독 상태 새로고침
-              </button>
-            )}
-            {status === 'CANCELLED' && (
-              <button type="button" onClick={handleRetry}>
-                다시 시도
-              </button>
-            )}
-            {status === 'FAILED' && (
-              <button type="button" onClick={handleRetry}>
-                다시 시도
-              </button>
-            )}
-            {status === 'PAYMENT_NOT_ENABLED' && (
-              <button type="button" disabled>
-                결제 사용 불가
-              </button>
-            )}
-          </div>
-
-          <p className="premium-sandbox__hint">{currentDetail.hint}</p>
-        </div>
-
-        {/* 우측 카드: 현재 상태 & 실시간 callback 카운트 관찰기 */}
-        <div className="premium-sandbox__card">
-          <h2>현재 상태</h2>
-
-          <div className="premium-sandbox__sub-info">
-            <h3>{currentDetail.title}</h3>
-            <p>{currentDetail.description}</p>
-            {status === 'SUCCESS' && subscription && (
-              <div className="premium-sandbox__subscription-details">
-                <p>플랜: {subscription.plan || '프리미엄 플랜'}</p>
-                <p>상태: {subscription.status || 'ACTIVE'}</p>
-              </div>
-            )}
-          </div>
-
-          <div className="premium-sandbox__callback-section">
-            <p className="premium-sandbox__callback-title">테스트에서 확인할 callback</p>
-            <div className="premium-sandbox__callback-counts">
-              <span>onCheckout: {callbackCounts.checkout}회</span>
-              <span> · </span>
-              <span>onCallbackResult: {callbackCounts.callbackResult}회</span>
-              <span> · </span>
-              <span>onRefreshSubscription: {callbackCounts.refresh}회</span>
-              <span> · </span>
-              <span>onRetry: {callbackCounts.retry}회</span>
+          {/* 내 현재 이용권 현황 카드 (선택한 이용권 & 보유 이용권 통합 노출) */}
+          <div className="premium-sandbox__status-card">
+            <div className="premium-sandbox__status-info">
+              <span className="premium-sandbox__status-label">
+                {isSubscribed ? '현재 이용권 보유 상태' : selectedPlan ? '선택한 이용권' : '현재 이용권 상태'}
+              </span>
+              <strong className="premium-sandbox__status-plan">
+                {isSubscribed
+                  ? `⭐ ${planDisplayName}`
+                  : selectedPlan
+                  ? `👉 ${selectedPlan.name} (${selectedPlan.priceDuration || `${selectedPlan.duration} · ${selectedPlan.price}`})`
+                  : '미보유 (이용권 결제 필요)'}
+              </strong>
+              {/* 남은 기간 및 만료일 표시: 상세 정보(endsAt)가 온전히 확보되었을 때만 렌더링 */}
+              {isSubscribed && hasSubscriptionDetails && (
+                <span className="premium-sandbox__status-expiry">
+                  📅 {formatRemainingPeriod(activeEndsAt)}
+                </span>
+              )}
             </div>
+            {isSubscribed ? (
+              <div className="premium-sandbox__status-badge active">이용권 보유</div>
+            ) : isBusy ? (
+              <div className="premium-sandbox__status-badge processing">연결 중…</div>
+            ) : (
+              <div className="premium-sandbox__status-badge free">미보유</div>
+            )}
           </div>
-        </div>
-      </div>
-    </main>
+        </section>
+
+        {/* 2. 따릉이 이용 안내 3종 그리드 */}
+        <section className="premium-sandbox__benefits">
+          <div className="premium-sandbox__benefit-card">
+            <div className="premium-sandbox__benefit-icon">🚲</div>
+            <h3>서울시 전역 2,700+ 대여소</h3>
+            <p>서울시 어디서나 원하는 대여소에서 자유롭게 대여하고 반납할 수 있습니다.</p>
+          </div>
+
+          <div className="premium-sandbox__benefit-card">
+            <div className="premium-sandbox__benefit-icon">🔄</div>
+            <h3>반납 후 무제한 재대여</h3>
+            <p>기본 대여 시간(1시간) 내에 반납 후 다시 대여하면 이용 기간 동안 무제한으로 탈 수 있습니다.</p>
+          </div>
+
+          <div className="premium-sandbox__benefit-card">
+            <div className="premium-sandbox__benefit-icon">🎯</div>
+            <h3>실시간 대여소 예측 연동</h3>
+            <p>따릉이 플로우의 실시간 재고 예측과 최적 경로 안내를 함께 활용하여 쾌적하게 이동하세요.</p>
+          </div>
+        </section>
+
+        {/* 3. 요금제 플랜 카드 선택 영역 */}
+        <section className="premium-sandbox__pricing">
+          <div className="premium-sandbox__pricing-header">
+            <h2>서울자전거 따릉이 정기 이용권</h2>
+            <p>30일 또는 365일 단위로 자동 갱신 없이 안전하게 결제하세요</p>
+          </div>
+
+          {/* 상태별 실시간 안내 알림 배너 */}
+          {feedback && (
+            <div className={`premium-feedback-banner ${feedback.type}`} role="status">
+              <span className="premium-feedback-banner__icon">{feedback.icon}</span>
+              <p className="premium-feedback-banner__text">{feedback.message}</p>
+              {feedbackStateAction(feedback.action)}
+              <button
+                type="button"
+                className="premium-feedback-banner__close"
+                aria-label="닫기"
+                onClick={() => setCustomFeedback(null)}
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          <div className="premium-sandbox__plans-grid">
+            {plans.map((plan) => {
+              const isCurrentPlan = activePlanId === plan.planCode;
+
+              return (
+                <div
+                  key={plan.planCode}
+                  data-testid={`plan-card-${plan.planCode}`}
+                  className={`premium-sandbox__plan-card ${plan.isFeatured ? 'premium-sandbox__plan-card--featured' : ''} ${isCurrentPlan ? 'current' : ''}`}
+                >
+                  {plan.isFeatured && <div className="premium-sandbox__plan-ribbon">🔥 365일 패스</div>}
+                  <div className="premium-sandbox__plan-head">
+                    <h3>{plan.name}</h3>
+                    <p className="premium-sandbox__plan-desc">{plan.duration} 이용권 · {plan.policyText}</p>
+                  </div>
+                  <div className="premium-sandbox__plan-price">
+                    <strong>{plan.price}</strong>
+                    <span>/ {plan.duration}</span>
+                  </div>
+                  <ul className="premium-sandbox__plan-features">
+                    {plan.features.map((feature, idx) => (
+                      <li key={idx}>✓ {feature}</li>
+                    ))}
+                  </ul>
+                  <button
+                    type="button"
+                    className={`premium-sandbox__plan-btn ${plan.isFeatured ? 'premium-sandbox__plan-btn--featured' : ''}`}
+                    disabled={isSubscribed || isBusy}
+                    onClick={() => handlePlanSelect(plan.planCode)}
+                  >
+                    {isSubscribed ? '이용권 보유 중' : isBusy ? '연결 중…' : plan.buttonLabel}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* 4. 하단 신뢰 및 보안 보증 바 */}
+        <footer className="premium-sandbox__trust">
+          <div className="premium-sandbox__trust-item">
+            <span>🔒</span>
+            <p>토스페이먼츠 안전 결제 시스템 적용</p>
+          </div>
+          <div className="premium-sandbox__trust-item">
+            <span>⚡</span>
+            <p>결제 즉시 따릉이 이용권 활성화</p>
+          </div>
+          <div className="premium-sandbox__trust-item">
+            <span>🤝</span>
+            <p>기간 만료 후 자동 연장 없는 안전한 이용권</p>
+          </div>
+        </footer>
+      </main>
+    </div>
+  );
+}
+
+function feedbackStateAction(action) {
+  if (!action) return null;
+  return (
+    <button
+      type="button"
+      className="premium-feedback-banner__action-btn"
+      onClick={action.onClick}
+    >
+      {action.label}
+    </button>
   );
 }

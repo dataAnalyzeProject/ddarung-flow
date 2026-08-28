@@ -24,7 +24,7 @@
 .archive-tabs button:last-child{border-radius:0 9px 9px 0}
 .archive-tabs button.active{border-color:#0c69ed;background:linear-gradient(135deg,#0c68ef,#0a5ce2);color:#fff;font-weight:800}
 
-.archive-card{border:1px solid var(--line);border-radius:13px;background:#fff}
+.archive-card{border:1px solid #e2e8f0 var(--line);border-radius:13px;background:#fff;box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04)}
 
 .archive-grid .archive-placeholder {
   grid-column: span 2;  /* 👈 2칸을 널찍하게 차지 */
@@ -67,6 +67,10 @@
   padding: 28px 24px;
   display: flex;
   flex-direction: column;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
 }
 .summary-card h2{font-size:22px;margin:0 0 17px;font-weight:900}
 .summary-row{height:72px;border-bottom:1px solid #d2dce8;display:flex;align-items:center;justify-content:space-between;font-size:17px}

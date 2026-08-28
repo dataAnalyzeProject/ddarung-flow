@@ -7,10 +7,10 @@ import { fetchRouteCandidates } from "../map/candidatesApi";
 import { fetchStationDetail } from "../map/stationApi";
 import { fetchAirQuality } from "../riding-guide/airQualityApi";
 import { fetchArrivalWeather } from "../weather/weatherApi";
-import { confirmPayment, fetchSubscription, startCheckout } from "../premium/subscriptionApi";
-import { requestTossCheckout } from "../premium/tossCheckout";
+import { confirmPayment, fetchSubscription } from "../premium/subscriptionApi";
 import { saveFavorite } from "../archive/archiveApi";
 import { formatStationTime } from "./components/StationRecommendationPanel";
+import { premiumPlansFixture } from "../premium/data/premiumGuideAccessFixture";
 
 jest.mock("../login/authApi", () => ({
   getCurrentUser: jest.fn(),
@@ -30,9 +30,7 @@ jest.mock("../weather/weatherApi", () => ({
 jest.mock("../premium/subscriptionApi", () => ({
   confirmPayment: jest.fn(),
   fetchSubscription: jest.fn(),
-  startCheckout: jest.fn(),
 }));
-jest.mock("../premium/tossCheckout", () => ({ requestTossCheckout: jest.fn() }));
 jest.mock("../archive/archiveApi", () => ({ saveFavorite: jest.fn(), saveSavedRoute: jest.fn() }));
 
 test("UTC 도착시각을 Asia/Seoul 시각으로 표시한다", () => {
@@ -86,7 +84,6 @@ describe("시안 6 메인 로그인 통합", () => {
     fetchArrivalWeather.mockResolvedValue({ status: "UNAVAILABLE", hourlyForecasts: [] });
     fetchSubscription.mockResolvedValue({ status: "ACTIVE" });
     fetchStationDetail.mockResolvedValue({ stationId: "ST-1009", stationNumber: "1009" });
-    startCheckout.mockResolvedValue({ status: "READY", orderId: "order-1", planId: "PREMIUM_MONTHLY_30D", amount: 2900, currency: "KRW" });
   });
 
   test("새로고침 후 저장된 성공률 게이지·수량별 막대·날씨 아이콘을 복원한다", async () => {
@@ -566,15 +563,13 @@ describe("시안 6 메인 로그인 통합", () => {
   });
 });
 
-describe("프리미엄 가이드 접근 통합", () => {
+describe("서울자전거 따릉이 이용권 결제 및 가이드 접근 통합", () => {
   beforeEach(() => {
     sessionStorage.clear();
     jest.clearAllMocks();
     getCurrentUser.mockResolvedValue({ authenticated: true, user: { displayName: "김따릉", provider: "kakao" } });
     fetchSubscription.mockResolvedValue({ status: "FREE" });
     confirmPayment.mockResolvedValue({ status: "ACTIVE" });
-    startCheckout.mockResolvedValue({ status: "READY", orderId: "order-1", planId: "PREMIUM_MONTHLY_30D", amount: 2900, currency: "KRW" });
-    requestTossCheckout.mockResolvedValue(undefined);
     fetchAirQuality.mockResolvedValue({ status: "UNAVAILABLE" });
   });
 
@@ -591,20 +586,20 @@ describe("프리미엄 가이드 접근 통합", () => {
     return candidate;
   }
 
-  test("FREE 사용자가 상세보기를 열면 구독 안내와 서버 checkout 요청을 사용한다", async () => {
+  // 1. FREE 사용자: 가이드 클릭 시 가이드 본문 진입이 차단되고 이용권 결제 화면으로 분기된다
+  test("FREE 사용자가 상세보기를 열면 가이드 본문 대신 이용권 결제 화면으로 분기된다", async () => {
     const candidate = restoreGuideCandidate();
     render(<MainPage />);
 
+    // 대여소 상세보기 클릭 ➔ 가이드 본문은 차단되고 결제 컴포넌트 노출
     fireEvent.click(await screen.findByRole("button", { name: `${candidate.stationName} 상세보기` }));
-    expect(await screen.findByText("프리미엄 월간")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: `${candidate.stationName} 라이딩 가이드` })).not.toBeInTheDocument();
     expect(fetchSubscription).toHaveBeenCalledTimes(1);
-
-    fireEvent.click(screen.getByRole("button", { name: "월간 선택" }));
-    await waitFor(() => expect(startCheckout).toHaveBeenCalledWith("PREMIUM_MONTHLY_30D"));
-    expect(screen.getByText("결제 확인 중입니다.")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: premiumPlansFixture[0].buttonLabel })).toBeInTheDocument();
   });
 
-  test("ACTIVE 사용자는 기존 라이딩 가이드 본문을 연다", async () => {
+  // 2. ACTIVE 사용자: 결제 화면을 건너뛰고 최종 목적지인 라이딩 가이드 본문(RidingGuidePage)으로 즉시 진입한다
+  test("ACTIVE 사용자는 결제 화면을 건너뛰고 라이딩 가이드 본문을 바로 연다", async () => {
     const candidate = restoreGuideCandidate();
     fetchSubscription.mockResolvedValue({ status: "ACTIVE" });
     render(<MainPage />);
@@ -613,71 +608,46 @@ describe("프리미엄 가이드 접근 통합", () => {
     expect(await screen.findByRole("heading", { name: `${candidate.stationName} 라이딩 가이드` })).toBeInTheDocument();
   });
 
+  // 3. ANONYMOUS 사용자: 로그인 유도 ➔ 로그인 성공 후 원래 진입하려던 가이드 화면으로 자동 복원된다
   test("ANONYMOUS 사용자는 로그인 유도 뒤 원래 가이드 진입 지점을 복원한다", async () => {
     const candidate = restoreGuideCandidate();
     getCurrentUser.mockResolvedValue({ authenticated: false, user: null });
     const firstRender = render(<MainPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: `${candidate.stationName} 상세보기` }));
-    expect(await screen.findByText("로그인 후 상세 가이드를 볼 수 있습니다.")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "로그인하고 계속" }));
+    const planBtn = await screen.findByRole("button", { name: premiumPlansFixture[0].buttonLabel });
+    fireEvent.click(planBtn);
+
+    // 로그인 필요 안내 및 로그인 버튼 클릭
+    expect(await screen.findByText("따릉이 이용권을 결제하시려면 로그인이 필요합니다.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "로그인하기" }));
     expect(sessionStorage.getItem(PENDING_GUIDE_KEY)).toBe("1");
     expect(loadPendingPrediction()).toEqual(expect.objectContaining({ requiredBikeCount: 1 }));
 
     firstRender.unmount();
+
+    // 로그인 완료 후 복귀 시: 가이드/결제 진입점 복원 확인
     window.history.replaceState({}, "", "/?login=success");
     getCurrentUser.mockResolvedValue({ authenticated: true, user: { displayName: "김따릉", provider: "kakao" } });
     render(<MainPage />);
 
-    expect(await screen.findByRole("heading", { name: "라이딩 가이드 접근 안내" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: premiumPlansFixture[0].buttonLabel })).toBeInTheDocument();
     expect(sessionStorage.getItem(PENDING_GUIDE_KEY)).toBeNull();
   });
 
-  test("EXPIRED 사용자는 가이드 본문 대신 요금제 안내를 본다", async () => {
+  // 4. EXPIRED 사용자: 라이딩 가이드 본문 진입이 차단되고 만료 안내 화면으로 분기된다
+  test("EXPIRED 사용자는 가이드 본문 진입이 차단되고 이용 기간 만료 안내를 본다", async () => {
     const candidate = restoreGuideCandidate();
     fetchSubscription.mockResolvedValue({ status: "EXPIRED" });
     render(<MainPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: `${candidate.stationName} 상세보기` }));
-    expect(await screen.findByText("이용 기간이 종료되었습니다. 계속 이용하시려면 요금제를 선택해 주세요.")).toBeInTheDocument();
-    expect(screen.getByText("프리미엄 월간")).toBeInTheDocument();
+    expect(await screen.findByText(/이용권 기간이 만료되었습니다/)).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: `${candidate.stationName} 라이딩 가이드` })).not.toBeInTheDocument();
   });
 
-  test.each([
-    ["PAYMENT_NOT_ENABLED", "현재 결제를 사용할 수 없습니다."],
-    ["CHECKOUT_REQUEST_FAILED", "결제 요청을 시작하지 못했습니다. 다시 시도해 주세요."],
-  ])("checkout이 %s로 실패하면 FREE 안내와 재시도 메시지로 돌아간다", async (code, notice) => {
-    const candidate = restoreGuideCandidate();
-    startCheckout.mockRejectedValue(new Error(code));
-    render(<MainPage />);
-
-    fireEvent.click(await screen.findByRole("button", { name: `${candidate.stationName} 상세보기` }));
-    await screen.findByText("프리미엄 월간");
-    fireEvent.click(screen.getByRole("button", { name: "월간 선택" }));
-
-    expect(await screen.findByRole("alert")).toHaveTextContent(notice);
-    expect(screen.getByRole("button", { name: "월간 선택" })).toBeEnabled();
-    expect(screen.queryByText("결제 확인 중입니다.")).not.toBeInTheDocument();
-  });
-
-  test("결제창을 닫으면 FREE 안내와 재시도 버튼으로 돌아간다", async () => {
-    const candidate = restoreGuideCandidate();
-    render(<MainPage />);
-
-    fireEvent.click(await screen.findByRole("button", { name: `${candidate.stationName} 상세보기` }));
-    await screen.findByText("프리미엄 월간");
-    fireEvent.click(screen.getByRole("button", { name: "월간 선택" }));
-    await waitFor(() => expect(requestTossCheckout).toHaveBeenCalledTimes(1));
-
-    requestTossCheckout.mock.calls[0][1].onCancel();
-
-    expect(await screen.findByRole("alert")).toHaveTextContent("결제가 취소되었습니다. 다시 시도해 주세요.");
-    expect(screen.getByRole("button", { name: "월간 선택" })).toBeEnabled();
-    expect(screen.queryByText("결제 확인 중입니다.")).not.toBeInTheDocument();
-  });
-
-  test("성공 redirect는 서버 확인 뒤 ACTIVE 가이드를 연다", async () => {
+  // 5. 결제 성공 redirect: 서버 결제 승인(confirmPayment)을 거쳐 최종 목적지인 ACTIVE 라이딩 가이드가 열린다
+  test("성공 redirect는 서버 승인 뒤 최종 목적지인 라이딩 가이드 본문을 연다", async () => {
     const candidate = restoreGuideCandidate();
     window.history.replaceState({}, "", "/?payment=processing&paymentKey=masked&orderId=masked&amount=2900");
     fetchSubscription.mockResolvedValue({ status: "ACTIVE" });
@@ -690,14 +660,14 @@ describe("프리미엄 가이드 접근 통합", () => {
     expect(window.location.search).toBe("");
   });
 
-  test("구독 조회 실패 시 ACTIVE 가이드 대신 안전한 안내를 표시한다", async () => {
+  // 6. 구독 조회 실패: 크래시 없이 안전한 에러 알림을 노출하고 라이딩 가이드 본문 진입을 차단한다
+  test("구독 조회 실패 시 크래시 없이 안전한 안내를 표시하고 가이드 진입을 차단한다", async () => {
     const candidate = restoreGuideCandidate();
     fetchSubscription.mockRejectedValue(new Error("SUBSCRIPTION_FETCH_FAILED"));
     render(<MainPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: `${candidate.stationName} 상세보기` }));
     expect(await screen.findByRole("alert")).toHaveTextContent("구독 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.");
-    expect(screen.getByText("프리미엄 월간")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: `${candidate.stationName} 라이딩 가이드` })).not.toBeInTheDocument();
   });
 });

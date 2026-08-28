@@ -16,9 +16,8 @@ import { adaptCandidateResponse } from "../prediction-results/adaptCandidateResp
 import RidingGuidePage from "../riding-guide/RidingGuidePage";
 import { fetchAirQuality } from "../riding-guide/airQualityApi";
 import { adaptArrivalWeather, fetchArrivalWeather } from "../weather/weatherApi";
-import PremiumGuideAccessPanel from "../premium/PremiumGuideAccessPanel";
-import { confirmPayment, fetchSubscription, startCheckout } from "../premium/subscriptionApi";
-import { requestTossCheckout } from "../premium/tossCheckout";
+import PremiumSandboxPage from "../premium/PremiumSandboxPage";
+import { confirmPayment, fetchSubscription } from "../premium/subscriptionApi";
 import { saveFavorite, saveSavedRoute } from "../archive/archiveApi";
 
 const EMPTY_INPUT = {
@@ -417,27 +416,6 @@ export default function MainPage({ onNavigate }) {
     window.location.assign("/login");
   };
 
-  const handleSelectPlan = async ({ planCode }) => {
-    setGuideAccessError(null);
-    setGuideAccessState("PROCESSING");
-    sessionStorage.setItem(PENDING_GUIDE_KEY, "1");
-    try {
-      const checkout = await startCheckout(planCode);
-      await requestTossCheckout(checkout, {
-        onCancel: () => {
-          sessionStorage.removeItem(PENDING_GUIDE_KEY);
-          sessionStorage.removeItem(PAYMENT_PROCESSING_KEY);
-          setGuideAccessState("FREE");
-          setGuideAccessError("결제가 취소되었습니다. 다시 시도해 주세요.");
-        },
-      });
-    } catch (error) {
-      sessionStorage.removeItem(PENDING_GUIDE_KEY);
-      setGuideAccessState("FREE");
-      setGuideAccessError(error.message === "PAYMENT_NOT_ENABLED" ? "현재 결제를 사용할 수 없습니다." : "결제 요청을 시작하지 못했습니다. 다시 시도해 주세요.");
-    }
-  };
-
   useEffect(() => {
     if (!ridingGuideOpen || !selectedStationInfo || guideAccessState !== "ACTIVE") return;
     let cancelled = false;
@@ -497,10 +475,13 @@ export default function MainPage({ onNavigate }) {
     if (guideAccessState !== "ACTIVE") {
       return (
         <main className="main-shell">
-          <PremiumGuideAccessPanel
+          <PremiumSandboxPage
             accessState={guideAccessState}
+            authState={authState}
+            user={user}
+            onNavigate={onNavigate}
+            onLogout={handleLogout}
             onLogin={handleGuideLogin}
-            onSelectPlan={handleSelectPlan}
           />
           {guideAccessState === "PROCESSING" && <p className="main-time-notice" role="status">결제 확인 요청이 준비되었습니다. sandbox 인수 환경에서 완료를 확인합니다.</p>}
           {guideAccessError && <p className="main-time-notice" role="alert">{guideAccessError}</p>}
