@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import App from "./App";
+import App, { navigationTarget } from "./App";
 import { getCurrentUser } from "./features/login/authApi";
 import { INTRO_SEEN_KEY } from "./features/intro/introStorage";
 import { fetchStationDetail, fetchStationRhythm } from "./features/station-detail/stationRhythmApi";
@@ -23,13 +23,21 @@ afterEach(() => {
   delete process.env.REACT_APP_JOURNEY_ENABLED;
 });
 
-test('keeps Journey routes on the main screen while the feature is off', async () => {
-  window.history.replaceState({}, '', '/#journey/result/decision-1');
+test.each([
+  ['unset planner', undefined, '/#journey'],
+  ['false planner', 'false', '/#journey'],
+  ['TRUE planner', 'TRUE', '/#journey'],
+  ['1 planner', '1', '/#journey'],
+  ['unset result', undefined, '/#journey/result/decision-1'],
+])('keeps %s Journey hash route on the main screen while the feature is off', async (_label, flag, path) => {
+  if (flag !== undefined) process.env.REACT_APP_JOURNEY_ENABLED = flag;
+  window.history.replaceState({}, '', path);
   window.localStorage.setItem(INTRO_SEEN_KEY, 'true');
 
   render(<App />);
 
   await waitFor(() => expect(document.querySelector('.main-shell')).toBeInTheDocument());
+  expect(screen.queryByRole('heading', { name: '여정 조건을 입력하세요' })).not.toBeInTheDocument();
   expect(screen.queryByText('여정을 불러오는 중입니다.')).not.toBeInTheDocument();
 });
 
@@ -41,6 +49,11 @@ test('renders the Journey planner only when the feature is explicitly enabled', 
   render(<App />);
 
   expect(await screen.findByRole('heading', { name: '여정 조건을 입력하세요' })).toBeInTheDocument();
+});
+
+test('does not create a Journey hash through programmatic navigation while the feature is off', () => {
+  expect(navigationTarget('journey')).toEqual({ hash: '', route: 'main', stationId: null });
+  expect(navigationTarget('journey-result', 'decision-1')).toEqual({ hash: '', route: 'main', stationId: null });
 });
 
 test("shows the selected draft 6 as the main page", async () => {

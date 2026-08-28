@@ -1,15 +1,19 @@
 package com.ddarungflow.journey.release;
 
 import com.ddarungflow.journey.persistence.JourneyDecisionRepository;
+import com.ddarungflow.journey.ai.JourneyAiGateway;
+import com.ddarungflow.journey.returnprediction.ReturnPredictionPort;
 import com.ddarungflow.journey.saved.SavedJourneyRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -21,6 +25,8 @@ class JourneyReleaseGateFilterTest {
     @Autowired private MockMvc mvc;
     @Autowired private JourneyDecisionRepository decisions;
     @Autowired private SavedJourneyRepository savedJourneys;
+    @MockitoBean private JourneyAiGateway aiGateway;
+    @MockitoBean private ReturnPredictionPort returnPredictionPort;
 
     @Test
     void hidesJourneyAndSavedJourneyEndpointsBeforeTheyCanWrite() throws Exception {
@@ -31,5 +37,14 @@ class JourneyReleaseGateFilterTest {
 
         assertThat(decisions.count()).isZero();
         assertThat(savedJourneys.count()).isZero();
+        verifyNoInteractions(aiGateway, returnPredictionPort);
+    }
+
+    @Test
+    void leavesExistingNonJourneyApisAvailable() throws Exception {
+        mvc.perform(get("/api/v1/auth/me"))
+                .andExpect(status().isOk());
+
+        verifyNoInteractions(aiGateway, returnPredictionPort);
     }
 }

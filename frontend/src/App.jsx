@@ -15,7 +15,7 @@ import { isJourneyEnabled } from './features/journey/journeyFeatureFlag';
 import { hasSeenIntro } from './features/intro/introStorage';
 import { getCurrentUser, logout } from './features/login/authApi';
 
-const HASH_ROUTES = ['qna', 'archive', 'alerts', 'mypage', 'journey'];
+const HASH_ROUTES = ['qna', 'archive', 'alerts', 'mypage'];
 
 function routeFromHash() {
   const hash = window.location.hash.slice(1);
@@ -23,6 +23,14 @@ function routeFromHash() {
   if (isJourneyEnabled() && hash.startsWith('journey/result/') && hash.slice('journey/result/'.length)) return { route: 'journey-result', stationId: hash.slice('journey/result/'.length) };
   if (isJourneyEnabled() && hash === 'journey') return { route: 'journey', stationId: null };
   return { route: HASH_ROUTES.includes(hash) ? hash : 'main', stationId: null };
+}
+
+export function navigationTarget(nextRoute, nextStationId) {
+  if (nextRoute === 'station' && nextStationId) return { hash: `#station/${encodeURIComponent(nextStationId)}`, route: 'station', stationId: nextStationId };
+  if (isJourneyEnabled() && nextRoute === 'journey-result' && nextStationId) return { hash: `#journey/result/${encodeURIComponent(nextStationId)}`, route: 'journey-result', stationId: nextStationId };
+  if (isJourneyEnabled() && nextRoute === 'journey') return { hash: '#journey', route: 'journey', stationId: null };
+  if (HASH_ROUTES.includes(nextRoute)) return { hash: `#${nextRoute}`, route: nextRoute, stationId: null };
+  return { hash: '', route: 'main', stationId: null };
 }
 
 function App() {
@@ -76,9 +84,9 @@ function App() {
       window.location.assign('/admin');
       return;
     }
-    const nextHash = nextRoute === 'station' && nextStationId ? `#station/${encodeURIComponent(nextStationId)}` : isJourneyEnabled() && nextRoute === 'journey-result' && nextStationId ? `#journey/result/${encodeURIComponent(nextStationId)}` : isJourneyEnabled() && nextRoute === 'journey' ? '#journey' : HASH_ROUTES.includes(nextRoute) ? `#${nextRoute}` : '';
-    window.history.pushState({}, '', `${window.location.pathname}${window.location.search}${nextHash}`);
-    setRoute({ route: nextRoute === 'station' && nextStationId ? 'station' : isJourneyEnabled() && nextRoute === 'journey-result' && nextStationId ? 'journey-result' : isJourneyEnabled() && nextRoute === 'journey' ? 'journey' : HASH_ROUTES.includes(nextRoute) ? nextRoute : 'main', stationId: nextStationId || null });
+    const target = navigationTarget(nextRoute, nextStationId);
+    window.history.pushState({}, '', `${window.location.pathname}${window.location.search}${target.hash}`);
+    setRoute({ route: target.route, stationId: target.stationId });
   };
 
   if (isLoginPath) {
@@ -116,8 +124,8 @@ function App() {
   if (route === 'station') {
     return <StationDetailPage stationId={stationId} authState={authState} user={user} onNavigate={navigate} onLogout={handleLogout} />;
   }
-  if (route === 'journey') return <JourneyPlannerPage authState={authState} onNavigate={navigate} />;
-  if (route === 'journey-result') return <JourneyResultPage decisionId={stationId} onNavigate={navigate} />;
+  if (route === 'journey' && isJourneyEnabled()) return <JourneyPlannerPage authState={authState} onNavigate={navigate} />;
+  if (route === 'journey-result' && isJourneyEnabled()) return <JourneyResultPage decisionId={stationId} onNavigate={navigate} />;
 
   return <MainPage onNavigate={navigate} />;
 }
