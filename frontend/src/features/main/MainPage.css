@@ -493,6 +493,22 @@
   font-size: 14px
 }
 
+.main-station-name h3 button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.main-station-name h3 button:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
 .main-station-name em {
   padding: 2px 6px;
   border-radius: 4px;
@@ -3821,7 +3837,7 @@
     height: min(640px, 100%);
     min-height: 0;
     align-self: start;
-    grid-template-rows: minmax(0, .88fr) minmax(0, 1.04fr) minmax(0, 1.08fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   }
 
   .main-side-panels>section {
@@ -4848,7 +4864,7 @@
   }
 
   .main-side-panels {
-    grid-template-rows: 136px 166px minmax(0, 1fr)
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr)
   }
 
   .main-side-panels>section:last-child .main-weather {

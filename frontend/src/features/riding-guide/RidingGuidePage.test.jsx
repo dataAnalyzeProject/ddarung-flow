@@ -217,18 +217,19 @@ describe("라이딩 가이드 대기질 상태", () => {
 
     render(<RidingGuidePage candidate={candidate} onBack={jest.fn()} />);
 
-    expect(screen.getByText("31%")).toBeInTheDocument();
+    const successRateCard = screen.getByRole("heading", { name: "예상 대여 성공률" }).closest("section");
+    expect(within(successRateCard).getByText("31%")).toBeInTheDocument();
     expect(screen.queryByText("87%")).not.toBeInTheDocument();
 
     const summaryCard = screen.getByRole("heading", { name: "대여 예측 요약" }).closest("section");
     expect(within(summaryCard).getByText(/낮음/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "1~5대 누적확률 보기" }));
-    expect(screen.getByText("49%")).toBeInTheDocument();
+    expect(within(summaryCard).getByText("49%")).toBeInTheDocument();
 
-    const highlightedRow = screen.getByText("2대 이상").closest("div");
+    const highlightedRow = within(summaryCard).getByText("2대 이상").closest("div");
     expect(highlightedRow).toHaveClass("current");
-    expect(screen.getByText("1대 이상").closest("div")).not.toHaveClass("current");
+    expect(within(summaryCard).getByText("1대 이상").closest("div")).not.toHaveClass("current");
   });
 
   test("종합판정이 주의(LOW)이면 인트로 배지·요약 문구가 바뀐다", () => {
