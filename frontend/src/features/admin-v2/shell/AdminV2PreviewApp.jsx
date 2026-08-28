@@ -40,7 +40,8 @@ export default function AdminV2PreviewApp({ pathname, search, createAccessAdapte
     const controller = new AbortController();
     setAccess(null);
     setLoadedFixtureId(null);
-    Promise.resolve(createAccessAdapter({ fixtureId }).load({ signal: controller.signal }))
+    Promise.resolve()
+      .then(() => createAccessAdapter({ fixtureId }).load({ signal: controller.signal }))
       .then((nextAccess) => { if (generation.current === current && !controller.signal.aborted) { setAccess(nextAccess); setLoadedFixtureId(fixtureId); setLoadedAdapter(() => createAccessAdapter); } })
       .catch(() => { if (generation.current === current && !controller.signal.aborted) { setAccess(accessFailure()); setLoadedFixtureId(fixtureId); setLoadedAdapter(() => createAccessAdapter); } });
     return () => controller.abort();

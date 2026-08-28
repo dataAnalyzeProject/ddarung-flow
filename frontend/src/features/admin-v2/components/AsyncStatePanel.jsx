@@ -14,6 +14,6 @@ export default function AsyncStatePanel({ state, code, requiredPermission, onRet
     {copy?.description ? <p>{copy.description}</p> : null}
     {code ? <p>{code}</p> : null}
     {requiredPermission ? <p>필요 권한: {requiredPermission}</p> : null}
-    {code === 'ADMIN_ACCESS_UNAVAILABLE' ? <button type="button" onClick={onRetry}>다시 시도</button> : null}
+    {code === 'ADMIN_ACCESS_UNAVAILABLE' && typeof onRetry === 'function' ? <button type="button" onClick={onRetry}>다시 시도</button> : null}
   </section>;
 }

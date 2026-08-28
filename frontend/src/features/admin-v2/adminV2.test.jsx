@@ -15,6 +15,40 @@ function setPreviewUrl(path) { window.history.replaceState({}, '', path); }
 async function waitForShell() { await waitFor(() => expect(screen.queryByText('불러오는 중')).not.toBeInTheDocument()); }
 function readyAccess(adminRoles, permissions, defaultConsole = 'OPS') { return { state: 'READY', adminRoles, permissions, defaultConsole, generatedAt: '2026-08-28T09:00:00Z', source: 'FIXTURE' }; }
 
+const FORBIDDEN_FIXTURE_KEYS = new Set([
+  'email', 'oauthid', 'oauth', 'providerid', 'provider', 'internaluserid',
+  'token', 'accesstoken', 'refreshtoken', 'objectkey', 'binarypath',
+]);
+const FORBIDDEN_FIXTURE_VALUE_PATTERNS = [
+  ['email', /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i],
+  ['bearer token', /\bbearer\s+[A-Z0-9._~+/=-]{8,}\b/i],
+  ['object storage key', /(?:\b(?:gs|oci|oss|s3|object-storage):\/\/\S+|^[A-Z0-9._-]+(?:\/[A-Z0-9._-]+)+$)/i],
+  ['binary path', /(?:[A-Z]:\\|\/)[^\s]*(?:\.bin|\.onnx|\.pkl|\.joblib|\.pt|\.pth)\b/i],
+];
+
+function expectSensitiveFixtureDataAbsent(value, path = 'fixture') {
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => expectSensitiveFixtureDataAbsent(item, `${path}[${index}]`));
+    return;
+  }
+  if (value && typeof value === 'object') {
+    Object.entries(value).forEach(([key, nested]) => {
+      if (FORBIDDEN_FIXTURE_KEYS.has(key.toLowerCase())) {
+        throw new Error(`${path}.${key} is a forbidden fixture key`);
+      }
+      expectSensitiveFixtureDataAbsent(nested, `${path}.${key}`);
+    });
+    return;
+  }
+  if (typeof value === 'string') {
+    FORBIDDEN_FIXTURE_VALUE_PATTERNS.forEach(([label, pattern]) => {
+      if (pattern.test(value)) {
+        throw new Error(`${path} contains a ${label}`);
+      }
+    });
+  }
+}
+
 afterEach(() => setPreviewUrl('/'));
 
 describe('admin v2 fixture access and routes', () => {
@@ -26,6 +60,23 @@ describe('admin v2 fixture access and routes', () => {
     const access = await createFixtureAdminAccessAdapter({ fixtureId }).load();
     expect(visibleConsoles(access.permissions)).toEqual(expectedConsoles);
     expect(defaultRoute(access)).not.toBeNull();
+  });
+
+  test.each([
+    'OPS_VIEWER', 'OPS_OPERATOR', 'OPS_MANAGER', 'DATA_ANALYST', 'MODEL_ENGINEER',
+    'MODEL_APPROVER', 'SUPPORT_OPERATOR', 'AUDITOR', 'ACCESS_ADMIN', 'SUPER_ADMIN',
+    'AUTH_REQUIRED', 'ADMIN_ACCESS_DENIED', 'ACCESS_ERROR', 'UNKNOWN',
+  ])('%s fixture contains no forbidden sensitive keys or values', async (fixtureId) => {
+    const access = await createFixtureAdminAccessAdapter({ fixtureId }).load();
+    expectSensitiveFixtureDataAbsent(access, fixtureId);
+  });
+
+  test('publicUserId remains an allowed fixture field', () => {
+    expect(() => expectSensitiveFixtureDataAbsent({ publicUserId: 'public-user-1' })).not.toThrow();
+  });
+
+  test('sensitive fixture detector rejects a relative object storage key', () => {
+    expect(() => expectSensitiveFixtureDataAbsent({ artifact: 'models/test.joblib' })).toThrow('object storage key');
   });
 
   test('root redirects with replaceState to the first permitted preview route and preserves query', async () => {
@@ -141,6 +192,63 @@ describe('admin v2 fixture access and routes', () => {
     expect(screen.getByRole('button', { name: '다시 시도' })).toBeInTheDocument();
   });
 
+  test.each([
+    ['factory', () => { throw new Error('factory unavailable'); }],
+    ['load', () => ({ load() { throw new Error('load unavailable'); } })],
+  ])('%s synchronous throw converges to the safe access error', async (boundary, createAccessAdapter) => {
+    render(<AdminV2PreviewApp pathname="/admin-v2-preview/ops" search="?fixture=OPS_VIEWER" createAccessAdapter={createAccessAdapter} />);
+    await waitFor(() => expect(screen.getByText('관리자 권한 정보를 불러오지 못했습니다.')).toBeInTheDocument());
+    expect(screen.getByText('ADMIN_ACCESS_UNAVAILABLE')).toBeInTheDocument();
+    expect(screen.queryByText('UI-OPS-01')).not.toBeInTheDocument();
+  });
+
+  test('retry clears route data and recovers after a synchronous failure', async () => {
+    const initialAdapter = () => ({ load: () => Promise.resolve(readyAccess(['OPS_VIEWER'], ['OPS_DASHBOARD_READ'])) });
+    let calls = 0;
+    let resolveRetry;
+    const createAccessAdapter = () => ({
+      load() {
+        calls += 1;
+        if (calls === 1) throw new Error('first load unavailable');
+        return new Promise((resolve) => { resolveRetry = resolve; });
+      },
+    });
+    const { rerender } = render(<AdminV2PreviewApp pathname="/admin-v2-preview/ops" search="?fixture=OPS_VIEWER" createAccessAdapter={initialAdapter} />);
+    await waitFor(() => expect(screen.getByText('UI-OPS-01')).toBeInTheDocument());
+    rerender(<AdminV2PreviewApp pathname="/admin-v2-preview/ops" search="?fixture=OPS_VIEWER" createAccessAdapter={createAccessAdapter} />);
+    await waitFor(() => expect(screen.getByText('관리자 권한 정보를 불러오지 못했습니다.')).toBeInTheDocument());
+    expect(screen.queryByText('UI-OPS-01')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    await waitFor(() => expect(screen.getByText('불러오는 중')).toBeInTheDocument());
+    expect(screen.queryByText('UI-OPS-01')).not.toBeInTheDocument();
+    await waitFor(() => expect(resolveRetry).toBeDefined());
+    await act(async () => resolveRetry(readyAccess(['OPS_VIEWER'], ['OPS_DASHBOARD_READ'])));
+    expect(screen.getByText('UI-OPS-01')).toBeInTheDocument();
+    expect(calls).toBe(2);
+  });
+
+  test('late previous response cannot overwrite a successful retry result', async () => {
+    let resolvePrevious;
+    const previousAdapter = () => ({ load: () => new Promise((resolve) => { resolvePrevious = resolve; }) });
+    let retryCalls = 0;
+    const retryAdapter = () => ({
+      load() {
+        retryCalls += 1;
+        if (retryCalls === 1) return Promise.reject(new Error('retry source unavailable'));
+        return Promise.resolve(readyAccess(['OPS_VIEWER'], ['OPS_DASHBOARD_READ']));
+      },
+    });
+    const { rerender } = render(<AdminV2PreviewApp pathname="/admin-v2-preview/ops" search="?fixture=OPS_VIEWER" createAccessAdapter={previousAdapter} />);
+    await waitFor(() => expect(resolvePrevious).toBeDefined());
+    rerender(<AdminV2PreviewApp pathname="/admin-v2-preview/ops" search="?fixture=OPS_VIEWER" createAccessAdapter={retryAdapter} />);
+    await waitFor(() => expect(screen.getByText('관리자 권한 정보를 불러오지 못했습니다.')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    await waitFor(() => expect(screen.getByText('UI-OPS-01')).toBeInTheDocument());
+    await act(async () => resolvePrevious(readyAccess(['MODEL_ENGINEER'], ['MODEL_METRICS_READ'], 'MODEL')));
+    expect(screen.getByText('UI-OPS-01')).toBeInTheDocument();
+    expect(screen.queryByText('UI-MODEL-01')).not.toBeInTheDocument();
+  });
+
   test('route metadata exactly matches the approved 16-route canonical matrix', () => {
     expect(ROUTES.map(({ id, canonicalPath, previewPath, title, console, requiredPermission }) => ({ id, canonicalPath, previewPath, title, console, requiredPermission }))).toEqual([
       { id: 'UI-OPS-01', canonicalPath: '/admin/ops', previewPath: '/admin-v2-preview/ops', title: '운영 상황판', console: 'OPS', requiredPermission: 'OPS_DASHBOARD_READ' },
@@ -176,6 +284,15 @@ describe('admin v2 fixture access and routes', () => {
     expect(screen.getByRole('region')).not.toHaveAttribute('aria-live');
     rerender(<AsyncStatePanel state="ERROR" />);
     expect(screen.getByRole('region')).toHaveAttribute('aria-live', 'polite');
+  });
+
+  test('renders retry only when an executable retry handler is provided', () => {
+    const onRetry = jest.fn();
+    const { rerender } = render(<AsyncStatePanel state="ERROR" code="ADMIN_ACCESS_UNAVAILABLE" />);
+    expect(screen.queryByRole('button', { name: '다시 시도' })).not.toBeInTheDocument();
+    rerender(<AsyncStatePanel state="ERROR" code="ADMIN_ACCESS_UNAVAILABLE" onRetry={onRetry} />);
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
   });
 
   test('production disables the preview helper', () => {
