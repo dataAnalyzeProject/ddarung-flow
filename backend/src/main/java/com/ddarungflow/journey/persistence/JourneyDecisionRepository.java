@@ -7,6 +7,6 @@ import java.util.List;
 import java.util.Optional;
 
 public interface JourneyDecisionRepository extends JpaRepository<JourneyDecisionEntity, Long> {
-    Optional<JourneyDecisionEntity> findByPublicIdAndUserId(String publicId, Long userId);
+    Optional<JourneyDecisionEntity> findFirstByPublicIdAndUserIdOrderByRevisionDesc(String publicId, Long userId);
     List<JourneyDecisionEntity> findByExpiresAtLessThanEqual(OffsetDateTime now);
 }

@@ -16,6 +16,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DataJpaTest
 @Import(JpaJourneyDecisionPersistenceAdapter.class)
@@ -40,7 +41,7 @@ class JourneyDecisionPersistenceAdapterTest {
     @Test
     void storesDecisionAndCandidatesAndFindsAnActiveDecision() {
         OffsetDateTime now = OffsetDateTime.now().truncatedTo(ChronoUnit.MICROS);
-        port.save(decision("decision-1", now.plusHours(24)));
+        port.save(decision("decision-1", 1, now, now.plusHours(24)));
 
         assertThat(port.findActiveDecision("decision-1", userId, now)).hasValueSatisfying(stored -> {
             assertThat(stored.status()).isEqualTo("PARTIAL");
@@ -53,13 +54,38 @@ class JourneyDecisionPersistenceAdapterTest {
     @Test
     void treats24HourTtlAsExpiredAndCleansUpParentAndCandidates() {
         OffsetDateTime now = OffsetDateTime.now().truncatedTo(ChronoUnit.MICROS);
-        port.save(decision("expired-decision", now));
+        port.save(decision("expired-decision", 1, now.minusHours(24), now));
 
         assertThat(port.isExpired("expired-decision", userId, now)).isTrue();
         assertThat(port.findActiveDecision("expired-decision", userId, now)).isEmpty();
         assertThat(port.deleteExpiredDecisions(now)).isEqualTo(1);
         assertThat(decisions.count()).isZero();
         assertThat(candidates.count()).isZero();
+    }
+
+    @Test
+    void returnsTheLatestRevisionAndRejectsTheSameRevisionForOneDecision() {
+        OffsetDateTime now = OffsetDateTime.now().truncatedTo(ChronoUnit.MICROS);
+        port.save(decision("revised-decision", 1, now, now.plusHours(24)));
+        port.save(decision("revised-decision", 2, now, now.plusHours(24)));
+
+        assertThat(port.findActiveDecision("revised-decision", userId, now)).hasValueSatisfying(stored ->
+                assertThat(stored.revision()).isEqualTo(2));
+        assertThatThrownBy(() -> port.save(decision("revised-decision", 2, now, now.plusHours(24))))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void usesAndEnforcesThe24HourDefaultAndMaximumTtl() {
+        OffsetDateTime generatedAt = OffsetDateTime.now().truncatedTo(ChronoUnit.MICROS);
+        JourneyDecisionPersistencePort.DecisionToStore defaultTtlDecision = new JourneyDecisionPersistencePort.DecisionToStore(
+                "default-ttl", userId, 1, "PARTIAL", "{\"origin\":\"place-1\"}", "journey-api-03", generatedAt, candidatesToStore());
+
+        assertThat(defaultTtlDecision.expiresAt()).isEqualTo(generatedAt.plusHours(24));
+        port.save(defaultTtlDecision);
+        port.save(decision("maximum-ttl", 1, generatedAt, generatedAt.plusHours(24)));
+        assertThatThrownBy(() -> port.save(decision("over-maximum-ttl", 1, generatedAt, generatedAt.plusHours(24).plusNanos(1))))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -71,11 +97,14 @@ class JourneyDecisionPersistenceAdapterTest {
                 .noneMatch(name -> name.contains("naturallanguage") || name.contains("transcript") || name.contains("voice"));
     }
 
-    private JourneyDecisionPersistencePort.DecisionToStore decision(String id, OffsetDateTime expiresAt) {
-        OffsetDateTime generatedAt = expiresAt.minusHours(24);
-        return new JourneyDecisionPersistencePort.DecisionToStore(id, userId, 1, "PARTIAL", "{\"origin\":\"place-1\"}",
-                "journey-api-03", generatedAt, expiresAt, List.of(
+    private JourneyDecisionPersistencePort.DecisionToStore decision(String id, int revision, OffsetDateTime generatedAt, OffsetDateTime expiresAt) {
+        return new JourneyDecisionPersistencePort.DecisionToStore(id, userId, revision, "PARTIAL", "{\"origin\":\"place-1\"}",
+                "journey-api-03", generatedAt, expiresAt, candidatesToStore());
+    }
+
+    private List<JourneyDecisionPersistencePort.CandidateToStore> candidatesToStore() {
+        return List.of(
                 new JourneyDecisionPersistencePort.CandidateToStore("stable", "STABLE", "{\"rank\":1}", "{\"asOf\":\"test\"}"),
-                new JourneyDecisionPersistencePort.CandidateToStore("comfortable", "COMFORTABLE", "{\"rank\":2}", "{\"asOf\":\"test\"}")));
+                new JourneyDecisionPersistencePort.CandidateToStore("comfortable", "COMFORTABLE", "{\"rank\":2}", "{\"asOf\":\"test\"}"));
     }
 }

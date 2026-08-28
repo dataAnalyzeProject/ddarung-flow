@@ -18,7 +18,8 @@ import java.util.UUID;
 @Entity
 @Table(name = "saved_journeys", uniqueConstraints = {
         @UniqueConstraint(name = "uk_saved_journeys_public_id", columnNames = "public_id"),
-        @UniqueConstraint(name = "uk_saved_journeys_user_idempotency", columnNames = {"user_id", "idempotency_key"})
+        @UniqueConstraint(name = "uk_saved_journeys_user_idempotency", columnNames = {"user_id", "idempotency_key"}),
+        @UniqueConstraint(name = "uk_saved_journeys_user_duplicate", columnNames = {"user_id", "duplicate_key"})
 })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -40,8 +41,8 @@ public class SavedJourneyEntity {
     @Column(name = "replay_input_json", nullable = false, columnDefinition = "text")
     private String replayInputJson;
 
-    @Column(name = "payload_hash", nullable = false, length = 64)
-    private String payloadHash;
+    @Column(name = "duplicate_key", nullable = false, length = 64)
+    private String duplicateKey;
 
     @Column(name = "idempotency_key", nullable = false, length = 128)
     private String idempotencyKey;
@@ -49,11 +50,11 @@ public class SavedJourneyEntity {
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 
-    SavedJourneyEntity(Long userId, String displayName, String replayInputJson, String payloadHash, String idempotencyKey) {
+    SavedJourneyEntity(Long userId, String displayName, String replayInputJson, String duplicateKey, String idempotencyKey) {
         this.userId = userId;
         this.displayName = displayName;
         this.replayInputJson = replayInputJson;
-        this.payloadHash = payloadHash;
+        this.duplicateKey = duplicateKey;
         this.idempotencyKey = idempotencyKey;
     }
 

@@ -3,6 +3,7 @@ package com.ddarungflow.journey.saved;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,19 +18,27 @@ import java.util.List;
 @Transactional(readOnly = true)
 public class SavedJourneyService {
 
+    static final int MAX_SAVED_JOURNEYS_PER_USER = 10;
+
     private final SavedJourneyRepository repository;
+    private final EntityManager entityManager;
 
     @Transactional
     public SavedJourneyEntity save(Long userId, String idempotencyKey, SavedJourneyDtos.SaveRequest request) {
         validate(userId, idempotencyKey, request);
         String replayInputJson = canonicalJson(request);
-        String payloadHash = sha256(replayInputJson);
+        String duplicateKey = sha256(replayInputJson);
+        lockUser(userId);
         return repository.findByUserIdAndIdempotencyKey(userId, idempotencyKey)
                 .map(existing -> {
-                    if (!existing.getPayloadHash().equals(payloadHash)) throw new IdempotencyConflictException();
+                    if (!existing.getDuplicateKey().equals(duplicateKey)) throw new IdempotencyConflictException();
                     return existing;
                 })
-                .orElseGet(() -> repository.save(new SavedJourneyEntity(userId, displayName(request), replayInputJson, payloadHash, idempotencyKey)));
+                .orElseGet(() -> repository.findByUserIdAndDuplicateKey(userId, duplicateKey)
+                        .orElseGet(() -> {
+                            if (repository.countByUserId(userId) >= MAX_SAVED_JOURNEYS_PER_USER) throw new SavedJourneyLimitException();
+                            return repository.save(new SavedJourneyEntity(userId, displayName(request), replayInputJson, duplicateKey, idempotencyKey));
+                        }));
     }
 
     public List<SavedJourneyEntity> list(Long userId) {
@@ -54,7 +63,7 @@ public class SavedJourneyService {
 
     private void validate(Long userId, String idempotencyKey, SavedJourneyDtos.SaveRequest request) {
         if (userId == null || idempotencyKey == null || idempotencyKey.isBlank() || idempotencyKey.length() > 128 || request == null
-                || !validPlace(request.origin()) || !validPlace(request.destination()) || request.requiredBikeCount() == null
+                || !validPlace(request.origin()) || (request.destination() != null && !validPlace(request.destination())) || request.requiredBikeCount() == null
                 || request.requiredBikeCount() < 1 || request.requiredBikeCount() > 5 || request.totalJourneyMinutes() == null
                 || request.totalJourneyMinutes() < 1 || request.maxJourneyMinutes() == null || request.maxJourneyMinutes() < 1
                 || request.maxJourneyMinutes() > request.totalJourneyMinutes()) {
@@ -69,7 +78,15 @@ public class SavedJourneyService {
     }
 
     private String displayName(SavedJourneyDtos.SaveRequest request) {
-        return blank(request.displayName()) ? request.origin().displayName() + " → " + request.destination().displayName() : request.displayName();
+        if (!blank(request.displayName())) return request.displayName();
+        return request.destination() == null ? request.origin().displayName() : request.origin().displayName() + " → " + request.destination().displayName();
+    }
+
+    private void lockUser(Long userId) {
+        if (entityManager.createNativeQuery("select id from users where id = :userId for update")
+                .setParameter("userId", userId).getResultList().isEmpty()) {
+            throw new IllegalArgumentException("로그인이 필요합니다.");
+        }
     }
 
     private String canonicalJson(SavedJourneyDtos.SaveRequest request) {
@@ -96,5 +113,6 @@ public class SavedJourneyService {
     }
 
     public static class SavedJourneyNotFoundException extends RuntimeException { }
+    public static class SavedJourneyLimitException extends RuntimeException { }
     public static class IdempotencyConflictException extends RuntimeException { }
 }

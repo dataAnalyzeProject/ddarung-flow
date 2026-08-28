@@ -20,7 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "journey_decisions", uniqueConstraints = @UniqueConstraint(name = "uk_journey_decisions_public_id", columnNames = "public_id"))
+@Table(name = "journey_decisions", uniqueConstraints = @UniqueConstraint(name = "uk_journey_decisions_public_revision", columnNames = {"public_id", "revision"}))
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class JourneyDecisionEntity {

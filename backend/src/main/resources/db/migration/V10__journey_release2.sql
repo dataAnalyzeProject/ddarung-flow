@@ -10,11 +10,12 @@ CREATE TABLE journey_decisions (
     created_at timestamp with time zone NOT NULL,
     updated_at timestamp with time zone NOT NULL,
     expires_at timestamp with time zone NOT NULL,
-    CONSTRAINT uk_journey_decisions_public_id UNIQUE (public_id),
+    CONSTRAINT uk_journey_decisions_public_revision UNIQUE (public_id, revision),
     CONSTRAINT fk_journey_decisions_user FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
 CREATE INDEX ix_journey_decisions_user_expires ON journey_decisions (user_id, expires_at);
+CREATE INDEX ix_journey_decisions_user_public_revision ON journey_decisions (user_id, public_id, revision DESC);
 CREATE INDEX ix_journey_decisions_expires ON journey_decisions (expires_at);
 
 CREATE TABLE journey_candidates (
@@ -35,11 +36,12 @@ CREATE TABLE saved_journeys (
     user_id bigint NOT NULL,
     display_name varchar(200) NOT NULL,
     replay_input_json text NOT NULL,
-    payload_hash varchar(64) NOT NULL,
+    duplicate_key varchar(64) NOT NULL,
     idempotency_key varchar(128) NOT NULL,
     created_at timestamp with time zone NOT NULL,
     CONSTRAINT uk_saved_journeys_public_id UNIQUE (public_id),
     CONSTRAINT uk_saved_journeys_user_idempotency UNIQUE (user_id, idempotency_key),
+    CONSTRAINT uk_saved_journeys_user_duplicate UNIQUE (user_id, duplicate_key),
     CONSTRAINT fk_saved_journeys_user FOREIGN KEY (user_id) REFERENCES users(id)
 );
 

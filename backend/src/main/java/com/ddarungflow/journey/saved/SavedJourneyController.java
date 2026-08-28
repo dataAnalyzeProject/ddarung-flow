@@ -61,7 +61,12 @@ public class SavedJourneyController {
 
     @ExceptionHandler(SavedJourneyService.IdempotencyConflictException.class)
     ResponseEntity<SavedJourneyDtos.ErrorResponse> conflict() {
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(new SavedJourneyDtos.ErrorResponse("JOURNEY_REVISION_CONFLICT"));
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new SavedJourneyDtos.ErrorResponse("IDEMPOTENCY_CONFLICT"));
+    }
+
+    @ExceptionHandler(SavedJourneyService.SavedJourneyLimitException.class)
+    ResponseEntity<SavedJourneyDtos.ErrorResponse> limitReached() {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new SavedJourneyDtos.ErrorResponse("SAVED_ROUTE_LIMIT_REACHED"));
     }
 
     private Long userId(PrincipalDetails principal) {

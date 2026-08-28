@@ -12,7 +12,13 @@ public interface JourneyDecisionPersistencePort {
 
     record DecisionToStore(String decisionId, Long userId, int revision, String status, String normalizedIntentJson,
                            String contractVersions, OffsetDateTime generatedAt, OffsetDateTime expiresAt,
-                           List<CandidateToStore> candidates) { }
+                           List<CandidateToStore> candidates) {
+        public DecisionToStore(String decisionId, Long userId, int revision, String status, String normalizedIntentJson,
+                               String contractVersions, OffsetDateTime generatedAt, List<CandidateToStore> candidates) {
+            this(decisionId, userId, revision, status, normalizedIntentJson, contractVersions, generatedAt,
+                    JourneyDecisionTtlPolicy.defaultExpiresAt(generatedAt), candidates);
+        }
+    }
 
     record CandidateToStore(String candidateKey, String archetype, String snapshotJson, String provenanceJson) { }
 
