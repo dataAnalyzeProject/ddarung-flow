@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["toolCalls"],
+  "properties": {
+    "toolCalls": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["callId", "toolName", "arguments"],
+        "properties": {
+          "callId": { "type": "string" },
+          "toolName": { "type": "string", "enum": ["resolve_places", "get_rental_candidates", "get_cycle_routes", "get_destination_candidates", "get_return_candidates", "simulate_journey", "rank_journeys", "get_next_best_question", "compare_counterfactual"] },
+          "arguments": {
+            "type": "array",
+            "items": {
+              "type": "object", "additionalProperties": false,
+              "required": ["name", "valueType", "value"],
+              "properties": {
+                "name": { "type": "string" },
+                "valueType": { "type": "string", "enum": ["string", "number", "boolean"] },
+                "value": { "type": ["string", "number", "boolean"] }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

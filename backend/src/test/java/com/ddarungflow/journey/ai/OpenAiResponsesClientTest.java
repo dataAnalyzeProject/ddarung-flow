@@ -1,0 +1,46 @@
+package com.ddarungflow.journey.ai;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.Test;
+
+import java.net.URI;
+import java.time.Duration;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+class OpenAiResponsesClientTest {
+    private final ObjectMapper mapper = new ObjectMapper();
+    private final OpenAiResponsesClient client = new OpenAiResponsesClient(
+            new JourneyAiProperties(true, URI.create("https://example.test/v1/responses"), "not-a-real-key", "runtime-model", Duration.ofSeconds(2)), mapper
+    );
+
+    @Test
+    void buildsResponsesStructuredOutputRequestWithStoreDisabled() throws Exception {
+        var payload = mapper.readTree(client.requestBody("ORIGIN_A", "journey_intent", mapper.readTree("{\"type\":\"object\"}")));
+
+        assertThat(payload.path("store").asBoolean()).isFalse();
+        assertThat(payload.path("model").asText()).isEqualTo("runtime-model");
+        assertThat(payload.path("text").path("format").path("type").asText()).isEqualTo("json_schema");
+        assertThat(payload.path("text").path("format").path("strict").asBoolean()).isTrue();
+    }
+
+    @Test
+    void mapsRateLimitAndServerFailuresToUnavailableWithoutLeakingBody() {
+        assertThat(client.statusError(429).code()).isEqualTo(JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE);
+        assertThat(client.statusError(500).code()).isEqualTo(JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE);
+    }
+
+    @Test
+    void rejectsDisabledOrMissingProviderWithoutNetwork() throws Exception {
+        OpenAiResponsesClient disabled = new OpenAiResponsesClient(JourneyAiProperties.disabled(), mapper);
+        assertThatThrownBy(() -> disabled.requestStructuredOutput("ORIGIN_A", "intent", mapper.readTree("{}")))
+                .extracting(exception -> ((JourneyAiException) exception).code())
+                .isEqualTo(JourneyAiErrorCode.AI_DISABLED);
+
+        OpenAiResponsesClient unconfigured = new OpenAiResponsesClient(new JourneyAiProperties(true, null, "", "", null), mapper);
+        assertThatThrownBy(() -> unconfigured.requestStructuredOutput("ORIGIN_A", "intent", mapper.readTree("{}")))
+                .extracting(exception -> ((JourneyAiException) exception).code())
+                .isEqualTo(JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE);
+    }
+}
