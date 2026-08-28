@@ -106,12 +106,10 @@ describe("시안 6 메인 로그인 통합", () => {
 
     render(<MainPage />);
 
-    expect(await screen.findByRole("img", { name: "성공률 게이지 46%" })).toBeInTheDocument();
-    expect(screen.getAllByText("중간").length).toBeGreaterThan(0);
+    expect(await screen.findByRole("heading", { name: "추천 대여소" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "예상 대여 성공률" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "대여수량별 예상 가능성" })).not.toBeInTheDocument();
     expect(screen.getByRole("img", { name: "맑음" })).toBeInTheDocument();
-    ["61%", "54%", "46%", "28%", "9%"].forEach((probability) => {
-      expect(screen.getAllByText(probability).length).toBeGreaterThan(0);
-    });
   });
 
   test("저장된 예측 불가 상태는 확률 대신 안전한 안내를 표시한다", async () => {
@@ -132,9 +130,9 @@ describe("시안 6 메인 로그인 통합", () => {
 
     render(<MainPage />);
 
-    expect(await screen.findByText("예측을 불러올 수 없음")).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: "예측을 불러올 수 없음" })).toBeInTheDocument();
-    expect(screen.getByText("선택한 대여소의 대수별 확률 정보가 없어요.")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "추천 대여소" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "예상 대여 성공률" })).not.toBeInTheDocument();
+    expect(screen.queryByText("선택한 대여소의 대수별 확률 정보가 없어요.")).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "도착 시간대별 가능성" })).not.toBeInTheDocument();
   });
 

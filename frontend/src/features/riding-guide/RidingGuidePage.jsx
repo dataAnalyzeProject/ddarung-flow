@@ -15,6 +15,7 @@ import AirQualityCard, { getGuideKhaiMetric } from "./components/AirQualityCard"
 import PredictionSummaryCard from "./components/PredictionSummaryCard";
 import CautionCard from "./components/CautionCard";
 import DataStatusFooter from "./components/DataStatusFooter";
+import { GuideBikeCountCard, GuideSuccessRateCard } from "./components/GuidePredictionMetrics";
 
 export default function RidingGuidePage({
   stationName = "성수역 3번 출구",
@@ -67,6 +68,8 @@ export default function RidingGuidePage({
           </section>
 
           <aside className="guide-side-column" aria-label="대여 예측과 이용 안내">
+            <GuideSuccessRateCard candidate={candidate} />
+            <GuideBikeCountCard candidate={candidate} />
             <PredictionSummaryCard candidate={candidate} />
             <CautionCard candidate={candidate} arrivalWeather={arrivalWeather} airQuality={airQuality} />
           </aside>
