@@ -38,6 +38,7 @@ jobs:
       backend_tag: ${{ steps.matrix.outputs.backend_tag }}
       inference_tag: ${{ steps.matrix.outputs.inference_tag }}
       inventory_refresher_tag: ${{ steps.matrix.outputs.inventory_refresher_tag }}
+      journey_enabled: ${{ steps.journey_flag.outputs.value }}
     env:
       DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
       OCI_REGISTRY: ${{ vars.OCI_REGISTRY }}
@@ -65,6 +66,26 @@ jobs:
             echo "Skipping stale build candidate $DEPLOY_SHA; main already advanced."
             echo 'latest=false' >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Read versioned Journey release flag
+        id: journey_flag
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t release_flag_lines < infra/staging/journey-release-flags.env
+          if [ "${#release_flag_lines[@]}" -ne 1 ]; then
+            echo 'Journey release flag must contain exactly one line.' >&2
+            exit 1
+          fi
+          case "${release_flag_lines[0]}" in
+            JOURNEY_ENABLED=true) journey_enabled=true ;;
+            JOURNEY_ENABLED=false) journey_enabled=false ;;
+            *)
+              echo 'JOURNEY_ENABLED must be exactly true or false without whitespace.' >&2
+              exit 1
+              ;;
+          esac
+          printf 'value=%s\n' "$journey_enabled" >> "$GITHUB_OUTPUT"
 
       - name: Log in to OCIR
         if: steps.candidate.outputs.latest == 'true'
@@ -102,6 +123,10 @@ jobs:
             if ! git diff --quiet "$parent_sha" "$DEPLOY_SHA" -- "$path"; then
               changed=true
               tag="$DEPLOY_SHA"
+            elif [ "$component" = frontend ] && ! git diff --quiet "$parent_sha" "$DEPLOY_SHA" -- infra/staging/journey-release-flags.env; then
+              echo "Journey release flag changed; rebuilding frontend for $DEPLOY_SHA."
+              changed=true
+              tag="$DEPLOY_SHA"
             elif ! docker manifest inspect "$image_base/$component:$parent_sha" >/dev/null 2>&1; then
               echo "Reusable image is unavailable; rebuilding $component for $DEPLOY_SHA."
               changed=true
@@ -137,6 +162,7 @@ jobs:
       STAGING_PUBLIC_URL: ${{ vars.STAGING_PUBLIC_URL }}
       KAKAO_MAP_APP_KEY: ${{ vars.KAKAO_MAP_APP_KEY }}
       TOSS_PAYMENTS_CLIENT_KEY: ${{ secrets.TOSS_PAYMENTS_CLIENT_KEY }}
+      JOURNEY_ENABLED: ${{ needs.detect-changes.outputs.journey_enabled }}
 
     steps:
       - name: Check required image configuration
@@ -155,6 +181,7 @@ jobs:
           [[ "$OCI_REPOSITORY" =~ ^[A-Za-z0-9._/-]+$ ]]
           [[ "$STAGING_PUBLIC_URL" =~ ^https://[A-Za-z0-9.:-]+$ ]]
           [[ "$TOSS_PAYMENTS_CLIENT_KEY" == test_* ]]
+          [[ "$JOURNEY_ENABLED" == true || "$JOURNEY_ENABLED" == false ]]
 
       - name: Check out the successful main commit
         uses: actions/checkout@v6
@@ -192,6 +219,7 @@ jobs:
             ${{ matrix.component == 'frontend' && format('REACT_APP_API_BASE_URL={0}', env.STAGING_PUBLIC_URL) || '' }}
             ${{ matrix.component == 'frontend' && format('REACT_APP_KAKAO_MAP_APP_KEY={0}', env.KAKAO_MAP_APP_KEY) || '' }}
             ${{ matrix.component == 'frontend' && format('REACT_APP_TOSS_PAYMENTS_CLIENT_KEY={0}', env.TOSS_PAYMENTS_CLIENT_KEY) || '' }}
+            ${{ matrix.component == 'frontend' && format('REACT_APP_JOURNEY_ENABLED={0}', env.JOURNEY_ENABLED) || '' }}
           cache-from: type=gha,scope=staging-${{ matrix.component }}
           cache-to: type=gha,mode=max,scope=staging-${{ matrix.component }}
 
@@ -224,6 +252,7 @@ jobs:
       BACKEND_TAG: ${{ needs.detect-changes.outputs.backend_tag }}
       INFERENCE_TAG: ${{ needs.detect-changes.outputs.inference_tag }}
       INVENTORY_REFRESHER_TAG: ${{ needs.detect-changes.outputs.inventory_refresher_tag }}
+      JOURNEY_ENABLED: ${{ needs.detect-changes.outputs.journey_enabled }}
 
     steps:
       - name: Check required deployment configuration
@@ -244,6 +273,7 @@ jobs:
           [[ "$REMOTE_APP_DIR" =~ ^/[A-Za-z0-9._/-]+$ ]]
           [[ "$SSH_HOST" =~ ^[A-Za-z0-9.-]+$ ]]
           [[ "$SSH_USER" =~ ^[A-Za-z0-9._-]+$ ]]
+          [[ "$JOURNEY_ENABLED" == true || "$JOURNEY_ENABLED" == false ]]
 
       - name: Check out the successful main commit
         uses: actions/checkout@v6
@@ -339,6 +369,9 @@ jobs:
             printf 'REACT_APP_TOSS_PAYMENTS_CLIENT_KEY=%s\n' "$TOSS_PAYMENTS_CLIENT_KEY"
             printf 'PAYMENT_MODE=sandbox\n'
             printf 'DEPLOYED_COMMIT=%s\n' "$DEPLOY_SHA"
+            printf 'JOURNEY_ENABLED=%s\n' "$JOURNEY_ENABLED"
+            printf 'FRONTEND_IMAGE_TAG=%s\n' "$FRONTEND_TAG"
+            printf 'BACKEND_IMAGE_TAG=%s\n' "$BACKEND_TAG"
             printf 'SWAGGER_ENABLED=true\n'
             printf 'FLYWAY_BASELINE_ON_MIGRATE=true\n'
             printf 'FLYWAY_BASELINE_VERSION=1\n'
@@ -386,7 +419,7 @@ jobs:
           set -euo pipefail
           target="$SSH_USER@$SSH_HOST"
           ssh -i "$HOME/.ssh/id_staging" -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" \
-            "REMOTE_APP_DIR='$REMOTE_APP_DIR' STAGING_PUBLIC_URL='$STAGING_PUBLIC_URL' bash -s" <<'REMOTE'
+            "REMOTE_APP_DIR='$REMOTE_APP_DIR' STAGING_PUBLIC_URL='$STAGING_PUBLIC_URL' JOURNEY_ENABLED='$JOURNEY_ENABLED' bash -s" <<'REMOTE'
           set -euo pipefail
           cd "$REMOTE_APP_DIR"
           test -f .env
@@ -426,6 +459,15 @@ jobs:
           chmod 600 release.env oauth.env
 
           compose_files=(-f docker-compose.yaml -f docker-compose.oci.yaml)
+          release_journey_enabled=$(sed -n 's/^JOURNEY_ENABLED=//p' release.env)
+          test "$release_journey_enabled" = "$JOURNEY_ENABLED"
+          [[ "$release_journey_enabled" == true || "$release_journey_enabled" == false ]]
+          mapfile -t frontend_flag_values < <(docker compose --env-file .env --env-file oauth.env --env-file release.env "${compose_files[@]}" config | awk '$1 == "REACT_APP_JOURNEY_ENABLED:" { gsub(/"/, "", $2); print $2 }')
+          mapfile -t backend_flag_values < <(docker compose --env-file .env --env-file oauth.env --env-file release.env "${compose_files[@]}" config | awk '$1 == "JOURNEY_ENABLED:" { gsub(/"/, "", $2); print $2 }')
+          [ "${#frontend_flag_values[@]}" -eq 1 ]
+          [ "${#backend_flag_values[@]}" -eq 1 ]
+          test "${frontend_flag_values[0]}" = "$release_journey_enabled"
+          test "${backend_flag_values[0]}" = "$release_journey_enabled"
           docker compose --env-file .env --env-file oauth.env --env-file release.env "${compose_files[@]}" config --quiet
 
           # Every deploy pulls four SHA-tagged images that nothing removes, so the

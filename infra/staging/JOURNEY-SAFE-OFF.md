@@ -1,24 +1,11 @@
-# Journey safe-off staging wiring
+# Journey staging safe-off
 
-`JOURNEY_ENABLED` is the top-level Journey release gate. It defaults to `false` for both the backend runtime and frontend build; the frontend only enables Journey routes when `REACT_APP_JOURNEY_ENABLED` is exactly `true`.
+`infra/staging/journey-release-flags.env` is the versioned, top-level staging release flag. It must contain exactly `JOURNEY_ENABLED=true` or `JOURNEY_ENABLED=false`; the current default is `false`.
 
-- `false`, empty, or unset: Journey routes are not rendered, Journey navigation does not create a Journey hash, and Journey API paths return 404 before authentication, controllers, database, AI gateway, or return-prediction processing.
-- `true`: the existing Journey routes and backend behavior are available.
+This release flag does not enable any lower-level capability by itself. `JOURNEY_AI_ENABLED`, `RETURN_PREDICTION_ENABLED`, and `JOURNEY_PHASE_A_FIXTURE_ENABLED` remain separate lower-level flags and default to `false`. The `journey` Compose profile keeps `return-inference` on the private `staging` network with no host port. With no configured model artifact, its health/predict contract remains not-ready and does not return a production prediction.
 
-Journey AI, return prediction, and the Phase A fixture are all disabled by default. The backend starts without the `return-inference` service, because it has no unconditional dependency on it.
+When the top-level value is `false`, the frontend does not render Journey routes and Journey API paths return 404 before authentication, controllers, database, AI, or return-prediction work. `return-inference` can be included only with the `journey` Compose profile; with no production model it reports `/health` as `RUNNING` and `UNAVAILABLE` with `ready: false`, while `/predict` returns `503 MODEL_NOT_CONFIGURED` with no probability fields.
 
-To include the private return-inference service locally, use the Journey profile:
+Changing `false` to `true` requires a separate approved PR. The frontend receives the flag as the build-time `REACT_APP_JOURNEY_ENABLED` argument and must be rebuilt under the new commit SHA. The backend receives the same value as its runtime `JOURNEY_ENABLED` environment value. A release candidate records its deployed commit, flag, and frontend/backend image tags together; an image tag is never overwritten with a different build argument.
 
-```powershell
-docker compose -f infra/staging/docker-compose.yaml --profile journey up -d
-```
-
-The service has no host port and is connected only to the private `staging` network. Its existing Dockerfile healthcheck calls `/health`. With no configured production model artifact, the expected health response is HTTP 200 with `serviceStatus: RUNNING`, `modelStatus: UNAVAILABLE`, and `ready: false`.
-
-`/predict` must return HTTP 503 `MODEL_NOT_CONFIGURED` in that state. It must not include `probabilities` or `selectedProbability`, and it must not synthesize a normal probability response.
-
-Connecting a real model artifact and a real OpenAI API key are follow-up work. Do not commit either artifact or any secret value.
-
-The current OCI staging deployment workflow does not pass `REACT_APP_JOURNEY_ENABLED` as a frontend build argument or `JOURNEY_ENABLED` as a backend runtime environment value. OCI staging therefore remains default-false safe-off. Activation wiring is `NOT_RUN`: a separate activation PR must rebuild the frontend and set the backend runtime environment together.
-
-Rollback is soft: set the Journey-related feature flags to `false` and run the stack without the `journey` profile. `COMPONENT_PASS` covers this safe-off boundary only; it does not claim `INTEGRATION_PASS` or `RELEASE_PASS`.
+Rollback restores the prior release files and images, including the prior flag commit. This wiring PR is not an activation: actual OpenAI, return-model, and routing providers remain `NOT_RUN`.

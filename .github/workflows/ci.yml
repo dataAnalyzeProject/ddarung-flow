@@ -20,6 +20,7 @@ jobs:
       backend: ${{ steps.paths.outputs.backend }}
       pipeline: ${{ steps.paths.outputs.pipeline }}
       inference: ${{ steps.paths.outputs.inference }}
+      workflow_validation: ${{ steps.paths.outputs.workflow_validation }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -45,12 +46,20 @@ jobs:
           backend=false
           pipeline=false
           inference=false
+          workflow_validation=false
           while IFS= read -r path; do
             case "$path" in
               frontend/*) frontend=true ;;
               backend/*) backend=true ;;
               pipeline/*) pipeline=true ;;
-              infra/inference/*|infra/staging/*) inference=true ;;
+              infra/inference/*) inference=true ;;
+              infra/staging/journey-release-flags.env)
+                frontend=true
+                backend=true
+                workflow_validation=true
+                ;;
+              infra/staging/*) inference=true ;;
+              .github/workflows/*) workflow_validation=true ;;
               *) all=true ;;
             esac
           done < <(git diff --name-only "$base_sha" "$head_sha")
@@ -59,9 +68,10 @@ jobs:
             backend=true
             pipeline=true
             inference=true
+            workflow_validation=true
           fi
-          printf 'frontend=%s\nbackend=%s\npipeline=%s\ninference=%s\n' \
-            "$frontend" "$backend" "$pipeline" "$inference" >> "$GITHUB_OUTPUT"
+          printf 'frontend=%s\nbackend=%s\npipeline=%s\ninference=%s\nworkflow_validation=%s\n' \
+            "$frontend" "$backend" "$pipeline" "$inference" "$workflow_validation" >> "$GITHUB_OUTPUT"
 
   frontend:
     name: frontend
@@ -127,3 +137,47 @@ jobs:
       - run: python -m unittest discover -s infra/inference -p test_app.py -v
       - run: docker compose --env-file infra/staging/.env.example -f infra/staging/docker-compose.yaml config --quiet
       - run: docker build --tag ddarung-flow-inference:ci infra/inference
+
+  workflow-validation:
+    name: workflow-validation
+    needs: changes
+    if: needs.changes.outputs.workflow_validation == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate versioned Journey release flag
+        shell: bash
+        run: |
+          set -euo pipefail
+          read_journey_enabled() {
+            local flag_file=$1
+            local lines=()
+            mapfile -t lines < "$flag_file"
+            [ "${#lines[@]}" -eq 1 ] || return 1
+            case "${lines[0]}" in
+              JOURNEY_ENABLED=true) printf 'true\n' ;;
+              JOURNEY_ENABLED=false) printf 'false\n' ;;
+              *) return 1 ;;
+            esac
+          }
+
+          test "$(read_journey_enabled infra/staging/journey-release-flags.env)" = false
+          flag_test_file=$(mktemp)
+          trap 'rm -f "$flag_test_file"' EXIT
+          printf 'JOURNEY_ENABLED=true\n' > "$flag_test_file"
+          test "$(read_journey_enabled "$flag_test_file")" = true
+          for invalid_value in 'JOURNEY_ENABLED=' 'JOURNEY_ENABLED=TRUE' 'JOURNEY_ENABLED=1' 'JOURNEY_ENABLED=yes' 'JOURNEY_ENABLED=false '; do
+            printf '%s\n' "$invalid_value" > "$flag_test_file"
+            if read_journey_enabled "$flag_test_file" >/dev/null; then
+              echo "Invalid Journey release flag was accepted: $invalid_value" >&2
+              exit 1
+            fi
+          done
+      - name: Lint deployment workflows
+        run: |
+          docker run --rm \
+            -v "$PWD:/repo" \
+            -w /repo \
+            rhysd/actionlint:1.7.8 \
+            .github/workflows/ci.yml \
+            .github/workflows/staging-deploy.yml
