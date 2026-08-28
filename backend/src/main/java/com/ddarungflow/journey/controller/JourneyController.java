@@ -3,6 +3,7 @@ package com.ddarungflow.journey.controller;
 import com.ddarungflow.dto.PrincipalDetails;
 import com.ddarungflow.journey.application.JourneyPlanService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -46,8 +47,14 @@ public class JourneyController {
         return service.counterfactual(userId(principal), decisionId);
     }
 
-    @ExceptionHandler(JourneyPlanService.InvalidJourneyInput.class)
+    @ExceptionHandler({JourneyPlanService.InvalidJourneyInput.class, HttpMessageNotReadableException.class})
     ResponseEntity<Map<String, String>> invalid() { return error(400, "JOURNEY_INTENT_INVALID"); }
+
+    @ExceptionHandler(JourneyPlanService.AiOutputSchemaInvalid.class)
+    ResponseEntity<Map<String, String>> aiOutputSchemaInvalid() { return error(502, "AI_OUTPUT_SCHEMA_INVALID"); }
+
+    @ExceptionHandler(JourneyPlanService.AiToolValueMismatch.class)
+    ResponseEntity<Map<String, String>> aiToolValueMismatch() { return error(500, "AI_TOOL_VALUE_MISMATCH"); }
 
     @ExceptionHandler(JourneyPlanService.DecisionMissing.class)
     ResponseEntity<Map<String, String>> missing() { return error(404, "JOURNEY_NOT_ACCESSIBLE"); }

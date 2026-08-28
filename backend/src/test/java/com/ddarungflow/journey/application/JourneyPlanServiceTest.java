@@ -94,10 +94,14 @@ class JourneyPlanServiceTest {
 
         assertThat(decision.status()).isEqualTo(com.ddarungflow.journey.domain.JourneyStatus.CLARIFICATION_REQUIRED);
         assertThat(decision.warnings()).containsExactly("CLARIFICATION_REQUIRED");
+        assertThat(decision.clarification().question()).isEqualTo("추가 여정 조건을 확인해 주세요.");
+        assertThat(decision.clarification().missingFields()).containsExactly("destination");
+        assertThat(service.find(10L, decision.decisionId()).clarification().missingFields()).containsExactly("destination");
+        assertThat(decision.normalizedIntent().toString()).doesNotContain("성수에서 카페 포함");
     }
 
     @Test
-    void malformedAiOutputDoesNotExposeProviderMessage() {
+    void malformedAiOutputPreservesTypedErrorWithoutProviderMessage() {
         JourneyAiGateway malformedAi = new JourneyAiGateway() {
             @Override public IntentResult compileIntent(String input) {
                 throw new JourneyAiException(JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID, "provider raw output: secret");
@@ -106,9 +110,49 @@ class JourneyPlanServiceTest {
         };
         JourneyPlanService service = service(new InMemoryPersistence(), malformedAi, new CountingReturnPort());
 
-        JourneyPlanService.Decision decision = service.plan(10L, naturalLanguageInput());
+        assertThatThrownBy(() -> service.plan(10L, naturalLanguageInput()))
+                .isInstanceOf(JourneyPlanService.AiOutputSchemaInvalid.class)
+                .hasMessageNotContaining("secret");
+    }
 
-        assertThat(decision.warnings()).containsExactly("AI_PROVIDER_UNAVAILABLE").noneMatch(warning -> warning.contains("secret"));
+    @Test
+    void preservesPiiBlockedAndToolMismatchCodesWithoutProviderMessage() {
+        JourneyAiGateway piiAi = failingAi(JourneyAiErrorCode.AI_PII_BLOCKED, "provider raw input: secret");
+        JourneyPlanService.Decision piiDecision = service(new InMemoryPersistence(), piiAi, new CountingReturnPort()).plan(10L, naturalLanguageInput());
+        assertThat(piiDecision.warnings()).containsExactly("AI_PII_BLOCKED").noneMatch(warning -> warning.contains("secret"));
+
+        JourneyAiGateway mismatchAi = failingAi(JourneyAiErrorCode.AI_TOOL_VALUE_MISMATCH, "provider raw output: secret");
+        assertThatThrownBy(() -> service(new InMemoryPersistence(), mismatchAi, new CountingReturnPort()).plan(10L, naturalLanguageInput()))
+                .isInstanceOf(JourneyPlanService.AiToolValueMismatch.class)
+                .hasMessageNotContaining("secret");
+    }
+
+    @Test
+    void rejectsInvalidSelectedPlacesAndPastDepartureAt() {
+        JourneyPlanService service = service(new InMemoryPersistence(), disabledAi(), new CountingReturnPort());
+        JourneyPlanService.PlanInput valid = formInput();
+
+        assertInvalid(service, new JourneyPlanService.PlanInput(valid.requestMode(), null,
+                new JourneyPlanService.Place("", "성수역", 37.54, 127.05), null, valid.departureAt(), 60, 2, valid.preferences(), valid.avoid(), null));
+        assertInvalid(service, new JourneyPlanService.PlanInput(valid.requestMode(), null,
+                new JourneyPlanService.Place("origin", "성수역", null, 127.05), null, valid.departureAt(), 60, 2, valid.preferences(), valid.avoid(), null));
+        assertInvalid(service, new JourneyPlanService.PlanInput(valid.requestMode(), null,
+                new JourneyPlanService.Place("origin", "성수역", 91.0, 127.05), null, valid.departureAt(), 60, 2, valid.preferences(), valid.avoid(), null));
+        assertInvalid(service, new JourneyPlanService.PlanInput(valid.requestMode(), null, valid.origin(),
+                new JourneyPlanService.Place("destination", "", 37.55, 127.06), valid.departureAt(), 60, 2, valid.preferences(), valid.avoid(), null));
+        assertInvalid(service, new JourneyPlanService.PlanInput(valid.requestMode(), null, valid.origin(), null,
+                OffsetDateTime.now().minusMinutes(1), 60, 2, valid.preferences(), valid.avoid(), null));
+    }
+
+    private JourneyAiGateway failingAi(JourneyAiErrorCode code, String message) {
+        return new JourneyAiGateway() {
+            @Override public IntentResult compileIntent(String input) { throw new JourneyAiException(code, message); }
+            @Override public List<com.ddarungflow.journey.ai.ToolCallRequest> validateToolPlan(List<com.ddarungflow.journey.ai.ToolCallRequest> requests) { return requests; }
+        };
+    }
+
+    private void assertInvalid(JourneyPlanService service, JourneyPlanService.PlanInput input) {
+        assertThatThrownBy(() -> service.plan(10L, input)).isInstanceOf(JourneyPlanService.InvalidJourneyInput.class);
     }
 
     private JourneyPlanService service(InMemoryPersistence persistence, JourneyAiGateway ai, ReturnPredictionPort returnPort) {

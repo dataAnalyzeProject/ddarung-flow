@@ -28,6 +28,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest(properties = {
         "journey.ai.enabled=false",
+        "OPENAI_RESPONSES_URI=https://example.test/v1/responses",
+        "OPENAI_API_KEY=test-api-key",
+        "OPENAI_MODEL=test-journey-model",
         "journey.return-prediction.enabled=false",
         "journey.phase-a-fixture-enabled=false"
 })
@@ -62,6 +65,9 @@ class JourneyControllerTest {
     @Test
     void safeOffApplicationStartsAndAuthenticatedPlanPersistsAnUnavailableRevision() throws Exception {
         assertThat(aiProperties.enabled()).isFalse();
+        assertThat(aiProperties.responsesUri().toString()).isEqualTo("https://example.test/v1/responses");
+        assertThat(aiProperties.apiKey()).isEqualTo("test-api-key");
+        assertThat(aiProperties.model()).isEqualTo("test-journey-model");
         String response = mvc.perform(post("/api/v1/journeys/plan").with(authentication(userA)).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON).content(PLAN))
                 .andExpect(status().isOk())
@@ -99,6 +105,32 @@ class JourneyControllerTest {
 
         mvc.perform(post("/api/v1/journeys/{id}/counterfactuals", decisionId).with(authentication(userA)).with(csrf()))
                 .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("JOURNEY_NO_VALID_CANDIDATE"));
+    }
+
+    @Test
+    void rejectsInvalidPublicPlanInputOnTheServer() throws Exception {
+        assertInvalid(PLAN.replace("\"origin-1\"", "\"\""));
+        assertInvalid(PLAN.replace("\"latitude\":37.544", "\"latitude\":null"));
+        assertInvalid(PLAN.replace("\"latitude\":37.544", "\"latitude\":91"));
+        assertInvalid(PLAN.replace("\"longitude\":127.056", "\"longitude\":181"));
+        assertInvalid(PLAN.replace("\"destination\":null", "\"destination\":{\"placeId\":\"destination-1\",\"displayName\":\"\",\"latitude\":37.5,\"longitude\":127.0}"));
+        assertInvalid(PLAN.replace("2030-08-28T18:00:00+09:00", "2000-08-28T18:00:00+09:00"));
+    }
+
+    @Test
+    void mapsTypedAiErrorsWithoutExposingProviderMessages() {
+        JourneyController controller = new JourneyController(null);
+
+        assertThat(controller.aiOutputSchemaInvalid().getStatusCode().value()).isEqualTo(502);
+        assertThat(controller.aiOutputSchemaInvalid().getBody()).containsEntry("code", "AI_OUTPUT_SCHEMA_INVALID").doesNotContainValue("provider raw output");
+        assertThat(controller.aiToolValueMismatch().getStatusCode().value()).isEqualTo(500);
+        assertThat(controller.aiToolValueMismatch().getBody()).containsEntry("code", "AI_TOOL_VALUE_MISMATCH").doesNotContainValue("provider raw output");
+    }
+
+    private void assertInvalid(String input) throws Exception {
+        mvc.perform(post("/api/v1/journeys/plan").with(authentication(userA)).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON).content(input))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("JOURNEY_INTENT_INVALID"));
     }
 
     private String plan() throws Exception {

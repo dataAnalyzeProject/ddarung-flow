@@ -13,6 +13,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -80,6 +81,8 @@ public class JourneyPlanService {
                     warning = safeAiCode(result.unavailableCode());
                 }
             } catch (JourneyAiException exception) {
+                if (exception.code() == JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID) throw new AiOutputSchemaInvalid();
+                if (exception.code() == JourneyAiErrorCode.AI_TOOL_VALUE_MISMATCH) throw new AiToolValueMismatch();
                 warning = safeAiCode(exception.code());
             }
         }
@@ -120,7 +123,7 @@ public class JourneyPlanService {
                     .map(candidate -> readCandidate(candidate.snapshotJson()))
                     .toList();
             return new Decision(stored.decisionId(), stored.revision(), JourneyStatus.valueOf(stored.status()),
-                    normalizedIntent, candidates, warnings, stored.expiresAt());
+                    normalizedIntent, clarificationFor(stored.status(), normalizedIntent), candidates, warnings, stored.expiresAt());
         } catch (Exception exception) {
             throw new IllegalStateException("저장된 Journey decision을 읽을 수 없습니다.", exception);
         }
@@ -140,12 +143,13 @@ public class JourneyPlanService {
     }
 
     private String safeAiCode(JourneyAiErrorCode code) {
-        return "AI_PROVIDER_UNAVAILABLE";
+        return code == JourneyAiErrorCode.AI_DISABLED ? JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE.name() : code.name();
     }
 
     private void validate(PlanInput input, boolean replan) {
-        if (input == null || input.requestMode() == null || input.origin() == null || blank(input.origin().displayName())
-                || input.departureAt() == null || input.maxJourneyMinutes() == null || input.maxJourneyMinutes() < 1
+        if (input == null || input.requestMode() == null || !validPlace(input.origin()) || !validOptionalPlace(input.destination())
+                || input.departureAt() == null || !input.departureAt().isAfter(OffsetDateTime.now())
+                || input.maxJourneyMinutes() == null || input.maxJourneyMinutes() < 1
                 || input.requiredBikeCount() == null || input.requiredBikeCount() < 1 || input.requiredBikeCount() > 5
                 || (input.requestMode() == RequestMode.NATURAL_LANGUAGE && blank(input.naturalLanguageText()))
                 || (replan && input.expectedRevision() == null)) {
@@ -155,6 +159,28 @@ public class JourneyPlanService {
 
     private boolean blank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private boolean validOptionalPlace(Place place) {
+        return place == null || validPlace(place);
+    }
+
+    private boolean validPlace(Place place) {
+        return place != null && !blank(place.placeId()) && !blank(place.displayName())
+                && finiteBetween(place.latitude(), -90, 90) && finiteBetween(place.longitude(), -180, 180);
+    }
+
+    private boolean finiteBetween(Double value, double minimum, double maximum) {
+        return value != null && Double.isFinite(value) && value >= minimum && value <= maximum;
+    }
+
+    private Clarification clarificationFor(String status, JsonNode normalizedIntent) {
+        if (!JourneyStatus.CLARIFICATION_REQUIRED.name().equals(status)) return null;
+        List<String> missingFields = new ArrayList<>();
+        for (JsonNode field : normalizedIntent.path("aiIntent").path("missingFields")) {
+            if (field.isTextual() && !field.asText().isBlank()) missingFields.add(field.asText());
+        }
+        return new Clarification("추가 여정 조건을 확인해 주세요.", List.copyOf(missingFields));
     }
 
     public enum RequestMode { FORM, NATURAL_LANGUAGE }
@@ -169,11 +195,15 @@ public class JourneyPlanService {
         }
     }
     public record Decision(String decisionId, Integer revision, JourneyStatus status, JsonNode normalizedIntent,
-                           List<JourneyCandidate> candidates, List<String> warnings, OffsetDateTime expiresAt) { }
+                           Clarification clarification, List<JourneyCandidate> candidates, List<String> warnings,
+                           OffsetDateTime expiresAt) { }
+    public record Clarification(String question, List<String> missingFields) { }
     public record Counterfactual(String status, List<String> unavailableFields) { }
     public static class InvalidJourneyInput extends RuntimeException { }
     public static class DecisionMissing extends RuntimeException { }
     public static class DecisionExpired extends RuntimeException { }
     public static class RevisionConflict extends RuntimeException { }
     public static class NoValidCandidate extends RuntimeException { }
+    public static class AiOutputSchemaInvalid extends RuntimeException { }
+    public static class AiToolValueMismatch extends RuntimeException { }
 }
