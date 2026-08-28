@@ -15,7 +15,7 @@ export async function getCurrentUser() {
     });
 
     if (!response.ok) {
-        throw new Error('로그인 상태를 확인할 수 없습니다.');
+        throw Object.assign(new Error('로그인 상태를 확인할 수 없습니다.'), { status: response.status });
     }
 
     return response.json();

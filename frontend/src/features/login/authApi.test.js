@@ -18,3 +18,17 @@ describe('OAuth 시작 주소', () => {
     });
   });
 });
+
+describe('세션 조회', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+    jest.resetModules();
+  });
+
+  test('실패 응답의 HTTP 상태를 호출 화면에 전달한다', async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 401 });
+    const { getCurrentUser } = require('./authApi');
+
+    await expect(getCurrentUser()).rejects.toMatchObject({ status: 401 });
+  });
+});

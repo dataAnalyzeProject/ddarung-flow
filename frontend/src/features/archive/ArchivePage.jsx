@@ -27,7 +27,7 @@ export default function ArchivePage({ authState, user, onNavigate, onBeforeLogin
         setHistories(predictionHistories);
         setScoreSummary(predictionScoreSummary);
       })
-      .catch((requestError) => setError(requestError.code || "보관함을 불러오지 못했습니다."))
+      .catch((requestError) => setError(requestError.status === 401 ? "auth-required" : requestError.code || "보관함을 불러오지 못했습니다."))
       .finally(() => setLoading(false));
   }, []);
 
@@ -69,8 +69,9 @@ export default function ArchivePage({ authState, user, onNavigate, onBeforeLogin
           {TABS.map((item) => <button key={item.id} type="button" role="tab" aria-selected={tab === item.id} className={tab === item.id ? "active" : ""} onClick={() => setTab(item.id)}>{item.label}</button>)}
         </div>
         {loading && <p role="status" className="archive-note">보관함을 불러오는 중입니다.</p>}
-        {error && <p role="alert" className="archive-note">{error}</p>}
-        {!loading && tab === "stations" && <div className="archive-grid">
+        {error === "auth-required" && <section role="alert" className="archive-note"><h2>로그인이 필요합니다</h2><p>보관함을 확인하려면 로그인해 주세요.</p><a href="/login">로그인하기</a></section>}
+        {error && error !== "auth-required" && <p role="alert" className="archive-note">{error}</p>}
+        {!loading && !error && tab === "stations" && <div className="archive-grid">
           {stations.map((station) => <article className="archive-card station-card" key={station.id}>
             <div className="station-top"><div className="station-pin"><BikePinIcon color="#08a36f" /></div><div><span className="station-label">대여소</span><button type="button" className="station-name" onClick={() => onNavigate?.("station", station.stationId)}>{station.stationName || `대여소 ${station.stationId}`}</button><div className="station-meta">대여소 ID {station.stationId}</div></div></div>
             <div className="station-actions"><button type="button" className="archive-btn" onClick={() => onNavigate?.("station", station.stationId)}>상세보기</button><button type="button" className="archive-btn danger" onClick={() => remove("station", station.id)}>삭제</button></div>
@@ -78,8 +79,8 @@ export default function ArchivePage({ authState, user, onNavigate, onBeforeLogin
           {!stations.length && <section className="archive-card archive-placeholder"><h2>저장한 대여소가 없습니다.</h2><p>지도에서 대여소를 저장하면 이곳에서 확인할 수 있습니다.</p></section>}
           <aside className="archive-card summary-card"><h2>보관함 요약</h2><div className="summary-row"><span>저장 대여소</span><b style={{ color: "#08a36f" }}>{stations.length}</b></div><div className="summary-row"><span>저장 경로</span><b style={{ color: "#0875ef" }}>{routes.length}</b></div><div className="summary-row"><span>예측 이력</span><b style={{ color: "#ff8700" }}>{histories.length}</b></div><button type="button" className="archive-find-btn" onClick={() => onNavigate?.("main")}>대여소 찾기</button></aside>
         </div>}
-        {!loading && tab === "routes" && <ArchiveList title="저장 경로" items={routes} empty="저장한 경로가 없습니다." format={(route) => route.displayName ? `${route.displayName}${route.replayable ? " · 입력 복원 가능" : " · 이전 형식"}` : `${route.startStationName || route.startStationId} → ${route.endStationName || route.endStationId}`} onRemove={(id) => remove("route", id)} onRestore={restoreRoute} />}
-        {!loading && tab === "history" && <PredictionHistoryList items={histories} scoreSummary={scoreSummary} onRemove={(id) => remove("history", id)} />}
+        {!loading && !error && tab === "routes" && <ArchiveList title="저장 경로" items={routes} empty="저장한 경로가 없습니다." format={(route) => route.displayName ? `${route.displayName}${route.replayable ? " · 입력 복원 가능" : " · 이전 형식"}` : `${route.startStationName || route.startStationId} → ${route.endStationName || route.endStationId}`} onRemove={(id) => remove("route", id)} onRestore={restoreRoute} />}
+        {!loading && !error && tab === "history" && <PredictionHistoryList items={histories} scoreSummary={scoreSummary} onRemove={(id) => remove("history", id)} />}
         <div className="archive-note"><span className="note-icon">i</span><span>예측 이력은 요청 당시의 조건이며 현재 결과가 아닙니다.</span></div>
       </main>
     </div>

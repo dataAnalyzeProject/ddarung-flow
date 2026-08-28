@@ -29,7 +29,7 @@ export default function AdminAccessGate() {
         }
         setState({ status: ADMIN_ROLE_VALUES.has(auth.user?.role) ? "allowed" : "forbidden", role: auth.user?.role || null });
       })
-      .catch(() => setState({ status: "error", role: null }));
+      .catch((error) => setState({ status: error.status === 401 ? "anonymous" : "error", role: null }));
   };
 
   useEffect(() => {

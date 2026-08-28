@@ -17,8 +17,16 @@ test("loads the logged-in user's archive data instead of fixtures", async () => 
   expect(await screen.findByText("성수역 → 서울숲")).toBeInTheDocument();
 });
 
-test("shows an API failure message", async () => {
-  global.fetch.mockResolvedValueOnce(response({ code: "AUTH_REQUIRED" }, 401));
+test("shows login guidance when the archive API returns 401", async () => {
+  global.fetch.mockResolvedValue(response({ code: "AUTH_REQUIRED" }, 401));
+  render(<ArchivePage />);
+  expect(await screen.findByRole("heading", { name: "로그인이 필요합니다" })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "로그인하기" })).toHaveAttribute("href", "/login");
+  expect(screen.queryByRole("heading", { name: "저장한 대여소가 없습니다." })).not.toBeInTheDocument();
+});
+
+test("shows a general message for an archive API failure other than 401", async () => {
+  global.fetch.mockResolvedValue(response({}, 500));
   render(<ArchivePage />);
   expect(await screen.findByRole("alert")).toHaveTextContent("보관함을 불러오지 못했습니다.");
 });
