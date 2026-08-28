@@ -11,6 +11,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.time.OffsetDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.List;
 
@@ -38,7 +39,7 @@ class JourneyDecisionPersistenceAdapterTest {
 
     @Test
     void storesDecisionAndCandidatesAndFindsAnActiveDecision() {
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = OffsetDateTime.now().truncatedTo(ChronoUnit.MICROS);
         port.save(decision("decision-1", now.plusHours(24)));
 
         assertThat(port.findActiveDecision("decision-1", userId, now)).hasValueSatisfying(stored -> {
@@ -51,7 +52,7 @@ class JourneyDecisionPersistenceAdapterTest {
 
     @Test
     void treats24HourTtlAsExpiredAndCleansUpParentAndCandidates() {
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = OffsetDateTime.now().truncatedTo(ChronoUnit.MICROS);
         port.save(decision("expired-decision", now));
 
         assertThat(port.isExpired("expired-decision", userId, now)).isTrue();
