@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["candidateId", "factRefs", "factValues", "summary", "tradeoffs"],
+  "properties": {
+    "candidateId": { "type": "string" },
+    "factRefs": { "type": "array", "items": { "type": "string" } },
+    "factValues": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["ref", "value"], "properties": { "ref": { "type": "string" }, "value": { "type": "number" } } } },
+    "summary": { "type": "string" },
+    "tradeoffs": { "type": "array", "items": { "type": "string" } }
+  }
+}

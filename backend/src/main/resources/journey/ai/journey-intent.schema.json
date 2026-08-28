@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["origin", "destination", "startAt", "totalMinutes", "requiredBikeCount", "preferences", "hardConstraints", "missingFields", "needsClarification"],
+  "properties": {
+    "origin": { "type": "object", "additionalProperties": false, "required": ["displayName", "placeId"], "properties": { "displayName": { "type": "string" }, "placeId": { "type": "string" } } },
+    "destination": { "type": ["object", "null"], "additionalProperties": false, "required": ["displayName", "placeId"], "properties": { "displayName": { "type": "string" }, "placeId": { "type": "string" } } },
+    "startAt": { "type": ["string", "null"], "format": "date-time" },
+    "totalMinutes": { "type": ["integer", "null"], "minimum": 1 },
+    "requiredBikeCount": { "type": ["integer", "null"], "minimum": 1, "maximum": 5 },
+    "preferences": {
+      "type": "object", "additionalProperties": false,
+      "required": ["stability", "lowSlope", "bikeLane", "scenery", "culture", "cafe", "avoidCrowds"],
+      "properties": {
+        "stability": { "type": "integer" }, "lowSlope": { "type": "integer" }, "bikeLane": { "type": "integer" },
+        "scenery": { "type": "integer" }, "culture": { "type": "integer" }, "cafe": { "type": "integer" }, "avoidCrowds": { "type": "integer" }
+      }
+    },
+    "hardConstraints": {
+      "type": "object", "additionalProperties": false,
+      "required": ["maxWalkMinutes", "avoidRain", "returnBy"],
+      "properties": { "maxWalkMinutes": { "type": ["integer", "null"] }, "avoidRain": { "type": ["boolean", "null"] }, "returnBy": { "type": ["string", "null"], "format": "date-time" } }
+    },
+    "missingFields": { "type": "array", "items": { "type": "string" } },
+    "needsClarification": { "type": "boolean" }
+  }
+}
