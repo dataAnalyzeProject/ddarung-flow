@@ -47,6 +47,16 @@ services:
       PAYMENT_MODE: ${PAYMENT_MODE:-sandbox}
       INFERENCE_BASE_URL: http://inference:8081
       MODEL_ACTIVATION_INFERENCE_BASE_URL: http://inference:8081
+      JOURNEY_AI_ENABLED: ${JOURNEY_AI_ENABLED:-false}
+      OPENAI_RESPONSES_URI: ${OPENAI_RESPONSES_URI:-https://api.openai.com/v1/responses}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-}
+      JOURNEY_AI_TIMEOUT: ${JOURNEY_AI_TIMEOUT:-10s}
+      RETURN_PREDICTION_ENABLED: ${RETURN_PREDICTION_ENABLED:-false}
+      RETURN_PREDICTION_BASE_URL: ${RETURN_PREDICTION_BASE_URL:-http://return-inference:8082}
+      RETURN_PREDICTION_TIMEOUT: ${RETURN_PREDICTION_TIMEOUT:-2s}
+      RETURN_PREDICTION_MAX_RESPONSE_AGE: ${RETURN_PREDICTION_MAX_RESPONSE_AGE:-15m}
+      JOURNEY_PHASE_A_FIXTURE_ENABLED: ${JOURNEY_PHASE_A_FIXTURE_ENABLED:-false}
       SERVER_FORWARD_HEADERS_STRATEGY: framework
     ports:
       - "${BACKEND_BIND_ADDRESS:-127.0.0.1}:${BACKEND_PORT}:8080"
@@ -96,6 +106,17 @@ services:
       MODEL_LOCAL_PATH: /models/model_winner.joblib
     volumes:
       - ${MODEL_LOCAL_PATH_HOST:-../../.local-models/model_winner.joblib}:/models/model_winner.joblib:ro
+    restart: unless-stopped
+    networks:
+      - staging
+
+  return-inference:
+    image: ${RETURN_INFERENCE_IMAGE:-ddarung-flow-return-inference:local}
+    build:
+      context: ../return-inference
+      dockerfile: Dockerfile
+    profiles:
+      - journey
     restart: unless-stopped
     networks:
       - staging
