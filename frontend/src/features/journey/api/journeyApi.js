@@ -13,6 +13,11 @@ async function mutation(path, body, extraHeaders = {}) {
 }
 
 export const planJourney = (input) => mutation('/api/v1/journeys/plan', input);
+export async function searchJourneyPlaces(query) {
+  const params = new URLSearchParams({ query: query.trim(), page: '1', size: '10' });
+  const body = await request(`/api/v1/places/search?${params}`);
+  return (body.places || []).map((place) => ({ placeId: place.placeId, displayName: place.displayName || place.name, latitude: Number(place.latitude), longitude: Number(place.longitude) }));
+}
 export const getJourney = (decisionId) => request(`/api/v1/journeys/${encodeURIComponent(decisionId)}`);
 export const replanJourney = (decisionId, input) => mutation(`/api/v1/journeys/${encodeURIComponent(decisionId)}/replan`, input);
 export const getCounterfactuals = (decisionId) => mutation(`/api/v1/journeys/${encodeURIComponent(decisionId)}/counterfactuals`, {});
