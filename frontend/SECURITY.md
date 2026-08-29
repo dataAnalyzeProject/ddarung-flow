@@ -81,3 +81,11 @@ docker run --rm ddarung-flow-frontend:security-check sh -c "test ! -e /usr/share
 ```
 
 Expected results are 6 passing test suites, 40 passing tests, a successful production and Docker build, 28 remaining build/test dependency records, and zero critical advisories.
+
+## Frontend client configuration rotation
+
+Browser client configuration must not be printed in CI logs. The staging frontend build uses BuildKit secrets for client-key inputs, and the workflow masks those inputs before the image build begins.
+
+Actual client-key values must never be recorded in the repository, Notion, or project documentation. After a provider or GitHub setting is replaced, a new frontend SHA must be rebuilt so the immutable staging image receives the replacement browser configuration. Revoke the previous client key only after browser smoke verification succeeds against that new staging image.
+
+Server-only secrets must never be passed to the frontend build. The JNY-SEC-1 incident remediation was applied in pull request #237. This documentation-only change creates the staging rotation deployment candidate; it does not change application behavior or activate any provider.
