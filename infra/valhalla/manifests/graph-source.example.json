@@ -5,7 +5,7 @@
   "architecture": "linux/arm64",
   "osmSource": "https://download.geofabrik.de/asia/south-korea-260828.osm.pbf",
   "osmSourceDate": "2026-08-28",
-  "osmSha256": "REQUIRED_AT_BOOTSTRAP",
+  "osmSha256": "27ee864898c51c48b43cdbb52e4609b0c43971dc59b155722ffe41a49d65c5ea",
   "graphVersion": "seoul-korea-20260828-v1",
   "elevationEnabled": false,
   "licenseAttribution": "© OpenStreetMap contributors, ODbL 1.0; extract supplied by Geofabrik GmbH."

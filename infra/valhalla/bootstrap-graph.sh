@@ -54,7 +54,7 @@ docker run --rm --platform linux/arm64 --entrypoint valhalla_build_tiles \
   -v "$data_dir:/data" "$runtime_image" -c /data/graph/valhalla.json /data/osm/source.osm.pbf
 
 config_sha256="$(sha256sum "$config_path" | awk '{print $1}')"
-graph_sha256="$(find "$data_dir/graph" -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | awk '{print $1}')"
+graph_sha256="$(python3 "${root_dir}/scripts/graph_digest.py" "$data_dir/graph")"
 git_sha="$(git -C "$root_dir/../.." rev-parse HEAD)"
 python3 - "$source_manifest" "$data_dir/graph/build-manifest.json" "$config_sha256" "$graph_sha256" "$git_sha" <<'PY'
 import datetime, json, sys
