@@ -2,6 +2,7 @@ package com.ddarungflow.journey.application;
 
 import com.ddarungflow.journey.ai.JourneyAiErrorCode;
 import com.ddarungflow.journey.ai.JourneyAiException;
+import com.ddarungflow.journey.ai.JourneyAiFailureStage;
 import com.ddarungflow.journey.ai.JourneyAiGateway;
 import com.ddarungflow.journey.ai.JourneyIntent;
 import com.ddarungflow.journey.ai.PlaceReference;
@@ -138,6 +139,18 @@ class JourneyPlanServiceTest {
     }
 
     @Test
+    void preservesOutputSchemaFailureStagesAtTheServiceBoundary() {
+        for (JourneyAiFailureStage stage : List.of(JourneyAiFailureStage.RESPONSE_ENVELOPE, JourneyAiFailureStage.OUTPUT_TEXT_JSON,
+                JourneyAiFailureStage.CANONICAL_SCHEMA, JourneyAiFailureStage.SEMANTIC_INTENT)) {
+            JourneyAiGateway failingAi = failingAi(JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID, "provider raw output", stage);
+
+            assertThatThrownBy(() -> service(new InMemoryPersistence(), failingAi, new CountingReturnPort()).plan(10L, naturalLanguageInput()))
+                    .isInstanceOf(JourneyPlanService.AiOutputSchemaInvalid.class)
+                    .satisfies(exception -> assertThat(((JourneyPlanService.AiOutputSchemaInvalid) exception).failureStage()).isEqualTo(stage));
+        }
+    }
+
+    @Test
     void preservesPiiBlockedAndToolMismatchCodesWithoutProviderMessage() {
         JourneyAiGateway piiAi = failingAi(JourneyAiErrorCode.AI_PII_BLOCKED, "provider raw input: secret");
         JourneyPlanService.Decision piiDecision = service(new InMemoryPersistence(), piiAi, new CountingReturnPort()).plan(10L, naturalLanguageInput());
@@ -167,8 +180,12 @@ class JourneyPlanServiceTest {
     }
 
     private JourneyAiGateway failingAi(JourneyAiErrorCode code, String message) {
+        return failingAi(code, message, null);
+    }
+
+    private JourneyAiGateway failingAi(JourneyAiErrorCode code, String message, JourneyAiFailureStage stage) {
         return new JourneyAiGateway() {
-            @Override public IntentResult compileIntent(String input) { throw new JourneyAiException(code, message); }
+            @Override public IntentResult compileIntent(String input) { throw new JourneyAiException(code, message, stage); }
             @Override public List<com.ddarungflow.journey.ai.ToolCallRequest> validateToolPlan(List<com.ddarungflow.journey.ai.ToolCallRequest> requests) { return requests; }
         };
     }

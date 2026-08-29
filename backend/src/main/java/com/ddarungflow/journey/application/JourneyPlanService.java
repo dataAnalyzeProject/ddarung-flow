@@ -2,6 +2,7 @@ package com.ddarungflow.journey.application;
 
 import com.ddarungflow.journey.ai.JourneyAiErrorCode;
 import com.ddarungflow.journey.ai.JourneyAiException;
+import com.ddarungflow.journey.ai.JourneyAiFailureStage;
 import com.ddarungflow.journey.ai.JourneyAiGateway;
 import com.ddarungflow.journey.ai.JourneyCompileRequest;
 import com.ddarungflow.journey.ai.JourneyIntent;
@@ -83,7 +84,7 @@ public class JourneyPlanService {
                     warning = safeAiCode(result.unavailableCode());
                 }
             } catch (JourneyAiException exception) {
-                if (exception.code() == JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID) throw new AiOutputSchemaInvalid();
+                if (exception.code() == JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID) throw new AiOutputSchemaInvalid(exception.failureStage());
                 if (exception.code() == JourneyAiErrorCode.AI_TOOL_VALUE_MISMATCH) throw new AiToolValueMismatch();
                 warning = safeAiCode(exception.code());
             }
@@ -215,6 +216,16 @@ public class JourneyPlanService {
     public static class DecisionExpired extends RuntimeException { }
     public static class RevisionConflict extends RuntimeException { }
     public static class NoValidCandidate extends RuntimeException { }
-    public static class AiOutputSchemaInvalid extends RuntimeException { }
+    public static class AiOutputSchemaInvalid extends RuntimeException {
+        private final JourneyAiFailureStage failureStage;
+
+        public AiOutputSchemaInvalid(JourneyAiFailureStage failureStage) {
+            this.failureStage = failureStage;
+        }
+
+        public JourneyAiFailureStage failureStage() {
+            return failureStage;
+        }
+    }
     public static class AiToolValueMismatch extends RuntimeException { }
 }
