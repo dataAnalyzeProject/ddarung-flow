@@ -26,10 +26,19 @@ public class JourneyIntentCompiler {
     }
 
     public JourneyIntent compile(String structuredOutput) {
+        JsonNode root;
         try {
-            JsonNode root = objectMapper.readTree(structuredOutput);
-            if (root == null || !root.isObject()) throw invalid("intent must be a JSON object");
+            root = objectMapper.readTree(structuredOutput);
+        } catch (Exception exception) {
+            throw invalid("intent output is not JSON", JourneyAiFailureStage.OUTPUT_TEXT_JSON, exception);
+        }
+        try {
+            if (root == null || !root.isObject()) throw invalid("intent must be a JSON object", JourneyAiFailureStage.CANONICAL_SCHEMA);
             schemaValidator.validate(root, intentSchema);
+        } catch (JourneyAiException exception) {
+            throw invalid("intent does not match canonical schema", JourneyAiFailureStage.CANONICAL_SCHEMA, exception);
+        }
+        try {
             List<String> missingFields = strings(root.path("missingFields"), "missingFields");
             boolean clarification = requiredBoolean(root, "needsClarification");
             JourneyIntent intent = new JourneyIntent(
@@ -44,30 +53,32 @@ public class JourneyIntentCompiler {
                     clarification
             );
             if (!clarification && (intent.origin().displayName().isBlank() || intent.startAt() == null || intent.totalMinutes() == null || intent.requiredBikeCount() == null)) {
-                throw invalid("complete intent is missing a required field");
+                throw invalid("complete intent is missing a required field", JourneyAiFailureStage.SEMANTIC_INTENT);
             }
             return intent;
         } catch (JourneyAiException exception) {
-            throw exception;
+            if (exception.failureStage() != null) throw exception;
+            throw invalid("intent semantic validation failed", JourneyAiFailureStage.SEMANTIC_INTENT, exception);
         } catch (Exception exception) {
-            throw new JourneyAiException(JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID, "intent output is invalid", exception);
+            throw invalid("intent semantic validation failed", JourneyAiFailureStage.SEMANTIC_INTENT, exception);
         }
     }
 
     private PlaceReference place(JsonNode node, String field) {
-        if (!node.isObject()) throw invalid(field + " must be an object");
+        if (!node.isObject()) throw invalid(field + " must be an object", JourneyAiFailureStage.SEMANTIC_INTENT);
         return new PlaceReference(requiredText(node, "displayName"), optionalText(node, "placeId"));
     }
 
     private PlaceReference optionalPlace(JsonNode node) { return node.isNull() || node.isMissingNode() ? null : place(node, "destination"); }
-    private OffsetDateTime optionalTime(JsonNode node) { try { return node.isNull() || node.isMissingNode() ? null : OffsetDateTime.parse(node.asText()); } catch (Exception exception) { throw invalid("startAt must be ISO-8601"); } }
-    private Integer optionalPositiveInt(JsonNode node, String field) { if (node.isNull() || node.isMissingNode()) return null; if (!node.canConvertToInt() || node.asInt() < 1) throw invalid(field + " must be positive"); return node.asInt(); }
-    private boolean requiredBoolean(JsonNode node, String field) { if (!node.has(field) || !node.get(field).isBoolean()) throw invalid(field + " must be boolean"); return node.get(field).asBoolean(); }
-    private String requiredText(JsonNode node, String field) { String value = optionalText(node, field); if (value.isBlank()) throw invalid(field + " is required"); return value; }
+    private OffsetDateTime optionalTime(JsonNode node) { try { return node.isNull() || node.isMissingNode() ? null : OffsetDateTime.parse(node.asText()); } catch (Exception exception) { throw invalid("startAt must be ISO-8601", JourneyAiFailureStage.SEMANTIC_INTENT); } }
+    private Integer optionalPositiveInt(JsonNode node, String field) { if (node.isNull() || node.isMissingNode()) return null; if (!node.canConvertToInt() || node.asInt() < 1) throw invalid(field + " must be positive", JourneyAiFailureStage.SEMANTIC_INTENT); return node.asInt(); }
+    private boolean requiredBoolean(JsonNode node, String field) { if (!node.has(field) || !node.get(field).isBoolean()) throw invalid(field + " must be boolean", JourneyAiFailureStage.SEMANTIC_INTENT); return node.get(field).asBoolean(); }
+    private String requiredText(JsonNode node, String field) { String value = optionalText(node, field); if (value.isBlank()) throw invalid(field + " is required", JourneyAiFailureStage.SEMANTIC_INTENT); return value; }
     private String optionalText(JsonNode node, String field) { return node.path(field).isTextual() ? node.path(field).asText().trim() : ""; }
 
-    private List<String> strings(JsonNode node, String field) { if (!node.isArray()) throw invalid(field + " must be an array"); List<String> values = new ArrayList<>(); for (JsonNode value : node) { if (!value.isTextual()) throw invalid(field + " values must be strings"); values.add(value.asText()); } return values; }
-    private Map<String, Integer> integerMap(JsonNode node, String field) { if (!node.isObject()) throw invalid(field + " must be an object"); Map<String, Integer> values = new LinkedHashMap<>(); Iterator<Map.Entry<String, JsonNode>> fields = node.fields(); while (fields.hasNext()) { Map.Entry<String, JsonNode> entry = fields.next(); if (!entry.getValue().canConvertToInt()) throw invalid(field + " values must be integers"); values.put(entry.getKey(), entry.getValue().asInt()); } return values; }
-    private Map<String, Object> objectMap(JsonNode node, String field) { if (!node.isObject()) throw invalid(field + " must be an object"); return objectMapper.convertValue(node, Map.class); }
-    private JourneyAiException invalid(String message) { return new JourneyAiException(JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID, message); }
+    private List<String> strings(JsonNode node, String field) { if (!node.isArray()) throw invalid(field + " must be an array", JourneyAiFailureStage.SEMANTIC_INTENT); List<String> values = new ArrayList<>(); for (JsonNode value : node) { if (!value.isTextual()) throw invalid(field + " values must be strings", JourneyAiFailureStage.SEMANTIC_INTENT); values.add(value.asText()); } return values; }
+    private Map<String, Integer> integerMap(JsonNode node, String field) { if (!node.isObject()) throw invalid(field + " must be an object", JourneyAiFailureStage.SEMANTIC_INTENT); Map<String, Integer> values = new LinkedHashMap<>(); Iterator<Map.Entry<String, JsonNode>> fields = node.fields(); while (fields.hasNext()) { Map.Entry<String, JsonNode> entry = fields.next(); if (!entry.getValue().canConvertToInt()) throw invalid(field + " values must be integers", JourneyAiFailureStage.SEMANTIC_INTENT); values.put(entry.getKey(), entry.getValue().asInt()); } return values; }
+    private Map<String, Object> objectMap(JsonNode node, String field) { if (!node.isObject()) throw invalid(field + " must be an object", JourneyAiFailureStage.SEMANTIC_INTENT); return objectMapper.convertValue(node, Map.class); }
+    private JourneyAiException invalid(String message, JourneyAiFailureStage stage) { return new JourneyAiException(JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID, message, stage); }
+    private JourneyAiException invalid(String message, JourneyAiFailureStage stage, Throwable cause) { return new JourneyAiException(JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID, message, cause, stage); }
 }

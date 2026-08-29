@@ -4,6 +4,9 @@ import java.util.List;
 
 public interface JourneyAiGateway {
     IntentResult compileIntent(String input);
+    default IntentResult compileIntent(JourneyCompileRequest request) {
+        return compileIntent(request.naturalLanguageText());
+    }
     List<ToolCallRequest> validateToolPlan(List<ToolCallRequest> requests);
 
     record IntentResult(JourneyIntent intent, JourneyAiErrorCode unavailableCode) {

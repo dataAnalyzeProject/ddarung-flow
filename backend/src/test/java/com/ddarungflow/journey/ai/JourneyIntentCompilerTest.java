@@ -53,4 +53,24 @@ class JourneyIntentCompilerTest {
                 .extracting(exception -> ((JourneyAiException) exception).code())
                 .isEqualTo(JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID);
     }
+
+    @Test
+    void separatesOutputJsonCanonicalSchemaAndSemanticFailureStages() {
+        assertStage("not-json", JourneyAiFailureStage.OUTPUT_TEXT_JSON);
+        assertStage("""
+                {"origin":{"displayName":"성수역","placeId":"ORIGIN_A","latitude":37},"destination":null,"startAt":"not-a-date","totalMinutes":60,"requiredBikeCount":2,"preferences":{"stability":3,"lowSlope":3,"bikeLane":3,"scenery":3,"culture":3,"cafe":3,"avoidCrowds":3},"hardConstraints":{"maxWalkMinutes":null,"avoidRain":null,"returnBy":null},"missingFields":[],"needsClarification":false}
+                """, JourneyAiFailureStage.CANONICAL_SCHEMA);
+        assertStage("""
+                {"origin":{"displayName":"","placeId":"ORIGIN_A"},"destination":null,"startAt":null,"totalMinutes":null,"requiredBikeCount":null,"preferences":{"stability":3,"lowSlope":3,"bikeLane":3,"scenery":3,"culture":3,"cafe":3,"avoidCrowds":3},"hardConstraints":{"maxWalkMinutes":null,"avoidRain":null,"returnBy":null},"missingFields":[],"needsClarification":false}
+                """, JourneyAiFailureStage.SEMANTIC_INTENT);
+    }
+
+    private void assertStage(String output, JourneyAiFailureStage expected) {
+        assertThatThrownBy(() -> compiler.compile(output))
+                .satisfies(exception -> {
+                    JourneyAiException journeyException = (JourneyAiException) exception;
+                    assertThat(journeyException.code()).isEqualTo(JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID);
+                    assertThat(journeyException.failureStage()).isEqualTo(expected);
+                });
+    }
 }

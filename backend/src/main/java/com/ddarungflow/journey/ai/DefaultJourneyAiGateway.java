@@ -14,6 +14,7 @@ public class DefaultJourneyAiGateway implements JourneyAiGateway {
     private final JourneyIntentCompiler intentCompiler;
     private final ResponsesApiClient client;
     private final JsonNode intentSchema;
+    private final JsonNode wireIntentSchema;
     private final AllowedJourneyTools allowedTools = new AllowedJourneyTools();
 
     public DefaultJourneyAiGateway(JourneyAiProperties properties, ObjectMapper objectMapper, JsonNode intentSchema) {
@@ -26,14 +27,20 @@ public class DefaultJourneyAiGateway implements JourneyAiGateway {
         this.intentCompiler = new JourneyIntentCompiler(objectMapper, intentSchema);
         this.client = client;
         this.intentSchema = intentSchema;
+        this.wireIntentSchema = new JourneyAiWireSchemaAdapter().adapt(intentSchema);
     }
 
     @Override
     public IntentResult compileIntent(String input) {
+        return compileIntent(new JourneyCompileRequest(input, null, null, null, null, null));
+    }
+
+    @Override
+    public IntentResult compileIntent(JourneyCompileRequest request) {
         if (!properties.enabled()) return IntentResult.unavailable(JourneyAiErrorCode.AI_DISABLED);
         if (!properties.providerConfigured()) return IntentResult.unavailable(JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE);
-        piiBoundaryValidator.rejectSensitiveInput(input);
-        JsonNode output = client.requestStructuredOutput(input, "journey_intent", intentSchema);
+        piiBoundaryValidator.rejectSensitiveInput(request.naturalLanguageText());
+        JsonNode output = client.requestStructuredOutput(request, "journey_intent", wireIntentSchema);
         return new IntentResult(intentCompiler.compile(output.toString()), null);
     }
 
