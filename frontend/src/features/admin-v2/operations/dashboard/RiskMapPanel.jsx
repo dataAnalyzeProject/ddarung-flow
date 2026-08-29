@@ -13,9 +13,14 @@ function position(items, index) {
   };
 }
 
-export default function RiskMapPanel({ items, selectedStationNumber, onSelect, referenceTime }) {
+function stateNotice(state, dataState) {
+  const labels = { DELAYED: '정보 갱신 지연', PARTIAL: '일부 데이터 누락', INSUFFICIENT_DATA: '판단 정보 부족', UNAVAILABLE: '현재 사용할 수 없음' };
+  return state !== 'SUCCESS' && labels[state] ? `${labels[state]} · ${dataState}` : null;
+}
+
+export default function RiskMapPanel({ items, selectedStationNumber, onSelect, referenceTime, state, dataState }) {
   return <section className="ops-dashboard-panel" aria-labelledby="risk-map-title">
-    <div className="ops-panel-heading"><div><h2 id="risk-map-title">수급 위험 지도</h2><p>우선 확인 대여소 {items.length}곳</p></div>{referenceTime ? <small>지도 기준 {new Date(referenceTime).toLocaleString('ko-KR')}</small> : null}</div>
+    <div className="ops-panel-heading"><div><h2 id="risk-map-title">수급 위험 지도</h2><p>우선 확인 대여소 {items.length}곳</p>{stateNotice(state, dataState) ? <p className="ops-risk-state-notice" role="status">{stateNotice(state, dataState)}</p> : null}</div>{referenceTime ? <small>지도 기준 {new Date(referenceTime).toLocaleString('ko-KR')}</small> : null}</div>
     <div className="ops-risk-map" aria-label="위험 대여소 위치">
       {items.map((item, index) => {
         const number = item.station.stationNumber;

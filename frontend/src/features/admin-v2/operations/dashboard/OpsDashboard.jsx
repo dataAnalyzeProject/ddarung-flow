@@ -13,6 +13,17 @@ function primaryState(overview) {
   return DATA_STATE_TO_UI[overview?.dataState] || 'SUCCESS';
 }
 
+function riskUiState(risk, riskError) {
+  if (riskError) return isAccessError(riskError) ? 'FORBIDDEN' : 'ERROR';
+  const hasItems = risk?.items?.length > 0;
+  if (risk?.dataState === 'NORMAL') return hasItems ? 'SUCCESS' : 'EMPTY';
+  if (risk?.dataState === 'DELAYED') return 'DELAYED';
+  if (risk?.dataState === 'MISSING') return 'PARTIAL';
+  if (risk?.dataState === 'INSUFFICIENT_DATA') return 'INSUFFICIENT_DATA';
+  if (risk?.dataState === 'UNAVAILABLE') return 'UNAVAILABLE';
+  return hasItems ? 'SUCCESS' : 'EMPTY';
+}
+
 function SectionState({ state, error }) {
   if (state === 'SUCCESS') return null;
   if (state === 'EMPTY') return <p className="ops-section-state">현재 조건에서 표시할 위험 대여소가 없습니다.</p>;
@@ -43,7 +54,8 @@ export default function OpsDashboard({ createAdapter }) {
   const overview = result?.overview;
   const uiState = primaryState(overview);
   const items = result?.risk?.items || [];
-  const riskState = result?.riskError ? (isAccessError(result.riskError) ? 'FORBIDDEN' : 'ERROR') : (items.length ? 'SUCCESS' : 'EMPTY');
+  const riskState = riskUiState(result?.risk, result?.riskError);
+  const hasRiskItems = items.length > 0;
   const selected = selectedStationNumber || items[0]?.station?.stationNumber;
   const summary = overview.rentalRiskSummary || {};
   const inventory = overview.inventoryStateSummary || {};
@@ -55,8 +67,8 @@ export default function OpsDashboard({ createAdapter }) {
     {result.riskError ? <p className="ops-overall-state ops-state-PARTIAL">일부 정보만 표시합니다. 위험 지도와 Top 5 상태를 확인해 주세요.</p> : null}
     <section className="ops-summary-grid" aria-label="대여 위험 요약"><article><p>CRITICAL 대여 부족</p><strong>{summary.criticalCount ?? '판단 정보 부족'}</strong><small>즉시 확인 필요</small></article><article><p>HIGH 대여 부족</p><strong>{summary.highCount ?? '판단 정보 부족'}</strong><small>우선 대응 권장</small></article><article><p>WATCH 대여 부족</p><strong>{summary.watchCount ?? '판단 정보 부족'}</strong><small>관찰 대상</small></article><article><p>데이터 상태</p><strong>{overview.dataState || 'UNAVAILABLE'}</strong><small>{inventoryLabels.map(([key, label]) => `${label} ${inventory[key] ?? '—'}`).join(' · ')}</small></article></section>
     <section className="ops-content-grid">
-      <div>{riskState === 'SUCCESS' ? <RiskMapPanel items={items} selectedStationNumber={selected} onSelect={setSelectedStationNumber} referenceTime={result.risk?.referenceTime} /> : <section className="ops-dashboard-panel"><h2>수급 위험 지도</h2><SectionState state={riskState} error={result.riskError} /></section>}</div>
-      <div>{riskState === 'SUCCESS' ? <PriorityStationList items={items} selectedStationNumber={selected} onSelect={setSelectedStationNumber} /> : <section className="ops-dashboard-panel"><h2>우선 확인 Top 5</h2><SectionState state={riskState} error={result.riskError} /></section>}</div>
+      <div>{hasRiskItems ? <RiskMapPanel items={items} selectedStationNumber={selected} onSelect={setSelectedStationNumber} referenceTime={result.risk?.referenceTime} state={riskState} dataState={result.risk?.dataState} /> : <section className="ops-dashboard-panel"><h2>수급 위험 지도</h2><SectionState state={riskState} error={result.riskError} /></section>}</div>
+      <div>{hasRiskItems ? <PriorityStationList items={items} selectedStationNumber={selected} onSelect={setSelectedStationNumber} state={riskState} dataState={result.risk?.dataState} /> : <section className="ops-dashboard-panel"><h2>우선 확인 Top 5</h2><SectionState state={riskState} error={result.riskError} /></section>}</div>
     </section>
     <section className="ops-notices" aria-label="지원 범위와 제한"><h2>지원 범위</h2>{overview.capabilities?.returnRisk?.available === false ? <p>반납 위험은 현재 지원되지 않음{overview.capabilities.returnRisk.reasonCode ? ` (${overview.capabilities.returnRisk.reasonCode})` : ''}</p> : null}{overview.limitations?.length ? <p>제한 사항: {overview.limitations.join(', ')}</p> : null}</section>
   </main>;
