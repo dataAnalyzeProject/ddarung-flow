@@ -3,6 +3,8 @@ package com.ddarungflow.journey.ai;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.OffsetDateTime;
 
@@ -16,6 +18,7 @@ import java.util.List;
  * Thin Responses API transport. It does not log prompts or responses.
  */
 public class ResponsesApiClient {
+    private static final Logger log = LoggerFactory.getLogger(ResponsesApiClient.class);
     private static final String JOURNEY_INTENT_INSTRUCTIONS = "Return only a JourneyIntent JSON object matching the supplied schema. "
             + "Use selected place references, departureAt, and requiredBikeCount from the input as authoritative. "
             + "Do not invent or change placeId values. Use maxJourneyMinutes when no explicit duration is given.";
@@ -48,6 +51,7 @@ public class ResponsesApiClient {
     public JsonNode requestStructuredOutput(JourneyCompileRequest input, String schemaName, JsonNode schema) {
         if (!properties.enabled()) throw new JourneyAiException(JourneyAiErrorCode.AI_DISABLED, "Journey AI is disabled");
         if (!properties.providerConfigured()) throw new JourneyAiException(JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE, "Journey AI provider is not configured");
+        boolean requestAttempted = false;
         try {
             HttpRequest request = HttpRequest.newBuilder(properties.responsesUri())
                     .timeout(properties.timeout())
@@ -55,15 +59,20 @@ public class ResponsesApiClient {
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(requestBody(input, schemaName, schema)))
                     .build();
+            requestAttempted = true;
+            log.info("event=journey_ai_provider_request attempted=true");
             TransportResponse response = transport.send(request);
+            log.info("event=journey_ai_provider_response status={}", response.statusCode());
             if (response.statusCode() != 200) throw statusError(response.statusCode());
             return extractStructuredOutput(response.body());
         } catch (JourneyAiException exception) {
             throw exception;
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
+            if (requestAttempted) log.warn("event=journey_ai_provider_transport_failure category=INTERRUPTED");
             throw new JourneyAiException(JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE, "provider request interrupted", exception);
         } catch (Exception exception) {
+            if (requestAttempted) log.warn("event=journey_ai_provider_transport_failure category=REQUEST_FAILURE");
             throw new JourneyAiException(JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE, "provider request failed", exception);
         }
     }

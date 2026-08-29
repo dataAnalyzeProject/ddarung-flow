@@ -2,7 +2,9 @@ package com.ddarungflow.journey.controller;
 
 import com.ddarungflow.dto.PrincipalDetails;
 import com.ddarungflow.entity.Users;
+import com.ddarungflow.journey.application.JourneyPlanService;
 import com.ddarungflow.journey.ai.JourneyAiProperties;
+import com.ddarungflow.journey.ai.JourneyAiFailureStage;
 import com.ddarungflow.journey.persistence.JourneyCandidateRepository;
 import com.ddarungflow.journey.persistence.JourneyDecisionRepository;
 import com.ddarungflow.repository.UsersRepository;
@@ -121,10 +123,21 @@ class JourneyControllerTest {
     void mapsTypedAiErrorsWithoutExposingProviderMessages() {
         JourneyController controller = new JourneyController(null);
 
-        assertThat(controller.aiOutputSchemaInvalid().getStatusCode().value()).isEqualTo(502);
-        assertThat(controller.aiOutputSchemaInvalid().getBody()).containsEntry("code", "AI_OUTPUT_SCHEMA_INVALID").doesNotContainValue("provider raw output");
+        JourneyPlanService.AiOutputSchemaInvalid exception = new JourneyPlanService.AiOutputSchemaInvalid(JourneyAiFailureStage.OUTPUT_TEXT_JSON);
+        assertThat(controller.aiOutputSchemaInvalid(exception).getStatusCode().value()).isEqualTo(502);
+        assertThat(controller.aiOutputSchemaInvalid(exception).getBody()).containsEntry("code", "AI_OUTPUT_SCHEMA_INVALID")
+                .doesNotContainKey("stage").doesNotContainValue("provider raw output");
         assertThat(controller.aiToolValueMismatch().getStatusCode().value()).isEqualTo(500);
         assertThat(controller.aiToolValueMismatch().getBody()).containsEntry("code", "AI_TOOL_VALUE_MISMATCH").doesNotContainValue("provider raw output");
+    }
+
+    @Test
+    void usesUnknownSafeDiagnosticsWhenTheFailureStageIsAbsent() {
+        JourneyController controller = new JourneyController(null);
+
+        assertThat(controller.aiOutputSchemaInvalid(new JourneyPlanService.AiOutputSchemaInvalid(null)).getStatusCode().value()).isEqualTo(502);
+        assertThat(controller.aiOutputSchemaInvalid(new JourneyPlanService.AiOutputSchemaInvalid(null)).getBody())
+                .containsEntry("code", "AI_OUTPUT_SCHEMA_INVALID").doesNotContainKey("stage");
     }
 
     private void assertInvalid(String input) throws Exception {

@@ -1,8 +1,13 @@
 package com.ddarungflow.journey.ai;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.net.URI;
 import java.time.Duration;
 import java.time.OffsetDateTime;
@@ -54,6 +59,32 @@ class ResponsesApiClientTest {
     }
 
     @Test
+    void logsOnlySafeProviderAttemptStatusAndTransportCategories() throws Exception {
+        ListAppender<ILoggingEvent> logs = attachLogs();
+        try {
+            ResponsesApiClient rateLimited = fixture(429, "provider raw response: secret");
+            assertThatThrownBy(() -> rateLimited.requestStructuredOutput("raw natural-language sentinel", "intent", mapper.readTree("{}")))
+                    .extracting(exception -> ((JourneyAiException) exception).code())
+                    .isEqualTo(JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE);
+
+            ResponsesApiClient failedTransport = new ResponsesApiClient(properties(), mapper, request -> {
+                throw new IOException("provider raw response: secret");
+            });
+            assertThatThrownBy(() -> failedTransport.requestStructuredOutput("raw natural-language sentinel", "intent", mapper.readTree("{}")))
+                    .extracting(exception -> ((JourneyAiException) exception).code())
+                    .isEqualTo(JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE);
+
+            String messages = logs.list.stream().map(ILoggingEvent::getFormattedMessage).collect(java.util.stream.Collectors.joining("\n"));
+            assertThat(messages).contains("event=journey_ai_provider_request attempted=true")
+                    .contains("event=journey_ai_provider_response status=429")
+                    .contains("event=journey_ai_provider_transport_failure category=REQUEST_FAILURE")
+                    .doesNotContain("raw natural-language sentinel", "provider raw response", "not-a-real-key", "Authorization", "Bearer");
+        } finally {
+            detachLogs(logs);
+        }
+    }
+
+    @Test
     void rejectsDisabledOrMissingProviderWithoutNetwork() throws Exception {
         ResponsesApiClient disabled = new ResponsesApiClient(JourneyAiProperties.disabled(), mapper);
         assertThatThrownBy(() -> disabled.requestStructuredOutput("ORIGIN_A", "intent", mapper.readTree("{}")))
@@ -85,11 +116,32 @@ class ResponsesApiClientTest {
     }
 
     private ResponsesApiClient fixture(String body) {
+        return fixture(200, body);
+    }
+
+    private ResponsesApiClient fixture(int status, String body) {
         return new ResponsesApiClient(
-                new JourneyAiProperties(true, URI.create("https://example.test/responses"), "not-a-real-key", "runtime-model", Duration.ofSeconds(2)),
+                properties(),
                 mapper,
-                request -> new ResponsesApiClient.TransportResponse(200, body)
+                request -> new ResponsesApiClient.TransportResponse(status, body)
         );
+    }
+
+    private JourneyAiProperties properties() {
+        return new JourneyAiProperties(true, URI.create("https://example.test/responses"), "not-a-real-key", "runtime-model", Duration.ofSeconds(2));
+    }
+
+    private ListAppender<ILoggingEvent> attachLogs() {
+        Logger logger = (Logger) LoggerFactory.getLogger(ResponsesApiClient.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        return appender;
+    }
+
+    private void detachLogs(ListAppender<ILoggingEvent> appender) {
+        ((Logger) LoggerFactory.getLogger(ResponsesApiClient.class)).detachAppender(appender);
+        appender.stop();
     }
 
     private void assertCode(String body, JourneyAiErrorCode expected) throws Exception {

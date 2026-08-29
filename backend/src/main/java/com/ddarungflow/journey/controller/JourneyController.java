@@ -2,6 +2,8 @@ package com.ddarungflow.journey.controller;
 
 import com.ddarungflow.dto.PrincipalDetails;
 import com.ddarungflow.journey.application.JourneyPlanService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -18,6 +20,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/v1/journeys")
 public class JourneyController {
+    private static final Logger log = LoggerFactory.getLogger(JourneyController.class);
     private final JourneyPlanService service;
 
     public JourneyController(JourneyPlanService service) {
@@ -51,7 +54,10 @@ public class JourneyController {
     ResponseEntity<Map<String, String>> invalid() { return error(400, "JOURNEY_INTENT_INVALID"); }
 
     @ExceptionHandler(JourneyPlanService.AiOutputSchemaInvalid.class)
-    ResponseEntity<Map<String, String>> aiOutputSchemaInvalid() { return error(502, "AI_OUTPUT_SCHEMA_INVALID"); }
+    ResponseEntity<Map<String, String>> aiOutputSchemaInvalid(JourneyPlanService.AiOutputSchemaInvalid exception) {
+        log.warn("event=journey_ai_schema_invalid stage={}", exception.failureStage() == null ? "UNKNOWN" : exception.failureStage());
+        return error(502, "AI_OUTPUT_SCHEMA_INVALID");
+    }
 
     @ExceptionHandler(JourneyPlanService.AiToolValueMismatch.class)
     ResponseEntity<Map<String, String>> aiToolValueMismatch() { return error(500, "AI_TOOL_VALUE_MISMATCH"); }
