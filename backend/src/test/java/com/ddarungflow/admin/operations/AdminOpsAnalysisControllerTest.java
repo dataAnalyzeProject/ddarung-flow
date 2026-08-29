@@ -36,9 +36,13 @@ class AdminOpsAnalysisControllerTest {
         mvc.perform(get("/api/v1/admin/ops/analysis").with(authentication(auth(UserRole.ADMIN, Set.of())))).andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("ADMIN_PERMISSION_DENIED"));
         var allowed = authentication(auth(UserRole.ADMIN, Set.of(AdminPermission.OPS_ANALYSIS_READ)));
         mvc.perform(get("/api/v1/admin/ops/analysis?view=DISTRICT").with(allowed)).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("UNSUPPORTED_ANALYSIS_VIEW"));
+        mvc.perform(get("/api/v1/admin/ops/analysis?view=INVALID").with(allowed)).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("UNSUPPORTED_ANALYSIS_VIEW"));
         mvc.perform(get("/api/v1/admin/ops/analysis?riskType=RETURN").with(allowed)).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("UNSUPPORTED_RISK_TYPE"));
+        mvc.perform(get("/api/v1/admin/ops/analysis?riskType=COMBINED").with(allowed)).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("UNSUPPORTED_RISK_TYPE"));
         mvc.perform(get("/api/v1/admin/ops/analysis?period=7").with(allowed)).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
         mvc.perform(get("/api/v1/admin/ops/analysis?dimension=district").with(allowed)).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        mvc.perform(get("/api/v1/admin/ops/analysis?horizonMinutes=60").with(allowed)).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        mvc.perform(get("/api/v1/admin/ops/analysis?requiredBikeCount=1").with(allowed)).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
 
     @Test void selectsLargestWindowAndReturnsWeightedFixedBuckets() throws Exception {
@@ -63,6 +67,35 @@ class AdminOpsAnalysisControllerTest {
         insertProfile("GOOD", "2003", LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 28), "{\"weekdayHourly\":[{\"dayOfWeek\":1,\"hourOfDay\":0,\"sampleCount\":10,\"medianBikeCount\":1,\"stockoutRate\":0.2}],\"stockout\":{\"episodeCount\":1}}");
         mvc.perform(get("/api/v1/admin/ops/analysis").with(allowed)).andExpect(status().isOk()).andExpect(jsonPath("$.dataState").value("NORMAL")).andExpect(jsonPath("$.limitations").value(org.hamcrest.Matchers.hasItem("PROFILE_PARTIAL_INVALID")));
     }
+
+    @Test void countsContributingStationsUniquelyWhileKeepingCellSamplesWeighted() throws Exception {
+        LocalDate start = LocalDate.of(2026, 8, 1); LocalDate end = LocalDate.of(2026, 8, 28);
+        insertProfile("A", "3001", start, end, "{\"weekdayHourly\":[{\"dayOfWeek\":1,\"hourOfDay\":8,\"sampleCount\":10,\"medianBikeCount\":2,\"stockoutRate\":0.2},{\"dayOfWeek\":1,\"hourOfDay\":9,\"sampleCount\":20,\"medianBikeCount\":2,\"stockoutRate\":0.5},{\"dayOfWeek\":2,\"hourOfDay\":8,\"sampleCount\":30,\"medianBikeCount\":2,\"stockoutRate\":0.4}],\"stockout\":{\"episodeCount\":1}}");
+        insertProfile("B", "3002", start, end, "{\"weekdayHourly\":[{\"dayOfWeek\":1,\"hourOfDay\":8,\"sampleCount\":40,\"medianBikeCount\":2,\"stockoutRate\":0.8}],\"stockout\":{\"episodeCount\":1}}");
+        var allowed = authentication(auth(UserRole.ADMIN, Set.of(AdminPermission.OPS_ANALYSIS_READ)));
+
+        mvc.perform(get("/api/v1/admin/ops/analysis?view=WEEKDAY").with(allowed)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.buckets[0].sampleCount").value(70)).andExpect(jsonPath("$.buckets[0].contributingStationCount").value(2))
+                .andExpect(jsonPath("$.buckets[0].observedStockoutRate").value(0.6285714))
+                .andExpect(jsonPath("$.weekdayHourCells[8].sampleCount").value(50)).andExpect(jsonPath("$.weekdayHourCells[8].contributingStationCount").value(2))
+                .andExpect(jsonPath("$.coverage.usableCellCount").value(4)).andExpect(jsonPath("$.coverage.expectedCellCount").value(336));
+        mvc.perform(get("/api/v1/admin/ops/analysis?view=HOUR").with(allowed)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.buckets[8].sampleCount").value(80)).andExpect(jsonPath("$.buckets[8].contributingStationCount").value(2))
+                .andExpect(jsonPath("$.buckets[8].observedStockoutRate").value(0.575));
+    }
+
+    @Test void selectsWindowByLargestCohortThenWindowEndAndWindowStart() throws Exception {
+        insertProfile("OLD", "4001", LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 21), validPayload());
+        insertProfile("NEWER_END", "4002", LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 28), validPayload());
+        insertProfile("NEWER_START", "4003", LocalDate.of(2026, 8, 7), LocalDate.of(2026, 8, 28), validPayload());
+
+        mvc.perform(get("/api/v1/admin/ops/analysis").with(authentication(auth(UserRole.ADMIN, Set.of(AdminPermission.OPS_ANALYSIS_READ)))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.selectedWindowStart").value("2026-08-07"))
+                .andExpect(jsonPath("$.selectedWindowEnd").value("2026-08-28"))
+                .andExpect(jsonPath("$.selectedWindowProfileCount").value(1)).andExpect(jsonPath("$.excludedDifferentWindowProfileCount").value(2));
+    }
+
+    private String validPayload() { return "{\"weekdayHourly\":[{\"dayOfWeek\":1,\"hourOfDay\":0,\"sampleCount\":10,\"medianBikeCount\":1,\"stockoutRate\":0.2}],\"stockout\":{\"episodeCount\":1}}"; }
     private UsernamePasswordAuthenticationToken auth(UserRole role, Set<AdminPermission> permissions) { Users user = users.save(Users.builder().provider("google").providerUserId(UUID.randomUUID().toString()).displayName("ops").role(role).build()); PrincipalDetails principal = new PrincipalDetails(user, Set.of(), permissions); return new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities()); }
     private void insertStation(String id, String number) { OffsetDateTime now = OffsetDateTime.now(); jdbc.update("INSERT INTO stations (station_id, station_number, name, latitude, longitude, active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", id, number, id, 37.5, 127.0, true, now, now); }
     private void insertProfile(String id, String number, LocalDate start, LocalDate end, String payload) { insertStation(id, number); jdbc.update("INSERT INTO station_rhythm_profiles (station_id, window_start, window_end, sample_count, payload, generated_at) VALUES (?, ?, ?, ?, ?, ?)", id, start, end, 100, payload, OffsetDateTime.now()); }
