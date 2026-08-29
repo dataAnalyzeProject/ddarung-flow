@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -63,7 +64,7 @@ public class AdminOpsController {
     ResponseEntity<AdminOpsDtos.ErrorResponse> unsupported() { return error(HttpStatus.BAD_REQUEST, "UNSUPPORTED_HORIZON"); }
     @ExceptionHandler(AdminOpsReadService.NotFoundException.class)
     ResponseEntity<AdminOpsDtos.ErrorResponse> missing() { return error(HttpStatus.NOT_FOUND, "ADMIN_OPS_STATION_NOT_FOUND"); }
-    @ExceptionHandler(IllegalArgumentException.class)
+    @ExceptionHandler({IllegalArgumentException.class, MethodArgumentTypeMismatchException.class})
     ResponseEntity<AdminOpsDtos.ErrorResponse> invalid() { return error(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR"); }
     private ResponseEntity<AdminOpsDtos.ErrorResponse> error(HttpStatus status, String code) { return ResponseEntity.status(status).body(new AdminOpsDtos.ErrorResponse(code, "입력값이 올바르지 않습니다.")); }
     private static class UnsupportedHorizonException extends RuntimeException { }

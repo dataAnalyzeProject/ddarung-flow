@@ -30,9 +30,9 @@ public class AdminOpsReadService {
         BigDecimal average = shortages.isEmpty() ? null : shortages.stream().reduce(BigDecimal.ZERO, BigDecimal::add)
                 .divide(BigDecimal.valueOf(shortages.size()), 7, java.math.RoundingMode.HALF_UP);
         return new AdminOpsDtos.OverviewResponse(referenceTime, OffsetDateTime.now(), horizon, capabilities(), aggregate(rows),
-                coverage(referenceTime, horizon), limitations(rows), AdminOpsRiskPolicy.RULE_VERSION,
+                coverage(referenceTime, horizon), limitations(rows, false), AdminOpsRiskPolicy.RULE_VERSION,
                 new AdminOpsDtos.RentalRiskSummary(required, shortages.size(), critical, high, watch, low, max, average),
-                new AdminOpsDtos.InventoryStateSummary(count(rows, "NORMAL"), count(rows, "DELAYED"), count(rows, "MISSING"), count(rows, "UNAVAILABLE")), null);
+                new AdminOpsDtos.InventoryStateSummary(countInventory(rows, "NORMAL"), countInventory(rows, "DELAYED"), countInventory(rows, "MISSING"), countInventory(rows, "UNAVAILABLE")), null);
     }
 
     public AdminOpsDtos.RiskStationListResponse list(OffsetDateTime referenceTime, int horizon, int required,
@@ -47,15 +47,15 @@ public class AdminOpsReadService {
         List<AdminOpsDtos.RiskStation> page = remaining.subList(0, end);
         String next = end < remaining.size() ? encode(page.get(page.size() - 1), referenceTime, horizon, required) : null;
         return new AdminOpsDtos.RiskStationListResponse(referenceTime, OffsetDateTime.now(), horizon, capabilities(), aggregate(rows),
-                coverage(referenceTime, horizon), limitations(rows), AdminOpsRiskPolicy.RULE_VERSION, page, next);
+                coverage(referenceTime, horizon), limitations(rows, minLng != null || dataState != null), AdminOpsRiskPolicy.RULE_VERSION, page, next);
     }
 
     public AdminOpsDtos.RiskStationDetailResponse detail(OffsetDateTime referenceTime, int horizon, int required, String stationNumber) {
-        AdminOpsReadRepository.Row row = repository.findRows(referenceTime, horizon, null, null, null, null, null).stream()
-                .filter(candidate -> stationNumber.equals(candidate.stationNumber())).findFirst().orElseThrow(NotFoundException::new);
+        AdminOpsReadRepository.Row row = repository.findDetail(referenceTime, horizon, stationNumber);
+        if (row == null) throw new NotFoundException();
         List<AdminOpsReadRepository.Row> only = List.of(row);
         return new AdminOpsDtos.RiskStationDetailResponse(referenceTime, OffsetDateTime.now(), horizon, capabilities(), row.dataState(),
-                coverage(referenceTime, horizon), limitations(only), AdminOpsRiskPolicy.RULE_VERSION, station(row, required), null);
+                coverage(referenceTime, horizon), limitations(only, false), AdminOpsRiskPolicy.RULE_VERSION, station(row, required), null);
     }
 
     private AdminOpsDtos.RiskStation station(AdminOpsReadRepository.Row row, int required) {
@@ -78,13 +78,14 @@ public class AdminOpsReadService {
         var row = repository.coverage(reference, horizon);
         return new AdminOpsDtos.Coverage(row.activeStationCount(), row.inventoryAvailableCount(), row.predictionAvailableCount(), row.profileAvailableCount());
     }
-    private List<String> limitations(List<AdminOpsReadRepository.Row> rows) {
+    private List<String> limitations(List<AdminOpsReadRepository.Row> rows, boolean filtered) {
         List<String> result = new ArrayList<>();
-        if (rows.isEmpty()) result.add("NO_ACTIVE_PUBLIC_STATIONS");
+        if (repository.activePublicStationCount() == 0) result.add("NO_ACTIVE_PUBLIC_STATIONS");
+        else if (filtered && rows.isEmpty()) result.add("NO_MATCHING_STATIONS");
         if (repository.activeStationsWithoutPublicNumber() > 0) result.add("STATION_NUMBER_MISSING");
         return result;
     }
-    private long count(List<AdminOpsReadRepository.Row> rows, String state) { return rows.stream().filter(row -> state.equals(row.dataState())).count(); }
+    private long countInventory(List<AdminOpsReadRepository.Row> rows, String state) { return rows.stream().filter(row -> state.equals(row.inventoryDataState())).count(); }
     private String aggregate(List<AdminOpsReadRepository.Row> rows) {
         if (rows.stream().anyMatch(row -> "UNAVAILABLE".equals(row.dataState()))) return "UNAVAILABLE";
         if (rows.stream().anyMatch(row -> "MISSING".equals(row.dataState()))) return "MISSING";

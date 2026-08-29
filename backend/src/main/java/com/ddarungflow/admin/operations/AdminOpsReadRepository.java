@@ -17,6 +17,16 @@ public class AdminOpsReadRepository {
 
     public List<Row> findRows(OffsetDateTime referenceTime, int horizonMinutes, BigDecimal minLng, BigDecimal minLat,
                               BigDecimal maxLng, BigDecimal maxLat, String requestedDataState) {
+        return queryRows(referenceTime, horizonMinutes, minLng, minLat, maxLng, maxLat, requestedDataState, null);
+    }
+
+    public Row findDetail(OffsetDateTime referenceTime, int horizonMinutes, String stationNumber) {
+        return queryRows(referenceTime, horizonMinutes, null, null, null, null, null, stationNumber).stream()
+                .findFirst().orElse(null);
+    }
+
+    private List<Row> queryRows(OffsetDateTime referenceTime, int horizonMinutes, BigDecimal minLng, BigDecimal minLat,
+                                BigDecimal maxLng, BigDecimal maxLat, String requestedDataState, String stationNumber) {
         OffsetDateTime normalSince = referenceTime.minusMinutes(30);
         OffsetDateTime delayedSince = referenceTime.minusMinutes(180);
         return jdbc.query("""
@@ -48,6 +58,7 @@ public class AdminOpsReadRepository {
                     LEFT JOIN station_inventory_current i ON i.station_id = s.station_id
                     LEFT JOIN ranked_predictions p ON p.station_id = s.station_id AND p.row_number = 1
                     WHERE s.active = TRUE AND s.station_number IS NOT NULL
+                      AND (? IS NULL OR s.station_number = ?)
                       AND (? IS NULL OR s.longitude BETWEEN ? AND ?)
                       AND (? IS NULL OR s.latitude BETWEEN ? AND ?)
                 ), resolved AS (
@@ -60,7 +71,7 @@ public class AdminOpsReadRepository {
                 ORDER BY CASE WHEN prediction_id IS NULL THEN 1 ELSE 0 END,
                          (1 - at_least_1_probability) DESC, station_number ASC
                 """, (rs, ignored) -> map(rs), referenceTime, referenceTime, horizonMinutes, referenceTime,
-                normalSince, delayedSince, minLng, minLng, maxLng, minLat, minLat, maxLat,
+                normalSince, delayedSince, stationNumber, stationNumber, minLng, minLng, maxLng, minLat, minLat, maxLat,
                 requestedDataState, requestedDataState);
     }
 
@@ -79,20 +90,25 @@ public class AdminOpsReadRepository {
     private Row map(ResultSet rs) throws SQLException {
         return new Row(rs.getString("station_number"), rs.getString("name"), rs.getBigDecimal("latitude"),
                 rs.getBigDecimal("longitude"), (Integer) rs.getObject("available_bike_count"),
-                rs.getObject("prediction_target_at", OffsetDateTime.class), rs.getString("data_state"),
+                rs.getObject("prediction_target_at", OffsetDateTime.class), rs.getString("inventory_data_state"), rs.getString("data_state"),
                 rs.getObject("at_least_1_probability", BigDecimal.class), rs.getObject("at_least_2_probability", BigDecimal.class),
                 rs.getObject("at_least_3_probability", BigDecimal.class), rs.getObject("at_least_4_probability", BigDecimal.class),
                 rs.getObject("at_least_5_probability", BigDecimal.class));
     }
 
     public record Row(String stationNumber, String name, BigDecimal latitude, BigDecimal longitude, Integer currentBikes,
-                      OffsetDateTime predictionTargetAt, String dataState, BigDecimal atLeast1, BigDecimal atLeast2,
+                      OffsetDateTime predictionTargetAt, String inventoryDataState, String dataState, BigDecimal atLeast1, BigDecimal atLeast2,
                       BigDecimal atLeast3, BigDecimal atLeast4, BigDecimal atLeast5) { }
     public record CoverageRow(Long activeStationCount, Long inventoryAvailableCount, Long predictionAvailableCount,
                               Long profileAvailableCount) { }
 
     public long activeStationsWithoutPublicNumber() {
         Long count = jdbc.queryForObject("SELECT COUNT(*) FROM stations WHERE active = TRUE AND station_number IS NULL", Long.class);
+        return count == null ? 0 : count;
+    }
+
+    public long activePublicStationCount() {
+        Long count = jdbc.queryForObject("SELECT COUNT(*) FROM stations WHERE active = TRUE AND station_number IS NOT NULL", Long.class);
         return count == null ? 0 : count;
     }
 }
