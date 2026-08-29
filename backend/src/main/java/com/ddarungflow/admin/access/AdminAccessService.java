@@ -126,32 +126,24 @@ public class AdminAccessService {
                     "SUPER_ADMIN 역할 변경은 SUPER_ADMIN만 수행할 수 있습니다.");
         }
 
-        boolean self = actor.getPublicId().equals(target.getPublicId());
         Set<AdminRole> currentActive = activeRoles(current, now);
-        Set<AdminRole> desiredActive = activeRoles(desired.assignments(), now);
-        Map<AdminRole, OffsetDateTime> currentMap = assignmentMap(current);
-        boolean selfSuperRemoval = currentActive.contains(AdminRole.SUPER_ADMIN)
-                && (!desiredActive.contains(AdminRole.SUPER_ADMIN)
-                || expiresSooner(currentMap.get(AdminRole.SUPER_ADMIN), desired.assignments().get(AdminRole.SUPER_ADMIN)));
-        boolean selfAccessRemoval = currentActive.contains(AdminRole.ACCESS_ADMIN)
-                && (!desiredActive.contains(AdminRole.ACCESS_ADMIN)
-                || expiresSooner(currentMap.get(AdminRole.ACCESS_ADMIN), desired.assignments().get(AdminRole.ACCESS_ADMIN)));
-        if (self && (selfSuperRemoval || selfAccessRemoval)) {
-            Set<AdminRole> protectedRoles = EnumSet.copyOf(currentActive);
-            protectedRoles.retainAll(Set.of(AdminRole.SUPER_ADMIN, AdminRole.ACCESS_ADMIN));
-            auditDenied(actor, target, protectedRoles, "ADMIN_ROLE_REVOKE", "SELF_ROLE_PROTECTED", normalizedReason, principal.getAdminRoles());
-            return RoleUpdateResult.error("SELF_ROLE_PROTECTED", "본인의 보호 역할은 회수할 수 없습니다.");
-        }
-
-        boolean schedulesLastSuperAdminRemoval = currentActive.contains(AdminRole.SUPER_ADMIN)
-                && desired.assignments().containsKey(AdminRole.SUPER_ADMIN)
-                && expiresSooner(currentMap.get(AdminRole.SUPER_ADMIN), desired.assignments().get(AdminRole.SUPER_ADMIN));
-        if (currentActive.contains(AdminRole.SUPER_ADMIN)
-                && (!desiredActive.contains(AdminRole.SUPER_ADMIN) || schedulesLastSuperAdminRemoval)
+        boolean targetSuperDecrease = currentActive.contains(AdminRole.SUPER_ADMIN)
+                && revokedOrReduced.contains(AdminRole.SUPER_ADMIN);
+        if (targetSuperDecrease
                 && adminUserRoleRepository.findActiveSuperAdminsForUpdate(now).size() <= 1) {
             auditDenied(actor, target, Set.of(AdminRole.SUPER_ADMIN), "ADMIN_ROLE_REVOKE",
                     "LAST_SUPER_ADMIN_REQUIRED", normalizedReason, principal.getAdminRoles());
             return RoleUpdateResult.error("LAST_SUPER_ADMIN_REQUIRED", "마지막 SUPER_ADMIN 역할은 회수할 수 없습니다.");
+        }
+
+        boolean self = actor.getPublicId().equals(target.getPublicId());
+        boolean selfAccessDecrease = currentActive.contains(AdminRole.ACCESS_ADMIN)
+                && revokedOrReduced.contains(AdminRole.ACCESS_ADMIN);
+        if (self && (targetSuperDecrease || selfAccessDecrease)) {
+            Set<AdminRole> protectedRoles = EnumSet.copyOf(currentActive);
+            protectedRoles.retainAll(Set.of(AdminRole.SUPER_ADMIN, AdminRole.ACCESS_ADMIN));
+            auditDenied(actor, target, protectedRoles, "ADMIN_ROLE_REVOKE", "SELF_ROLE_PROTECTED", normalizedReason, principal.getAdminRoles());
+            return RoleUpdateResult.error("SELF_ROLE_PROTECTED", "본인의 보호 역할은 회수할 수 없습니다.");
         }
 
         if (sameDesiredState(current, desired.assignments())) {
@@ -284,11 +276,6 @@ public class AdminAccessService {
 
     private boolean sameInstant(OffsetDateTime left, OffsetDateTime right) {
         return left == null ? right == null : right != null && left.isEqual(right);
-    }
-
-    private boolean expiresSooner(OffsetDateTime current, OffsetDateTime desired) {
-        if (desired == null) return false;
-        return current == null || desired.isBefore(current);
     }
 
     private AdminAccessDtos.UserRolesResponse response(Users user, List<AdminUserRole> assignments, OffsetDateTime now) {

@@ -174,36 +174,111 @@ class AdminAccessIntegrationTest {
     }
 
     @Test
-    void selfAndLastSuperAdminProtectionsApplyIncludingScheduledExpiry() {
-        Users self = saveUser("self", UserRole.ADMIN);
-        roleRepository.save(new AdminUserRole(self.getId(), AdminRole.ACCESS_ADMIN, self.getId(),
-                OffsetDateTime.now(), null, "초기 권한", 0));
-        AdminAccessService.RoleUpdateResult selfResult = accessService.replaceRoles(principal(self, AdminRole.ACCESS_ADMIN),
-                self.getPublicId(), new AdminAccessDtos.DesiredSetRequest(0L, List.of(), "본인 역할 회수"));
-        assertThat(selfResult.errorCode()).isEqualTo("SELF_ROLE_PROTECTED");
-
-        Users selfSuper = saveUser("self-super", UserRole.ADMIN);
-        roleRepository.save(new AdminUserRole(selfSuper.getId(), AdminRole.SUPER_ADMIN, selfSuper.getId(),
+    void a1AndA7SingleActiveSuperSelfDeleteUsesLastSuperPrecedenceAndAuditReason() {
+        Users actor = saveUser("a1-single-super", UserRole.ADMIN);
+        roleRepository.save(new AdminUserRole(actor.getId(), AdminRole.SUPER_ADMIN, actor.getId(),
                 OffsetDateTime.now(), null, "초기 최고 권한", 0));
-        AdminAccessService.RoleUpdateResult selfSuperResult = accessService.replaceRoles(principal(selfSuper, AdminRole.SUPER_ADMIN),
-                selfSuper.getPublicId(), new AdminAccessDtos.DesiredSetRequest(0L, List.of(), "본인 최고 역할 회수"));
-        assertThat(selfSuperResult.errorCode()).isEqualTo("SELF_ROLE_PROTECTED");
-        roleRepository.deleteAllByUserId(selfSuper.getId());
-        roleRepository.flush();
 
-        Users actor = saveUser("actor-super", UserRole.ADMIN);
-        Users lastSuper = saveUser("last-super", UserRole.ADMIN);
-        roleRepository.save(new AdminUserRole(lastSuper.getId(), AdminRole.SUPER_ADMIN, actor.getId(),
-                OffsetDateTime.now(), null, "초기 최고 관리자", 0));
-        PrincipalDetails superPrincipal = principal(actor, AdminRole.SUPER_ADMIN);
-        AdminAccessService.RoleUpdateResult revoke = accessService.replaceRoles(superPrincipal, lastSuper.getPublicId(),
-                new AdminAccessDtos.DesiredSetRequest(0L, List.of(), "마지막 최고 관리자 회수"));
-        assertThat(revoke.errorCode()).isEqualTo("ADMIN_PERMISSION_DENIED");
+        AdminAccessService.RoleUpdateResult result = accessService.replaceRoles(principal(actor, AdminRole.SUPER_ADMIN),
+                actor.getPublicId(), new AdminAccessDtos.DesiredSetRequest(0L, List.of(), "마지막 최고 관리자 회수"));
 
-        AdminAccessService.RoleUpdateResult schedule = accessService.replaceRoles(superPrincipal, lastSuper.getPublicId(),
-                new AdminAccessDtos.DesiredSetRequest(0L, List.of(new AdminAccessDtos.RoleAssignmentRequest(
-                        AdminRole.SUPER_ADMIN, OffsetDateTime.now().plusDays(1))), "마지막 최고 관리자 만료"));
-        assertThat(schedule.errorCode()).isEqualTo("ADMIN_PERMISSION_DENIED");
+        assertThat(result.errorCode()).isEqualTo("LAST_SUPER_ADMIN_REQUIRED");
+        assertThat(auditRepository.findByAction("ADMIN_ROLE_REVOKE")).singleElement().satisfies(event -> {
+            assertThat(event.getResult()).isEqualTo(AuditResult.FAILURE);
+            assertThat(event.getReasonCode()).isEqualTo("LAST_SUPER_ADMIN_REQUIRED");
+        });
+    }
+
+    @Test
+    void a2AndA7SingleActiveSuperSelfExpiryReductionUsesLastSuperPrecedenceAndAuditReason() {
+        Users actor = saveUser("a2-single-super", UserRole.ADMIN);
+        roleRepository.save(new AdminUserRole(actor.getId(), AdminRole.SUPER_ADMIN, actor.getId(),
+                OffsetDateTime.now(), null, "초기 최고 권한", 0));
+        OffsetDateTime finiteExpiry = OffsetDateTime.now().plusDays(1);
+
+        AdminAccessService.RoleUpdateResult result = accessService.replaceRoles(principal(actor, AdminRole.SUPER_ADMIN),
+                actor.getPublicId(), new AdminAccessDtos.DesiredSetRequest(0L,
+                        List.of(new AdminAccessDtos.RoleAssignmentRequest(AdminRole.SUPER_ADMIN, finiteExpiry)),
+                        "마지막 최고 관리자 만료"));
+
+        assertThat(result.errorCode()).isEqualTo("LAST_SUPER_ADMIN_REQUIRED");
+        assertThat(auditRepository.findByAction("ADMIN_ROLE_REVOKE")).singleElement().satisfies(event -> {
+            assertThat(event.getResult()).isEqualTo(AuditResult.FAILURE);
+            assertThat(event.getReasonCode()).isEqualTo("LAST_SUPER_ADMIN_REQUIRED");
+        });
+    }
+
+    @Test
+    void a3TwoActiveSupersSelfDeleteUsesSelfProtection() {
+        Users actor = saveUser("a3-actor-super", UserRole.ADMIN);
+        Users other = saveUser("a3-other-super", UserRole.ADMIN);
+        roleRepository.save(new AdminUserRole(actor.getId(), AdminRole.SUPER_ADMIN, actor.getId(),
+                OffsetDateTime.now(), null, "행위자 최고 권한", 0));
+        roleRepository.save(new AdminUserRole(other.getId(), AdminRole.SUPER_ADMIN, actor.getId(),
+                OffsetDateTime.now(), null, "다른 최고 권한", 0));
+
+        AdminAccessService.RoleUpdateResult result = accessService.replaceRoles(principal(actor, AdminRole.SUPER_ADMIN),
+                actor.getPublicId(), new AdminAccessDtos.DesiredSetRequest(0L, List.of(), "본인 최고 역할 회수"));
+        AdminAccessService.RoleUpdateResult shortened = accessService.replaceRoles(principal(actor, AdminRole.SUPER_ADMIN),
+                actor.getPublicId(), new AdminAccessDtos.DesiredSetRequest(0L,
+                        List.of(new AdminAccessDtos.RoleAssignmentRequest(
+                                AdminRole.SUPER_ADMIN, OffsetDateTime.now().plusDays(1))),
+                        "본인 최고 역할 단축"));
+
+        assertThat(result.errorCode()).isEqualTo("SELF_ROLE_PROTECTED");
+        assertThat(shortened.errorCode()).isEqualTo("SELF_ROLE_PROTECTED");
+    }
+
+    @Test
+    void a4SelfAccessAdminDeleteUsesSelfProtection() {
+        Users actor = saveUser("a4-access-admin", UserRole.ADMIN);
+        roleRepository.save(new AdminUserRole(actor.getId(), AdminRole.ACCESS_ADMIN, actor.getId(),
+                OffsetDateTime.now(), null, "접근 관리 권한", 0));
+
+        AdminAccessService.RoleUpdateResult result = accessService.replaceRoles(principal(actor, AdminRole.ACCESS_ADMIN),
+                actor.getPublicId(), new AdminAccessDtos.DesiredSetRequest(0L, List.of(), "본인 접근 역할 회수"));
+        AdminAccessService.RoleUpdateResult shortened = accessService.replaceRoles(principal(actor, AdminRole.ACCESS_ADMIN),
+                actor.getPublicId(), new AdminAccessDtos.DesiredSetRequest(0L,
+                        List.of(new AdminAccessDtos.RoleAssignmentRequest(
+                                AdminRole.ACCESS_ADMIN, OffsetDateTime.now().plusDays(1))),
+                        "본인 접근 역할 단축"));
+
+        assertThat(result.errorCode()).isEqualTo("SELF_ROLE_PROTECTED");
+        assertThat(shortened.errorCode()).isEqualTo("SELF_ROLE_PROTECTED");
+    }
+
+    @Test
+    void a5NonSuperCannotRevokeSuperEvenWhenTargetIsTheLastSuper() {
+        Users actor = saveUser("a5-access-admin", UserRole.ADMIN);
+        Users target = saveUser("a5-super-target", UserRole.ADMIN);
+        roleRepository.save(new AdminUserRole(actor.getId(), AdminRole.ACCESS_ADMIN, actor.getId(),
+                OffsetDateTime.now(), null, "접근 관리 권한", 0));
+        roleRepository.save(new AdminUserRole(target.getId(), AdminRole.SUPER_ADMIN, target.getId(),
+                OffsetDateTime.now(), null, "회수 대상 최고 권한", 0));
+
+        AdminAccessService.RoleUpdateResult result = accessService.replaceRoles(principal(actor, AdminRole.ACCESS_ADMIN),
+                target.getPublicId(), new AdminAccessDtos.DesiredSetRequest(0L, List.of(), "최고 관리자 회수 시도"));
+
+        assertThat(result.errorCode()).isEqualTo("ADMIN_PERMISSION_DENIED");
+    }
+
+    @Test
+    void a6ActiveSuperCanRevokeTheOtherSuperWhenOneActiveSuperRemains() {
+        Users actor = saveUser("a6-actor-super", UserRole.ADMIN);
+        Users target = saveUser("a6-other-super", UserRole.ADMIN);
+        roleRepository.save(new AdminUserRole(actor.getId(), AdminRole.SUPER_ADMIN, actor.getId(),
+                OffsetDateTime.now(), null, "행위자 최고 권한", 0));
+        roleRepository.save(new AdminUserRole(target.getId(), AdminRole.SUPER_ADMIN, actor.getId(),
+                OffsetDateTime.now(), null, "회수 대상 최고 권한", 0));
+
+        AdminAccessService.RoleUpdateResult result = accessService.replaceRoles(principal(actor, AdminRole.SUPER_ADMIN),
+                target.getPublicId(), new AdminAccessDtos.DesiredSetRequest(0L, List.of(), "다른 최고 관리자 회수"));
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.response().version()).isEqualTo(1);
+        assertThat(roleRepository.findAllByUserIdOrderByRoleCodeAsc(target.getId())).isEmpty();
+        assertThat(roleRepository.findActiveByUserId(actor.getId(), OffsetDateTime.now()))
+                .extracting(AdminUserRole::getRoleCode).containsExactly(AdminRole.SUPER_ADMIN);
     }
 
     @Test
