@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createFixtureAdminAccessAdapter } from '../adapters/fixtureAdminAccessAdapter';
 import { resolvePreviewRoute, visibleConsoles } from '../routes/routeMap';
 import { routesForConsole } from '../routes/routeMap';
@@ -47,17 +47,17 @@ export default function AdminV2PreviewApp({ pathname, search, createAccessAdapte
     return () => controller.abort();
   }, [createAccessAdapter, fixtureId, retryVersion]);
 
-  function navigate(nextPath, replace = false) {
+  const navigate = useCallback((nextPath, replace = false) => {
     const nextUrl = `${nextPath}${location.search}`;
     window.history[replace ? 'replaceState' : 'pushState']({}, '', nextUrl);
     setLocation({ pathname: nextPath, search: location.search });
-  }
+  }, [location.search]);
 
   useEffect(() => {
     if (!access || loadedFixtureId !== fixtureId || loadedAdapter !== createAccessAdapter || access.state !== 'READY') return;
     const resolution = resolvePreviewRoute(location.pathname, access);
     if (resolution.type === 'REDIRECT' && resolution.route) navigate(resolution.route.previewPath, true);
-  }, [access, createAccessAdapter, fixtureId, loadedAdapter, loadedFixtureId, location.pathname]);
+  }, [access, createAccessAdapter, fixtureId, loadedAdapter, loadedFixtureId, location.pathname, navigate]);
 
   if (!access || loadedFixtureId !== fixtureId || requestedFixtureId !== fixtureId || loadedAdapter !== createAccessAdapter) return <AsyncStatePanel state="LOADING" />;
   if (access.state !== 'READY') return <AsyncStatePanel state={stateForAccess(access)} code={access.code} onRetry={() => setRetryVersion((version) => version + 1)} />;

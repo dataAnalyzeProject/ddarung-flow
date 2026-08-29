@@ -1,1 +1,1 @@
-export { createFixtureAdminAccessAdapter } from '../fixtures/fixtureAdminAccessAdapter';
+export { createFixtureAdminAccessAdapter } from '../fixtures/fixtureAdminAccessAdapter.js';
