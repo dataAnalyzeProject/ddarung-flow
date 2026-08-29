@@ -106,12 +106,13 @@ test("renders the fixture-only admin preview without checking a session outside 
 });
 
 test('renders the admin-v2 OPS preview without checking a session', async () => {
-  window.history.replaceState({}, '', '/admin-v2-preview/ops?fixture=OPS_VIEWER');
+  window.history.replaceState({}, '', '/admin-v2-preview/ops?fixture=OPS_VIEWER&opsFixture=SUCCESS');
 
   render(<App />);
 
-  expect(await screen.findByText('UI-OPS-01')).toBeInTheDocument();
-  expect(screen.getByText('FIXTURE / API_NOT_CONNECTED')).toBeInTheDocument();
+  expect(await screen.findByRole('heading', { name: '운영 상황판' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '운영 상황판' })).toHaveAttribute('aria-current', 'page');
+  expect(screen.queryByText('FIXTURE / API_NOT_CONNECTED')).not.toBeInTheDocument();
   expect(getCurrentUser).not.toHaveBeenCalled();
 });
 

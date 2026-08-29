@@ -91,32 +91,32 @@ describe('admin v2 fixture access and routes', () => {
   });
 
   test('menu and console navigation push pathname while preserving fixture query', async () => {
-    setPreviewUrl('/admin-v2-preview/ops?fixture=SUPER_ADMIN&mode=review');
+    setPreviewUrl('/admin-v2-preview/ops?fixture=SUPER_ADMIN&mode=review&opsFixture=SUCCESS');
     render(<AdminV2PreviewApp />);
     await waitForShell();
     fireEvent.click(screen.getByRole('button', { name: '수급 위험 지도' }));
     expect(window.location.pathname).toBe('/admin-v2-preview/ops/risk-map');
-    expect(window.location.search).toBe('?fixture=SUPER_ADMIN&mode=review');
+    expect(window.location.search).toBe('?fixture=SUPER_ADMIN&mode=review&opsFixture=SUCCESS');
     fireEvent.click(screen.getByRole('button', { name: '모델' }));
     expect(window.location.pathname).toBe('/admin-v2-preview/models');
-    expect(window.location.search).toBe('?fixture=SUPER_ADMIN&mode=review');
+    expect(window.location.search).toBe('?fixture=SUPER_ADMIN&mode=review&opsFixture=SUCCESS');
     expect(screen.getByText('UI-MODEL-01')).toBeInTheDocument();
   });
 
   test('popstate restores the previous preview route', async () => {
-    setPreviewUrl('/admin-v2-preview/ops?fixture=OPS_VIEWER');
+    setPreviewUrl('/admin-v2-preview/ops?fixture=OPS_VIEWER&opsFixture=SUCCESS');
     render(<AdminV2PreviewApp />);
     await waitForShell();
     window.history.pushState({}, '', '/admin-v2-preview/ops/risk-map?fixture=OPS_VIEWER');
     fireEvent(window, new PopStateEvent('popstate'));
     expect(screen.getByText('UI-OPS-02')).toBeInTheDocument();
-    window.history.pushState({}, '', '/admin-v2-preview/ops?fixture=OPS_VIEWER');
+    window.history.pushState({}, '', '/admin-v2-preview/ops?fixture=OPS_VIEWER&opsFixture=SUCCESS');
     fireEvent(window, new PopStateEvent('popstate'));
-    expect(screen.getByText('UI-OPS-01')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('heading', { name: '운영 상황판' })).toBeInTheDocument());
   });
 
   test('a changed pathname prop replaces the active route without relying on a stale browser path', async () => {
-    const { rerender } = render(<AdminV2PreviewApp pathname="/admin-v2-preview/ops" search="?fixture=OPS_VIEWER" />);
+    const { rerender } = render(<AdminV2PreviewApp pathname="/admin-v2-preview/ops" search="?fixture=OPS_VIEWER&opsFixture=SUCCESS" />);
     await waitForShell();
     rerender(<AdminV2PreviewApp pathname="/admin-v2-preview/ops/risk-map" search="?fixture=OPS_VIEWER" />);
     await waitFor(() => expect(screen.getByText('UI-OPS-02')).toBeInTheDocument());
@@ -143,7 +143,6 @@ describe('admin v2 fixture access and routes', () => {
     expect(screen.getByText(title)).toBeInTheDocument();
     expect(screen.getByText(description)).toBeInTheDocument();
     expect(screen.queryByRole('navigation', { name: '관리자 메뉴' })).not.toBeInTheDocument();
-    expect(screen.queryByText('UI-OPS-01')).not.toBeInTheDocument();
   });
 
   test('unknown fixture is ACCESS_ERROR, not a privileged fallback', async () => {
@@ -151,13 +150,12 @@ describe('admin v2 fixture access and routes', () => {
     render(<AdminV2PreviewApp />);
     await waitForShell();
     expect(screen.getByText('관리자 권한 정보를 불러오지 못했습니다.')).toBeInTheDocument();
-    expect(screen.queryByText('UI-OPS-01')).not.toBeInTheDocument();
   });
 
   test('a source change clears stale OPS data and late completion cannot overwrite new access', async () => {
     const resolvers = {};
     const createAccessAdapter = ({ fixtureId }) => ({ load: () => new Promise((resolve) => { resolvers[fixtureId] = resolve; }) });
-    const { rerender } = render(<AdminV2PreviewApp pathname="/admin-v2-preview/ops" search="?fixture=OPS_VIEWER" createAccessAdapter={createAccessAdapter} />);
+    const { rerender } = render(<AdminV2PreviewApp pathname="/admin-v2-preview/ops" search="?fixture=OPS_VIEWER&opsFixture=SUCCESS" createAccessAdapter={createAccessAdapter} />);
     await waitFor(() => expect(resolvers.OPS_VIEWER).toBeDefined());
     rerender(<AdminV2PreviewApp pathname="/admin-v2-preview/system/access" search="?fixture=ACCESS_ADMIN" createAccessAdapter={createAccessAdapter} />);
     expect(screen.getByText('불러오는 중')).toBeInTheDocument();
@@ -166,28 +164,28 @@ describe('admin v2 fixture access and routes', () => {
     expect(screen.getByText('UI-SYS-02')).toBeInTheDocument();
     await act(async () => resolvers.OPS_VIEWER(readyAccess(['NOT_A_ROUTE_ROLE'], ['OPS_DASHBOARD_READ'])));
     expect(screen.getByText('UI-SYS-02')).toBeInTheDocument();
-    expect(screen.queryByText('UI-OPS-01')).not.toBeInTheDocument();
   });
 
   test('an adapter source change is immediately loading even when the fixture is unchanged', async () => {
     const firstAdapter = () => ({ load: () => Promise.resolve(readyAccess(['NOT_A_ROUTE_ROLE'], ['OPS_DASHBOARD_READ'])) });
     const secondAdapter = () => ({ load: () => new Promise(() => {}) });
-    const { rerender } = render(<AdminV2PreviewApp pathname="/admin-v2-preview/ops" search="?fixture=OPS_VIEWER" createAccessAdapter={firstAdapter} />);
-    await waitFor(() => expect(screen.getByText('UI-OPS-01')).toBeInTheDocument());
-    rerender(<AdminV2PreviewApp pathname="/admin-v2-preview/ops" search="?fixture=OPS_VIEWER" createAccessAdapter={secondAdapter} />);
+    setPreviewUrl('/admin-v2-preview/ops?fixture=OPS_VIEWER&opsFixture=SUCCESS');
+    const { rerender } = render(<AdminV2PreviewApp pathname="/admin-v2-preview/ops" search="?fixture=OPS_VIEWER&opsFixture=SUCCESS" createAccessAdapter={firstAdapter} />);
+    await waitFor(() => expect(screen.getByRole('heading', { name: '운영 상황판' })).toBeInTheDocument());
+    rerender(<AdminV2PreviewApp pathname="/admin-v2-preview/ops" search="?fixture=OPS_VIEWER&opsFixture=SUCCESS" createAccessAdapter={secondAdapter} />);
     expect(screen.getByText('불러오는 중')).toBeInTheDocument();
-    expect(screen.queryByText('UI-OPS-01')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '운영 상황판' })).not.toBeInTheDocument();
   });
 
   test('adapter rejection converges to the safe access error and unmount ignores late completion', async () => {
     let resolve;
     const delayedAdapter = () => ({ load: () => new Promise((done) => { resolve = done; }) });
-    const { unmount } = render(<AdminV2PreviewApp pathname="/admin-v2-preview/ops" search="?fixture=OPS_VIEWER" createAccessAdapter={delayedAdapter} />);
+    const { unmount } = render(<AdminV2PreviewApp pathname="/admin-v2-preview/ops" search="?fixture=OPS_VIEWER&opsFixture=SUCCESS" createAccessAdapter={delayedAdapter} />);
     await waitFor(() => expect(resolve).toBeDefined());
     unmount();
     await act(async () => resolve(readyAccess(['NOT_A_ROUTE_ROLE'], ['OPS_DASHBOARD_READ'])));
     const rejectingAdapter = () => ({ load: () => Promise.reject(new Error('unavailable')) });
-    render(<AdminV2PreviewApp pathname="/admin-v2-preview/ops" search="?fixture=OPS_VIEWER" createAccessAdapter={rejectingAdapter} />);
+    render(<AdminV2PreviewApp pathname="/admin-v2-preview/ops" search="?fixture=OPS_VIEWER&opsFixture=SUCCESS" createAccessAdapter={rejectingAdapter} />);
     await waitFor(() => expect(screen.getByText('관리자 권한 정보를 불러오지 못했습니다.')).toBeInTheDocument());
     expect(screen.getByRole('button', { name: '다시 시도' })).toBeInTheDocument();
   });
@@ -196,10 +194,9 @@ describe('admin v2 fixture access and routes', () => {
     ['factory', () => { throw new Error('factory unavailable'); }],
     ['load', () => ({ load() { throw new Error('load unavailable'); } })],
   ])('%s synchronous throw converges to the safe access error', async (boundary, createAccessAdapter) => {
-    render(<AdminV2PreviewApp pathname="/admin-v2-preview/ops" search="?fixture=OPS_VIEWER" createAccessAdapter={createAccessAdapter} />);
+    render(<AdminV2PreviewApp pathname="/admin-v2-preview/ops" search="?fixture=OPS_VIEWER&opsFixture=SUCCESS" createAccessAdapter={createAccessAdapter} />);
     await waitFor(() => expect(screen.getByText('관리자 권한 정보를 불러오지 못했습니다.')).toBeInTheDocument());
     expect(screen.getByText('ADMIN_ACCESS_UNAVAILABLE')).toBeInTheDocument();
-    expect(screen.queryByText('UI-OPS-01')).not.toBeInTheDocument();
   });
 
   test('retry clears route data and recovers after a synchronous failure', async () => {
@@ -213,17 +210,18 @@ describe('admin v2 fixture access and routes', () => {
         return new Promise((resolve) => { resolveRetry = resolve; });
       },
     });
-    const { rerender } = render(<AdminV2PreviewApp pathname="/admin-v2-preview/ops" search="?fixture=OPS_VIEWER" createAccessAdapter={initialAdapter} />);
-    await waitFor(() => expect(screen.getByText('UI-OPS-01')).toBeInTheDocument());
-    rerender(<AdminV2PreviewApp pathname="/admin-v2-preview/ops" search="?fixture=OPS_VIEWER" createAccessAdapter={createAccessAdapter} />);
+    setPreviewUrl('/admin-v2-preview/ops?fixture=OPS_VIEWER&opsFixture=SUCCESS');
+    const { rerender } = render(<AdminV2PreviewApp pathname="/admin-v2-preview/ops" search="?fixture=OPS_VIEWER&opsFixture=SUCCESS" createAccessAdapter={initialAdapter} />);
+    await waitFor(() => expect(screen.getByRole('heading', { name: '운영 상황판' })).toBeInTheDocument());
+    rerender(<AdminV2PreviewApp pathname="/admin-v2-preview/ops" search="?fixture=OPS_VIEWER&opsFixture=SUCCESS" createAccessAdapter={createAccessAdapter} />);
     await waitFor(() => expect(screen.getByText('관리자 권한 정보를 불러오지 못했습니다.')).toBeInTheDocument());
-    expect(screen.queryByText('UI-OPS-01')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '운영 상황판' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
     await waitFor(() => expect(screen.getByText('불러오는 중')).toBeInTheDocument());
-    expect(screen.queryByText('UI-OPS-01')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '운영 상황판' })).not.toBeInTheDocument();
     await waitFor(() => expect(resolveRetry).toBeDefined());
     await act(async () => resolveRetry(readyAccess(['OPS_VIEWER'], ['OPS_DASHBOARD_READ'])));
-    expect(screen.getByText('UI-OPS-01')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '운영 상황판' })).toBeInTheDocument();
     expect(calls).toBe(2);
   });
 
@@ -238,14 +236,15 @@ describe('admin v2 fixture access and routes', () => {
         return Promise.resolve(readyAccess(['OPS_VIEWER'], ['OPS_DASHBOARD_READ']));
       },
     });
-    const { rerender } = render(<AdminV2PreviewApp pathname="/admin-v2-preview/ops" search="?fixture=OPS_VIEWER" createAccessAdapter={previousAdapter} />);
+    setPreviewUrl('/admin-v2-preview/ops?fixture=OPS_VIEWER&opsFixture=SUCCESS');
+    const { rerender } = render(<AdminV2PreviewApp pathname="/admin-v2-preview/ops" search="?fixture=OPS_VIEWER&opsFixture=SUCCESS" createAccessAdapter={previousAdapter} />);
     await waitFor(() => expect(resolvePrevious).toBeDefined());
-    rerender(<AdminV2PreviewApp pathname="/admin-v2-preview/ops" search="?fixture=OPS_VIEWER" createAccessAdapter={retryAdapter} />);
+    rerender(<AdminV2PreviewApp pathname="/admin-v2-preview/ops" search="?fixture=OPS_VIEWER&opsFixture=SUCCESS" createAccessAdapter={retryAdapter} />);
     await waitFor(() => expect(screen.getByText('관리자 권한 정보를 불러오지 못했습니다.')).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
-    await waitFor(() => expect(screen.getByText('UI-OPS-01')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: '운영 상황판' })).toBeInTheDocument());
     await act(async () => resolvePrevious(readyAccess(['MODEL_ENGINEER'], ['MODEL_METRICS_READ'], 'MODEL')));
-    expect(screen.getByText('UI-OPS-01')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '운영 상황판' })).toBeInTheDocument();
     expect(screen.queryByText('UI-MODEL-01')).not.toBeInTheDocument();
   });
 
