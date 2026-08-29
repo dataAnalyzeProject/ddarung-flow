@@ -1,0 +1,14 @@
+{
+  "mjolnir": {
+    "tile_dir": "/data/graph/tiles",
+    "admin": "/data/graph/admins.sqlite",
+    "timezone": "/data/graph/timezones.sqlite",
+    "concurrency": 1
+  },
+  "service_limits": {
+    "bicycle": {
+      "max_distance": 500000,
+      "max_locations": 50
+    }
+  }
+}
