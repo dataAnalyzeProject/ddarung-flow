@@ -10,7 +10,9 @@ describe('OpsDashboard', () => {
   test('renders the canonical context, four summary cards, map, Top 5, and capability-off copy', async () => {
     render(<OpsDashboard createAdapter={adapterFor(dashboardFixture('SUCCESS'))} />);
     await waitFor(() => expect(screen.getByRole('heading', { name: '운영 상황판' })).toBeInTheDocument());
-    expect(screen.getByText('2026. 8. 30. 오전 9:00:00')).toBeInTheDocument();
+    const operationsContext = screen.getByRole('region', { name: '운영 기준' });
+    expect(operationsContext).toHaveTextContent('기준시각');
+    expect(operationsContext).toHaveTextContent(/2026.*8.*30/);
     expect(screen.getByText('CRITICAL 대여 부족')).toBeInTheDocument();
     expect(screen.getByText('HIGH 대여 부족')).toBeInTheDocument();
     expect(screen.getByText('WATCH 대여 부족')).toBeInTheDocument();
