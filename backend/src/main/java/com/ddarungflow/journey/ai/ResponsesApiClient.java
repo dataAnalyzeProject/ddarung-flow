@@ -11,14 +11,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Thin Responses API transport. It does not log prompts or responses, and is not wired until E0.
+ * Thin Responses API transport. It does not log prompts or responses.
  */
-public class OpenAiResponsesClient {
+public class ResponsesApiClient {
     private final JourneyAiProperties properties;
     private final ObjectMapper objectMapper;
     private final ResponseTransport transport;
 
-    public OpenAiResponsesClient(JourneyAiProperties properties, ObjectMapper objectMapper) {
+    public ResponsesApiClient(JourneyAiProperties properties, ObjectMapper objectMapper) {
         this(properties, objectMapper, defaultTransport(properties));
     }
 
@@ -30,7 +30,7 @@ public class OpenAiResponsesClient {
         };
     }
 
-    OpenAiResponsesClient(JourneyAiProperties properties, ObjectMapper objectMapper, ResponseTransport transport) {
+    ResponsesApiClient(JourneyAiProperties properties, ObjectMapper objectMapper, ResponseTransport transport) {
         this.properties = properties;
         this.objectMapper = objectMapper;
         this.transport = transport;
@@ -66,6 +66,9 @@ public class OpenAiResponsesClient {
             if ("incomplete".equals(response.path("status").asText())) {
                 throw new JourneyAiException(JourneyAiErrorCode.AI_RESPONSE_INCOMPLETE, "provider response is incomplete");
             }
+            if ("failed".equals(response.path("status").asText())) {
+                throw new JourneyAiException(JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE, "provider response failed");
+            }
             if (!"completed".equals(response.path("status").asText())) throw schemaInvalid("provider response is not completed");
             List<String> texts = new ArrayList<>();
             for (JsonNode output : response.path("output")) {
@@ -91,12 +94,11 @@ public class OpenAiResponsesClient {
     String requestBody(String input, String schemaName, JsonNode schema) throws Exception {
         ObjectNode root = objectMapper.createObjectNode();
         root.put("model", properties.model());
-        root.put("store", false);
         root.put("input", input);
+        root.putObject("reasoning").put("effort", "none");
         ObjectNode format = root.putObject("text").putObject("format");
         format.put("type", "json_schema");
         format.put("name", schemaName);
-        format.put("strict", true);
         format.set("schema", schema);
         return objectMapper.writeValueAsString(root);
     }

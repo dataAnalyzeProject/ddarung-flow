@@ -8,7 +8,7 @@ import java.time.Duration;
  */
 public record JourneyAiProperties(boolean enabled, URI responsesUri, String apiKey, String model, Duration timeout) {
     public JourneyAiProperties {
-        responsesUri = responsesUri == null ? URI.create("https://api.openai.com/v1/responses") : responsesUri;
+        responsesUri = responsesUri == null ? URI.create("https://api.deepseek.com/responses") : responsesUri;
         apiKey = apiKey == null ? "" : apiKey;
         model = model == null ? "" : model;
         timeout = timeout == null ? Duration.ofSeconds(10) : timeout;

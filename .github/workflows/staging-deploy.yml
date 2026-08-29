@@ -284,18 +284,18 @@ jobs:
       INVENTORY_REFRESHER_TAG: ${{ needs.detect-changes.outputs.inventory_refresher_tag }}
       JOURNEY_ENABLED: ${{ needs.detect-changes.outputs.journey_enabled }}
       JOURNEY_AI_ENABLED: ${{ needs.detect-changes.outputs.journey_ai_enabled }}
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
-      OPENAI_RESPONSES_URI: ${{ vars.OPENAI_RESPONSES_URI }}
+      JOURNEY_AI_API_KEY: ${{ secrets.JOURNEY_AI_API_KEY }}
+      JOURNEY_AI_MODEL: ${{ vars.JOURNEY_AI_MODEL }}
+      JOURNEY_AI_RESPONSES_URI: ${{ vars.JOURNEY_AI_RESPONSES_URI }}
       JOURNEY_AI_TIMEOUT: ${{ vars.JOURNEY_AI_TIMEOUT }}
 
     steps:
-      - name: Mask OpenAI server secret
+      - name: Mask Journey AI server secret
         shell: bash
         run: |
           set -euo pipefail
-          if [ -n "${OPENAI_API_KEY:-}" ]; then
-            printf '::add-mask::%s\n' "$OPENAI_API_KEY"
+          if [ -n "${JOURNEY_AI_API_KEY:-}" ]; then
+            printf '::add-mask::%s\n' "$JOURNEY_AI_API_KEY"
           fi
 
       - name: Check required deployment configuration
@@ -319,7 +319,7 @@ jobs:
           [[ "$JOURNEY_ENABLED" == true || "$JOURNEY_ENABLED" == false ]]
           [[ "$JOURNEY_AI_ENABLED" == true || "$JOURNEY_AI_ENABLED" == false ]]
           if [ "$JOURNEY_AI_ENABLED" = true ]; then
-            for name in OPENAI_API_KEY OPENAI_MODEL; do
+            for name in JOURNEY_AI_API_KEY JOURNEY_AI_MODEL; do
               if [ -z "${!name:-}" ]; then
                 echo "Required Journey AI configuration is missing: $name" >&2
                 exit 1
@@ -423,8 +423,8 @@ jobs:
             printf 'DEPLOYED_COMMIT=%s\n' "$DEPLOY_SHA"
             printf 'JOURNEY_ENABLED=%s\n' "$JOURNEY_ENABLED"
             printf 'JOURNEY_AI_ENABLED=%s\n' "$JOURNEY_AI_ENABLED"
-            printf 'OPENAI_MODEL=%s\n' "$OPENAI_MODEL"
-            printf 'OPENAI_RESPONSES_URI=%s\n' "$OPENAI_RESPONSES_URI"
+            printf 'JOURNEY_AI_MODEL=%s\n' "$JOURNEY_AI_MODEL"
+            printf 'JOURNEY_AI_RESPONSES_URI=%s\n' "$JOURNEY_AI_RESPONSES_URI"
             printf 'JOURNEY_AI_TIMEOUT=%s\n' "$JOURNEY_AI_TIMEOUT"
             printf 'FRONTEND_IMAGE_TAG=%s\n' "$FRONTEND_TAG"
             printf 'BACKEND_IMAGE_TAG=%s\n' "$BACKEND_TAG"
@@ -454,8 +454,8 @@ jobs:
             printf 'NAVER_CLIENT_SECRET=%s\n' "$NAVER_CLIENT_SECRET"
             printf 'TOSS_PAYMENTS_SECRET_KEY=%s\n' "$TOSS_PAYMENTS_SECRET_KEY"
           } > oauth.candidate.env
-          if [ -n "${OPENAI_API_KEY:-}" ]; then
-            env | grep -E '^OPENAI_API_KEY=' >> oauth.candidate.env
+          if [ -n "${JOURNEY_AI_API_KEY:-}" ]; then
+            env | grep -E '^JOURNEY_AI_API_KEY=' >> oauth.candidate.env
           fi
           chmod 600 oauth.candidate.env
 
@@ -525,8 +525,8 @@ jobs:
           test "$release_journey_ai_enabled" = "$JOURNEY_AI_ENABLED"
           [[ "$release_journey_ai_enabled" == true || "$release_journey_ai_enabled" == false ]]
           if [ "$release_journey_ai_enabled" = true ]; then
-            grep -Eq '^OPENAI_MODEL=.+$' release.env
-            grep -Eq '^OPENAI_API_KEY=.+$' oauth.env
+            grep -Eq '^JOURNEY_AI_MODEL=.+$' release.env
+            grep -Eq '^JOURNEY_AI_API_KEY=.+$' oauth.env
           fi
           mapfile -t frontend_flag_values < <(docker compose --env-file .env --env-file oauth.env --env-file release.env "${compose_files[@]}" config | awk '$1 == "REACT_APP_JOURNEY_ENABLED:" { gsub(/"/, "", $2); print $2 }')
           mapfile -t backend_flag_values < <(docker compose --env-file .env --env-file oauth.env --env-file release.env "${compose_files[@]}" config | awk '$1 == "JOURNEY_ENABLED:" { gsub(/"/, "", $2); print $2 }')

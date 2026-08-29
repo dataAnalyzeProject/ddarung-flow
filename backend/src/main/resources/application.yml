@@ -67,9 +67,9 @@ journey:
   enabled: ${JOURNEY_ENABLED:false}
   ai:
     enabled: ${JOURNEY_AI_ENABLED:false}
-    responses-uri: ${OPENAI_RESPONSES_URI:https://api.openai.com/v1/responses}
-    api-key: ${OPENAI_API_KEY:}
-    model: ${OPENAI_MODEL:}
+    responses-uri: ${JOURNEY_AI_RESPONSES_URI:https://api.deepseek.com/responses}
+    api-key: ${JOURNEY_AI_API_KEY:}
+    model: ${JOURNEY_AI_MODEL:deepseek-v4-flash}
     timeout: ${JOURNEY_AI_TIMEOUT:10s}
   return-prediction:
     enabled: ${RETURN_PREDICTION_ENABLED:false}

@@ -203,7 +203,8 @@ jobs:
             esac
           }
 
-          test "$(read_journey_ai_enabled infra/staging/journey-ai-release-flags.env)" = false
+          checked_in_value="$(read_journey_ai_enabled infra/staging/journey-ai-release-flags.env)"
+          [[ "$checked_in_value" == true || "$checked_in_value" == false ]]
           flag_test_file=$(mktemp)
           trap 'rm -f "$flag_test_file"' EXIT
           printf 'JOURNEY_AI_ENABLED=false\n' > "$flag_test_file"
@@ -255,35 +256,51 @@ jobs:
           fi
           grep -Eq 'kakao_map_app_key=.*env\.KAKAO_MAP_APP_KEY' .github/workflows/staging-deploy.yml
           grep -Eq 'toss_payments_client_key=.*env\.TOSS_PAYMENTS_CLIENT_KEY' .github/workflows/staging-deploy.yml
-      - name: Guard Journey OpenAI server-only handling
+      - name: Guard Journey AI server-only handling
         shell: bash
         run: |
           set -euo pipefail
-          test "$(cat infra/staging/journey-ai-release-flags.env)" = 'JOURNEY_AI_ENABLED=false'
-          if rg -n 'OPENAI_API_KEY' frontend; then
-            echo 'OPENAI_API_KEY must not be referenced by frontend files.' >&2
+          read_journey_ai_enabled() {
+            local flag_file=$1
+            local lines=()
+            mapfile -t lines < "$flag_file"
+            [ "${#lines[@]}" -eq 1 ] || return 1
+            case "${lines[0]}" in
+              JOURNEY_AI_ENABLED=true) printf 'true\n' ;;
+              JOURNEY_AI_ENABLED=false) printf 'false\n' ;;
+              *) return 1 ;;
+            esac
+          }
+          checked_in_value="$(read_journey_ai_enabled infra/staging/journey-ai-release-flags.env)"
+          [[ "$checked_in_value" == true || "$checked_in_value" == false ]]
+          if rg -n 'JOURNEY_AI_API_KEY' frontend; then
+            echo 'JOURNEY_AI_API_KEY must not be referenced by frontend files.' >&2
             exit 1
           fi
           if awk '
             /^[[:space:]]*build-args:[[:space:]]*\|/ { in_build_args = 1; next }
             in_build_args && /^[[:space:]]*[[:alnum:]_-]+:/ { in_build_args = 0 }
-            in_build_args && /OPENAI_API_KEY/ { found = 1 }
+            in_build_args && /JOURNEY_AI_API_KEY/ { found = 1 }
             END { exit !found }
           ' .github/workflows/staging-deploy.yml; then
-            echo 'OPENAI_API_KEY must not be passed through Docker build args.' >&2
+            echo 'JOURNEY_AI_API_KEY must not be passed through Docker build args.' >&2
             exit 1
           fi
-          if rg -n --glob 'Dockerfile*' 'OPENAI_API_KEY' .; then
-            echo 'OPENAI_API_KEY must not be used by Docker build files.' >&2
+          if rg -n --glob 'Dockerfile*' 'JOURNEY_AI_API_KEY' .; then
+            echo 'JOURNEY_AI_API_KEY must not be used by Docker build files.' >&2
             exit 1
           fi
-          direct_output=$(rg -n 'OPENAI_API_KEY' .github/workflows/staging-deploy.yml | rg '(echo|printf)' || true)
+          direct_output=$(rg -n 'JOURNEY_AI_API_KEY' .github/workflows/staging-deploy.yml | rg '(echo|printf)' || true)
           if [ -n "$(printf '%s\n' "$direct_output" | grep -v '::add-mask::' || true)" ]; then
-            echo 'OPENAI_API_KEY must not be emitted by echo or printf.' >&2
+            echo 'JOURNEY_AI_API_KEY must not be emitted by echo or printf.' >&2
             exit 1
           fi
           if git grep -n -E 'sk-(proj-)?[A-Za-z0-9_-]{20,}'; then
-            echo 'A checked-in OpenAI API key pattern was found.' >&2
+            echo 'A checked-in Journey AI API key pattern was found.' >&2
+            exit 1
+          fi
+          if rg -n 'OPENAI_' backend infra/staging docs/journey .github/workflows/staging-deploy.yml; then
+            echo 'Legacy OPENAI runtime wiring must not remain.' >&2
             exit 1
           fi
       - name: Verify frontend BuildKit secrets stay out of build metadata

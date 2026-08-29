@@ -40,8 +40,8 @@ class DefaultJourneyAiGatewayTest {
         providerSchema.withArray("required").add("providerMarker");
         providerSchema.with("properties").putObject("providerMarker").put("type", "string");
         JourneyAiProperties properties = new JourneyAiProperties(true, null, "test-key", "test-model", Duration.ofSeconds(1));
-        OpenAiResponsesClient client = new OpenAiResponsesClient(properties, mapper,
-                request -> new OpenAiResponsesClient.TransportResponse(200, completedResponseWithoutProviderMarker()));
+        ResponsesApiClient client = new ResponsesApiClient(properties, mapper,
+                request -> new ResponsesApiClient.TransportResponse(200, completedResponseWithoutProviderMarker()));
         DefaultJourneyAiGateway gateway = new DefaultJourneyAiGateway(properties, mapper, providerSchema, client);
 
         assertThatThrownBy(() -> gateway.compileIntent("ORIGIN_A에서 출발"))
