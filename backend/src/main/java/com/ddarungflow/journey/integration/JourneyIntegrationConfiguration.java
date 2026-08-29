@@ -23,9 +23,9 @@ public class JourneyIntegrationConfiguration {
     @Bean
     JourneyAiProperties journeyAiProperties(
             @Value("${journey.ai.enabled:false}") boolean enabled,
-            @Value("${journey.ai.responses-uri:https://api.openai.com/v1/responses}") URI responsesUri,
+            @Value("${journey.ai.responses-uri:https://api.deepseek.com/responses}") URI responsesUri,
             @Value("${journey.ai.api-key:}") String apiKey,
-            @Value("${journey.ai.model:}") String model,
+            @Value("${journey.ai.model:deepseek-v4-flash}") String model,
             @Value("${journey.ai.timeout:10s}") Duration timeout) {
         return new JourneyAiProperties(enabled, responsesUri, apiKey, model, timeout);
     }

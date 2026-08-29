@@ -28,9 +28,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest(properties = {
         "journey.ai.enabled=false",
-        "OPENAI_RESPONSES_URI=https://example.test/v1/responses",
-        "OPENAI_API_KEY=test-api-key",
-        "OPENAI_MODEL=test-journey-model",
+        "JOURNEY_AI_RESPONSES_URI=https://example.test/responses",
+        "JOURNEY_AI_API_KEY=test-api-key",
+        "JOURNEY_AI_MODEL=test-journey-model",
         "journey.return-prediction.enabled=false",
         "journey.phase-a-fixture-enabled=false"
 })
@@ -65,7 +65,7 @@ class JourneyControllerTest {
     @Test
     void safeOffApplicationStartsAndAuthenticatedPlanPersistsAnUnavailableRevision() throws Exception {
         assertThat(aiProperties.enabled()).isFalse();
-        assertThat(aiProperties.responsesUri().toString()).isEqualTo("https://example.test/v1/responses");
+        assertThat(aiProperties.responsesUri().toString()).isEqualTo("https://example.test/responses");
         assertThat(aiProperties.apiKey()).isEqualTo("test-api-key");
         assertThat(aiProperties.model()).isEqualTo("test-journey-model");
         String response = mvc.perform(post("/api/v1/journeys/plan").with(authentication(userA)).with(csrf())

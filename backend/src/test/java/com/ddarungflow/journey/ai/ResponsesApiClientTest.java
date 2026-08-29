@@ -5,25 +5,28 @@ import org.junit.jupiter.api.Test;
 
 import java.net.URI;
 import java.time.Duration;
-import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-class OpenAiResponsesClientTest {
+class ResponsesApiClientTest {
     private final ObjectMapper mapper = new ObjectMapper();
-    private final OpenAiResponsesClient client = new OpenAiResponsesClient(
-            new JourneyAiProperties(true, URI.create("https://example.test/v1/responses"), "not-a-real-key", "runtime-model", Duration.ofSeconds(2)), mapper
+    private final ResponsesApiClient client = new ResponsesApiClient(
+            new JourneyAiProperties(true, URI.create("https://example.test/responses"), "not-a-real-key", "runtime-model", Duration.ofSeconds(2)), mapper
     );
 
     @Test
-    void buildsResponsesStructuredOutputRequestWithStoreDisabled() throws Exception {
+    void buildsDeepSeekResponsesStructuredOutputRequest() throws Exception {
         var payload = mapper.readTree(client.requestBody("ORIGIN_A", "journey_intent", mapper.readTree("{\"type\":\"object\"}")));
 
-        assertThat(payload.path("store").asBoolean()).isFalse();
         assertThat(payload.path("model").asText()).isEqualTo("runtime-model");
+        assertThat(payload.path("input").asText()).isEqualTo("ORIGIN_A");
+        assertThat(payload.path("reasoning").path("effort").asText()).isEqualTo("none");
         assertThat(payload.path("text").path("format").path("type").asText()).isEqualTo("json_schema");
-        assertThat(payload.path("text").path("format").path("strict").asBoolean()).isTrue();
+        assertThat(payload.path("text").path("format").path("name").asText()).isEqualTo("journey_intent");
+        assertThat(payload.path("text").path("format").path("schema")).isNotNull();
+        assertThat(payload.has("store")).isFalse();
+        assertThat(payload.path("text").path("format").has("strict")).isFalse();
     }
 
     @Test
@@ -34,12 +37,12 @@ class OpenAiResponsesClientTest {
 
     @Test
     void rejectsDisabledOrMissingProviderWithoutNetwork() throws Exception {
-        OpenAiResponsesClient disabled = new OpenAiResponsesClient(JourneyAiProperties.disabled(), mapper);
+        ResponsesApiClient disabled = new ResponsesApiClient(JourneyAiProperties.disabled(), mapper);
         assertThatThrownBy(() -> disabled.requestStructuredOutput("ORIGIN_A", "intent", mapper.readTree("{}")))
                 .extracting(exception -> ((JourneyAiException) exception).code())
                 .isEqualTo(JourneyAiErrorCode.AI_DISABLED);
 
-        OpenAiResponsesClient unconfigured = new OpenAiResponsesClient(new JourneyAiProperties(true, null, "", "", null), mapper);
+        ResponsesApiClient unconfigured = new ResponsesApiClient(new JourneyAiProperties(true, null, "", "", null), mapper);
         assertThatThrownBy(() -> unconfigured.requestStructuredOutput("ORIGIN_A", "intent", mapper.readTree("{}")))
                 .extracting(exception -> ((JourneyAiException) exception).code())
                 .isEqualTo(JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE);
@@ -47,7 +50,7 @@ class OpenAiResponsesClientTest {
 
     @Test
     void extractsOutputTextAfterReasoningItemsWithoutAssumingOutputOrder() throws Exception {
-        OpenAiResponsesClient fixture = fixture("""
+        ResponsesApiClient fixture = fixture("""
                 {"status":"completed","output":[{"type":"reasoning"},{"type":"message","content":[{"type":"output_text","text":"{\\"origin\\":\\"ORIGIN_A\\"}"}]}]}
                 """);
 
@@ -55,18 +58,19 @@ class OpenAiResponsesClientTest {
     }
 
     @Test
-    void classifiesRefusalIncompleteAndMalformedSuccessfulTransportResponses() throws Exception {
+    void classifiesRefusalIncompleteFailedAndMalformedSuccessfulTransportResponses() throws Exception {
         assertCode("{\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"refusal\",\"refusal\":\"cannot comply\"}]}]}", JourneyAiErrorCode.AI_PROVIDER_REFUSAL);
         assertCode("{\"status\":\"incomplete\",\"incomplete_details\":{\"reason\":\"max_output_tokens\"},\"output\":[]}", JourneyAiErrorCode.AI_RESPONSE_INCOMPLETE);
+        assertCode("{\"status\":\"failed\",\"error\":{\"message\":\"provider detail must not escape\"},\"output\":[]}", JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE);
         assertCode("not-json", JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID);
         assertCode("{\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"not-json\"}]}]}", JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID);
     }
 
-    private OpenAiResponsesClient fixture(String body) {
-        return new OpenAiResponsesClient(
-                new JourneyAiProperties(true, URI.create("https://example.test/v1/responses"), "not-a-real-key", "runtime-model", Duration.ofSeconds(2)),
+    private ResponsesApiClient fixture(String body) {
+        return new ResponsesApiClient(
+                new JourneyAiProperties(true, URI.create("https://example.test/responses"), "not-a-real-key", "runtime-model", Duration.ofSeconds(2)),
                 mapper,
-                request -> new OpenAiResponsesClient.TransportResponse(200, body)
+                request -> new ResponsesApiClient.TransportResponse(200, body)
         );
     }
 
