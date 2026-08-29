@@ -190,3 +190,55 @@ jobs:
             rhysd/actionlint:1.7.8 \
             .github/workflows/ci.yml \
             .github/workflows/staging-deploy.yml
+      - name: Guard frontend build key handling
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -Eq '^[[:space:]]*ARG[[:space:]]+REACT_APP_.*KEY' frontend/Dockerfile; then
+            echo 'Frontend key configuration must not use Docker ARG.' >&2
+            exit 1
+          fi
+          if grep -Eq '^[[:space:]]*ENV[[:space:]]+REACT_APP_.*KEY' frontend/Dockerfile; then
+            echo 'Frontend key configuration must not use Docker ENV.' >&2
+            exit 1
+          fi
+          grep -Eq -- '--mount=type=secret,id=kakao_map_app_key' frontend/Dockerfile
+          grep -Eq -- '--mount=type=secret,id=toss_payments_client_key' frontend/Dockerfile
+          if awk '
+            /^[[:space:]]*build-args:[[:space:]]*\|/ { in_build_args = 1; next }
+            in_build_args && /^[[:space:]]*[[:alnum:]_-]+:/ { in_build_args = 0 }
+            in_build_args && /REACT_APP_.*KEY/ { found = 1 }
+            END { exit !found }
+          ' .github/workflows/staging-deploy.yml; then
+            echo 'Frontend key configuration must not be passed through build-args.' >&2
+            exit 1
+          fi
+          grep -Eq 'kakao_map_app_key=.*env\.KAKAO_MAP_APP_KEY' .github/workflows/staging-deploy.yml
+          grep -Eq 'toss_payments_client_key=.*env\.TOSS_PAYMENTS_CLIENT_KEY' .github/workflows/staging-deploy.yml
+      - name: Verify frontend BuildKit secrets stay out of build metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          sentinel=$(uuidgen | tr -d '-')
+          kakao_secret=$(mktemp)
+          toss_secret=$(mktemp)
+          build_log=$(mktemp)
+          image_tag="ddarung-flow-frontend-secret-guard:${GITHUB_SHA}"
+          trap 'rm -f "$kakao_secret" "$toss_secret" "$build_log"; docker image rm -f "$image_tag" >/dev/null 2>&1 || true' EXIT
+          printf '%s' "$sentinel-kakao" > "$kakao_secret"
+          printf '%s' "$sentinel-toss" > "$toss_secret"
+          docker buildx build --load --progress=plain \
+            --tag "$image_tag" \
+            --build-arg REACT_APP_API_BASE_URL=https://example.invalid \
+            --build-arg REACT_APP_JOURNEY_ENABLED=false \
+            --secret id=kakao_map_app_key,src="$kakao_secret" \
+            --secret id=toss_payments_client_key,src="$toss_secret" \
+            --file frontend/Dockerfile frontend > "$build_log" 2>&1
+          if grep -Fq -- "$sentinel" "$build_log"; then
+            echo 'Frontend BuildKit sentinel appeared in the captured build log.' >&2
+            exit 1
+          fi
+          if docker history --no-trunc "$image_tag" | grep -Fq -- "$sentinel"; then
+            echo 'Frontend BuildKit sentinel appeared in Docker image history.' >&2
+            exit 1
+          fi

@@ -207,6 +207,14 @@ jobs:
           username: ${{ secrets.OCIR_USERNAME }}
           password: ${{ secrets.OCIR_AUTH_TOKEN }}
 
+      - name: Mask frontend client configuration
+        if: matrix.component == 'frontend'
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '::add-mask::%s\n' "$KAKAO_MAP_APP_KEY"
+          printf '::add-mask::%s\n' "$TOSS_PAYMENTS_CLIENT_KEY"
+
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
@@ -217,9 +225,10 @@ jobs:
           tags: ${{ env.OCI_REGISTRY }}/${{ env.OCI_NAMESPACE }}/${{ env.OCI_REPOSITORY }}/${{ matrix.component }}:${{ matrix.tag }}
           build-args: |
             ${{ matrix.component == 'frontend' && format('REACT_APP_API_BASE_URL={0}', env.STAGING_PUBLIC_URL) || '' }}
-            ${{ matrix.component == 'frontend' && format('REACT_APP_KAKAO_MAP_APP_KEY={0}', env.KAKAO_MAP_APP_KEY) || '' }}
-            ${{ matrix.component == 'frontend' && format('REACT_APP_TOSS_PAYMENTS_CLIENT_KEY={0}', env.TOSS_PAYMENTS_CLIENT_KEY) || '' }}
             ${{ matrix.component == 'frontend' && format('REACT_APP_JOURNEY_ENABLED={0}', env.JOURNEY_ENABLED) || '' }}
+          secrets: |
+            ${{ matrix.component == 'frontend' && format('kakao_map_app_key={0}', env.KAKAO_MAP_APP_KEY) || '' }}
+            ${{ matrix.component == 'frontend' && format('toss_payments_client_key={0}', env.TOSS_PAYMENTS_CLIENT_KEY) || '' }}
           cache-from: type=gha,scope=staging-${{ matrix.component }}
           cache-to: type=gha,mode=max,scope=staging-${{ matrix.component }}
 
