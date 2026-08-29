@@ -80,6 +80,28 @@ class JourneyPlanServiceTest {
     }
 
     @Test
+    void passesOnlyValidatedNonSensitiveContextToNaturalLanguageCompile() {
+        java.util.concurrent.atomic.AtomicReference<com.ddarungflow.journey.ai.JourneyCompileRequest> captured = new java.util.concurrent.atomic.AtomicReference<>();
+        JourneyAiGateway contextAwareAi = new JourneyAiGateway() {
+            @Override public IntentResult compileIntent(String input) { throw new AssertionError("legacy compile path must not be used"); }
+            @Override public IntentResult compileIntent(com.ddarungflow.journey.ai.JourneyCompileRequest request) {
+                captured.set(request);
+                return IntentResult.unavailable(JourneyAiErrorCode.AI_DISABLED);
+            }
+            @Override public List<com.ddarungflow.journey.ai.ToolCallRequest> validateToolPlan(List<com.ddarungflow.journey.ai.ToolCallRequest> requests) { return requests; }
+        };
+
+        JourneyPlanService.PlanInput input = naturalLanguageInput();
+        service(new InMemoryPersistence(), contextAwareAi, new CountingReturnPort()).plan(10L, input);
+
+        assertThat(captured.get().origin()).isEqualTo(new PlaceReference("성수역", "place-origin"));
+        assertThat(captured.get().departureAt()).isEqualTo(input.departureAt());
+        assertThat(captured.get().maxJourneyMinutes()).isEqualTo(60);
+        assertThat(captured.get().requiredBikeCount()).isEqualTo(2);
+        assertThat(captured.get().toString()).doesNotContain("37.54").doesNotContain("127.05");
+    }
+
+    @Test
     void mockAiClarificationIsPersistedWithoutProviderOutputLeakage() {
         JourneyAiGateway clarificationAi = new JourneyAiGateway() {
             @Override public IntentResult compileIntent(String input) {

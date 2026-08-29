@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 
 import java.net.URI;
 import java.time.Duration;
+import java.time.OffsetDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -20,13 +21,30 @@ class ResponsesApiClientTest {
         var payload = mapper.readTree(client.requestBody("ORIGIN_A", "journey_intent", mapper.readTree("{\"type\":\"object\"}")));
 
         assertThat(payload.path("model").asText()).isEqualTo("runtime-model");
-        assertThat(payload.path("input").asText()).isEqualTo("ORIGIN_A");
+        assertThat(payload.path("instructions").asText()).isNotBlank();
+        assertThat(mapper.readTree(payload.path("input").asText()).path("naturalLanguageText").asText()).isEqualTo("ORIGIN_A");
         assertThat(payload.path("reasoning").path("effort").asText()).isEqualTo("none");
         assertThat(payload.path("text").path("format").path("type").asText()).isEqualTo("json_schema");
         assertThat(payload.path("text").path("format").path("name").asText()).isEqualTo("journey_intent");
         assertThat(payload.path("text").path("format").path("schema")).isNotNull();
         assertThat(payload.has("store")).isFalse();
         assertThat(payload.path("text").path("format").has("strict")).isFalse();
+    }
+
+    @Test
+    void sendsOnlyAllowlistedCompileContextInInstructionsAndInputContract() throws Exception {
+        JourneyCompileRequest request = new JourneyCompileRequest("성수에서 출발", new PlaceReference("성수역", "ORIGIN_A"),
+                new PlaceReference("서울숲", "DESTINATION_B"), OffsetDateTime.parse("2026-08-30T18:30:00+09:00"), 60, 2);
+        var payload = mapper.readTree(client.requestBody(request, "journey_intent", mapper.readTree("{\"type\":\"object\"}")));
+        var input = mapper.readTree(payload.path("input").asText());
+
+        assertThat(payload.path("instructions").asText()).contains("authoritative");
+        assertThat(input.path("origin").path("displayName").asText()).isEqualTo("성수역");
+        assertThat(input.path("origin").path("placeId").asText()).isEqualTo("ORIGIN_A");
+        assertThat(OffsetDateTime.parse(input.path("departureAt").asText())).isEqualTo(request.departureAt());
+        assertThat(input.path("requiredBikeCount").asInt()).isEqualTo(2);
+        assertThat(input.toString()).doesNotContain("latitude").doesNotContain("longitude").doesNotContain("userId")
+                .doesNotContain("Authorization").doesNotContain("cookie").doesNotContain("secret");
     }
 
     @Test
@@ -62,8 +80,8 @@ class ResponsesApiClientTest {
         assertCode("{\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"refusal\",\"refusal\":\"cannot comply\"}]}]}", JourneyAiErrorCode.AI_PROVIDER_REFUSAL);
         assertCode("{\"status\":\"incomplete\",\"incomplete_details\":{\"reason\":\"max_output_tokens\"},\"output\":[]}", JourneyAiErrorCode.AI_RESPONSE_INCOMPLETE);
         assertCode("{\"status\":\"failed\",\"error\":{\"message\":\"provider detail must not escape\"},\"output\":[]}", JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE);
-        assertCode("not-json", JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID);
-        assertCode("{\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"not-json\"}]}]}", JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID);
+        assertCode("not-json", JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID, JourneyAiFailureStage.RESPONSE_ENVELOPE);
+        assertCode("{\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"not-json\"}]}]}", JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID, JourneyAiFailureStage.OUTPUT_TEXT_JSON);
     }
 
     private ResponsesApiClient fixture(String body) {
@@ -75,8 +93,15 @@ class ResponsesApiClientTest {
     }
 
     private void assertCode(String body, JourneyAiErrorCode expected) throws Exception {
+        assertCode(body, expected, null);
+    }
+
+    private void assertCode(String body, JourneyAiErrorCode expected, JourneyAiFailureStage stage) throws Exception {
         assertThatThrownBy(() -> fixture(body).requestStructuredOutput("ORIGIN_A", "intent", mapper.readTree("{}")))
-                .extracting(exception -> ((JourneyAiException) exception).code())
-                .isEqualTo(expected);
+                .satisfies(exception -> {
+                    JourneyAiException journeyException = (JourneyAiException) exception;
+                    assertThat(journeyException.code()).isEqualTo(expected);
+                    assertThat(journeyException.failureStage()).isEqualTo(stage);
+                });
     }
 }

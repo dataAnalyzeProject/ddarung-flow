@@ -3,7 +3,9 @@ package com.ddarungflow.journey.application;
 import com.ddarungflow.journey.ai.JourneyAiErrorCode;
 import com.ddarungflow.journey.ai.JourneyAiException;
 import com.ddarungflow.journey.ai.JourneyAiGateway;
+import com.ddarungflow.journey.ai.JourneyCompileRequest;
 import com.ddarungflow.journey.ai.JourneyIntent;
+import com.ddarungflow.journey.ai.PlaceReference;
 import com.ddarungflow.journey.domain.JourneyCandidate;
 import com.ddarungflow.journey.domain.JourneyStatus;
 import com.ddarungflow.journey.persistence.JourneyDecisionPersistencePort;
@@ -70,7 +72,7 @@ public class JourneyPlanService {
 
         if (input.requestMode() == RequestMode.NATURAL_LANGUAGE) {
             try {
-                JourneyAiGateway.IntentResult result = aiGateway.compileIntent(input.naturalLanguageText());
+                JourneyAiGateway.IntentResult result = aiGateway.compileIntent(compileRequest(input));
                 if (result.available()) {
                     aiIntent = result.intent();
                     if (aiIntent.needsClarification()) {
@@ -110,6 +112,15 @@ public class JourneyPlanService {
         } catch (Exception exception) {
             throw new IllegalStateException("Journey normalized intent를 저장할 수 없습니다.", exception);
         }
+    }
+
+    private JourneyCompileRequest compileRequest(PlanInput input) {
+        return new JourneyCompileRequest(input.naturalLanguageText(), toPlaceReference(input.origin()), toPlaceReference(input.destination()),
+                input.departureAt(), input.maxJourneyMinutes(), input.requiredBikeCount());
+    }
+
+    private PlaceReference toPlaceReference(Place place) {
+        return place == null ? null : new PlaceReference(place.displayName(), place.placeId());
     }
 
     private Decision toDecision(JourneyDecisionPersistencePort.StoredDecision stored) {
