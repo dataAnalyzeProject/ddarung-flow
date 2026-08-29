@@ -42,7 +42,7 @@ class AdminAuditLogsControllerTest {
     private UsernamePasswordAuthenticationToken adminAuthentication() {
         Users user = usersRepository.save(Users.builder().provider("google").providerUserId("audit-admin-" + System.nanoTime())
                 .displayName("감사 관리자").email(null).role(UserRole.ADMIN).build());
-        PrincipalDetails principal = new PrincipalDetails(user);
+        PrincipalDetails principal = com.ddarungflow.support.AdminSecurityTestSupport.principal(user);
         return new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
     }
 }

@@ -54,6 +54,9 @@ public class ModelArtifact {
     @Column(name = "manifest_sha256", length = 64)
     private String manifestSha256;
 
+    @Column(name = "validated_by_user_id")
+    private Long validatedByUserId;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private ModelArtifactState state;
@@ -135,5 +138,10 @@ public class ModelArtifact {
 
     public void transitionTo(ModelArtifactState newState) {
         this.state = newState;
+    }
+
+    public void markValidatedBy(Long actorUserId) {
+        if (actorUserId == null) throw new IllegalArgumentException("validator actor is required");
+        this.validatedByUserId = actorUserId;
     }
 }

@@ -99,7 +99,7 @@ class AdminUsersControllerTest {
 
     private UsernamePasswordAuthenticationToken authFor(String providerUserId, UserRole role) {
         Users saved = usersRepository.save(user(providerUserId, role));
-        PrincipalDetails principal = new PrincipalDetails(saved);
+        PrincipalDetails principal = com.ddarungflow.support.AdminSecurityTestSupport.principal(saved);
         return new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
     }
 

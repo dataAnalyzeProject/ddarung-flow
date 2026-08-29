@@ -127,8 +127,17 @@ public class ModelRegistryService {
     }
 
     public ModelArtifact transition(Long modelId, ModelArtifactState target) {
+        return transition(modelId, target, null);
+    }
+
+    public ModelArtifact transition(Long modelId, ModelArtifactState target, Long actorUserId) {
         if (modelId == null || target == null) {
             throw new IllegalArgumentException("modelId and target state must not be null");
+        }
+        if ((target == ModelArtifactState.VALIDATED || target == ModelArtifactState.APPROVED
+                || target == ModelArtifactState.REJECTED)
+                && actorUserId == null) {
+            throw new MakerCheckerViolationException();
         }
         ModelArtifact artifact = artifactRepository.findById(modelId)
             .orElseThrow(() -> new IllegalArgumentException("ModelArtifact not found with id: " + modelId));
@@ -155,9 +164,14 @@ public class ModelRegistryService {
             if (combinations.size() != 20) {
                 throw new IllegalStateException("Cannot transition DRAFT model to VALIDATED: evaluations must cover all 20 unique combinations");
             }
+            if (actorUserId != null) artifact.markValidatedBy(actorUserId);
         } else if (current == ModelArtifactState.VALIDATED) {
             if (target != ModelArtifactState.APPROVED && target != ModelArtifactState.REJECTED) {
                 throw new IllegalStateException("VALIDATED state can only transition to APPROVED or REJECTED");
+            }
+            if (actorUserId != null && (actorUserId.equals(artifact.getTrainerUserId())
+                    || actorUserId.equals(artifact.getValidatedByUserId()))) {
+                throw new MakerCheckerViolationException();
             }
         } else {
             throw new IllegalStateException("Cannot transition from terminal state: " + current);
@@ -168,9 +182,17 @@ public class ModelRegistryService {
     }
 
     @Transactional(readOnly = true)
+    public ModelArtifact findById(Long modelId) {
+        return artifactRepository.findById(modelId)
+                .orElseThrow(() -> new IllegalArgumentException("ModelArtifact not found with id: " + modelId));
+    }
+
+    @Transactional(readOnly = true)
     public List<ModelArtifact> findAll() {
         return artifactRepository.findAll();
     }
+
+    public static class MakerCheckerViolationException extends RuntimeException { }
 
     @Transactional(readOnly = true)
     public List<ModelEvaluation> findEvaluations(Long modelId) {

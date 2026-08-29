@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.time.OffsetDateTime;
 
@@ -21,6 +22,7 @@ public class AdminAuditLogsController {
     private final AdminAuditLogQueryService adminAuditLogQueryService;
 
     @GetMapping
+    @PreAuthorize("hasAuthority('AUDIT_READ')")
     public AdminAuditLogDtos.PageResponse list(@RequestParam(required = false) String action,
                                                 @RequestParam(required = false) AuditResult result,
                                                 @RequestParam(required = false) String reasonCode,

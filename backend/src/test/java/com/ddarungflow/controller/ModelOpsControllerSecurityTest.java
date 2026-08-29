@@ -1,6 +1,8 @@
 package com.ddarungflow.controller;
 
 import com.ddarungflow.dto.PrincipalDetails;
+import com.ddarungflow.admin.access.AdminPermission;
+import com.ddarungflow.admin.access.AdminRole;
 import com.ddarungflow.entity.UserRole;
 import com.ddarungflow.entity.Users;
 import com.ddarungflow.modelops.ModelArtifact;
@@ -28,6 +30,7 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.EnumSet;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
@@ -137,6 +140,7 @@ class ModelOpsControllerSecurityTest {
     @Test
     void adminCanCreateUploadRegisterTransitionAndReadModels() throws Exception {
         UsernamePasswordAuthenticationToken admin = authenticationFor(UserRole.ADMIN);
+        UsernamePasswordAuthenticationToken approver = authenticationFor(UserRole.ADMIN);
 
         MvcResult uploadResult = mockMvc.perform(post("/api/v1/admin/model-uploads")
                         .with(csrf()).with(authentication(admin))
@@ -169,7 +173,7 @@ class ModelOpsControllerSecurityTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.state").value("VALIDATED"));
         mockMvc.perform(post("/api/v1/admin/models/{id}/approve", approved.getId())
-                        .with(csrf()).with(authentication(admin)))
+                        .with(csrf()).with(authentication(approver)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.state").value("APPROVED"));
 
@@ -190,10 +194,55 @@ class ModelOpsControllerSecurityTest {
                         .with(csrf()).with(authentication(admin)))
                 .andExpect(status().isOk());
         mockMvc.perform(post("/api/v1/admin/models/{id}/reject", rejected.getId())
-                        .with(csrf()).with(authentication(admin)))
+                        .with(csrf()).with(authentication(approver)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.state").value("REJECTED"));
-        assertThrows(IllegalStateException.class, () -> modelRegistryService.transition(rejected.getId(), ModelArtifactState.APPROVED));
+        assertThrows(IllegalStateException.class, () -> modelRegistryService.transition(rejected.getId(),
+                ModelArtifactState.APPROVED, ((PrincipalDetails) approver.getPrincipal()).getUsers().getId()));
+    }
+
+    @Test
+    void makerCheckerRejectsSameActorAndPermissionlessAdminButAllowsDifferentApprover() throws Exception {
+        UsernamePasswordAuthenticationToken maker = authenticationForRoles(AdminRole.MODEL_ENGINEER, AdminRole.MODEL_APPROVER);
+        UsernamePasswordAuthenticationToken engineerOnly = authenticationForRoles(AdminRole.MODEL_ENGINEER);
+        UsernamePasswordAuthenticationToken checker = authenticationForRoles(AdminRole.MODEL_APPROVER);
+
+        mockMvc.perform(post("/api/v1/admin/models").with(csrf()).with(authentication(maker))
+                        .contentType(MediaType.APPLICATION_JSON).content(modelRequest("maker-checker-approve")))
+                .andExpect(status().isCreated());
+        ModelArtifact approveCandidate = artifactRepository.findAll().getFirst();
+        evaluationRepository.saveAll(evaluationsFor(approveCandidate.getId()));
+        mockMvc.perform(post("/api/v1/admin/models/{id}/validate", approveCandidate.getId())
+                        .with(csrf()).with(authentication(maker))).andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/admin/models/{id}/approve", approveCandidate.getId())
+                        .with(csrf()).with(authentication(maker)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("MODEL_PROMOTION_GATE_FAILED"));
+        mockMvc.perform(post("/api/v1/admin/models/{id}/approve", approveCandidate.getId())
+                        .with(csrf()).with(authentication(engineerOnly)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ADMIN_PERMISSION_DENIED"));
+        mockMvc.perform(post("/api/v1/admin/models/{id}/approve", approveCandidate.getId())
+                        .with(csrf()).with(authentication(checker)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.state").value("APPROVED"));
+
+        mockMvc.perform(post("/api/v1/admin/models").with(csrf()).with(authentication(maker))
+                        .contentType(MediaType.APPLICATION_JSON).content(modelRequest("maker-checker-reject", "e".repeat(64))))
+                .andExpect(status().isCreated());
+        ModelArtifact rejectCandidate = artifactRepository.findAll().stream()
+                .filter(model -> "maker-checker-reject".equals(model.getVersion())).findFirst().orElseThrow();
+        evaluationRepository.saveAll(evaluationsFor(rejectCandidate.getId()));
+        mockMvc.perform(post("/api/v1/admin/models/{id}/validate", rejectCandidate.getId())
+                        .with(csrf()).with(authentication(maker))).andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/admin/models/{id}/reject", rejectCandidate.getId())
+                        .with(csrf()).with(authentication(maker)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("MODEL_PROMOTION_GATE_FAILED"));
+        mockMvc.perform(post("/api/v1/admin/models/{id}/reject", rejectCandidate.getId())
+                        .with(csrf()).with(authentication(checker)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.state").value("REJECTED"));
     }
 
     private UsernamePasswordAuthenticationToken authenticationFor(UserRole role) {
@@ -204,14 +253,29 @@ class ModelOpsControllerSecurityTest {
                 .email(null)
                 .role(role)
                 .build());
-        PrincipalDetails principal = new PrincipalDetails(user);
+        PrincipalDetails principal = com.ddarungflow.support.AdminSecurityTestSupport.principal(user);
+        return new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+    }
+
+    private UsernamePasswordAuthenticationToken authenticationForRoles(AdminRole first, AdminRole... rest) {
+        Users user = usersRepository.save(Users.builder()
+                .provider("google").providerUserId("modelops-role-" + UUID.randomUUID())
+                .displayName("관리자").email(null).role(UserRole.ADMIN).build());
+        EnumSet<AdminRole> roles = EnumSet.of(first, rest);
+        EnumSet<AdminPermission> permissions = EnumSet.noneOf(AdminPermission.class);
+        roles.forEach(role -> permissions.addAll(role.permissions()));
+        PrincipalDetails principal = new PrincipalDetails(user, roles, permissions);
         return new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
     }
 
     private String modelRequest(String version) {
+        return modelRequest(version, HASH);
+    }
+
+    private String modelRequest(String version, String sha256) {
         return """
             {"version":"%s","artifactKey":"models/%s.joblib","sha256":"%s","codeCommit":"abc123","dataManifestHash":"%s","configHash":"%s","featureSchemaVersion":"v1","manifestKey":"models/%s.json","manifestSha256":"%s"}
-            """.formatted(version, version, HASH, "b".repeat(64), "c".repeat(64), version, "d".repeat(64));
+            """.formatted(version, version, sha256, "b".repeat(64), "c".repeat(64), version, "d".repeat(64));
     }
 
     private List<ModelEvaluation> evaluationsFor(Long modelId) {

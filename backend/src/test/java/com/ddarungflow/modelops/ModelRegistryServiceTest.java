@@ -139,14 +139,15 @@ class ModelRegistryServiceTest {
 
         // DRAFT -> VALIDATED without 20 evaluations should fail
         given(evaluationRepository.findAllByModelId(modelId)).willReturn(Collections.emptyList());
-        assertThatThrownBy(() -> registryService.transition(modelId, ModelArtifactState.VALIDATED))
+        assertThatThrownBy(() -> registryService.transition(modelId, ModelArtifactState.VALIDATED, 2L))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("without exactly 20 evaluations");
 
         // DRAFT -> VALIDATED with 20 evaluations should succeed
         given(evaluationRepository.findAllByModelId(modelId)).willReturn(create20ValidEvaluations(modelId));
-        ModelArtifact validated = registryService.transition(modelId, ModelArtifactState.VALIDATED);
+        ModelArtifact validated = registryService.transition(modelId, ModelArtifactState.VALIDATED, 2L);
         assertThat(validated.getState()).isEqualTo(ModelArtifactState.VALIDATED);
+        assertThat(validated.getValidatedByUserId()).isEqualTo(2L);
 
         // DRAFT -> APPROVED directly should fail
         ModelArtifact draftArtifact2 = new ModelArtifact(
@@ -154,7 +155,7 @@ class ModelRegistryServiceTest {
             "v1", ModelArtifactState.DRAFT, now
         );
         given(artifactRepository.findById(2L)).willReturn(Optional.of(draftArtifact2));
-        assertThatThrownBy(() -> registryService.transition(2L, ModelArtifactState.APPROVED))
+        assertThatThrownBy(() -> registryService.transition(2L, ModelArtifactState.APPROVED, 2L))
             .isInstanceOf(IllegalStateException.class);
 
         // VALIDATED -> APPROVED
@@ -163,13 +164,24 @@ class ModelRegistryServiceTest {
             "v1", ModelArtifactState.VALIDATED, now
         );
         given(artifactRepository.findById(3L)).willReturn(Optional.of(validatedArtifact));
-        ModelArtifact approved = registryService.transition(3L, ModelArtifactState.APPROVED);
+        ModelArtifact approved = registryService.transition(3L, ModelArtifactState.APPROVED, 2L);
         assertThat(approved.getState()).isEqualTo(ModelArtifactState.APPROVED);
 
         // Transition to ACTIVE or RETIRED should be rejected (lead role only)
         assertThatThrownBy(() -> registryService.transition(3L, ModelArtifactState.ACTIVE))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("reserved for team lead service");
+    }
+
+    @Test
+    @DisplayName("requiresActorForValidationApprovalAndRejection: actor 없는 검증·승인·거부 우회 차단")
+    void requiresActorForValidationApprovalAndRejection() {
+        assertThatThrownBy(() -> registryService.transition(10L, ModelArtifactState.VALIDATED))
+            .isInstanceOf(ModelRegistryService.MakerCheckerViolationException.class);
+        assertThatThrownBy(() -> registryService.transition(10L, ModelArtifactState.APPROVED))
+            .isInstanceOf(ModelRegistryService.MakerCheckerViolationException.class);
+        assertThatThrownBy(() -> registryService.transition(10L, ModelArtifactState.REJECTED, null))
+            .isInstanceOf(ModelRegistryService.MakerCheckerViolationException.class);
     }
 
     @Test
@@ -261,7 +273,7 @@ class ModelRegistryServiceTest {
         given(artifactRepository.findById(modelId)).willReturn(Optional.of(draftArtifact));
         given(evaluationRepository.findAllByModelId(modelId)).willReturn(dupEvaluations);
 
-        assertThatThrownBy(() -> registryService.transition(modelId, ModelArtifactState.VALIDATED))
+        assertThatThrownBy(() -> registryService.transition(modelId, ModelArtifactState.VALIDATED, 2L))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("unique combinations");
 

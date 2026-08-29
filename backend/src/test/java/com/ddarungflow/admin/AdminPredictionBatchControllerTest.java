@@ -87,7 +87,7 @@ class AdminPredictionBatchControllerTest {
 
     private UsernamePasswordAuthenticationToken auth(UserRole role) {
         Users user = users.save(Users.builder().provider("google").providerUserId("batch-" + role).displayName("batch").role(role).build());
-        PrincipalDetails principal = new PrincipalDetails(user);
+        PrincipalDetails principal = com.ddarungflow.support.AdminSecurityTestSupport.principal(user);
         return new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
     }
 }

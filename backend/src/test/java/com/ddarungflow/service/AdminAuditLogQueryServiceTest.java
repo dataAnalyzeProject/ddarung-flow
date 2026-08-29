@@ -31,7 +31,7 @@ class AdminAuditLogQueryServiceTest {
     @Test
     void combinesFiltersUsesDescendingTimeAndIdAndReturnsOnlyPublicFields() {
         OffsetDateTime occurredAt = OffsetDateTime.parse("2026-08-26T10:00:00+09:00");
-        AuditEvent event = AuditEvent.builder().actorUserId(99L).actorRole(UserRole.ADMIN).action("ROLE_CHANGE")
+        AuditEvent event = AuditEvent.builder().actorUserId(99L).actorRole(UserRole.ADMIN).actorRoleCodes("SUPER_ADMIN").action("ROLE_CHANGE")
                 .targetType("USER").targetId("public-user").result(AuditResult.SUCCESS).reasonCode("ROLE_CHANGED")
                 .correlationId("correlation-1").occurredAt(occurredAt).build();
         when(auditEventRepository.findAuditLogs(any(), any(), any(), any(), any(), any()))
