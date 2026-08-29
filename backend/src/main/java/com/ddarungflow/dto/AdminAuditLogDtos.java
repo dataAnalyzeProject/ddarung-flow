@@ -11,7 +11,8 @@ public final class AdminAuditLogDtos {
 
     public record AuditLogResponse(String action, String targetType, String targetId, UserRole actorRole,
                                    AuditResult result, String reasonCode, String correlationId,
-                                   OffsetDateTime occurredAt) { }
+                                   OffsetDateTime occurredAt, String targetPublicId,
+                                   List<String> actorRoleCodes) { }
 
     public record PageResponse(List<AuditLogResponse> items, int page, int size, long total) { }
 

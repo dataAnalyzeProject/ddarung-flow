@@ -51,7 +51,7 @@ class ModelActivationServiceTest {
         verify(gateway).activate(candidate);
         verify(artifactRepository).save(previous);
         verify(artifactRepository).save(candidate);
-        verify(auditEventService).appendEvent(eq(1L), eq(UserRole.ADMIN), eq("MODEL_ACTIVATE"), eq("MODEL"), anyString(), eq(AuditResult.SUCCESS), isNull(), anyString(), any());
+        verify(auditEventService).appendEvent(eq(1L), eq(UserRole.ADMIN), anyCollection(), eq("MODEL_ACTIVATE"), eq("MODEL"), eq("candidate"), eq(AuditResult.SUCCESS), isNull(), isNull(), anyString(), any());
     }
 
     @Test
@@ -69,7 +69,7 @@ class ModelActivationServiceTest {
         assertThat(previous.getState()).isEqualTo(ModelArtifactState.ACTIVE);
         verify(gateway).activate(previous);
         verify(artifactRepository, never()).save(any());
-        verify(auditEventService).appendEvent(eq(1L), eq(UserRole.ADMIN), eq("MODEL_ACTIVATE"), eq("MODEL"), anyString(), eq(AuditResult.FAILURE), eq("POST_SWITCH_SMOKE_FAILED"), anyString(), any());
+        verify(auditEventService).appendEvent(eq(1L), eq(UserRole.ADMIN), anyCollection(), eq("MODEL_ACTIVATE"), eq("MODEL"), eq("candidate"), eq(AuditResult.FAILURE), eq("POST_SWITCH_SMOKE_FAILED"), isNull(), anyString(), any());
     }
 
     @Test

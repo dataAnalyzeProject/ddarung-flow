@@ -14,6 +14,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.nio.file.Files;
@@ -28,6 +29,7 @@ public class AdminExportsController {
     private final ExportFileService exportFileService;
 
     @PostMapping
+    @PreAuthorize("hasAnyAuthority('DATA_EXPORT_REQUEST','OPS_REPORT_EXPORT')")
     public ResponseEntity<AdminExportDtos.ExportResponse> create(@AuthenticationPrincipal PrincipalDetails principal,
                                                                    @Valid @RequestBody AdminExportDtos.CreateRequest body) {
         ExportRequest request = exportRequestService.create(principal.getUsers().getId(), body.source(), body.format(), body.purpose(), body.rowCount(), OffsetDateTime.now());
@@ -35,6 +37,7 @@ public class AdminExportsController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyAuthority('DATA_EXPORT_REQUEST','DATA_EXPORT_DOWNLOAD','OPS_REPORT_EXPORT')")
     public AdminExportDtos.ListResponse list() {
         List<AdminExportDtos.ExportResponse> items = exportRequestService.getExportRequestsForAdmin(OffsetDateTime.now()).stream()
                 .map(AdminExportDtos.ExportResponse::from).toList();
@@ -42,11 +45,13 @@ public class AdminExportsController {
     }
 
     @GetMapping("/{exportId}")
+    @PreAuthorize("hasAnyAuthority('DATA_EXPORT_REQUEST','DATA_EXPORT_DOWNLOAD','OPS_REPORT_EXPORT')")
     public AdminExportDtos.ExportResponse detail(@PathVariable Long exportId) {
         return AdminExportDtos.ExportResponse.from(exportRequestService.getExportRequestForAdmin(exportId, OffsetDateTime.now()));
     }
 
     @GetMapping("/{exportId}/download")
+    @PreAuthorize("hasAnyAuthority('DATA_EXPORT_DOWNLOAD','OPS_REPORT_EXPORT')")
     public ResponseEntity<byte[]> download(@PathVariable Long exportId) throws Exception {
         ExportFileService.DownloadedFile file = exportFileService.openForDownload(exportId, OffsetDateTime.now());
         MediaType contentType = file.format().name().equals("CSV") ? MediaType.parseMediaType("text/csv") : MediaType.parseMediaType("application/vnd.apache.parquet");

@@ -20,6 +20,9 @@ public interface UsersRepository extends JpaRepository<Users, Long> {
     // 2. publicId(UUID)로 유저 조회
     Optional<Users> findByPublicId(UUID publicId);
 
+    @Query(value = "select * from users where public_id = :publicId for update", nativeQuery = true)
+    Optional<Users> findByPublicIdForUpdate(@Param("publicId") UUID publicId);
+
     // 3. email로 유저 조회 (필요 시 사용)
     Optional<Users> findByEmail(String email);
 

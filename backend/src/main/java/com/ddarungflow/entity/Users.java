@@ -56,6 +56,9 @@ public class Users {
     @Column(name = "last_login_at")
     private OffsetDateTime lastLoginAt;
 
+    @Column(name = "admin_role_version", nullable = false)
+    private long adminRoleVersion;
+
     @PrePersist
     public void prePersist() {
         if (this.publicId == null) {
@@ -122,5 +125,9 @@ public class Users {
             throw new IllegalArgumentException("허용되지 않은 역할입니다.");
         }
         this.role = role;
+    }
+
+    public long incrementAdminRoleVersion() {
+        return ++adminRoleVersion;
     }
 }

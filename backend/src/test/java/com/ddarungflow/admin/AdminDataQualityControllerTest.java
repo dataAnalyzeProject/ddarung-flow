@@ -79,7 +79,7 @@ class AdminDataQualityControllerTest {
 
     private UsernamePasswordAuthenticationToken auth(UserRole role, String suffix) {
         Users user = users.save(Users.builder().provider("google").providerUserId("quality-" + suffix).displayName(suffix).role(role).build());
-        PrincipalDetails principal = new PrincipalDetails(user);
+        PrincipalDetails principal = com.ddarungflow.support.AdminSecurityTestSupport.principal(user);
         return new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
     }
 }

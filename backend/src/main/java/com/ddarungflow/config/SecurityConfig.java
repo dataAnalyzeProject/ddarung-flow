@@ -1,5 +1,8 @@
 package com.ddarungflow.config;
 
+import com.ddarungflow.admin.access.AdminAuthorityRefreshFilter;
+import com.ddarungflow.admin.access.AdminAuthorityService;
+import com.ddarungflow.repository.UsersRepository;
 import com.ddarungflow.service.CustomOAuth2UserService;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -10,6 +13,9 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.authorization.AuthorizationDeniedException;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
@@ -17,6 +23,7 @@ import org.springframework.security.oauth2.core.OAuth2AuthorizationException;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -28,10 +35,13 @@ import java.io.IOException;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
 
     private final CustomOAuth2UserService customOAuth2UserService;
+    private final AdminAuthorityService adminAuthorityService;
+    private final UsersRepository usersRepository;
 
     @Value("${app.frontend-url:http://localhost:3000}")
     private String frontendUrl;
@@ -146,6 +156,7 @@ public class SecurityConfig {
                         .authenticationEntryPoint(apiVsRedirectEntryPoint())
                         .accessDeniedHandler(adminAccessDeniedHandler())
                 )
+                .addFilterAfter(new AdminAuthorityRefreshFilter(adminAuthorityService, usersRepository), CsrfFilter.class)
                 .oauth2Login(oauth2 -> oauth2
                         .loginPage(frontendUrl + "/login")
                         .authorizationEndpoint(endpoint -> endpoint
@@ -183,7 +194,13 @@ public class SecurityConfig {
     private AccessDeniedHandler adminAccessDeniedHandler() {
         return (request, response, accessDeniedException) -> {
             if (ADMIN_API_PATH.matcher(request.getRequestURI()).matches()) {
-                writeApiError(response, HttpServletResponse.SC_FORBIDDEN, "ADMIN_ACCESS_DENIED", "관리자 권한이 필요합니다.");
+                boolean adminPermissionDenied = accessDeniedException instanceof AuthorizationDeniedException
+                        && SecurityContextHolder.getContext().getAuthentication() != null
+                        && SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
+                        .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
+                writeApiError(response, HttpServletResponse.SC_FORBIDDEN,
+                        adminPermissionDenied ? "ADMIN_PERMISSION_DENIED" : "ADMIN_ACCESS_DENIED",
+                        adminPermissionDenied ? "세부 관리자 권한이 필요합니다." : "관리자 권한이 필요합니다.");
                 return;
             }
             if (RETENTION_API_PATH.matcher(request.getRequestURI()).matches()) {

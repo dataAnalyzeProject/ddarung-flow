@@ -86,7 +86,7 @@ class QnaControllerTest {
 
     private UsernamePasswordAuthenticationToken authFor(String id, UserRole role) {
         Users saved = usersRepository.save(user(id, role));
-        PrincipalDetails principal = new PrincipalDetails(saved);
+        PrincipalDetails principal = com.ddarungflow.support.AdminSecurityTestSupport.principal(saved);
         return new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
     }
 

@@ -1,5 +1,7 @@
 package com.ddarungflow.service;
 
+import com.ddarungflow.admin.access.AdminAuthorityService;
+import com.ddarungflow.admin.access.AdminAuthoritySnapshot;
 import com.ddarungflow.dto.PrincipalDetails;
 import com.ddarungflow.entity.Users;
 import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService;
@@ -15,9 +17,11 @@ import java.util.Map;
 public class CustomOAuth2UserService extends DefaultOAuth2UserService {
 
     private final AuthService authService;
+    private final AdminAuthorityService adminAuthorityService;
 
-    public CustomOAuth2UserService(AuthService authService) {
+    public CustomOAuth2UserService(AuthService authService, AdminAuthorityService adminAuthorityService) {
         this.authService = authService;
+        this.adminAuthorityService = adminAuthorityService;
     }
 
     @Override
@@ -70,6 +74,7 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
                 .getProviderDetails()
                 .getUserInfoEndpoint()
                 .getUserNameAttributeName();
-        return new PrincipalDetails(user, attributes, nameAttributeKey);
+        AdminAuthoritySnapshot authority = adminAuthorityService.load(user);
+        return new PrincipalDetails(user, attributes, nameAttributeKey, authority.roles(), authority.permissions());
     }
 }

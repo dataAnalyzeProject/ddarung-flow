@@ -1,5 +1,7 @@
 package com.ddarungflow.dto;
 
+import com.ddarungflow.admin.access.AdminPermission;
+import com.ddarungflow.admin.access.AdminRole;
 import com.ddarungflow.entity.Users;
 import lombok.Getter;
 import org.springframework.security.core.GrantedAuthority;
@@ -8,8 +10,9 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 
 import java.util.Collection;
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.Map;
+import java.util.Set;
 
 @Getter
 public class PrincipalDetails implements UserDetails, OAuth2User {
@@ -17,17 +20,32 @@ public class PrincipalDetails implements UserDetails, OAuth2User {
     private final Users users;
     private Map<String, Object> attributes;
     private String nameAttributeKey;
+    private final Set<AdminRole> adminRoles;
+    private final Set<AdminPermission> adminPermissions;
 
     // 1. 일반 Form 로그인용 생성자
     public PrincipalDetails(Users users) {
         this.users = users;
+        this.adminRoles = Set.of();
+        this.adminPermissions = Set.of();
     }
 
     // 2. OAuth2 소셜 로그인용 생성자
     public PrincipalDetails(Users users, Map<String, Object> attributes, String nameAttributeKey) {
+        this(users, attributes, nameAttributeKey, Set.of(), Set.of());
+    }
+
+    public PrincipalDetails(Users users, Set<AdminRole> adminRoles, Set<AdminPermission> adminPermissions) {
+        this(users, null, null, adminRoles, adminPermissions);
+    }
+
+    public PrincipalDetails(Users users, Map<String, Object> attributes, String nameAttributeKey,
+                            Set<AdminRole> adminRoles, Set<AdminPermission> adminPermissions) {
         this.users = users;
         this.attributes = attributes;
         this.nameAttributeKey = nameAttributeKey;
+        this.adminRoles = Set.copyOf(adminRoles);
+        this.adminPermissions = Set.copyOf(adminPermissions);
     }
 
     // --- OAuth2User 구현 메소드 ---
@@ -48,7 +66,13 @@ public class PrincipalDetails implements UserDetails, OAuth2User {
     // --- UserDetails 구현 메소드 ---
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + getEffectiveRole().name()));
+        ArrayList<GrantedAuthority> authorities = new ArrayList<>();
+        authorities.add(new SimpleGrantedAuthority("ROLE_" + getEffectiveRole().name()));
+        adminRoles.stream().sorted().map(role -> new SimpleGrantedAuthority("ADMIN_ROLE_" + role.name()))
+                .forEach(authorities::add);
+        adminPermissions.stream().sorted().map(permission -> new SimpleGrantedAuthority(permission.name()))
+                .forEach(authorities::add);
+        return authorities;
     }
 
     public com.ddarungflow.entity.UserRole getEffectiveRole() {

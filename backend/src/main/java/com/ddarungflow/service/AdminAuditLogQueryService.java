@@ -12,6 +12,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.Arrays;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -36,7 +38,16 @@ public class AdminAuditLogQueryService {
     private AdminAuditLogDtos.AuditLogResponse response(AuditEvent event) {
         return new AdminAuditLogDtos.AuditLogResponse(event.getAction(), event.getTargetType(), event.getTargetId(),
                 event.getActorRole(), event.getResult(), event.getReasonCode(), event.getCorrelationId(),
-                event.getOccurredAt());
+                event.getOccurredAt(), publicTargetId(event),
+                Arrays.stream(event.getActorRoleCodes().split(",")).filter(value -> !value.isBlank()).toList());
+    }
+
+    private String publicTargetId(AuditEvent event) {
+        try {
+            return UUID.fromString(event.getTargetId()).toString();
+        } catch (IllegalArgumentException ignored) {
+            return event.getAction().startsWith("MODEL_") ? event.getTargetId() : null;
+        }
     }
 
     private String trimToNull(String value) {
