@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import random
 import re
 import time
 from datetime import datetime, timezone
@@ -11,12 +12,14 @@ import psycopg
 
 from pipeline.src.collectors.bike_inventory_collector import (
     SeoulBikeApiClient,
+    SeoulBikeTransportError,
     collect_bike_inventory,
 )
 
 
 DEFAULT_REFRESH_INTERVAL_SECONDS = 300
-RETRY_DELAY_SECONDS = 60
+DEGRADED_RECOVERY_DELAYS_SECONDS = (60, 120, 240, 300)
+DEGRADED_RECOVERY_JITTER_SECONDS = 10
 
 
 def build_snapshot_rows(collection_result, minimum_rows=1000):
@@ -136,21 +139,36 @@ def refresh_once(api_key, database_url, now=None, minimum_rows=1000):
     return len(rows)
 
 
-def refresh_cycle(api_key, database_url, refresh=refresh_once, sleep=time.sleep):
-    for attempt in range(2):
-        try:
-            count = refresh(api_key, database_url)
-            print(f"inventory refresh succeeded: station_count={count}", flush=True)
-            return True
-        except Exception as exception:
-            print(f"inventory refresh failed: {type(exception).__name__}", flush=True)
-            if attempt == 0:
-                sleep(RETRY_DELAY_SECONDS)
-    return False
+def refresh_cycle(api_key, database_url, refresh=refresh_once):
+    try:
+        count = refresh(api_key, database_url)
+        print(f"event=inventory_refresh_success station_count={count}", flush=True)
+        return True
+    except SeoulBikeTransportError as exception:
+        print(f"event=inventory_refresh_failure category={exception.category}", flush=True)
+        return False
+    except Exception:
+        print("event=inventory_refresh_failure category=OTHER_FAILURE", flush=True)
+        return False
 
 
 def next_cycle_delay(interval_seconds, elapsed_seconds):
     return max(0, interval_seconds - elapsed_seconds)
+
+
+def degraded_recovery_delay(failure_streak, random_source=random.uniform):
+    if failure_streak <= 0:
+        raise ValueError("failure_streak must be positive")
+    base = DEGRADED_RECOVERY_DELAYS_SECONDS[min(failure_streak - 1, len(DEGRADED_RECOVERY_DELAYS_SECONDS) - 1)]
+    jitter = min(max(random_source(0, DEGRADED_RECOVERY_JITTER_SECONDS), 0), DEGRADED_RECOVERY_JITTER_SECONDS)
+    return base + jitter
+
+
+def next_refresh_schedule(succeeded, interval_seconds, elapsed_seconds, failure_streak, random_source=random.uniform):
+    if succeeded:
+        return next_cycle_delay(interval_seconds, elapsed_seconds), 0
+    next_failure_streak = failure_streak + 1
+    return degraded_recovery_delay(next_failure_streak, random_source), next_failure_streak
 
 
 def main():
@@ -169,11 +187,18 @@ def main():
     if interval_seconds < 60:
         raise RuntimeError("INVENTORY_REFRESH_SECONDS must be at least 60")
 
+    failure_streak = 0
     while True:
         cycle_started = time.monotonic()
-        refresh_cycle(api_key, database_url)
+        succeeded = refresh_cycle(api_key, database_url)
         elapsed_seconds = time.monotonic() - cycle_started
-        time.sleep(next_cycle_delay(interval_seconds, elapsed_seconds))
+        delay, failure_streak = next_refresh_schedule(
+            succeeded,
+            interval_seconds,
+            elapsed_seconds,
+            failure_streak,
+        )
+        time.sleep(delay)
 
 
 if __name__ == "__main__":
