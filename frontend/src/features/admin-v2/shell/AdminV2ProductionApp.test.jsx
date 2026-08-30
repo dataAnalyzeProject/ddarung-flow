@@ -33,6 +33,14 @@ describe('AdminV2ProductionApp', () => {
     expect(screen.getByRole('heading', { name: 'LIVE OPS' })).toBeInTheDocument();
   });
 
+  test('renders live reference time without fixture, preview, or development markers', async () => {
+    const { container } = render(<AdminV2ProductionApp pathname="/admin/ops" createAccessAdapter={adapterFor(readyAccess())} />);
+
+    expect(await screen.findByRole('heading', { name: 'LIVE OPS' })).toBeInTheDocument();
+    expect(screen.getByText('기준 시각: 2026-08-30T00:00:00Z')).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/fixture|preview|dev/i);
+  });
+
   test('renders the released risk map and preserves query during canonical navigation', async () => {
     window.history.replaceState({}, '', '/admin/ops?fixture=SUPER_ADMIN&mode=review');
     render(<AdminV2ProductionApp createAccessAdapter={adapterFor(readyAccess(allPermissions))} />);
