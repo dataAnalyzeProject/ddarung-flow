@@ -2,6 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStatePanel from '../../components/AsyncStatePanel';
 
 const DATA_STATE_TO_UI = { DELAYED: 'DELAYED', MISSING: 'PARTIAL', INSUFFICIENT_DATA: 'INSUFFICIENT_DATA', UNAVAILABLE: 'UNAVAILABLE' };
+const ROOT_DATA_STATE_CLASS = {
+  NORMAL: 'candidates-root-state--normal',
+  MISSING: 'candidates-root-state--missing',
+  DELAYED: 'candidates-root-state--delayed',
+  INSUFFICIENT_DATA: 'candidates-root-state--insufficient-data',
+  UNAVAILABLE: 'candidates-root-state--unavailable',
+};
 const COVERAGE_FIELDS = [
   ['activePublicStationCount', '활성 공개 대여소'],
   ['inventoryAvailableCount', '재고 확인 가능'],
@@ -80,6 +87,7 @@ export default function CandidatesPage({ createAdapter }) {
   if (error) return <AsyncStatePanel state={isAccessError(error) ? 'FORBIDDEN' : 'ERROR'} code={error.code} requiredPermission={isAccessError(error) ? 'OPS_CANDIDATE_READ' : undefined} />;
 
   const items = result?.items || [];
+  const rootDataState = result?.dataState || 'UNAVAILABLE';
   const rootUiState = DATA_STATE_TO_UI[result?.dataState] || (!items.length ? 'EMPTY' : 'SUCCESS');
   return <main className="candidates-page" aria-label="집중관리 목록">
     <header className="candidates-header">
@@ -101,7 +109,7 @@ export default function CandidatesPage({ createAdapter }) {
       </div>
       <div className="candidates-context" aria-label="목록 기준">
         <span><b>생성 시각</b>{formatTime(result?.generatedAt)}</span>
-        <span><b>데이터 상태</b><mark>{result?.dataState || 'UNAVAILABLE'}</mark></span>
+        <span><b>데이터 상태</b><mark className={`candidates-root-state ${ROOT_DATA_STATE_CLASS[rootDataState] || 'candidates-root-state--unknown'}`}>{rootDataState}</mark></span>
         <span><b>위험 유형</b>{result?.riskType || 'RENTAL'}</span>
       </div>
     </section>
