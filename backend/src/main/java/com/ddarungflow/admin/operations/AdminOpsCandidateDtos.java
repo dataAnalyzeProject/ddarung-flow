@@ -16,7 +16,7 @@ public final class AdminOpsCandidateDtos {
                              BigDecimal medianDurationMinutes, BigDecimal p90DurationMinutes, BigDecimal medianRecoveryMinutesToThree) { }
     public record Candidate(long rank, String ruleVersion, AdminOpsDtos.Station station, Prediction prediction, RankingFactors rankingFactors,
                             Recurrence recurrence, String dataState) { }
-    public record Response(OffsetDateTime referenceTime, OffsetDateTime generatedAt, int horizonMinutes, int requiredBikeCount, String riskType,
+    public record Response(OffsetDateTime referenceTime, OffsetDateTime generatedAt, int horizonMinutes, int requiredBikeCount, String riskType, String ruleVersion,
                            AdminOpsDtos.Capabilities capabilities, String dataState, Coverage coverage, List<String> limitations,
                            List<Candidate> items, String nextCursor) { }
 }

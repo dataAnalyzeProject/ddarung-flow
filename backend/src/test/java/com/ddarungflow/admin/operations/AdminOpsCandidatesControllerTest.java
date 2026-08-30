@@ -42,7 +42,8 @@ class AdminOpsCandidatesControllerTest {
         mvc.perform(get("/api/v1/admin/ops/candidates?requiredBikeCount=0").with(allowed)).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
         mvc.perform(get("/api/v1/admin/ops/candidates?limit=0").with(allowed)).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
         mvc.perform(get("/api/v1/admin/ops/candidates?limit=501").with(allowed)).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
-        mvc.perform(get("/api/v1/admin/ops/candidates?limit=500").with(allowed)).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/admin/ops/candidates?limit=500").with(allowed)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(0)).andExpect(jsonPath("$.ruleVersion").value("OPS_CANDIDATE_RENTAL_V1"));
     }
 
     @Test void ranksEligibleRowsPaginatesAndKeepsSourceGapsExplicit() throws Exception {
@@ -51,7 +52,8 @@ class AdminOpsCandidatesControllerTest {
         var allowed = authentication(auth(UserRole.ADMIN, Set.of(AdminPermission.OPS_CANDIDATE_READ)));
         MvcResult first = mvc.perform(get("/api/v1/admin/ops/candidates?limit=2").with(allowed)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].rank").value(1)).andExpect(jsonPath("$.items[0].station.stationNumber").value("1001"))
-                .andExpect(jsonPath("$.items[1].station.stationNumber").value("1002")).andExpect(jsonPath("$.items[0].ruleVersion").value("OPS_CANDIDATE_RENTAL_V1"))
+                .andExpect(jsonPath("$.items[1].station.stationNumber").value("1002")).andExpect(jsonPath("$.ruleVersion").value("OPS_CANDIDATE_RENTAL_V1"))
+                .andExpect(jsonPath("$.items[0].ruleVersion").value("OPS_CANDIDATE_RENTAL_V1"))
                 .andExpect(jsonPath("$.items[0].station.capacity").isEmpty()).andExpect(jsonPath("$.capabilities.usageScale.available").value(false))
                 .andExpect(jsonPath("$.capabilities.nearbyAlternatives.available").value(false)).andExpect(jsonPath("$..stationId").doesNotExist()).andReturn();
         String cursor = JsonPath.read(first.getResponse().getContentAsString(), "$.nextCursor"); String reference = JsonPath.read(first.getResponse().getContentAsString(), "$.referenceTime");

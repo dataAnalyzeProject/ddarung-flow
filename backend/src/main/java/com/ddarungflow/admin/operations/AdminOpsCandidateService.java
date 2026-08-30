@@ -43,7 +43,7 @@ public class AdminOpsCandidateService {
         List<AdminOpsCandidateDtos.Candidate> page = numbered.subList(start, end).stream().map(value -> withRank(value.candidate(), value.rank())).toList();
         String next = end < numbered.size() ? encode(numbered.get(end - 1).candidate(), reference, horizon, required, riskType) : null;
         var coverage = readRepository.coverage(reference, horizon);
-        return new AdminOpsCandidateDtos.Response(reference, OffsetDateTime.now(), horizon, required, riskType, capabilities(), aggregate(rows),
+        return new AdminOpsCandidateDtos.Response(reference, OffsetDateTime.now(), horizon, required, riskType, RULE_VERSION, capabilities(), aggregate(rows),
                 new AdminOpsCandidateDtos.Coverage(readRepository.activePublicStationCount(), coverage.inventoryAvailableCount(), coverage.predictionAvailableCount(), coverage.profileAvailableCount(), numbered.size()),
                 limitations(rows, eligible), page, next);
     }
