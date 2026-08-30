@@ -1,0 +1,1 @@
+export default function RiskLegend() { return <ul className="risk-map-legend" aria-label="위험 표시 범례"><li><b>C</b> CRITICAL</li><li><b>H</b> HIGH</li><li><b>W</b> WATCH</li><li><b>L</b> LOW</li><li><b>?</b> 판단 정보 부족</li></ul>; }

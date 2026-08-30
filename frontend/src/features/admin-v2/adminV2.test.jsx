@@ -91,15 +91,15 @@ describe('admin v2 fixture access and routes', () => {
   });
 
   test('menu and console navigation push pathname while preserving fixture query', async () => {
-    setPreviewUrl('/admin-v2-preview/ops?fixture=SUPER_ADMIN&mode=review&opsFixture=SUCCESS');
+    setPreviewUrl('/admin-v2-preview/ops?fixture=SUPER_ADMIN&mode=review&opsFixture=SUCCESS&riskMapFixture=SUCCESS');
     render(<AdminV2PreviewApp />);
     await waitForShell();
     fireEvent.click(screen.getByRole('button', { name: '수급 위험 지도' }));
     expect(window.location.pathname).toBe('/admin-v2-preview/ops/risk-map');
-    expect(window.location.search).toBe('?fixture=SUPER_ADMIN&mode=review&opsFixture=SUCCESS');
+    expect(window.location.search).toBe('?fixture=SUPER_ADMIN&mode=review&opsFixture=SUCCESS&riskMapFixture=SUCCESS');
     fireEvent.click(screen.getByRole('button', { name: '모델' }));
     expect(window.location.pathname).toBe('/admin-v2-preview/models');
-    expect(window.location.search).toBe('?fixture=SUPER_ADMIN&mode=review&opsFixture=SUCCESS');
+    expect(window.location.search).toBe('?fixture=SUPER_ADMIN&mode=review&opsFixture=SUCCESS&riskMapFixture=SUCCESS');
     expect(screen.getByText('UI-MODEL-01')).toBeInTheDocument();
   });
 
@@ -107,9 +107,9 @@ describe('admin v2 fixture access and routes', () => {
     setPreviewUrl('/admin-v2-preview/ops?fixture=OPS_VIEWER&opsFixture=SUCCESS');
     render(<AdminV2PreviewApp />);
     await waitForShell();
-    window.history.pushState({}, '', '/admin-v2-preview/ops/risk-map?fixture=OPS_VIEWER');
+    window.history.pushState({}, '', '/admin-v2-preview/ops/risk-map?fixture=OPS_VIEWER&riskMapFixture=SUCCESS');
     fireEvent(window, new PopStateEvent('popstate'));
-    expect(screen.getByText('UI-OPS-02')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '수급 위험 지도' })).toBeInTheDocument();
     window.history.pushState({}, '', '/admin-v2-preview/ops?fixture=OPS_VIEWER&opsFixture=SUCCESS');
     fireEvent(window, new PopStateEvent('popstate'));
     await waitFor(() => expect(screen.getByRole('heading', { name: '운영 상황판' })).toBeInTheDocument());
@@ -118,8 +118,8 @@ describe('admin v2 fixture access and routes', () => {
   test('a changed pathname prop replaces the active route without relying on a stale browser path', async () => {
     const { rerender } = render(<AdminV2PreviewApp pathname="/admin-v2-preview/ops" search="?fixture=OPS_VIEWER&opsFixture=SUCCESS" />);
     await waitForShell();
-    rerender(<AdminV2PreviewApp pathname="/admin-v2-preview/ops/risk-map" search="?fixture=OPS_VIEWER" />);
-    await waitFor(() => expect(screen.getByText('UI-OPS-02')).toBeInTheDocument());
+    rerender(<AdminV2PreviewApp pathname="/admin-v2-preview/ops/risk-map" search="?fixture=OPS_VIEWER&riskMapFixture=SUCCESS" />);
+    await waitFor(() => expect(screen.getByRole('heading', { name: '수급 위험 지도' })).toBeInTheDocument());
   });
 
   test('direct URL with no permission is forbidden and renders no domain placeholder', async () => {
