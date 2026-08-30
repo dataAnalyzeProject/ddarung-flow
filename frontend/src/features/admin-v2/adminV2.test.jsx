@@ -252,7 +252,7 @@ describe('admin v2 fixture access and routes', () => {
     expect(ROUTES.map(({ id, canonicalPath, previewPath, title, console, requiredPermission }) => ({ id, canonicalPath, previewPath, title, console, requiredPermission }))).toEqual([
       { id: 'UI-OPS-01', canonicalPath: '/admin/ops', previewPath: '/admin-v2-preview/ops', title: '운영 상황판', console: 'OPS', requiredPermission: 'OPS_DASHBOARD_READ' },
       { id: 'UI-OPS-02', canonicalPath: '/admin/ops/risk-map', previewPath: '/admin-v2-preview/ops/risk-map', title: '수급 위험 지도', console: 'OPS', requiredPermission: 'OPS_RISK_MAP_READ' },
-      { id: 'UI-OPS-03', canonicalPath: '/admin/ops/candidates', previewPath: '/admin-v2-preview/ops/candidates', title: '집중관리 후보', console: 'OPS', requiredPermission: 'OPS_CANDIDATE_READ' },
+      { id: 'UI-OPS-03', canonicalPath: '/admin/ops/candidates', previewPath: '/admin-v2-preview/ops/candidates', title: '집중관리 목록', console: 'OPS', requiredPermission: 'OPS_CANDIDATE_READ' },
       { id: 'UI-OPS-04', canonicalPath: '/admin/ops/analysis', previewPath: '/admin-v2-preview/ops/analysis', title: '지역·시간대 분석', console: 'OPS', requiredPermission: 'OPS_ANALYSIS_READ' },
       { id: 'UI-OPS-05', canonicalPath: '/admin/ops/data', previewPath: '/admin-v2-preview/ops/data', title: '데이터 상태', console: 'OPS', requiredPermission: 'DATA_STATUS_READ' },
       { id: 'UI-OPS-06', canonicalPath: '/admin/ops/reports', previewPath: '/admin-v2-preview/ops/reports', title: '운영 리포트', console: 'OPS', requiredPermission: 'OPS_REPORT_EXPORT' },
@@ -300,10 +300,10 @@ describe('admin v2 fixture access and routes', () => {
   });
 
   test('canonical production routes apply the release gate before permissions', () => {
-    expect(PRODUCTION_RELEASED_ROUTE_IDS).toEqual(['UI-OPS-01', 'UI-OPS-02']);
+    expect(PRODUCTION_RELEASED_ROUTE_IDS).toEqual(['UI-OPS-01', 'UI-OPS-02', 'UI-OPS-03']);
     expect(resolveCanonicalRoute('/admin/ops', { permissions: ['OPS_DASHBOARD_READ'] })).toMatchObject({ type: 'ALLOW', route: { id: 'UI-OPS-01' } });
     expect(resolveCanonicalRoute('/admin/ops/risk-map', { permissions: [] })).toMatchObject({ type: 'FORBIDDEN', route: { requiredPermission: 'OPS_RISK_MAP_READ' } });
-    expect(resolveCanonicalRoute('/admin/ops/candidates', { permissions: ['OPS_CANDIDATE_READ'] })).toMatchObject({ type: 'RELEASE_NOT_AVAILABLE', route: { id: 'UI-OPS-03' } });
+    expect(resolveCanonicalRoute('/admin/ops/candidates', { permissions: ['OPS_CANDIDATE_READ'] })).toMatchObject({ type: 'ALLOW', route: { id: 'UI-OPS-03' } });
     expect(resolveCanonicalRoute('/admin/models', { permissions: ['MODEL_METRICS_READ'] })).toMatchObject({ type: 'RELEASE_NOT_AVAILABLE', route: { id: 'UI-MODEL-01' } });
     expect(resolveCanonicalRoute('/admin/not-real', { permissions: [] }).type).toBe('NOT_FOUND');
     expect(isAdminV2ProductionPath('/admin')).toBe(false);
