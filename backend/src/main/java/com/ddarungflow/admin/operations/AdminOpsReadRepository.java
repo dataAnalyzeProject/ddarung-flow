@@ -7,6 +7,7 @@ import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 @Repository
@@ -27,9 +28,18 @@ public class AdminOpsReadRepository {
 
     private List<Row> queryRows(OffsetDateTime referenceTime, int horizonMinutes, BigDecimal minLng, BigDecimal minLat,
                                 BigDecimal maxLng, BigDecimal maxLat, String requestedDataState, String stationNumber) {
+        QuerySpec query = buildRowsQuery(referenceTime, horizonMinutes, minLng, minLat, maxLng, maxLat,
+                requestedDataState, stationNumber);
+        return jdbc.query(query.sql(), (rs, ignored) -> map(rs), query.parameters().toArray());
+    }
+
+    QuerySpec buildRowsQuery(OffsetDateTime referenceTime, int horizonMinutes, BigDecimal minLng, BigDecimal minLat,
+                             BigDecimal maxLng, BigDecimal maxLat, String requestedDataState, String stationNumber) {
         OffsetDateTime normalSince = referenceTime.minusMinutes(30);
         OffsetDateTime delayedSince = referenceTime.minusMinutes(180);
-        return jdbc.query("""
+        List<Object> parameters = new ArrayList<>(List.of(referenceTime, referenceTime, horizonMinutes, referenceTime,
+                normalSince, delayedSince));
+        StringBuilder sql = new StringBuilder("""
                 WITH ranked_predictions AS (
                     SELECT sp.id, sp.station_id, sp.prediction_target_at,
                            sp.at_least_1_probability, sp.at_least_2_probability, sp.at_least_3_probability,
@@ -58,21 +68,36 @@ public class AdminOpsReadRepository {
                     LEFT JOIN station_inventory_current i ON i.station_id = s.station_id
                     LEFT JOIN ranked_predictions p ON p.station_id = s.station_id AND p.row_number = 1
                     WHERE s.active = TRUE AND s.station_number IS NOT NULL
-                      AND (? IS NULL OR s.station_number = ?)
-                      AND (? IS NULL OR s.longitude BETWEEN ? AND ?)
-                      AND (? IS NULL OR s.latitude BETWEEN ? AND ?)
+                """);
+        if (stationNumber != null) {
+            sql.append(" AND s.station_number = ?\n");
+            parameters.add(stationNumber);
+        }
+        if (minLng != null && minLat != null && maxLng != null && maxLat != null) {
+            sql.append(" AND s.longitude BETWEEN ? AND ?\n")
+                    .append(" AND s.latitude BETWEEN ? AND ?\n");
+            parameters.add(minLng);
+            parameters.add(maxLng);
+            parameters.add(minLat);
+            parameters.add(maxLat);
+        }
+        sql.append("""
                 ), resolved AS (
                     SELECT *, CASE WHEN inventory_data_state = 'NORMAL' AND prediction_id IS NULL
                                     THEN 'INSUFFICIENT_DATA' ELSE inventory_data_state END AS data_state
                     FROM station_rows
                 )
                 SELECT * FROM resolved
-                WHERE (? IS NULL OR data_state = ?)
+                """);
+        if (requestedDataState != null) {
+            sql.append("WHERE data_state = ?\n");
+            parameters.add(requestedDataState);
+        }
+        sql.append("""
                 ORDER BY CASE WHEN prediction_id IS NULL THEN 1 ELSE 0 END,
                          (1 - at_least_1_probability) DESC, station_number ASC
-                """, (rs, ignored) -> map(rs), referenceTime, referenceTime, horizonMinutes, referenceTime,
-                normalSince, delayedSince, stationNumber, stationNumber, minLng, minLng, maxLng, minLat, minLat, maxLat,
-                requestedDataState, requestedDataState);
+                """);
+        return new QuerySpec(sql.toString(), List.copyOf(parameters));
     }
 
     public CoverageRow coverage(OffsetDateTime referenceTime, int horizonMinutes) {
@@ -101,6 +126,7 @@ public class AdminOpsReadRepository {
                       BigDecimal atLeast3, BigDecimal atLeast4, BigDecimal atLeast5) { }
     public record CoverageRow(Long activeStationCount, Long inventoryAvailableCount, Long predictionAvailableCount,
                               Long profileAvailableCount) { }
+    record QuerySpec(String sql, List<Object> parameters) { }
 
     public long activeStationsWithoutPublicNumber() {
         Long count = jdbc.queryForObject("SELECT COUNT(*) FROM stations WHERE active = TRUE AND station_number IS NULL", Long.class);
