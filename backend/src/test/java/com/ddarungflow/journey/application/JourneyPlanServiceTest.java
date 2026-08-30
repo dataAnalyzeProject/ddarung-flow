@@ -27,17 +27,17 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class JourneyPlanServiceTest {
 
     @Test
-    void safeOffPlanPersistsRevisionOneWithoutNaturalLanguageOrFixtureCandidates() {
+    void missingDestinationIsDeterministicallyClarifiedWithoutCandidates() {
         InMemoryPersistence persistence = new InMemoryPersistence();
         CountingReturnPort returnPort = new CountingReturnPort();
         JourneyPlanService service = service(persistence, disabledAi(), returnPort);
 
         JourneyPlanService.Decision decision = service.plan(10L, formInput());
 
-        assertThat(decision.status()).isEqualTo(com.ddarungflow.journey.domain.JourneyStatus.UNAVAILABLE);
+        assertThat(decision.status()).isEqualTo(com.ddarungflow.journey.domain.JourneyStatus.CLARIFICATION_REQUIRED);
         assertThat(decision.revision()).isEqualTo(1);
         assertThat(decision.candidates()).isEmpty();
-        assertThat(decision.warnings()).containsExactly("JOURNEY_PROVIDER_UNAVAILABLE");
+        assertThat(decision.warnings()).containsExactly("CLARIFICATION_REQUIRED");
         assertThat(persistence.decisions.getFirst().normalizedIntentJson()).doesNotContain("naturalLanguageText").doesNotContain("fixture");
         assertThat(returnPort.predictCalls).isZero();
     }
@@ -71,13 +71,14 @@ class JourneyPlanServiceTest {
     }
 
     @Test
-    void disabledNaturalLanguageUsesSafeFallback() {
+    void missingNaturalLanguageDestinationDoesNotCallAiOrFabricateAPlace() {
         JourneyPlanService service = service(new InMemoryPersistence(), disabledAi(), new CountingReturnPort());
 
-        JourneyPlanService.Decision decision = service.plan(10L, naturalLanguageInput());
+        JourneyPlanService.Decision decision = service.plan(10L, naturalLanguageInputWithoutDestination());
 
-        assertThat(decision.status()).isEqualTo(com.ddarungflow.journey.domain.JourneyStatus.UNAVAILABLE);
-        assertThat(decision.warnings()).containsExactly("AI_PROVIDER_UNAVAILABLE");
+        assertThat(decision.status()).isEqualTo(com.ddarungflow.journey.domain.JourneyStatus.CLARIFICATION_REQUIRED);
+        assertThat(decision.clarification().missingFields()).containsExactly("destination");
+        assertThat(decision.candidates()).isEmpty();
     }
 
     @Test
@@ -96,6 +97,7 @@ class JourneyPlanServiceTest {
         service(new InMemoryPersistence(), contextAwareAi, new CountingReturnPort()).plan(10L, input);
 
         assertThat(captured.get().origin()).isEqualTo(new PlaceReference("성수역", "place-origin"));
+        assertThat(captured.get().destination()).isEqualTo(new PlaceReference("서울숲", "place-destination"));
         assertThat(captured.get().departureAt()).isEqualTo(input.departureAt());
         assertThat(captured.get().maxJourneyMinutes()).isEqualTo(60);
         assertThat(captured.get().requiredBikeCount()).isEqualTo(2);
@@ -154,7 +156,7 @@ class JourneyPlanServiceTest {
     void preservesPiiBlockedAndToolMismatchCodesWithoutProviderMessage() {
         JourneyAiGateway piiAi = failingAi(JourneyAiErrorCode.AI_PII_BLOCKED, "provider raw input: secret");
         JourneyPlanService.Decision piiDecision = service(new InMemoryPersistence(), piiAi, new CountingReturnPort()).plan(10L, naturalLanguageInput());
-        assertThat(piiDecision.warnings()).containsExactly("AI_PII_BLOCKED").noneMatch(warning -> warning.contains("secret"));
+        assertThat(piiDecision.warnings()).contains("AI_PII_BLOCKED").noneMatch(warning -> warning.contains("secret"));
 
         JourneyAiGateway mismatchAi = failingAi(JourneyAiErrorCode.AI_TOOL_VALUE_MISMATCH, "provider raw output: secret");
         assertThatThrownBy(() -> service(new InMemoryPersistence(), mismatchAi, new CountingReturnPort()).plan(10L, naturalLanguageInput()))
@@ -179,6 +181,130 @@ class JourneyPlanServiceTest {
                 OffsetDateTime.now().minusMinutes(1), 60, 2, valid.preferences(), valid.avoid(), null));
     }
 
+    @Test
+    void formAndNaturalLanguageUseOnlyCoreCandidatesAndPersistTheirSnapshots() {
+        InMemoryPersistence persistence = new InMemoryPersistence();
+        JourneyRentalPredictionPort rentalPort = request -> List.of(
+                rental("station-1", "대여소 1", "0.81", 180, 450, "NORMAL", request.requiredBikeCount()),
+                rental("station-2", "대여소 2", "0.70", 240, 500, "NORMAL", request.requiredBikeCount()));
+        JourneyPlanService service = service(persistence, disabledAi(), new CountingReturnPort(), rentalPort);
+
+        JourneyPlanService.Decision form = service.plan(10L, formInputWithDestination(3));
+        JourneyPlanService.Decision naturalLanguage = service.plan(10L, naturalLanguageInput());
+
+        assertThat(form.status()).isEqualTo(com.ddarungflow.journey.domain.JourneyStatus.READY);
+        assertThat(form.candidates()).extracting(candidate -> candidate.stationId()).containsExactly("station-1", "station-2");
+        assertThat(form.candidates()).allSatisfy(candidate -> {
+            assertThat(candidate.archetype()).isEqualTo(com.ddarungflow.journey.domain.JourneyArchetype.CORE_RENTAL);
+            assertThat(candidate.requiredBikeCount()).isEqualTo(3);
+            assertThat(candidate.returnProbability()).isNull();
+            assertThat(candidate.cyclingMinutes()).isNull();
+            assertThat(candidate.elevationMeters()).isNull();
+            assertThat(candidate.bikeLanePercent()).isNull();
+        });
+        assertThat(naturalLanguage.status()).isEqualTo(com.ddarungflow.journey.domain.JourneyStatus.READY);
+        assertThat(naturalLanguage.candidates()).hasSize(2);
+        assertThat(service.find(10L, form.decisionId()).candidates()).isEqualTo(form.candidates());
+    }
+
+    @Test
+    void normalCoreCandidatesAreSortedDeterministicallyAndLimitedToThree() {
+        JourneyRentalPredictionPort rentalPort = request -> List.of(
+                rental("station-c", "C", "0.80", 180, 500, "NORMAL"),
+                rental("station-b", "B", "0.80", 180, 400, "NORMAL"),
+                rental("station-a", "A", "0.80", 120, 600, "NORMAL"),
+                rental("station-d", "D", "0.79", 60, 100, "NORMAL"),
+                rental("station-missing", "M", null, 1, 1, "MISSING"));
+        JourneyPlanService service = service(new InMemoryPersistence(), disabledAi(), new CountingReturnPort(), rentalPort);
+
+        JourneyPlanService.Decision decision = service.plan(10L, formInputWithDestination(1));
+
+        assertThat(decision.status()).isEqualTo(com.ddarungflow.journey.domain.JourneyStatus.PARTIAL);
+        assertThat(decision.candidates()).extracting(candidate -> candidate.stationId())
+                .containsExactly("station-a", "station-b", "station-c");
+        assertThat(decision.candidates()).extracting(candidate -> candidate.rank()).containsExactly(1, 2, 3);
+    }
+
+    @Test
+    void derivesReadyPartialAndUnavailableFromCorePredictionStatuses() {
+        JourneyPlanService ready = service(new InMemoryPersistence(), disabledAi(), new CountingReturnPort(),
+                request -> List.of(rental("ready", "R", "0.70", 60, 100, "NORMAL")));
+        JourneyPlanService partial = service(new InMemoryPersistence(), disabledAi(), new CountingReturnPort(),
+                request -> List.of(rental("partial", "P", "0.70", 60, 100, "NORMAL"), rental("missing", "M", null, 0, 0, "MISSING")));
+        JourneyPlanService unavailable = service(new InMemoryPersistence(), disabledAi(), new CountingReturnPort(),
+                request -> List.of(rental("soon", "S", null, 0, 0, "TOO_SOON"), rental("down", "D", null, 0, 0, "UNAVAILABLE")));
+
+        assertThat(ready.plan(10L, formInputWithDestination(1)).status()).isEqualTo(com.ddarungflow.journey.domain.JourneyStatus.READY);
+        assertThat(partial.plan(10L, formInputWithDestination(1)).status()).isEqualTo(com.ddarungflow.journey.domain.JourneyStatus.PARTIAL);
+        assertThat(unavailable.plan(10L, formInputWithDestination(1)).status()).isEqualTo(com.ddarungflow.journey.domain.JourneyStatus.UNAVAILABLE);
+    }
+
+    @Test
+    void forwardsEverySupportedRequiredBikeCountToCoreWithoutCoercion() {
+        List<Integer> receivedCounts = new ArrayList<>();
+        JourneyRentalPredictionPort rentalPort = request -> {
+            receivedCounts.add(request.requiredBikeCount());
+            return List.of(rental("station", "S", "0.72", 60, 100, "NORMAL", request.requiredBikeCount()));
+        };
+        JourneyPlanService service = service(new InMemoryPersistence(), disabledAi(), new CountingReturnPort(), rentalPort);
+
+        for (int requiredBikeCount = 1; requiredBikeCount <= 5; requiredBikeCount++) {
+            int expectedBikeCount = requiredBikeCount;
+            JourneyPlanService.Decision decision = service.plan(10L, formInputWithDestination(requiredBikeCount));
+            assertThat(decision.candidates()).singleElement().satisfies(candidate ->
+                    assertThat(candidate.requiredBikeCount()).isEqualTo(expectedBikeCount));
+        }
+
+        assertThat(receivedCounts).containsExactly(1, 2, 3, 4, 5);
+    }
+
+    @Test
+    void preservesLegacyCandidateSnapshotsForBackwardReads() {
+        InMemoryPersistence persistence = new InMemoryPersistence();
+        persistence.decisions.add(new JourneyDecisionPersistencePort.StoredDecision("legacy", 10L, 1, "READY",
+                "{\"destination\":{\"placeId\":\"old\"}}", "journey-api-03", OffsetDateTime.now(), OffsetDateTime.now().plusHours(1),
+                List.of(new JourneyDecisionPersistencePort.StoredCandidate("legacy", "STABLE", """
+                        {"candidateId":"legacy","archetype":"STABLE","rank":1,"rentalProbability":77,
+                        "returnProbability":66,"cyclingMinutes":12,"distanceMeters":100,"elevationMeters":3,
+                        "bikeLanePercent":50,"destinationName":"old","destinationCategory":"c","advantage":"a","tradeoff":"t"}
+                        """, "{}"))));
+        JourneyPlanService service = service(persistence, disabledAi(), new CountingReturnPort());
+
+        JourneyPlanService.Decision decision = service.find(10L, "legacy");
+
+        assertThat(decision.candidates()).singleElement().satisfies(candidate -> {
+            assertThat(candidate.rentalProbability()).isEqualByComparingTo("77");
+            assertThat(candidate.stationId()).isNull();
+            assertThat(candidate.returnProbability()).isEqualByComparingTo("66");
+        });
+    }
+
+    @Test
+    void persistsTimeConsistentCoreRentalSnapshotWithoutChangingItsProbability() {
+        OffsetDateTime departureAt = OffsetDateTime.parse("2030-08-30T10:20:00+09:00");
+        OffsetDateTime arrivalAt = departureAt.plusMinutes(10);
+        OffsetDateTime featureAsOf = OffsetDateTime.parse("2030-08-30T09:00:00+09:00");
+        JourneyRentalPredictionPort rentalPort = request -> List.of(new JourneyRentalPredictionPort.RentalCandidate(
+                "station-time", "시간 대여소", new java.math.BigDecimal("37.55"), new java.math.BigDecimal("127.05"),
+                8, "NORMAL", featureAsOf, new java.math.BigDecimal("0.62"), request.requiredBikeCount(), "MEDIUM",
+                800, 600, arrivalAt, featureAsOf.plusHours(2), 120L, featureAsOf, "model@1", featureAsOf, "NORMAL"));
+        InMemoryPersistence persistence = new InMemoryPersistence();
+        JourneyPlanService service = service(persistence, disabledAi(), new CountingReturnPort(), rentalPort);
+        JourneyPlanService.PlanInput input = formInputWithDestination(2);
+        input = new JourneyPlanService.PlanInput(input.requestMode(), input.naturalLanguageText(), input.origin(), input.destination(),
+                departureAt, input.maxJourneyMinutes(), input.requiredBikeCount(), input.preferences(), input.avoid(), input.expectedRevision());
+
+        JourneyPlanService.Decision saved = service.plan(10L, input);
+        JourneyPlanService.Decision read = service.find(10L, saved.decisionId());
+
+        assertThat(read.candidates()).singleElement().satisfies(candidate -> {
+            assertThat(candidate.arrivalAt()).isEqualTo(departureAt.plusSeconds(candidate.accessDurationSeconds()));
+            assertThat(candidate.predictionTargetAt()).isEqualTo(candidate.arrivalAt().plusMinutes(30).truncatedTo(java.time.temporal.ChronoUnit.HOURS));
+            assertThat(candidate.horizonMinutes()).isEqualTo(java.time.temporal.ChronoUnit.MINUTES.between(candidate.featureAsOf(), candidate.predictionTargetAt()));
+            assertThat(candidate.rentalProbability()).isEqualByComparingTo("0.62");
+        });
+    }
+
     private JourneyAiGateway failingAi(JourneyAiErrorCode code, String message) {
         return failingAi(code, message, null);
     }
@@ -195,7 +321,12 @@ class JourneyPlanServiceTest {
     }
 
     private JourneyPlanService service(InMemoryPersistence persistence, JourneyAiGateway ai, ReturnPredictionPort returnPort) {
-        return new JourneyPlanService(persistence, ai, returnPort, new ObjectMapper().findAndRegisterModules());
+        return service(persistence, ai, returnPort, request -> List.of());
+    }
+
+    private JourneyPlanService service(InMemoryPersistence persistence, JourneyAiGateway ai, ReturnPredictionPort returnPort,
+                                       JourneyRentalPredictionPort rentalPort) {
+        return new JourneyPlanService(persistence, ai, returnPort, rentalPort, new ObjectMapper().findAndRegisterModules());
     }
 
     private JourneyAiGateway disabledAi() {
@@ -212,6 +343,35 @@ class JourneyPlanServiceTest {
     }
 
     private JourneyPlanService.PlanInput naturalLanguageInput() {
+        JourneyPlanService.PlanInput form = formInput();
+        return new JourneyPlanService.PlanInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE, "성수에서 카페 포함", form.origin(),
+                new JourneyPlanService.Place("place-destination", "서울숲", 37.544, 127.037),
+                form.departureAt(), form.maxJourneyMinutes(), form.requiredBikeCount(), form.preferences(), form.avoid(), null);
+    }
+
+    private JourneyPlanService.PlanInput formInputWithDestination(int requiredBikeCount) {
+        JourneyPlanService.PlanInput form = formInput();
+        return new JourneyPlanService.PlanInput(form.requestMode(), form.naturalLanguageText(), form.origin(),
+                new JourneyPlanService.Place("place-destination", "서울숲", 37.544, 127.037), form.departureAt(),
+                form.maxJourneyMinutes(), requiredBikeCount, form.preferences(), form.avoid(), form.expectedRevision());
+    }
+
+    private JourneyRentalPredictionPort.RentalCandidate rental(String stationId, String stationName, String probability,
+                                                                 int durationSeconds, int distanceMeters, String status) {
+        return rental(stationId, stationName, probability, durationSeconds, distanceMeters, status, 1);
+    }
+
+    private JourneyRentalPredictionPort.RentalCandidate rental(String stationId, String stationName, String probability,
+                                                                 int durationSeconds, int distanceMeters, String status,
+                                                                 int requiredBikeCount) {
+        OffsetDateTime now = OffsetDateTime.parse("2026-08-30T09:00:00+09:00");
+        return new JourneyRentalPredictionPort.RentalCandidate(stationId, stationName, new java.math.BigDecimal("37.55"),
+                new java.math.BigDecimal("127.05"), 8, "NORMAL", now.minusMinutes(1),
+                probability == null ? null : new java.math.BigDecimal(probability), requiredBikeCount, "HIGH", distanceMeters, durationSeconds,
+                now.plusMinutes(5), now.plusHours(1), 60L, now, "model@1", now, status);
+    }
+
+    private JourneyPlanService.PlanInput naturalLanguageInputWithoutDestination() {
         JourneyPlanService.PlanInput form = formInput();
         return new JourneyPlanService.PlanInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE, "성수에서 카페 포함", form.origin(), null,
                 form.departureAt(), form.maxJourneyMinutes(), form.requiredBikeCount(), form.preferences(), form.avoid(), null);
@@ -233,7 +393,9 @@ class JourneyPlanServiceTest {
 
         @Override public StoredDecision save(DecisionToStore decision) {
             StoredDecision stored = new StoredDecision(decision.decisionId(), decision.userId(), decision.revision(), decision.status(),
-                    decision.normalizedIntentJson(), decision.contractVersions(), decision.generatedAt(), decision.expiresAt(), List.of());
+                    decision.normalizedIntentJson(), decision.contractVersions(), decision.generatedAt(), decision.expiresAt(),
+                    decision.candidates().stream().map(candidate -> new StoredCandidate(candidate.candidateKey(), candidate.archetype(),
+                            candidate.snapshotJson(), candidate.provenanceJson())).toList());
             decisions.add(stored);
             return stored;
         }

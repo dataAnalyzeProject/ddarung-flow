@@ -70,6 +70,22 @@ public class MapPredictionService {
         return assembleCandidates(candidates, null, requiredBikeCount);
     }
 
+    /**
+     * Internal Journey boundary: Core still uses the actual request time for features,
+     * while the Journey's selected departure determines candidate arrival time.
+     */
+    public List<PredictionApiDtos.CandidatePredictionResponseDto> buildJourneyRouteCandidates(
+        BigDecimal originLat,
+        BigDecimal originLng,
+        BigDecimal destLat,
+        BigDecimal destLng,
+        OffsetDateTime departureAt,
+        Integer requiredBikeCount
+    ) {
+        List<RouteCandidateService.StationDistance> candidates = routeCandidateService.findCandidates(originLat, originLng, destLat, destLng, "WALK");
+        return assembleCandidates(candidates, null, requiredBikeCount, departureAt);
+    }
+
     public List<PredictionApiDtos.CandidatePredictionResponseDto> buildDirectRoute(
         String stationId,
         BigDecimal originLat,
@@ -88,6 +104,15 @@ public class MapPredictionService {
         Integer minutesAheadOverride,
         Integer requiredBikeCount
     ) {
+        return assembleCandidates(candidates, minutesAheadOverride, requiredBikeCount, null);
+    }
+
+    private List<PredictionApiDtos.CandidatePredictionResponseDto> assembleCandidates(
+        List<RouteCandidateService.StationDistance> candidates,
+        Integer minutesAheadOverride,
+        Integer requiredBikeCount,
+        OffsetDateTime journeyDepartureAt
+    ) {
         int bikeCount = (requiredBikeCount != null && requiredBikeCount >= 1 && requiredBikeCount <= 5) ? requiredBikeCount : 1;
         OffsetDateTime requestedAt = OffsetDateTime.now(clock);
 
@@ -97,9 +122,10 @@ public class MapPredictionService {
             Station station = cand.station();
 
             // 1. 후보별 실제 도착시각 계산: DIRECT 모드는 사용자 입력, ROUTE 모드는 실제 경로 소요시간
+            OffsetDateTime arrivalBase = journeyDepartureAt == null ? requestedAt : journeyDepartureAt;
             OffsetDateTime arrivalAt = (minutesAheadOverride != null && minutesAheadOverride > 0)
                 ? requestedAt.plusMinutes(minutesAheadOverride)
-                : requestedAt.plusSeconds(cand.durationSeconds());
+                : arrivalBase.plusSeconds(cand.durationSeconds());
 
             // 저장된 배치의 featureAsOf는 정시 단위이므로, 현재 정시로 내림한 값을 근사값으로 사용해야
             // horizonMinutes가 60/120/180/240 중 하나로 맞아떨어진다. requestedAt을 그대로 쓰면

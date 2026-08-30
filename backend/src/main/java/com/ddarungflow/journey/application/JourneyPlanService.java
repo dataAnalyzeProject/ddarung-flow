@@ -7,6 +7,7 @@ import com.ddarungflow.journey.ai.JourneyAiGateway;
 import com.ddarungflow.journey.ai.JourneyCompileRequest;
 import com.ddarungflow.journey.ai.JourneyIntent;
 import com.ddarungflow.journey.ai.PlaceReference;
+import com.ddarungflow.journey.domain.JourneyArchetype;
 import com.ddarungflow.journey.domain.JourneyCandidate;
 import com.ddarungflow.journey.domain.JourneyStatus;
 import com.ddarungflow.journey.persistence.JourneyDecisionPersistencePort;
@@ -17,9 +18,11 @@ import org.springframework.stereotype.Service;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.IntStream;
 
 @Service
 public class JourneyPlanService {
@@ -29,13 +32,16 @@ public class JourneyPlanService {
     private final JourneyAiGateway aiGateway;
     @SuppressWarnings("unused")
     private final ReturnPredictionPort returnPredictionPort;
+    private final JourneyRentalPredictionPort rentalPredictionPort;
     private final ObjectMapper objectMapper;
 
     public JourneyPlanService(JourneyDecisionPersistencePort persistence, JourneyAiGateway aiGateway,
-                              ReturnPredictionPort returnPredictionPort, ObjectMapper objectMapper) {
+                              ReturnPredictionPort returnPredictionPort, JourneyRentalPredictionPort rentalPredictionPort,
+                              ObjectMapper objectMapper) {
         this.persistence = persistence;
         this.aiGateway = aiGateway;
         this.returnPredictionPort = returnPredictionPort;
+        this.rentalPredictionPort = rentalPredictionPort;
         this.objectMapper = objectMapper;
     }
 
@@ -68,8 +74,14 @@ public class JourneyPlanService {
 
     private Decision persist(long userId, String decisionId, int revision, PlanInput input) {
         JourneyIntent aiIntent = null;
-        JourneyStatus status = JourneyStatus.UNAVAILABLE;
-        String warning = "JOURNEY_PROVIDER_UNAVAILABLE";
+        List<String> warnings = new ArrayList<>();
+
+        if (input.destination() == null) {
+            return save(userId, decisionId, revision, input, null, JourneyStatus.CLARIFICATION_REQUIRED,
+                    List.of(), List.of("CLARIFICATION_REQUIRED"));
+        }
+
+        boolean aiRequestedClarification = false;
 
         if (input.requestMode() == RequestMode.NATURAL_LANGUAGE) {
             try {
@@ -77,24 +89,87 @@ public class JourneyPlanService {
                 if (result.available()) {
                     aiIntent = result.intent();
                     if (aiIntent.needsClarification()) {
-                        status = JourneyStatus.CLARIFICATION_REQUIRED;
-                        warning = "CLARIFICATION_REQUIRED";
+                        aiRequestedClarification = true;
                     }
                 } else {
-                    warning = safeAiCode(result.unavailableCode());
+                    warnings.add(safeAiCode(result.unavailableCode()));
                 }
             } catch (JourneyAiException exception) {
                 if (exception.code() == JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID) throw new AiOutputSchemaInvalid(exception.failureStage());
                 if (exception.code() == JourneyAiErrorCode.AI_TOOL_VALUE_MISMATCH) throw new AiToolValueMismatch();
-                warning = safeAiCode(exception.code());
+                warnings.add(safeAiCode(exception.code()));
             }
         }
 
+        if (aiRequestedClarification) {
+            return save(userId, decisionId, revision, input, aiIntent, JourneyStatus.CLARIFICATION_REQUIRED,
+                    List.of(), List.of("CLARIFICATION_REQUIRED"));
+        }
+
+        List<JourneyRentalPredictionPort.RentalCandidate> coreCandidates;
+        try {
+            coreCandidates = rentalPredictionPort.predict(new JourneyRentalPredictionPort.RentalPredictionRequest(
+                    java.math.BigDecimal.valueOf(input.origin().latitude()), java.math.BigDecimal.valueOf(input.origin().longitude()),
+                    java.math.BigDecimal.valueOf(input.destination().latitude()), java.math.BigDecimal.valueOf(input.destination().longitude()),
+                    input.departureAt(), input.requiredBikeCount()));
+        } catch (Exception exception) {
+            coreCandidates = List.of();
+        }
+
+        int normalCandidateCount = (int) coreCandidates.stream().filter(candidate -> "NORMAL".equals(candidate.predictionStatus())).count();
+        List<JourneyCandidate> candidates = toJourneyCandidates(coreCandidates, input);
+        JourneyStatus status = candidates.isEmpty() ? JourneyStatus.UNAVAILABLE
+                : normalCandidateCount == coreCandidates.size() ? JourneyStatus.READY : JourneyStatus.PARTIAL;
+        if (status == JourneyStatus.UNAVAILABLE) warnings.add("JOURNEY_RENTAL_UNAVAILABLE");
+        if (status == JourneyStatus.PARTIAL) warnings.add("JOURNEY_RENTAL_PARTIAL");
+        return save(userId, decisionId, revision, input, aiIntent, status, candidates, warnings);
+    }
+
+    private Decision save(long userId, String decisionId, int revision, PlanInput input, JourneyIntent aiIntent,
+                          JourneyStatus status, List<JourneyCandidate> candidates, List<String> warnings) {
         OffsetDateTime generatedAt = OffsetDateTime.now();
         JourneyDecisionPersistencePort.StoredDecision stored = persistence.save(new JourneyDecisionPersistencePort.DecisionToStore(
                 decisionId, userId, revision, status.name(), normalizedIntent(input, aiIntent), CONTRACT_VERSIONS,
-                generatedAt, List.of()));
-        return toDecision(stored, List.of(warning));
+                generatedAt, candidates.stream().map(this::candidateToStore).toList()));
+        return toDecision(stored, warnings);
+    }
+
+    private JourneyDecisionPersistencePort.CandidateToStore candidateToStore(JourneyCandidate candidate) {
+        try {
+            return new JourneyDecisionPersistencePort.CandidateToStore(candidate.candidateId(), candidate.archetype().name(),
+                    objectMapper.writeValueAsString(candidate), "{\"source\":\"core-on-demand\"}");
+        } catch (Exception exception) {
+            throw new IllegalStateException("Journey candidate를 저장할 수 없습니다.", exception);
+        }
+    }
+
+    private List<JourneyCandidate> toJourneyCandidates(List<JourneyRentalPredictionPort.RentalCandidate> coreCandidates,
+                                                        PlanInput input) {
+        List<JourneyRentalPredictionPort.RentalCandidate> normalCandidates = coreCandidates.stream()
+                .filter(candidate -> "NORMAL".equals(candidate.predictionStatus()))
+                .sorted(Comparator.comparing(JourneyRentalPredictionPort.RentalCandidate::rentalProbability,
+                                Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(JourneyRentalPredictionPort.RentalCandidate::durationSeconds,
+                                Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(JourneyRentalPredictionPort.RentalCandidate::distanceMeters,
+                                Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(JourneyRentalPredictionPort.RentalCandidate::stationId,
+                                Comparator.nullsLast(Comparator.naturalOrder())))
+                .limit(3)
+                .toList();
+        return IntStream.range(0, normalCandidates.size())
+                .mapToObj(index -> toJourneyCandidate(normalCandidates.get(index), input, index + 1))
+                .toList();
+    }
+
+    private JourneyCandidate toJourneyCandidate(JourneyRentalPredictionPort.RentalCandidate candidate, PlanInput input, int rank) {
+        return new JourneyCandidate(candidate.stationId(), JourneyArchetype.CORE_RENTAL, rank,
+                candidate.rentalProbability(), null, null, candidate.distanceMeters(), null, null,
+                input.destination().displayName(), null, null, null, candidate.stationId(), candidate.stationName(),
+                candidate.latitude(), candidate.longitude(), candidate.requiredBikeCount(), candidate.availableBikeCount(),
+                candidate.inventoryStatus(), candidate.inventoryCollectedAt(), candidate.availabilityLevel(),
+                candidate.durationSeconds(), candidate.arrivalAt(), candidate.predictionTargetAt(), candidate.horizonMinutes(),
+                candidate.featureAsOf(), candidate.modelVersion(), candidate.generatedAt(), candidate.predictionStatus());
     }
 
     private String normalizedIntent(PlanInput input, JourneyIntent aiIntent) {
@@ -150,8 +225,10 @@ public class JourneyPlanService {
     }
 
     private List<String> warningsFor(String status) {
-        return JourneyStatus.CLARIFICATION_REQUIRED.name().equals(status)
-                ? List.of("CLARIFICATION_REQUIRED") : List.of("JOURNEY_PROVIDER_UNAVAILABLE");
+        if (JourneyStatus.CLARIFICATION_REQUIRED.name().equals(status)) return List.of("CLARIFICATION_REQUIRED");
+        if (JourneyStatus.PARTIAL.name().equals(status)) return List.of("JOURNEY_RENTAL_PARTIAL");
+        if (JourneyStatus.READY.name().equals(status)) return List.of();
+        return List.of("JOURNEY_RENTAL_UNAVAILABLE");
     }
 
     private String safeAiCode(JourneyAiErrorCode code) {
@@ -189,8 +266,13 @@ public class JourneyPlanService {
     private Clarification clarificationFor(String status, JsonNode normalizedIntent) {
         if (!JourneyStatus.CLARIFICATION_REQUIRED.name().equals(status)) return null;
         List<String> missingFields = new ArrayList<>();
+        if (normalizedIntent.path("destination").isMissingNode() || normalizedIntent.path("destination").isNull()) {
+            missingFields.add("destination");
+        }
         for (JsonNode field : normalizedIntent.path("aiIntent").path("missingFields")) {
-            if (field.isTextual() && !field.asText().isBlank()) missingFields.add(field.asText());
+            if (field.isTextual() && !field.asText().isBlank() && !missingFields.contains(field.asText())) {
+                missingFields.add(field.asText());
+            }
         }
         return new Clarification("추가 여정 조건을 확인해 주세요.", List.copyOf(missingFields));
     }
