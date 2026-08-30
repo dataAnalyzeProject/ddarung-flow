@@ -13,9 +13,12 @@ export function isSelectedPlace(place) {
 
 export function validatePlannerInput(input, now = Date.now()) {
   if (!isSelectedPlace(input.origin)) return '출발 장소를 검색 결과에서 선택해 주세요.';
+  if (!isSelectedPlace(input.destination)) return '목적지를 검색 결과에서 선택해 주세요.';
   if (!input.departureAt) return '출발 희망 시각을 입력해 주세요.';
   const departureAt = new Date(input.departureAt);
   if (Number.isNaN(departureAt.getTime()) || departureAt.getTime() <= now) return '출발 희망 시각은 현재 이후여야 합니다.';
+  const requiredBikeCount = Number(input.requiredBikeCount);
+  if (!Number.isInteger(requiredBikeCount) || requiredBikeCount < 1 || requiredBikeCount > 5) return '필요한 자전거 수는 1~5대여야 합니다.';
   return '';
 }
 
