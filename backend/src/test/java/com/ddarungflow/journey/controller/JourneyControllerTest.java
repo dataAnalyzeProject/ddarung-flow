@@ -65,7 +65,7 @@ class JourneyControllerTest {
     }
 
     @Test
-    void safeOffApplicationStartsAndAuthenticatedPlanPersistsAnUnavailableRevision() throws Exception {
+    void missingDestinationPersistsAClarificationRevisionWithoutCandidates() throws Exception {
         assertThat(aiProperties.enabled()).isFalse();
         assertThat(aiProperties.responsesUri().toString()).isEqualTo("https://example.test/responses");
         assertThat(aiProperties.apiKey()).isEqualTo("test-api-key");
@@ -74,9 +74,10 @@ class JourneyControllerTest {
                         .contentType(MediaType.APPLICATION_JSON).content(PLAN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.revision").value(1))
-                .andExpect(jsonPath("$.status").value("UNAVAILABLE"))
+                .andExpect(jsonPath("$.status").value("CLARIFICATION_REQUIRED"))
                 .andExpect(jsonPath("$.candidates").isEmpty())
-                .andExpect(jsonPath("$.warnings[0]").value("JOURNEY_PROVIDER_UNAVAILABLE"))
+                .andExpect(jsonPath("$.warnings[0]").value("CLARIFICATION_REQUIRED"))
+                .andExpect(jsonPath("$.clarification.missingFields[0]").value("destination"))
                 .andReturn().getResponse().getContentAsString();
 
         String decisionId = objectMapper.readTree(response).path("decisionId").asText();
