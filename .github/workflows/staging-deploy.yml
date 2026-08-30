@@ -555,7 +555,7 @@ jobs:
           docker compose --env-file .env --env-file oauth.env --env-file release.env "${compose_files[@]}" up -d --no-build --remove-orphans
 
           staging_healthy=false
-          for attempt in $(seq 1 18); do
+          for attempt in $(seq 1 60); do
             postgres_status=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' ddarung-flow-staging-postgres-1 2>/dev/null || true)
             inference_status=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' ddarung-flow-staging-inference-1 2>/dev/null || true)
             inventory_refresher_status=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' ddarung-flow-staging-inventory-refresher-1 2>/dev/null || true)
@@ -570,6 +570,13 @@ jobs:
             sleep 5
           done
           if [ "$staging_healthy" != true ]; then
+            inventory_refresher_reason=$(docker inspect --format '{{range .State.Health.Log}}{{printf "%s" .Output}}{{end}}' ddarung-flow-staging-inventory-refresher-1 2>/dev/null | tail -n 1 | tr -d '\r\n' || true)
+            case "$inventory_refresher_reason" in
+              FRESH_OK|STALE|MISSING|PARTIAL|FUTURE_TIMESTAMP|DB_ERROR) ;;
+              *) inventory_refresher_reason=UNAVAILABLE ;;
+            esac
+            printf 'inventory_refresher_status=%s\n' "$inventory_refresher_status"
+            printf 'inventory_refresher_reason=%s\n' "$inventory_refresher_reason"
             echo "Staging health checks did not pass before timeout." >&2
             false
           fi
