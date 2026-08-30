@@ -17,6 +17,7 @@ import SystemJourneyOps from '../system/journey-ops/index.jsx';
 import { CONSOLE_ORDER, hasPermission, PERMISSIONS } from '../permissions/permissions.js';
 
 export const PREVIEW_PREFIX = '/admin-v2-preview';
+export const PRODUCTION_RELEASED_ROUTE_IDS = ['UI-OPS-01', 'UI-OPS-02'];
 export const ROUTES = [
   ['UI-OPS-01', 'OPS', '/admin/ops', '/ops', '운영 상황판', 'OPS_DASHBOARD_READ', OperationsOverview],
   ['UI-OPS-02', 'OPS', '/admin/ops/risk-map', '/ops/risk-map', '수급 위험 지도', 'OPS_RISK_MAP_READ', OperationsRiskMap],
@@ -60,6 +61,17 @@ export function resolvePreviewRoute(pathname, access) {
   const route = ROUTES.find((candidate) => candidate.previewPath === pathname);
   if (!route) return { type: 'NOT_FOUND' };
   return hasPermission(access.permissions, route.requiredPermission) ? { type: 'ALLOW', route } : { type: 'FORBIDDEN', route };
+}
+
+export function resolveCanonicalRoute(pathname, access, releasedRouteIds = PRODUCTION_RELEASED_ROUTE_IDS) {
+  const route = ROUTES.find((candidate) => candidate.canonicalPath === pathname);
+  if (!route) return { type: 'NOT_FOUND' };
+  if (!releasedRouteIds.includes(route.id)) return { type: 'RELEASE_NOT_AVAILABLE', route };
+  return hasPermission(access.permissions, route.requiredPermission) ? { type: 'ALLOW', route } : { type: 'FORBIDDEN', route };
+}
+
+export function isAdminV2ProductionPath(pathname) {
+  return pathname.startsWith('/admin/');
 }
 
 export function isAdminV2PreviewPath(pathname, nodeEnv = process.env.NODE_ENV) {
