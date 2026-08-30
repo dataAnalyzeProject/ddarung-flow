@@ -226,6 +226,25 @@ class JourneyPlanServiceTest {
     }
 
     @Test
+    void readbackCanonicalizesPersistedCandidateOrderByRankThenCandidateId() {
+        InMemoryPersistence persistence = new InMemoryPersistence();
+        JourneyPlanService service = service(persistence, disabledAi(), new CountingReturnPort(), request -> List.of(
+                rental("station-1", "One", "0.9", 60, 100, "NORMAL"),
+                rental("station-2", "Two", "0.8", 120, 200, "NORMAL"),
+                rental("station-3", "Three", "0.7", 180, 300, "NORMAL")));
+        JourneyPlanService.Decision planned = service.plan(10L, formInputWithDestination(1));
+        JourneyDecisionPersistencePort.StoredDecision stored = persistence.decisions.getFirst();
+        persistence.decisions.set(0, new JourneyDecisionPersistencePort.StoredDecision(stored.decisionId(), stored.userId(), stored.revision(),
+                stored.status(), stored.normalizedIntentJson(), stored.contractVersions(), stored.generatedAt(), stored.expiresAt(),
+                List.of(stored.candidates().get(1), stored.candidates().get(2), stored.candidates().get(0))));
+
+        assertThat(service.find(10L, planned.decisionId()).candidates()).extracting(candidate -> candidate.rank())
+                .containsExactly(1, 2, 3);
+        assertThat(service.find(10L, planned.decisionId()).candidates()).extracting(candidate -> candidate.candidateId())
+                .containsExactly("station-1", "station-2", "station-3");
+    }
+
+    @Test
     void derivesReadyPartialAndUnavailableFromCorePredictionStatuses() {
         JourneyPlanService ready = service(new InMemoryPersistence(), disabledAi(), new CountingReturnPort(),
                 request -> List.of(rental("ready", "R", "0.70", 60, 100, "NORMAL")));

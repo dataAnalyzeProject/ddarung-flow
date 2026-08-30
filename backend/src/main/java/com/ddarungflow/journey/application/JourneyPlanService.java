@@ -208,6 +208,8 @@ public class JourneyPlanService {
             JsonNode normalizedIntent = objectMapper.readTree(stored.normalizedIntentJson());
             List<JourneyCandidate> candidates = stored.candidates().stream()
                     .map(candidate -> readCandidate(candidate.snapshotJson()))
+                    .sorted(Comparator.comparing(JourneyCandidate::rank, Comparator.nullsLast(Comparator.naturalOrder()))
+                            .thenComparing(JourneyCandidate::candidateId, Comparator.nullsLast(Comparator.naturalOrder())))
                     .toList();
             return new Decision(stored.decisionId(), stored.revision(), JourneyStatus.valueOf(stored.status()),
                     normalizedIntent, clarificationFor(stored.status(), normalizedIntent), candidates, warnings, stored.expiresAt());
