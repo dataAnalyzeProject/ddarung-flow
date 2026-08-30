@@ -7,12 +7,15 @@ from unittest.mock import patch
 
 from pipeline.src.inventory_current_refresher import (
     DEFAULT_REFRESH_INTERVAL_SECONDS,
-    RETRY_DELAY_SECONDS,
+    DEGRADED_RECOVERY_DELAYS_SECONDS,
     build_snapshot_rows,
+    degraded_recovery_delay,
     next_cycle_delay,
+    next_refresh_schedule,
     publish_snapshot,
     refresh_cycle,
 )
+from pipeline.src.collectors.bike_inventory_collector import SeoulBikeTransportError
 from pipeline.src.inventory_refresher_healthcheck import (
     DB_ERROR,
     FRESH_OK,
@@ -101,45 +104,66 @@ class RefreshCycleTests(unittest.TestCase):
     def test_default_interval_is_five_minutes(self):
         self.assertEqual(DEFAULT_REFRESH_INTERVAL_SECONDS, 300)
 
-    def test_successful_first_attempt_does_not_retry(self):
+    def test_successful_cycle_does_not_retry(self):
         calls = []
 
         def refresh(*_):
             calls.append(True)
             return 1000
 
-        self.assertTrue(refresh_cycle("key", "database", refresh=refresh, sleep=lambda _: self.fail("unexpected retry")))
+        self.assertTrue(refresh_cycle("key", "database", refresh=refresh))
         self.assertEqual(len(calls), 1)
 
-    def test_first_failure_retries_once_after_sixty_seconds(self):
+    def test_failed_cycle_does_not_repeat_the_whole_snapshot(self):
         calls = []
-        sleeps = []
 
         def refresh(*_):
             calls.append(True)
-            if len(calls) == 1:
-                raise RuntimeError()
-            return 1000
+            raise SeoulBikeTransportError("TIMEOUT", True)
 
-        self.assertTrue(refresh_cycle("key", "database", refresh=refresh, sleep=sleeps.append))
-        self.assertEqual(len(calls), 2)
-        self.assertEqual(sleeps, [RETRY_DELAY_SECONDS])
+        self.assertFalse(refresh_cycle("key", "database", refresh=refresh))
+        self.assertEqual(len(calls), 1)
 
-    def test_failed_retry_stops_without_an_immediate_third_attempt(self):
-        calls = []
-        sleeps = []
+    def test_failure_logging_is_sanitized(self):
+        output = io.StringIO()
 
-        def refresh(*_):
-            calls.append(True)
-            raise RuntimeError()
+        with contextlib.redirect_stdout(output):
+            self.assertFalse(
+                refresh_cycle(
+                    "secret-key",
+                    "sensitive database",
+                    refresh=lambda *_: (_ for _ in ()).throw(SeoulBikeTransportError("TIMEOUT", True)),
+                )
+            )
 
-        self.assertFalse(refresh_cycle("key", "database", refresh=refresh, sleep=sleeps.append))
-        self.assertEqual(len(calls), 2)
-        self.assertEqual(sleeps, [RETRY_DELAY_SECONDS])
+        self.assertEqual(output.getvalue(), "event=inventory_refresh_failure category=TIMEOUT\n")
+        self.assertNotIn("secret-key", output.getvalue())
+        self.assertNotIn("database", output.getvalue())
 
-    def test_next_cycle_uses_elapsed_time_without_catch_up_burst(self):
+    def test_normal_cycle_uses_start_to_start_five_minute_cadence(self):
         self.assertEqual(next_cycle_delay(300, 25), 275)
         self.assertEqual(next_cycle_delay(300, 360), 0)
+
+    def test_degraded_recovery_cadence_is_bounded_and_slows_down(self):
+        self.assertEqual(DEGRADED_RECOVERY_DELAYS_SECONDS, (60, 120, 240, 300))
+        self.assertEqual(
+            [degraded_recovery_delay(streak, random_source=lambda *_: 0) for streak in range(1, 6)],
+            [60, 120, 240, 300, 300],
+        )
+        self.assertEqual(degraded_recovery_delay(1, random_source=lambda *_: 10), 70)
+
+    def test_degraded_recovery_rejects_zero_failure_streak(self):
+        with self.assertRaisesRegex(ValueError, "positive"):
+            degraded_recovery_delay(0)
+
+    def test_failure_schedule_slows_down_and_success_resets_the_streak(self):
+        first_delay, first_streak = next_refresh_schedule(False, 300, 999, 0, random_source=lambda *_: 0)
+        second_delay, second_streak = next_refresh_schedule(False, 300, 999, first_streak, random_source=lambda *_: 0)
+        recovered_delay, recovered_streak = next_refresh_schedule(True, 300, 25, second_streak)
+
+        self.assertEqual((first_delay, first_streak), (60, 1))
+        self.assertEqual((second_delay, second_streak), (120, 2))
+        self.assertEqual((recovered_delay, recovered_streak), (275, 0))
 
 
 class HealthcheckCursor:

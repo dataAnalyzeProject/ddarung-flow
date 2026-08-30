@@ -1,13 +1,19 @@
 """외부 서버 없이 재고·날씨 수집 계약을 확인한다."""
 
 import json
+import socket
 from datetime import datetime
 from pathlib import Path
+from urllib.error import HTTPError, URLError
 from zoneinfo import ZoneInfo
 
 import pytest
 
-from pipeline.src.collectors.bike_inventory_collector import collect_bike_inventory
+from pipeline.src.collectors.bike_inventory_collector import (
+    SeoulBikeApiClient,
+    SeoulBikeTransportError,
+    collect_bike_inventory,
+)
 from pipeline.src.collectors.weather_collector import (
     KmaUltraShortObservationClient,
     collect_weather,
@@ -103,6 +109,91 @@ def test_collect_bike_inventory_propagates_client_failure():
 
     with pytest.raises(TimeoutError, match="fixture timeout"):
         collect_bike_inventory(FailingClient(), COLLECTED_AT)
+
+
+@pytest.mark.parametrize(
+    ("failure", "category", "retryable"),
+    [
+        (TimeoutError("sensitive timeout"), "TIMEOUT", True),
+        (HTTPError("http://example.invalid/secret-key", 404, "not found", None, None), "HTTP_4XX", False),
+        (HTTPError("http://example.invalid/secret-key", 503, "unavailable", None, None), "HTTP_5XX", True),
+        (URLError(socket.gaierror()), "DNS_ERROR", True),
+    ],
+)
+def test_bike_transport_errors_are_sanitized_and_classified(monkeypatch, failure, category, retryable):
+    def fail_request(url, timeout):
+        raise failure
+
+    monkeypatch.setattr("pipeline.src.collectors.bike_inventory_collector.urlopen", fail_request)
+
+    with pytest.raises(SeoulBikeTransportError) as exc_info:
+        SeoulBikeApiClient("secret-key").fetch_page(1, 1)
+
+    error = exc_info.value
+    assert error.category == category
+    assert error.retryable is retryable
+    assert "secret-key" not in str(error)
+    assert "http://" not in str(error)
+
+
+def test_page_retry_retries_only_the_failed_page_and_continues(capsys):
+    first_page = {
+        "rentBikeStatus": {
+            "RESULT": {"CODE": "INFO-000"},
+            "row": [{"stationId": str(index), "parkingBikeTotCnt": "1"} for index in range(1000)],
+        }
+    }
+    second_page = {
+        "rentBikeStatus": {
+            "RESULT": {"CODE": "INFO-000"},
+            "row": [{"stationId": "1000", "parkingBikeTotCnt": "1"}],
+        }
+    }
+
+    class RetryOnlySecondPageClient:
+        def __init__(self):
+            self.calls = []
+            self.second_page_attempt = 0
+
+        def fetch_page(self, start_index, end_index):
+            self.calls.append((start_index, end_index))
+            if start_index == 1:
+                return first_page
+            self.second_page_attempt += 1
+            if self.second_page_attempt == 1:
+                raise SeoulBikeTransportError("TIMEOUT", True)
+            return second_page
+
+    sleeps = []
+    client = RetryOnlySecondPageClient()
+
+    result = collect_bike_inventory(client, COLLECTED_AT, sleep=sleeps.append, random_source=lambda *_: 0)
+
+    assert client.calls == [(1, 1000), (1001, 2000), (1001, 2000)]
+    assert result["payload"]["rentBikeStatus"]["list_total_count"] == 1001
+    assert sleeps == [5]
+    assert capsys.readouterr().out == "event=inventory_page_retry category=TIMEOUT attempt=2\n"
+
+
+def test_page_retry_stops_after_two_attempts_without_retrying_http_4xx():
+    class FailingPageClient:
+        def __init__(self, error):
+            self.error = error
+            self.calls = []
+
+        def fetch_page(self, start_index, end_index):
+            self.calls.append((start_index, end_index))
+            raise self.error
+
+    retryable = FailingPageClient(SeoulBikeTransportError("TIMEOUT", True))
+    with pytest.raises(SeoulBikeTransportError):
+        collect_bike_inventory(retryable, COLLECTED_AT, sleep=lambda _: None, random_source=lambda *_: 0)
+    assert retryable.calls == [(1, 1000), (1, 1000)]
+
+    non_retryable = FailingPageClient(SeoulBikeTransportError("HTTP_4XX", False, http_status=404))
+    with pytest.raises(SeoulBikeTransportError):
+        collect_bike_inventory(non_retryable, COLLECTED_AT, sleep=lambda _: pytest.fail("unexpected retry"))
+    assert non_retryable.calls == [(1, 1000)]
 
 
 def test_collect_weather_passes_required_request_fields():
