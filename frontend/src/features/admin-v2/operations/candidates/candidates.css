@@ -1,0 +1,32 @@
+.candidates-page { display: grid; gap: 20px; min-width: 0; }
+.candidates-header { display: flex; align-items: start; justify-content: space-between; gap: 24px; }
+.candidates-header h1, .candidates-coverage h2, .candidates-list h2 { margin: 0; }
+.candidates-header p { margin: 8px 0 0; }
+.candidates-eyebrow { color: var(--admin-v2-accent); font-size: .875rem; font-weight: 700; }
+.candidates-controls, .candidates-context, .candidates-coverage > div, .candidates-list-heading, .candidates-list-heading nav { display: flex; gap: 12px; flex-wrap: wrap; }
+.candidates-controls label, .candidates-context span, .candidates-coverage span { display: grid; gap: 4px; font-size: .875rem; }
+.candidates-controls select { margin-left: 8px; }
+.candidates-context, .candidates-coverage, .candidates-list { background: #fff; border: 1px solid var(--admin-v2-border); border-radius: 8px; padding: 20px; }
+.candidates-context { justify-content: space-between; }
+.candidates-context mark { width: fit-content; }
+.candidates-coverage { display: grid; gap: 12px; }
+.candidates-coverage span { min-width: 132px; }
+.candidates-coverage p { margin: 0; }
+.candidates-list { display: grid; gap: 16px; }
+.candidates-list-heading { align-items: start; justify-content: space-between; }
+.candidates-list-heading p { margin: 6px 0 0; }
+.candidates-list-heading a { color: var(--admin-v2-accent); }
+.candidates-table-wrap { overflow-x: auto; }
+.candidates-table-wrap table { border-collapse: collapse; width: 100%; min-width: 900px; }
+.candidates-table-wrap th, .candidates-table-wrap td { border-bottom: 1px solid var(--admin-v2-border); padding: 12px; text-align: left; vertical-align: top; }
+.candidates-table-wrap th { white-space: nowrap; }
+.candidates-table-wrap small { display: block; margin-top: 4px; }
+.candidates-probability { color: var(--admin-v2-accent); font-weight: 700; white-space: nowrap; }
+.candidates-recurrence summary { cursor: pointer; }
+.candidates-recurrence dl { display: grid; gap: 6px; margin: 10px 0 0; }
+.candidates-recurrence dl div { display: flex; gap: 8px; }
+.candidates-recurrence dt { font-weight: 700; }
+.candidates-recurrence dd { margin: 0; }
+.candidates-recurrence-unavailable { color: #475569; }
+.candidates-empty, .candidates-load-more-error { margin: 0; }
+@media (max-width: 760px) { .candidates-header { display: grid; } .candidates-context { justify-content: start; } }

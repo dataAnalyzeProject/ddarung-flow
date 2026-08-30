@@ -3,6 +3,7 @@ import AdminV2ProductionApp from './AdminV2ProductionApp';
 
 jest.mock('../operations/overview/index.jsx', () => () => <h1>LIVE OPS</h1>);
 jest.mock('../operations/risk-map/index.jsx', () => () => <h1>LIVE RISK MAP</h1>);
+jest.mock('../operations/candidates/index.jsx', () => () => <h1>LIVE CANDIDATES</h1>);
 
 const allPermissions = [
   'OPS_DASHBOARD_READ', 'OPS_RISK_MAP_READ', 'OPS_CANDIDATE_READ', 'OPS_ANALYSIS_READ', 'MODEL_METRICS_READ', 'ACCESS_READ',
@@ -83,10 +84,9 @@ describe('AdminV2ProductionApp', () => {
     expect(firstSignal.aborted).toBe(true);
   });
 
-  test('isolates unreleased and unknown routes before domain rendering', async () => {
+  test('renders the released candidates route and isolates unknown routes before domain rendering', async () => {
     const { rerender } = render(<AdminV2ProductionApp pathname="/admin/ops/candidates" createAccessAdapter={adapterFor(readyAccess(allPermissions))} />);
-    expect(await screen.findByText('RELEASE_NOT_AVAILABLE')).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'LIVE OPS' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'LIVE CANDIDATES' })).toBeInTheDocument();
     rerender(<AdminV2ProductionApp pathname="/admin/not-real" createAccessAdapter={adapterFor(readyAccess(allPermissions))} />);
     expect(await screen.findByText('NOT_FOUND')).toBeInTheDocument();
   });
@@ -96,7 +96,7 @@ describe('AdminV2ProductionApp', () => {
 
     expect(await screen.findByRole('button', { name: '운영 상황판' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '수급 위험 지도' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '집중관리 후보' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '집중관리 목록' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '지역·시간대 분석' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '모델' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '시스템' })).not.toBeInTheDocument();
