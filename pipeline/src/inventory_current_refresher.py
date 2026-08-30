@@ -161,7 +161,7 @@ def degraded_recovery_delay(failure_streak, random_source=random.uniform):
         raise ValueError("failure_streak must be positive")
     base = DEGRADED_RECOVERY_DELAYS_SECONDS[min(failure_streak - 1, len(DEGRADED_RECOVERY_DELAYS_SECONDS) - 1)]
     jitter = min(max(random_source(0, DEGRADED_RECOVERY_JITTER_SECONDS), 0), DEGRADED_RECOVERY_JITTER_SECONDS)
-    return base + jitter
+    return min(base + jitter, DEGRADED_RECOVERY_DELAYS_SECONDS[-1])
 
 
 def next_refresh_schedule(succeeded, interval_seconds, elapsed_seconds, failure_streak, random_source=random.uniform):

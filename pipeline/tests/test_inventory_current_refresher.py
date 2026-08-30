@@ -150,7 +150,10 @@ class RefreshCycleTests(unittest.TestCase):
             [degraded_recovery_delay(streak, random_source=lambda *_: 0) for streak in range(1, 6)],
             [60, 120, 240, 300, 300],
         )
-        self.assertEqual(degraded_recovery_delay(1, random_source=lambda *_: 10), 70)
+        maximum_delays = [degraded_recovery_delay(streak, random_source=lambda *_: 10) for streak in range(1, 8)]
+        self.assertEqual(maximum_delays, [70, 130, 250, 300, 300, 300, 300])
+        self.assertTrue(all(delay <= 300 for delay in maximum_delays))
+        self.assertTrue(all(previous <= current for previous, current in zip(maximum_delays, maximum_delays[1:])))
 
     def test_degraded_recovery_rejects_zero_failure_streak(self):
         with self.assertRaisesRegex(ValueError, "positive"):
