@@ -15,6 +15,10 @@ from pipeline.src.collectors.bike_inventory_collector import (
 )
 
 
+DEFAULT_REFRESH_INTERVAL_SECONDS = 300
+RETRY_DELAY_SECONDS = 60
+
+
 def build_snapshot_rows(collection_result, minimum_rows=1000):
     node = collection_result.get("payload", {}).get("rentBikeStatus", {})
     source_rows = node.get("row")
@@ -132,6 +136,23 @@ def refresh_once(api_key, database_url, now=None, minimum_rows=1000):
     return len(rows)
 
 
+def refresh_cycle(api_key, database_url, refresh=refresh_once, sleep=time.sleep):
+    for attempt in range(2):
+        try:
+            count = refresh(api_key, database_url)
+            print(f"inventory refresh succeeded: station_count={count}", flush=True)
+            return True
+        except Exception as exception:
+            print(f"inventory refresh failed: {type(exception).__name__}", flush=True)
+            if attempt == 0:
+                sleep(RETRY_DELAY_SECONDS)
+    return False
+
+
+def next_cycle_delay(interval_seconds, elapsed_seconds):
+    return max(0, interval_seconds - elapsed_seconds)
+
+
 def main():
     api_key = os.getenv("SEOUL_OPEN_API_KEY", "")
     database_url = os.getenv("DATABASE_URL", "")
@@ -142,19 +163,17 @@ def main():
             user=os.environ["DB_USERNAME"],
             password=os.environ["DB_PASSWORD"],
         )
-    interval_seconds = int(os.getenv("INVENTORY_REFRESH_SECONDS", "600"))
+    interval_seconds = int(os.getenv("INVENTORY_REFRESH_SECONDS", str(DEFAULT_REFRESH_INTERVAL_SECONDS)))
     if not api_key or not database_url:
         raise RuntimeError("SEOUL_OPEN_API_KEY and DATABASE_URL are required")
     if interval_seconds < 60:
         raise RuntimeError("INVENTORY_REFRESH_SECONDS must be at least 60")
 
     while True:
-        try:
-            count = refresh_once(api_key, database_url)
-            print(f"inventory refresh succeeded: station_count={count}", flush=True)
-        except Exception as exception:
-            print(f"inventory refresh failed: {type(exception).__name__}", flush=True)
-        time.sleep(interval_seconds)
+        cycle_started = time.monotonic()
+        refresh_cycle(api_key, database_url)
+        elapsed_seconds = time.monotonic() - cycle_started
+        time.sleep(next_cycle_delay(interval_seconds, elapsed_seconds))
 
 
 if __name__ == "__main__":

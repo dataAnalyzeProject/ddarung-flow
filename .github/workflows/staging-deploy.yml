@@ -558,11 +558,12 @@ jobs:
           for attempt in $(seq 1 18); do
             postgres_status=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' ddarung-flow-staging-postgres-1 2>/dev/null || true)
             inference_status=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' ddarung-flow-staging-inference-1 2>/dev/null || true)
+            inventory_refresher_status=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' ddarung-flow-staging-inventory-refresher-1 2>/dev/null || true)
             frontend_code=$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:3100/ || true)
             proxy_code=$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:3100/api/v1/auth/me || true)
             public_frontend_code=$(curl -sS -o /dev/null -w '%{http_code}' "$STAGING_PUBLIC_URL/" || true)
             public_proxy_code=$(curl -sS -o /dev/null -w '%{http_code}' "$STAGING_PUBLIC_URL/api/v1/auth/me" || true)
-            if [ "$postgres_status" = healthy ] && [ "$inference_status" = healthy ] && [ "$frontend_code" = 200 ] && [[ "$proxy_code" =~ ^(200|401|403)$ ]] && [ "$public_frontend_code" = 200 ] && [[ "$public_proxy_code" =~ ^(200|401|403)$ ]]; then
+            if [ "$postgres_status" = healthy ] && [ "$inference_status" = healthy ] && [ "$inventory_refresher_status" = healthy ] && [ "$frontend_code" = 200 ] && [[ "$proxy_code" =~ ^(200|401|403)$ ]] && [ "$public_frontend_code" = 200 ] && [[ "$public_proxy_code" =~ ^(200|401|403)$ ]]; then
               staging_healthy=true
               break
             fi
