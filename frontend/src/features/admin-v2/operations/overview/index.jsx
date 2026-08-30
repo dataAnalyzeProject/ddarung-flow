@@ -1,2 +1,1 @@
-import { createRoutePlaceholder } from '../../components/RoutePlaceholder';
-export default createRoutePlaceholder();
+export { default } from '../dashboard/index.jsx';
