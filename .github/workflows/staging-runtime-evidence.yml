@@ -35,6 +35,16 @@ jobs:
       REMOTE_APP_DIR: ${{ vars.REMOTE_APP_DIR }}
       SSH_HOST: ${{ secrets.STAGING_SSH_HOST }}
       SSH_USER: ${{ secrets.STAGING_SSH_USER }}
+      HTTP_5XX_PATTERN: '(^|[^[:alnum:]])5[0-9][0-9]([^[:alnum:]]|$)|internal server error|bad gateway|service unavailable|gateway timeout'
+      UNHANDLED_ERROR_PATTERN: 'servlet[.]service[(][)].*threw[[:space:]]+exception|exception[[:space:]]+in[[:space:]]+thread|unhandled[[:space:]]+(exception|error)|uncaught.*exception'
+      DB_FAILURE_PATTERN: '(hikaripool|hikari|postgresql|jdbc).*(connection[[:space:]]+(is[[:space:]]+not[[:space:]]+available|refused)|timed[[:space:]]+out|unavailable|timeout|critical[[:space:]]+connection[[:space:]]+failure)|connection[[:space:]]+to[[:space:]]+(db|postgres|postgresql)(:[0-9]+)?[[:space:]]+refused|psqlexception'
+      INFERENCE_BACKEND_FAILURE_PATTERN: '(inference|upstream).*(connection[[:space:]]+refused|timed[[:space:]]+out|unavailable|timeout|critical[[:space:]]+failure)|(connection[[:space:]]+refused|timed[[:space:]]+out|unavailable|timeout|critical[[:space:]]+failure).*(inference|upstream)'
+      INFERENCE_RUNTIME_FAILURE_PATTERN: 'connection[[:space:]]+refused|timed[[:space:]]+out|unavailable|timeout|critical[[:space:]]+failure'
+      JOURNEY_REQUEST_PATTERN: 'event=journey_ai_provider_request'
+      JOURNEY_RESPONSE_PATTERN: 'event=journey_ai_provider_response'
+      JOURNEY_TRANSPORT_FAILURE_PATTERN: 'event=journey_ai_provider_transport_failure'
+      UNSAFE_LOG_PATTERN: '"?(authorization|access_token|refresh_token)"?[[:space:]]*[:=]|bearer[[:space:]]+[^[:space:]]+|(api[[:space:]_-]*key|secret|oauth[[:space:]_-]*token|csrf|cookie|session|access_token|refresh_token)[[:space:]]*[:=]'
+      RAW_AI_CONTENT_PATTERN: '"?naturallanguagetext"?[[:space:]]*[:=]|(provider[[:space:]_-]*(prompt|output)|(prompt|output)[[:space:]_-]*payload)[[:space:]]*[:=]'
 
     steps:
       - name: Validate manual evidence request
@@ -48,6 +58,49 @@ jobs:
           [[ "$REMOTE_APP_DIR" =~ ^/[A-Za-z0-9._/-]+$ ]]
           [[ "$SSH_HOST" =~ ^[A-Za-z0-9.-]+$ ]]
           [[ "$SSH_USER" =~ ^[A-Za-z0-9._-]+$ ]]
+
+      - name: Validate fixed marker coverage
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          matches() {
+            local pattern="$1"
+            local line="$2"
+            printf '%s\n' "$line" | awk -v pattern="$pattern" '{ normalized = tolower($0); exit !(normalized ~ pattern) }'
+          }
+
+          expect_match() {
+            matches "$1" "$2"
+          }
+
+          expect_no_match() {
+            if matches "$1" "$2"; then
+              exit 1
+            fi
+          }
+
+          expect_match "$UNSAFE_LOG_PATTERN" '{"Authorization":"Bearer abc"}'
+          expect_match "$UNSAFE_LOG_PATTERN" '{"access_token":"abc"}'
+          expect_match "$UNSAFE_LOG_PATTERN" '{"refresh_token":"abc"}'
+          expect_match "$RAW_AI_CONTENT_PATTERN" '{"naturalLanguageText":"서울역에서 광화문"}'
+          expect_match "$DB_FAILURE_PATTERN" 'HikariPool-1 - Connection is not available, request timed out after 30000ms.'
+          expect_match "$DB_FAILURE_PATTERN" 'org.postgresql.util.PSQLException:'
+          expect_match "$DB_FAILURE_PATTERN" 'Connection to db:5432 refused.'
+          expect_match "$INFERENCE_RUNTIME_FAILURE_PATTERN" 'Connection refused'
+          expect_match "$INFERENCE_RUNTIME_FAILURE_PATTERN" 'request timed out'
+          expect_match "$INFERENCE_RUNTIME_FAILURE_PATTERN" 'UNAVAILABLE'
+          expect_match "$UNHANDLED_ERROR_PATTERN" 'Servlet.service() path threw exception'
+          expect_match "$UNHANDLED_ERROR_PATTERN" 'Exception in thread main'
+          expect_match "$UNHANDLED_ERROR_PATTERN" 'Unhandled Exception'
+          expect_match "$UNHANDLED_ERROR_PATTERN" 'Uncaught provider Exception'
+
+          expect_no_match "$UNSAFE_LOG_PATTERN" 'event=journey_ai_provider_response status=200'
+          expect_no_match "$RAW_AI_CONTENT_PATTERN" 'event=journey_ai_provider_response status=200'
+          expect_no_match "$RAW_AI_CONTENT_PATTERN" 'output_text schema term'
+          expect_no_match "$UNHANDLED_ERROR_PATTERN" 'normal application startup complete'
+          expect_no_match "$DB_FAILURE_PATTERN" 'normal application startup complete'
+          expect_no_match "$INFERENCE_RUNTIME_FAILURE_PATTERN" 'normal application startup complete'
 
       - name: Check out exact candidate
         uses: actions/checkout@v6
@@ -84,7 +137,7 @@ jobs:
 
           set +e
           summary="$(ssh -q -T -i "$HOME/.ssh/id_staging" -o BatchMode=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
-            "REMOTE_APP_DIR='$REMOTE_APP_DIR' CANDIDATE_SHA='$CANDIDATE_SHA' LOOKBACK_MINUTES='$LOOKBACK_MINUTES' bash -s" <<'REMOTE'
+            "REMOTE_APP_DIR='$REMOTE_APP_DIR' CANDIDATE_SHA='$CANDIDATE_SHA' LOOKBACK_MINUTES='$LOOKBACK_MINUTES' HTTP_5XX_PATTERN='$HTTP_5XX_PATTERN' UNHANDLED_ERROR_PATTERN='$UNHANDLED_ERROR_PATTERN' DB_FAILURE_PATTERN='$DB_FAILURE_PATTERN' INFERENCE_BACKEND_FAILURE_PATTERN='$INFERENCE_BACKEND_FAILURE_PATTERN' INFERENCE_RUNTIME_FAILURE_PATTERN='$INFERENCE_RUNTIME_FAILURE_PATTERN' JOURNEY_REQUEST_PATTERN='$JOURNEY_REQUEST_PATTERN' JOURNEY_RESPONSE_PATTERN='$JOURNEY_RESPONSE_PATTERN' JOURNEY_TRANSPORT_FAILURE_PATTERN='$JOURNEY_TRANSPORT_FAILURE_PATTERN' UNSAFE_LOG_PATTERN='$UNSAFE_LOG_PATTERN' RAW_AI_CONTENT_PATTERN='$RAW_AI_CONTENT_PATTERN' bash -s" <<'REMOTE'
           set -euo pipefail
           cd "$REMOTE_APP_DIR"
 
@@ -126,7 +179,7 @@ jobs:
             local service="$1"
             local pattern="$2"
             local count
-            if count=$("${compose[@]}" logs --since "${LOOKBACK_MINUTES}m" --no-color "$service" 2>/dev/null | awk -v pattern="$pattern" '$0 ~ pattern { matches++ } END { print matches + 0 }'); then
+            if count=$("${compose[@]}" logs --since "${LOOKBACK_MINUTES}m" --no-color "$service" 2>/dev/null | awk -v pattern="$pattern" '{ normalized = tolower($0); if (normalized ~ pattern) { matches++ } } END { print matches + 0 }'); then
               printf '%s' "$count"
             else
               printf '%s' -1
@@ -163,19 +216,19 @@ jobs:
             exit 1
           fi
 
-          http_5xx=$(count_logs backend '(^|[^[:alnum:]])5[0-9][0-9]([^[:alnum:]]|$)|Internal Server Error|Bad Gateway|Service Unavailable|Gateway Timeout')
-          unhandled_error=$(count_logs backend 'Unhandled[[:space:]]+(Exception|Error)|Exception in thread')
-          db_failure_backend=$(count_logs backend '(PostgreSQL|JDBC|Hikari).*(connection refused|unavailable|timeout|critical connection failure)|(connection refused|unavailable|timeout|critical connection failure).*(PostgreSQL|JDBC|Hikari)')
-          db_failure_postgres=$(count_logs postgres '(PostgreSQL|JDBC|Hikari).*(connection refused|unavailable|timeout|critical connection failure)|(connection refused|unavailable|timeout|critical connection failure).*(PostgreSQL|JDBC|Hikari)')
-          inference_failure_backend=$(count_logs backend '(inference|upstream).*(connection refused|unavailable|timeout|critical failure)|(connection refused|unavailable|timeout|critical failure).*(inference|upstream)')
-          inference_failure_runtime=$(count_logs inference '(inference|upstream).*(connection refused|unavailable|timeout|critical failure)|(connection refused|unavailable|timeout|critical failure).*(inference|upstream)')
-          journey_request=$(count_logs backend 'event=journey_ai_provider_request')
-          journey_response=$(count_logs backend 'event=journey_ai_provider_response')
-          journey_transport_failure=$(count_logs backend 'event=journey_ai_provider_transport_failure')
-          unsafe_backend=$(count_logs backend '(Authorization|Bearer)[[:space:]]*[:=]|(API[[:space:]_-]*key|secret|OAuth[[:space:]_-]*token|CSRF|cookie|session|access_token|refresh_token)[[:space:]]*[:=]')
-          unsafe_inference=$(count_logs inference '(Authorization|Bearer)[[:space:]]*[:=]|(API[[:space:]_-]*key|secret|OAuth[[:space:]_-]*token|CSRF|cookie|session|access_token|refresh_token)[[:space:]]*[:=]')
-          unsafe_postgres=$(count_logs postgres '(Authorization|Bearer)[[:space:]]*[:=]|(API[[:space:]_-]*key|secret|OAuth[[:space:]_-]*token|CSRF|cookie|session|access_token|refresh_token)[[:space:]]*[:=]')
-          raw_ai_content=$(count_logs backend '(naturalLanguageText|provider[[:space:]_-]*(prompt|output)|prompt[[:space:]_-]*payload|output[[:space:]_-]*payload)[[:space:]]*[:=]')
+          http_5xx=$(count_logs backend "$HTTP_5XX_PATTERN")
+          unhandled_error=$(count_logs backend "$UNHANDLED_ERROR_PATTERN")
+          db_failure_backend=$(count_logs backend "$DB_FAILURE_PATTERN")
+          db_failure_postgres=$(count_logs postgres "$DB_FAILURE_PATTERN")
+          inference_failure_backend=$(count_logs backend "$INFERENCE_BACKEND_FAILURE_PATTERN")
+          inference_failure_runtime=$(count_logs inference "$INFERENCE_RUNTIME_FAILURE_PATTERN")
+          journey_request=$(count_logs backend "$JOURNEY_REQUEST_PATTERN")
+          journey_response=$(count_logs backend "$JOURNEY_RESPONSE_PATTERN")
+          journey_transport_failure=$(count_logs backend "$JOURNEY_TRANSPORT_FAILURE_PATTERN")
+          unsafe_backend=$(count_logs backend "$UNSAFE_LOG_PATTERN")
+          unsafe_inference=$(count_logs inference "$UNSAFE_LOG_PATTERN")
+          unsafe_postgres=$(count_logs postgres "$UNSAFE_LOG_PATTERN")
+          raw_ai_content=$(count_logs backend "$RAW_AI_CONTENT_PATTERN")
 
           db_failure=$((db_failure_backend + db_failure_postgres))
           inference_failure=$((inference_failure_backend + inference_failure_runtime))
