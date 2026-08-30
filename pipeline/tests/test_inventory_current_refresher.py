@@ -1,7 +1,9 @@
 import contextlib
 import io
 from datetime import datetime, timezone
+from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 from pipeline.src.inventory_current_refresher import (
     DEFAULT_REFRESH_INTERVAL_SECONDS,
@@ -11,7 +13,17 @@ from pipeline.src.inventory_current_refresher import (
     publish_snapshot,
     refresh_cycle,
 )
-from pipeline.src.inventory_refresher_healthcheck import inventory_is_fresh
+from pipeline.src.inventory_refresher_healthcheck import (
+    DB_ERROR,
+    FRESH_OK,
+    FUTURE_TIMESTAMP,
+    MISSING,
+    PARTIAL,
+    STALE,
+    inventory_health_reason,
+    inventory_is_fresh,
+    main as healthcheck_main,
+)
 
 
 def collection(rows):
@@ -154,35 +166,61 @@ class HealthcheckCursor:
 class HealthcheckTests(unittest.TestCase):
     def healthcheck(self, row=None, error=None):
         cursor = HealthcheckCursor(row=row, error=error)
-        result = inventory_is_fresh("masked", connection_factory=lambda _: FakeConnection(cursor))
-        return result, cursor
+        reason = inventory_health_reason("masked", connection_factory=lambda _: FakeConnection(cursor))
+        return reason, cursor
 
     def test_fresh_complete_snapshot_passes(self):
-        result, cursor = self.healthcheck((True, 1000))
-        self.assertTrue(result)
+        reason, cursor = self.healthcheck((True, True, 1000))
+        self.assertEqual(reason, FRESH_OK)
+        self.assertTrue(inventory_is_fresh("masked", connection_factory=lambda _: FakeConnection(HealthcheckCursor((True, True, 1000)))))
         self.assertIn("CURRENT_TIMESTAMP - INTERVAL '10 minutes'", cursor.sql)
         self.assertIn("i.inventory_status = 'NORMAL'", cursor.sql)
 
     def test_stale_snapshot_fails(self):
-        result, _ = self.healthcheck((False, 1000))
-        self.assertFalse(result)
+        reason, _ = self.healthcheck((False, True, 1000))
+        self.assertEqual(reason, STALE)
 
     def test_future_snapshot_fails(self):
-        result, cursor = self.healthcheck((False, 1000))
-        self.assertFalse(result)
+        reason, cursor = self.healthcheck((True, False, 1000))
+        self.assertEqual(reason, FUTURE_TIMESTAMP)
         self.assertIn("latest.collected_at <= CURRENT_TIMESTAMP", cursor.sql)
 
     def test_missing_current_inventory_fails(self):
-        result, _ = self.healthcheck(None)
-        self.assertFalse(result)
+        reason, _ = self.healthcheck(None)
+        self.assertEqual(reason, MISSING)
 
     def test_incomplete_recent_snapshot_fails(self):
-        result, _ = self.healthcheck((True, 999))
-        self.assertFalse(result)
+        reason, _ = self.healthcheck((True, True, 999))
+        self.assertEqual(reason, PARTIAL)
 
     def test_database_failure_fails_without_exposing_connection_details(self):
         output = io.StringIO()
         with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
-            result, _ = self.healthcheck(error=RuntimeError("sensitive connection value"))
-        self.assertFalse(result)
+            reason, _ = self.healthcheck(error=RuntimeError("sensitive connection value"))
+        self.assertEqual(reason, DB_ERROR)
         self.assertEqual(output.getvalue(), "")
+
+    def test_main_outputs_only_the_sanitized_reason_code(self):
+        output = io.StringIO()
+        with patch.dict("os.environ", {"DATABASE_URL": "sensitive connection value"}, clear=True), \
+             patch("pipeline.src.inventory_refresher_healthcheck.inventory_health_reason", return_value=STALE), \
+             contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
+            self.assertEqual(healthcheck_main(), 1)
+        self.assertEqual(output.getvalue(), f"{STALE}\n")
+
+    def test_main_exits_zero_only_for_fresh_ok(self):
+        output = io.StringIO()
+        with patch.dict("os.environ", {"DATABASE_URL": "masked"}, clear=True), \
+             patch("pipeline.src.inventory_refresher_healthcheck.inventory_health_reason", return_value=FRESH_OK), \
+             contextlib.redirect_stdout(output):
+            self.assertEqual(healthcheck_main(), 0)
+        self.assertEqual(output.getvalue(), f"{FRESH_OK}\n")
+
+    def test_staging_workflow_preserves_last_sanitized_health_reason(self):
+        workflow = (
+            Path(__file__).parents[2] / ".github" / "workflows" / "staging-deploy.yml"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('{{printf "%s" .Output}}', workflow)
+        self.assertNotIn("{{println .Output}}", workflow)
+        self.assertEqual(STALE, "MISSING\nSTALE\n".splitlines()[-1])
