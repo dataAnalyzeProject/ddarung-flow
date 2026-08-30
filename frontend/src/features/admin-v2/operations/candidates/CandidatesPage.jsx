@@ -39,13 +39,22 @@ export default function CandidatesPage({ createAdapter }) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadMoreError, setLoadMoreError] = useState(null);
   const generation = useRef(0);
+  const loadMoreController = useRef(null);
   const adapter = useMemo(() => createAdapter(), [createAdapter]);
   const limit = 25;
+
+  const resetLoadMore = () => {
+    loadMoreController.current?.abort();
+    loadMoreController.current = null;
+    setLoadingMore(false);
+    setLoadMoreError(null);
+  };
 
   useEffect(() => {
     const controller = new AbortController();
     const current = ++generation.current;
-    setLoading(true); setError(null); setResult(null); setLoadMoreError(null);
+    resetLoadMore();
+    setLoading(true); setError(null); setResult(null);
     adapter.load({ horizonMinutes, requiredBikeCount, limit, signal: controller.signal })
       .then((next) => { if (!controller.signal.aborted && generation.current === current) setResult(next); })
       .catch((nextError) => { if (!controller.signal.aborted && nextError?.name !== 'AbortError' && generation.current === current) setError(nextError); })
@@ -57,22 +66,23 @@ export default function CandidatesPage({ createAdapter }) {
     if (!result?.nextCursor || loadingMore) return;
     const controller = new AbortController();
     const current = ++generation.current;
+    loadMoreController.current = controller;
     setLoadingMore(true); setLoadMoreError(null);
     adapter.load({ horizonMinutes, requiredBikeCount, limit, cursor: result.nextCursor, signal: controller.signal })
       .then((next) => {
-        if (generation.current === current) setResult((previous) => ({ ...next, items: [...(previous?.items || []), ...(next.items || [])] }));
+        if (!controller.signal.aborted && generation.current === current) setResult((previous) => ({ ...next, items: [...(previous?.items || []), ...(next.items || [])] }));
       })
-      .catch((nextError) => { if (nextError?.name !== 'AbortError' && generation.current === current) setLoadMoreError(nextError); })
-      .finally(() => { if (generation.current === current) setLoadingMore(false); });
+      .catch((nextError) => { if (!controller.signal.aborted && nextError?.name !== 'AbortError' && generation.current === current) setLoadMoreError(nextError); })
+      .finally(() => { if (loadMoreController.current === controller) { loadMoreController.current = null; setLoadingMore(false); } });
   };
 
   if (loading) return <AsyncStatePanel state="LOADING" />;
   if (error) return <AsyncStatePanel state={isAccessError(error) ? 'FORBIDDEN' : 'ERROR'} code={error.code} requiredPermission={isAccessError(error) ? 'OPS_CANDIDATE_READ' : undefined} />;
 
   const items = result?.items || [];
-  const rootUiState = !items.length ? 'EMPTY' : DATA_STATE_TO_UI[result?.dataState] || 'SUCCESS';
+  const rootUiState = DATA_STATE_TO_UI[result?.dataState] || (!items.length ? 'EMPTY' : 'SUCCESS');
   return <main className="candidates-page" aria-label="집중관리 목록">
-    <header className="candidates-header"><div><p className="candidates-eyebrow">UI-OPS-03</p><h1>집중관리 목록</h1><p>미래 대여 부족 확률과 반복 품절 근거를 기준으로 우선 확인 대여소를 정렬합니다.</p></div><div className="candidates-controls"><label>예측 horizon<select value={horizonMinutes} onChange={(event) => setHorizonMinutes(Number(event.target.value))}>{[60, 120, 180, 240].map((value) => <option key={value} value={value}>{value}분</option>)}</select></label><label>필요 자전거 수<select value={requiredBikeCount} onChange={(event) => setRequiredBikeCount(Number(event.target.value))}>{[1, 2, 3, 4, 5].map((value) => <option key={value} value={value}>{value}대</option>)}</select></label></div></header>
+    <header className="candidates-header"><div><p className="candidates-eyebrow">UI-OPS-03</p><h1>집중관리 목록</h1><p>미래 대여 부족 확률과 반복 품절 근거를 기준으로 우선 확인 대여소를 정렬합니다.</p></div><div className="candidates-controls"><label>예측 horizon<select value={horizonMinutes} onChange={(event) => { resetLoadMore(); setHorizonMinutes(Number(event.target.value)); }}>{[60, 120, 180, 240].map((value) => <option key={value} value={value}>{value}분</option>)}</select></label><label>필요 자전거 수<select value={requiredBikeCount} onChange={(event) => { resetLoadMore(); setRequiredBikeCount(Number(event.target.value)); }}>{[1, 2, 3, 4, 5].map((value) => <option key={value} value={value}>{value}대</option>)}</select></label></div></header>
     <section className="candidates-context" aria-label="목록 기준"><span><b>기준시각</b>{formatTime(result?.referenceTime)}</span><span><b>생성시각</b>{formatTime(result?.generatedAt)}</span><span><b>데이터 상태</b><mark>{result?.dataState || 'UNAVAILABLE'}</mark></span><span><b>위험 유형</b>{result?.riskType || 'RENTAL'}</span></section>
     <section className="candidates-coverage" aria-label="데이터 범위"><h2>데이터 범위</h2><div>{COVERAGE_FIELDS.map(([field, label]) => <span key={field}><b>{label}</b>{result?.coverage?.[field] ?? '확인 정보 없음'}</span>)}</div>{result?.limitations?.length ? <p>제한 사항: {result.limitations.join(', ')}</p> : null}</section>
     {rootUiState !== 'SUCCESS' ? <AsyncStatePanel state={rootUiState} code={result?.dataState === 'MISSING' ? 'MISSING' : undefined} /> : null}

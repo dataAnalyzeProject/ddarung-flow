@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import CandidatesPage from './CandidatesPage';
 
 const first = {
@@ -11,6 +11,7 @@ const first = {
 };
 
 function adapterFor(load) { return () => ({ load }); }
+function deferred() { let resolve; let reject; return { promise: new Promise((done, fail) => { resolve = done; reject = fail; }), resolve, reject }; }
 
 describe('CandidatesPage', () => {
   test('displays API rank order unchanged, preserves zero/null inventory, and keeps recurrence as evidence', async () => {
@@ -40,9 +41,10 @@ describe('CandidatesPage', () => {
 
   test.each([
     [{ items: [], dataState: 'NORMAL' }, '표시할 항목 없음'],
-    [{ items: [{ rank: 1 }], dataState: 'MISSING' }, '일부 정보만 사용 가능'],
-    [{ items: [{ rank: 1 }], dataState: 'INSUFFICIENT_DATA' }, '판단에 필요한 정보 부족'],
-    [{ items: [{ rank: 1 }], dataState: 'UNAVAILABLE' }, '현재 사용할 수 없음'],
+    [{ items: [], dataState: 'MISSING' }, '일부 정보만 사용 가능'],
+    [{ items: [], dataState: 'DELAYED' }, '정보 갱신 지연'],
+    [{ items: [], dataState: 'INSUFFICIENT_DATA' }, '판단에 필요한 정보 부족'],
+    [{ items: [], dataState: 'UNAVAILABLE' }, '현재 사용할 수 없음'],
   ])('renders root %s state distinctly', async (partial, label) => {
     render(<CandidatesPage createAdapter={adapterFor(() => Promise.resolve({ ...first, ...partial }))} />);
     expect(await screen.findByText(label)).toBeInTheDocument();
@@ -52,5 +54,38 @@ describe('CandidatesPage', () => {
     render(<CandidatesPage createAdapter={adapterFor(() => Promise.reject({ status, code: 'REQUEST_FAILED' }))} />);
     expect(await screen.findByText('REQUEST_FAILED')).toBeInTheDocument();
     if (permission) expect(screen.getByText(`필요 권한: ${permission}`)).toBeInTheDocument();
+  });
+
+  test('cancels stale load-more when filters change and keeps the new cursor usable', async () => {
+    const initial = deferred();
+    const staleMore = deferred();
+    const filtered = deferred();
+    const nextFilteredPage = deferred();
+    const load = jest.fn(({ horizonMinutes, cursor }) => {
+      if (horizonMinutes === 60 && !cursor) return initial.promise;
+      if (horizonMinutes === 60 && cursor === 'old-cursor') return staleMore.promise;
+      if (horizonMinutes === 120 && !cursor) return filtered.promise;
+      if (horizonMinutes === 120 && cursor === 'new-cursor') return nextFilteredPage.promise;
+      throw new Error('unexpected request');
+    });
+    render(<CandidatesPage createAdapter={adapterFor(load)} />);
+    await act(async () => initial.resolve({ ...first, nextCursor: 'old-cursor', items: [{ ...first.items[0], station: { ...first.items[0].station, name: '기존 후보' } }] }));
+    fireEvent.click(screen.getByRole('button', { name: '더 보기' }));
+    await waitFor(() => expect(load).toHaveBeenLastCalledWith(expect.objectContaining({ horizonMinutes: 60, cursor: 'old-cursor' })));
+
+    fireEvent.change(screen.getByLabelText('예측 horizon'), { target: { value: '120' } });
+    await waitFor(() => expect(load).toHaveBeenLastCalledWith(expect.objectContaining({ horizonMinutes: 120 })));
+    expect(load.mock.calls.at(-1)[0]).not.toHaveProperty('cursor');
+    await act(async () => filtered.resolve({ ...first, nextCursor: 'new-cursor', items: [{ ...first.items[1], station: { ...first.items[1].station, name: '새 필터 후보' } }] }));
+    expect(await screen.findByText('새 필터 후보')).toBeInTheDocument();
+
+    await act(async () => staleMore.resolve({ ...first, nextCursor: null, items: [{ ...first.items[0], station: { ...first.items[0].station, name: 'stale 후보' } }] }));
+    expect(screen.queryByText('stale 후보')).not.toBeInTheDocument();
+    const loadMoreButton = screen.getByRole('button', { name: '더 보기' });
+    expect(loadMoreButton).not.toBeDisabled();
+    fireEvent.click(loadMoreButton);
+    await waitFor(() => expect(load).toHaveBeenLastCalledWith(expect.objectContaining({ horizonMinutes: 120, cursor: 'new-cursor' })));
+    await act(async () => nextFilteredPage.resolve({ ...first, nextCursor: null, items: [{ ...first.items[0], rank: 3, station: { ...first.items[0].station, name: '새 페이지 후보' } }] }));
+    expect(await screen.findByText('새 페이지 후보')).toBeInTheDocument();
   });
 });
