@@ -3,7 +3,7 @@ import AdminV2ProductionApp from './AdminV2ProductionApp';
 
 jest.mock('../operations/overview/index.jsx', () => () => <h1>LIVE OPS</h1>);
 jest.mock('../operations/risk-map/index.jsx', () => () => <h1>LIVE RISK MAP</h1>);
-jest.mock('../operations/candidates/index.jsx', () => () => <h1>LIVE CANDIDATES</h1>);
+jest.mock('../operations/candidates/index.jsx', () => () => <main className="candidates-page"><h1>LIVE CANDIDATES</h1></main>);
 
 const allPermissions = [
   'OPS_DASHBOARD_READ', 'OPS_RISK_MAP_READ', 'OPS_CANDIDATE_READ', 'OPS_ANALYSIS_READ', 'MODEL_METRICS_READ', 'ACCESS_READ',
@@ -31,6 +31,14 @@ describe('AdminV2ProductionApp', () => {
     await waitFor(() => expect(resolve).toBeDefined());
     await act(async () => resolve(readyAccess()));
     expect(screen.getByRole('heading', { name: 'LIVE OPS' })).toBeInTheDocument();
+  });
+
+  test('renders live reference time without fixture, preview, or development markers', async () => {
+    const { container } = render(<AdminV2ProductionApp pathname="/admin/ops" createAccessAdapter={adapterFor(readyAccess())} />);
+
+    expect(await screen.findByRole('heading', { name: 'LIVE OPS' })).toBeInTheDocument();
+    expect(screen.getByText('기준 시각: 2026-08-30T00:00:00Z')).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/fixture|preview|dev/i);
   });
 
   test('renders the released risk map and preserves query during canonical navigation', async () => {
@@ -89,6 +97,14 @@ describe('AdminV2ProductionApp', () => {
     expect(await screen.findByRole('heading', { name: 'LIVE CANDIDATES' })).toBeInTheDocument();
     rerender(<AdminV2ProductionApp pathname="/admin/not-real" createAccessAdapter={adapterFor(readyAccess(allPermissions))} />);
     expect(await screen.findByText('NOT_FOUND')).toBeInTheDocument();
+  });
+
+  test('does not add a nested main landmark around a page-owned main', async () => {
+    const { container } = render(<AdminV2ProductionApp pathname="/admin/ops/candidates" createAccessAdapter={adapterFor(readyAccess(allPermissions))} />);
+
+    expect(await screen.findByRole('heading', { name: 'LIVE CANDIDATES' })).toBeInTheDocument();
+    expect(container.querySelector('.admin-v2-content').tagName).toBe('DIV');
+    expect(container.querySelectorAll('main')).toHaveLength(1);
   });
 
   test('shows only released OPS navigation even for a super-admin equivalent access', async () => {
