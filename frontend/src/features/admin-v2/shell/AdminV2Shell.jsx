@@ -14,7 +14,7 @@ export default function AdminV2Shell({ consoles, activeConsole, activeRoute, acc
     </header>
     <div className="admin-v2-layout">
       <aside className="admin-v2-sidebar"><PermissionAwareNav routes={routesForConsole(activeConsole, access.permissions)} activeRouteId={activeRoute?.id} onNavigate={onRouteNavigate} /></aside>
-      <main className="admin-v2-content">{children}</main>
+      <div className="admin-v2-content">{children}</div>
     </div>
   </div>;
 }
