@@ -477,7 +477,7 @@ jobs:
         run: |
           set -euo pipefail
           target="$SSH_USER@$SSH_HOST"
-          ssh -i "$HOME/.ssh/id_staging" -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" \
+          ssh -i "$HOME/.ssh/id_staging" -o BatchMode=yes -o StrictHostKeyChecking=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=10 "$target" \
             "REMOTE_APP_DIR='$REMOTE_APP_DIR' STAGING_PUBLIC_URL='$STAGING_PUBLIC_URL' JOURNEY_ENABLED='$JOURNEY_ENABLED' JOURNEY_AI_ENABLED='$JOURNEY_AI_ENABLED' bash -s" <<'REMOTE'
           set -euo pipefail
           cd "$REMOTE_APP_DIR"
