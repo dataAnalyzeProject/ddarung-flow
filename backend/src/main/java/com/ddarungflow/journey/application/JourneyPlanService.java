@@ -163,7 +163,7 @@ public class JourneyPlanService {
     }
 
     private JourneyCandidate toJourneyCandidate(JourneyRentalPredictionPort.RentalCandidate candidate, PlanInput input, int rank) {
-        return new JourneyCandidate(candidate.stationId(), JourneyArchetype.values()[rank - 1], rank,
+        return new JourneyCandidate(candidate.stationId(), JourneyArchetype.CORE_RENTAL, rank,
                 candidate.rentalProbability(), null, null, candidate.distanceMeters(), null, null,
                 input.destination().displayName(), null, null, null, candidate.stationId(), candidate.stationName(),
                 candidate.latitude(), candidate.longitude(), candidate.requiredBikeCount(), candidate.availableBikeCount(),

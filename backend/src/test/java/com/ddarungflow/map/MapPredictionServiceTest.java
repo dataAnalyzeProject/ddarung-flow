@@ -251,6 +251,58 @@ class MapPredictionServiceTest {
         org.mockito.Mockito.verifyNoInteractions(inferenceClient);
     }
 
+    @Test
+    @DisplayName("Journey departureAt으로 선택한 H1~H4만큼의 Core 확률과 시간 정보를 함께 계산한다")
+    void journeyDepartureAtSelectsMatchingCoreHorizon() {
+        RouteCandidateService candidateService = routeCandidatesWithDuration(600);
+        MapPredictionService service = new MapPredictionService(candidateService, inventoryRepository, inferenceClient, TOO_SOON_CLOCK);
+        org.mockito.Mockito.doAnswer(invocation -> horizonSpecificInferenceResponse(candidateId(invocation)))
+                .when(inferenceClient).predict(org.mockito.ArgumentMatchers.anyList());
+        OffsetDateTime featureAsOf = OffsetDateTime.now(TOO_SOON_CLOCK).truncatedTo(java.time.temporal.ChronoUnit.HOURS);
+
+        for (int horizon : List.of(60, 120, 180, 240)) {
+            OffsetDateTime departureAt = OffsetDateTime.now(TOO_SOON_CLOCK).plusMinutes(15L + (horizon - 60));
+            PredictionApiDtos.CandidatePredictionResponseDto dto = service.buildJourneyRouteCandidates(
+                    new BigDecimal("37.5500"), new BigDecimal("126.9000"),
+                    new BigDecimal("37.5556488"), new BigDecimal("126.91062927"), departureAt, 1).getFirst();
+
+            assertThat(dto.predictionStatus()).isEqualTo(PredictionApiDtos.PredictionStatus.NORMAL);
+            assertThat(dto.arrivalAt()).isEqualTo(departureAt.plusSeconds(600));
+            assertThat(dto.featureAsOf()).isEqualTo(featureAsOf);
+            assertThat(dto.horizonMinutes()).isEqualTo(horizon);
+            assertThat(dto.predictionTargetAt()).isEqualTo(featureAsOf.plusMinutes(horizon));
+            assertThat(dto.predictionProbability()).isEqualByComparingTo("0." + (60 + horizon / 60));
+        }
+    }
+
+    @Test
+    @DisplayName("Journey departureAt이 H1~H4 밖이면 Core가 확률을 만들지 않는다")
+    void journeyDepartureAtOutsideCoreHorizonsIsUnavailableWithoutProbability() {
+        InferenceClient unusedInference = org.mockito.Mockito.mock(InferenceClient.class);
+        MapPredictionService service = new MapPredictionService(routeCandidatesWithDuration(600), inventoryRepository, unusedInference, TOO_SOON_CLOCK);
+        OffsetDateTime departureAt = OffsetDateTime.now(TOO_SOON_CLOCK).plusHours(4).plusMinutes(15);
+
+        PredictionApiDtos.CandidatePredictionResponseDto dto = service.buildJourneyRouteCandidates(
+                new BigDecimal("37.5500"), new BigDecimal("126.9000"),
+                new BigDecimal("37.5556488"), new BigDecimal("126.91062927"), departureAt, 1).getFirst();
+
+        assertThat(dto.predictionStatus()).isEqualTo(PredictionApiDtos.PredictionStatus.UNAVAILABLE);
+        assertThat(dto.predictionProbability()).isNull();
+        assertThat(dto.featureAsOf()).isNull();
+        org.mockito.Mockito.verifyNoInteractions(unusedInference);
+    }
+
+    private RouteCandidateService routeCandidatesWithDuration(int durationSeconds) {
+        KakaoMapClient client = new KakaoMapClient("https://dapi.kakao.com", "key", request -> {
+            @SuppressWarnings("unchecked")
+            java.net.http.HttpResponse<String> response = org.mockito.Mockito.mock(java.net.http.HttpResponse.class);
+            org.mockito.Mockito.when(response.statusCode()).thenReturn(200);
+            org.mockito.Mockito.when(response.body()).thenReturn("{\"route\":{\"properties\":{\"totalDistance\":800,\"totalTime\":" + durationSeconds + "}}}");
+            return response;
+        });
+        return new RouteCandidateService(stationRepository, client);
+    }
+
     @SuppressWarnings("unchecked")
     private static String candidateId(org.mockito.invocation.InvocationOnMock invocation) {
         List<InferenceDtos.CandidateRequest> requests = invocation.getArgument(0);
@@ -275,5 +327,17 @@ class MapPredictionServiceTest {
             OffsetDateTime.parse("2026-08-15T09:50:01Z"),
             List.of(new InferenceDtos.CandidatePrediction(stationId, "NORMAL", rows))
         );
+    }
+
+    private static InferenceDtos.PredictResponse horizonSpecificInferenceResponse(String stationId) {
+        List<InferenceDtos.ProbabilityRow> rows = new java.util.ArrayList<>();
+        for (int horizon : List.of(60, 120, 180, 240)) {
+            for (int quantity = 1; quantity <= 5; quantity++) {
+                rows.add(new InferenceDtos.ProbabilityRow(horizon, quantity,
+                        new BigDecimal("0." + (60 + horizon / 60)).subtract(new BigDecimal("0.01").multiply(BigDecimal.valueOf(quantity - 1)))));
+            }
+        }
+        return new InferenceDtos.PredictResponse("NORMAL", null, "model@horizon", OffsetDateTime.parse("2026-08-15T09:05:01+09:00"),
+                List.of(new InferenceDtos.CandidatePrediction(stationId, "NORMAL", rows)));
     }
 }

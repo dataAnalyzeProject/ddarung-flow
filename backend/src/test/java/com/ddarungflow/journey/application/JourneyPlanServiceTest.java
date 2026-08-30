@@ -195,6 +195,7 @@ class JourneyPlanServiceTest {
         assertThat(form.status()).isEqualTo(com.ddarungflow.journey.domain.JourneyStatus.READY);
         assertThat(form.candidates()).extracting(candidate -> candidate.stationId()).containsExactly("station-1", "station-2");
         assertThat(form.candidates()).allSatisfy(candidate -> {
+            assertThat(candidate.archetype()).isEqualTo(com.ddarungflow.journey.domain.JourneyArchetype.CORE_RENTAL);
             assertThat(candidate.requiredBikeCount()).isEqualTo(3);
             assertThat(candidate.returnProbability()).isNull();
             assertThat(candidate.cyclingMinutes()).isNull();
@@ -275,6 +276,32 @@ class JourneyPlanServiceTest {
             assertThat(candidate.rentalProbability()).isEqualByComparingTo("77");
             assertThat(candidate.stationId()).isNull();
             assertThat(candidate.returnProbability()).isEqualByComparingTo("66");
+        });
+    }
+
+    @Test
+    void persistsTimeConsistentCoreRentalSnapshotWithoutChangingItsProbability() {
+        OffsetDateTime departureAt = OffsetDateTime.parse("2030-08-30T10:20:00+09:00");
+        OffsetDateTime arrivalAt = departureAt.plusMinutes(10);
+        OffsetDateTime featureAsOf = OffsetDateTime.parse("2030-08-30T09:00:00+09:00");
+        JourneyRentalPredictionPort rentalPort = request -> List.of(new JourneyRentalPredictionPort.RentalCandidate(
+                "station-time", "시간 대여소", new java.math.BigDecimal("37.55"), new java.math.BigDecimal("127.05"),
+                8, "NORMAL", featureAsOf, new java.math.BigDecimal("0.62"), request.requiredBikeCount(), "MEDIUM",
+                800, 600, arrivalAt, featureAsOf.plusHours(2), 120L, featureAsOf, "model@1", featureAsOf, "NORMAL"));
+        InMemoryPersistence persistence = new InMemoryPersistence();
+        JourneyPlanService service = service(persistence, disabledAi(), new CountingReturnPort(), rentalPort);
+        JourneyPlanService.PlanInput input = formInputWithDestination(2);
+        input = new JourneyPlanService.PlanInput(input.requestMode(), input.naturalLanguageText(), input.origin(), input.destination(),
+                departureAt, input.maxJourneyMinutes(), input.requiredBikeCount(), input.preferences(), input.avoid(), input.expectedRevision());
+
+        JourneyPlanService.Decision saved = service.plan(10L, input);
+        JourneyPlanService.Decision read = service.find(10L, saved.decisionId());
+
+        assertThat(read.candidates()).singleElement().satisfies(candidate -> {
+            assertThat(candidate.arrivalAt()).isEqualTo(departureAt.plusSeconds(candidate.accessDurationSeconds()));
+            assertThat(candidate.predictionTargetAt()).isEqualTo(candidate.arrivalAt().plusMinutes(30).truncatedTo(java.time.temporal.ChronoUnit.HOURS));
+            assertThat(candidate.horizonMinutes()).isEqualTo(java.time.temporal.ChronoUnit.MINUTES.between(candidate.featureAsOf(), candidate.predictionTargetAt()));
+            assertThat(candidate.rentalProbability()).isEqualByComparingTo("0.62");
         });
     }
 

@@ -18,22 +18,21 @@ public class CoreRentalPredictionAdapter implements JourneyRentalPredictionPort 
 
     @Override
     public List<RentalCandidate> predict(RentalPredictionRequest request) {
-        return mapPredictionService.buildRouteCandidates(
+        return mapPredictionService.buildJourneyRouteCandidates(
                         request.originLatitude(), request.originLongitude(),
                         request.destinationLatitude(), request.destinationLongitude(),
-                        "WALK", null, request.requiredBikeCount())
+                        request.departureAt(), request.requiredBikeCount())
                 .stream()
-                .map(candidate -> toRentalCandidate(candidate, request.departureAt()))
+                .map(this::toRentalCandidate)
                 .toList();
     }
 
-    private RentalCandidate toRentalCandidate(PredictionApiDtos.CandidatePredictionResponseDto candidate,
-                                               OffsetDateTime departureAt) {
+    private RentalCandidate toRentalCandidate(PredictionApiDtos.CandidatePredictionResponseDto candidate) {
         return new RentalCandidate(
                 candidate.stationId(), candidate.stationName(), candidate.latitude(), candidate.longitude(),
                 candidate.availableBikeCount(), name(candidate.inventoryStatus()), candidate.inventoryCollectedAt(),
                 candidate.predictionProbability(), candidate.requiredBikeCount(), name(candidate.availabilityLevel()), candidate.distanceMeters(),
-                candidate.durationSeconds(), departureAt.plusSeconds(candidate.durationSeconds()), candidate.predictionTargetAt(),
+                candidate.durationSeconds(), candidate.arrivalAt(), candidate.predictionTargetAt(),
                 candidate.horizonMinutes(), candidate.featureAsOf(), candidate.modelVersion(), candidate.generatedAt(),
                 name(candidate.predictionStatus()));
     }
