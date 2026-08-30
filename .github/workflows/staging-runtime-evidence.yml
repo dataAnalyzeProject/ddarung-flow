@@ -1,0 +1,238 @@
+name: Staging Runtime Evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type RUNTIME_EVIDENCE to collect sanitized staging runtime evidence
+        required: true
+        type: string
+      candidate_sha:
+        description: Exact 40-character main commit SHA deployed to staging
+        required: true
+        type: string
+      lookback_minutes:
+        description: Log lookback in minutes (10-120)
+        required: false
+        default: '30'
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oci-staging-deploy
+  cancel-in-progress: false
+
+jobs:
+  collect-runtime-evidence:
+    name: collect-sanitized-runtime-evidence
+    runs-on: ubuntu-latest
+    environment: oci-staging
+    env:
+      CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+      LOOKBACK_MINUTES: ${{ inputs.lookback_minutes }}
+      REMOTE_APP_DIR: ${{ vars.REMOTE_APP_DIR }}
+      SSH_HOST: ${{ secrets.STAGING_SSH_HOST }}
+      SSH_USER: ${{ secrets.STAGING_SSH_USER }}
+
+    steps:
+      - name: Validate manual evidence request
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ inputs.confirmation }}" = RUNTIME_EVIDENCE
+          [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$LOOKBACK_MINUTES" =~ ^[0-9]+$ ]]
+          (( 10#$LOOKBACK_MINUTES >= 10 && 10#$LOOKBACK_MINUTES <= 120 ))
+          [[ "$REMOTE_APP_DIR" =~ ^/[A-Za-z0-9._/-]+$ ]]
+          [[ "$SSH_HOST" =~ ^[A-Za-z0-9.-]+$ ]]
+          [[ "$SSH_USER" =~ ^[A-Za-z0-9._-]+$ ]]
+
+      - name: Check out exact candidate
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          fetch-depth: 0
+
+      - name: Verify candidate is current main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(git rev-parse origin/main)" = "$CANDIDATE_SHA"
+
+      - name: Configure verified SSH access
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.STAGING_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$HOME/.ssh/id_staging"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_staging" "$HOME/.ssh/known_hosts"
+          ssh-keygen -y -f "$HOME/.ssh/id_staging" >/dev/null
+          ssh-keygen -F "$SSH_HOST" -f "$HOME/.ssh/known_hosts" >/dev/null
+
+      - name: Collect sanitized remote evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          set +e
+          summary="$(ssh -q -T -i "$HOME/.ssh/id_staging" -o BatchMode=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "REMOTE_APP_DIR='$REMOTE_APP_DIR' CANDIDATE_SHA='$CANDIDATE_SHA' LOOKBACK_MINUTES='$LOOKBACK_MINUTES' bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd "$REMOTE_APP_DIR"
+
+          deployed_commit=$(sed -n 's/^DEPLOYED_COMMIT=//p' release.env 2>/dev/null || true)
+          if [ "$deployed_commit" != "$CANDIDATE_SHA" ]; then
+            printf 'deployed_commit_match=0\n'
+            exit 1
+          fi
+          printf 'deployed_commit_match=1\n'
+
+          compose=(docker compose --env-file .env --env-file oauth.env --env-file release.env -f docker-compose.yaml)
+          if [ -f docker-compose.oci.yaml ]; then
+            compose+=(-f docker-compose.oci.yaml)
+          fi
+
+          container_id() {
+            "${compose[@]}" ps -q "$1" 2>/dev/null || true
+          }
+
+          running_state() {
+            local container="$1"
+            if [ -z "$container" ]; then
+              printf '%s' 0
+              return
+            fi
+            docker inspect --format '{{if .State.Running}}1{{else}}0{{end}}' "$container" 2>/dev/null || printf '%s' 0
+          }
+
+          restart_count() {
+            local container="$1"
+            if [ -z "$container" ]; then
+              printf '%s' -1
+              return
+            fi
+            docker inspect --format '{{.RestartCount}}' "$container" 2>/dev/null || printf '%s' -1
+          }
+
+          count_logs() {
+            local service="$1"
+            local pattern="$2"
+            local count
+            if count=$("${compose[@]}" logs --since "${LOOKBACK_MINUTES}m" --no-color "$service" 2>/dev/null | awk -v pattern="$pattern" '$0 ~ pattern { matches++ } END { print matches + 0 }'); then
+              printf '%s' "$count"
+            else
+              printf '%s' -1
+            fi
+          }
+
+          backend_container=$(container_id backend)
+          inference_container=$(container_id inference)
+          postgres_container=$(container_id postgres)
+          backend_running=$(running_state "$backend_container")
+          inference_running=$(running_state "$inference_container")
+          postgres_running=$(running_state "$postgres_container")
+          backend_restarts=$(restart_count "$backend_container")
+          inference_restarts=$(restart_count "$inference_container")
+          postgres_restarts=$(restart_count "$postgres_container")
+
+          printf 'backend_running=%s\n' "$backend_running"
+          printf 'inference_running=%s\n' "$inference_running"
+          printf 'postgres_running=%s\n' "$postgres_running"
+          printf 'backend_restart_count=%s\n' "$backend_restarts"
+          printf 'inference_restart_count=%s\n' "$inference_restarts"
+          printf 'postgres_restart_count=%s\n' "$postgres_restarts"
+
+          if [ "$backend_running" != 1 ] || [ "$inference_running" != 1 ] || [ "$postgres_running" != 1 ]; then
+            printf 'http_5xx_marker_count=-1\n'
+            printf 'unhandled_error_marker_count=-1\n'
+            printf 'db_failure_marker_count=-1\n'
+            printf 'inference_failure_marker_count=-1\n'
+            printf 'journey_ai_request_event_count=-1\n'
+            printf 'journey_ai_response_event_count=-1\n'
+            printf 'journey_ai_transport_failure_event_count=-1\n'
+            printf 'unsafe_log_marker_count=-1\n'
+            printf 'raw_ai_content_marker_count=-1\n'
+            exit 1
+          fi
+
+          http_5xx=$(count_logs backend '(^|[^[:alnum:]])5[0-9][0-9]([^[:alnum:]]|$)|Internal Server Error|Bad Gateway|Service Unavailable|Gateway Timeout')
+          unhandled_error=$(count_logs backend 'Unhandled[[:space:]]+(Exception|Error)|Exception in thread')
+          db_failure_backend=$(count_logs backend '(PostgreSQL|JDBC|Hikari).*(connection refused|unavailable|timeout|critical connection failure)|(connection refused|unavailable|timeout|critical connection failure).*(PostgreSQL|JDBC|Hikari)')
+          db_failure_postgres=$(count_logs postgres '(PostgreSQL|JDBC|Hikari).*(connection refused|unavailable|timeout|critical connection failure)|(connection refused|unavailable|timeout|critical connection failure).*(PostgreSQL|JDBC|Hikari)')
+          inference_failure_backend=$(count_logs backend '(inference|upstream).*(connection refused|unavailable|timeout|critical failure)|(connection refused|unavailable|timeout|critical failure).*(inference|upstream)')
+          inference_failure_runtime=$(count_logs inference '(inference|upstream).*(connection refused|unavailable|timeout|critical failure)|(connection refused|unavailable|timeout|critical failure).*(inference|upstream)')
+          journey_request=$(count_logs backend 'event=journey_ai_provider_request')
+          journey_response=$(count_logs backend 'event=journey_ai_provider_response')
+          journey_transport_failure=$(count_logs backend 'event=journey_ai_provider_transport_failure')
+          unsafe_backend=$(count_logs backend '(Authorization|Bearer)[[:space:]]*[:=]|(API[[:space:]_-]*key|secret|OAuth[[:space:]_-]*token|CSRF|cookie|session|access_token|refresh_token)[[:space:]]*[:=]')
+          unsafe_inference=$(count_logs inference '(Authorization|Bearer)[[:space:]]*[:=]|(API[[:space:]_-]*key|secret|OAuth[[:space:]_-]*token|CSRF|cookie|session|access_token|refresh_token)[[:space:]]*[:=]')
+          unsafe_postgres=$(count_logs postgres '(Authorization|Bearer)[[:space:]]*[:=]|(API[[:space:]_-]*key|secret|OAuth[[:space:]_-]*token|CSRF|cookie|session|access_token|refresh_token)[[:space:]]*[:=]')
+          raw_ai_content=$(count_logs backend '(naturalLanguageText|provider[[:space:]_-]*(prompt|output)|prompt[[:space:]_-]*payload|output[[:space:]_-]*payload)[[:space:]]*[:=]')
+
+          db_failure=$((db_failure_backend + db_failure_postgres))
+          inference_failure=$((inference_failure_backend + inference_failure_runtime))
+          unsafe_log=$((unsafe_backend + unsafe_inference + unsafe_postgres))
+
+          printf 'http_5xx_marker_count=%s\n' "$http_5xx"
+          printf 'unhandled_error_marker_count=%s\n' "$unhandled_error"
+          printf 'db_failure_marker_count=%s\n' "$db_failure"
+          printf 'inference_failure_marker_count=%s\n' "$inference_failure"
+          printf 'journey_ai_request_event_count=%s\n' "$journey_request"
+          printf 'journey_ai_response_event_count=%s\n' "$journey_response"
+          printf 'journey_ai_transport_failure_event_count=%s\n' "$journey_transport_failure"
+          printf 'unsafe_log_marker_count=%s\n' "$unsafe_log"
+          printf 'raw_ai_content_marker_count=%s\n' "$raw_ai_content"
+
+          test "$backend_restarts" = 0
+          test "$inference_restarts" = 0
+          test "$postgres_restarts" = 0
+          test "$http_5xx" = 0
+          test "$unhandled_error" = 0
+          test "$db_failure" = 0
+          test "$inference_failure" = 0
+          test "$unsafe_log" = 0
+          test "$raw_ai_content" = 0
+          REMOTE
+          )"
+          remote_status=$?
+          set -e
+
+          expected_keys=(
+            deployed_commit_match
+            backend_running
+            inference_running
+            postgres_running
+            backend_restart_count
+            inference_restart_count
+            postgres_restart_count
+            http_5xx_marker_count
+            unhandled_error_marker_count
+            db_failure_marker_count
+            inference_failure_marker_count
+            journey_ai_request_event_count
+            journey_ai_response_event_count
+            journey_ai_transport_failure_event_count
+            unsafe_log_marker_count
+            raw_ai_content_marker_count
+          )
+          if [ "$summary" = 'deployed_commit_match=0' ]; then
+            printf '%s\n' "$summary"
+            exit 1
+          fi
+          test "$(printf '%s\n' "$summary" | sed '/^$/d' | wc -l)" -eq "${#expected_keys[@]}"
+          for key in "${expected_keys[@]}"; do
+            value=$(printf '%s\n' "$summary" | sed -n "s/^${key}=//p")
+            test "$(printf '%s\n' "$value" | sed '/^$/d' | wc -l)" -eq 1
+            [[ "$value" =~ ^-?[0-9]+$ ]]
+          done
+
+          printf '%s\n' "$summary"
+          test "$remote_status" -eq 0
