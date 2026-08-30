@@ -1,32 +1,58 @@
-.candidates-page { display: grid; gap: 20px; min-width: 0; }
-.candidates-header { display: flex; align-items: start; justify-content: space-between; gap: 24px; }
+.candidates-page { display: grid; gap: 12px; min-width: 0; }
+.candidates-header { align-items: center; display: flex; gap: 16px; justify-content: space-between; }
 .candidates-header h1, .candidates-coverage h2, .candidates-list h2 { margin: 0; }
-.candidates-header p { margin: 8px 0 0; }
-.candidates-eyebrow { color: var(--admin-v2-accent); font-size: .875rem; font-weight: 700; }
-.candidates-controls, .candidates-context, .candidates-coverage > div, .candidates-list-heading, .candidates-list-heading nav { display: flex; gap: 12px; flex-wrap: wrap; }
-.candidates-controls label, .candidates-context span, .candidates-coverage span { display: grid; gap: 4px; font-size: .875rem; }
-.candidates-controls select { margin-left: 8px; }
-.candidates-context, .candidates-coverage, .candidates-list { background: #fff; border: 1px solid var(--admin-v2-border); border-radius: 8px; padding: 20px; }
+.candidates-header p { font-size: .8125rem; margin: 3px 0 0; }
+.candidates-eyebrow { display: none; }
+.candidates-reference-time { display: grid; gap: 2px; min-width: 170px; text-align: right; }
+.candidates-reference-time span, .candidates-controls > p, .candidates-context b, .candidates-coverage b { color: #64748b; font-size: .75rem; font-weight: 700; }
+.candidates-reference-time strong { font-size: .8125rem; font-weight: 600; }
+.candidates-decision-context, .candidates-list, .candidates-coverage { background: #fff; border: 1px solid var(--admin-v2-border); border-radius: 10px; }
+.candidates-decision-context { display: grid; grid-template-columns: minmax(300px, .9fr) minmax(0, 1.1fr); }
+.candidates-controls, .candidates-context { align-items: end; display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 10px 14px; }
+.candidates-controls { border-right: 1px solid var(--admin-v2-border); }
+.candidates-controls > p { display: none; }
+.candidates-controls label, .candidates-context span, .candidates-coverage span { display: grid; gap: 4px; font-size: .8125rem; }
+.candidates-controls select { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 5px; color: #0f172a; font: inherit; margin-left: 8px; padding: 3px 24px 3px 7px; }
 .candidates-context { justify-content: space-between; }
-.candidates-context mark { width: fit-content; }
-.candidates-coverage { display: grid; gap: 12px; }
-.candidates-coverage span { min-width: 132px; }
-.candidates-coverage p { margin: 0; }
-.candidates-list { display: grid; gap: 16px; }
-.candidates-list-heading { align-items: start; justify-content: space-between; }
-.candidates-list-heading p { margin: 6px 0 0; }
-.candidates-list-heading a { color: var(--admin-v2-accent); }
+.candidates-root-state { background: #f1f5f9; border-radius: 999px; color: #475569; font-size: .6875rem; font-weight: 700; padding: 3px 7px; width: fit-content; }
+.candidates-root-state--normal { background: #e8f7ee; color: #166534; }
+.candidates-root-state--missing { background: #fff7ed; color: #9a3412; }
+.candidates-root-state--delayed { background: #fffbeb; color: #92400e; }
+.candidates-root-state--insufficient-data { background: #f5f3ff; color: #6b21a8; }
+.candidates-root-state--unavailable { background: #f1f5f9; color: #475569; }
+.candidates-list { display: grid; gap: 10px; padding: 12px; }
+.candidates-list-heading { align-items: start; display: flex; gap: 16px; justify-content: space-between; }
+.candidates-list-heading p { color: #64748b; font-size: .8125rem; margin: 2px 0 0; }
+.candidates-list-heading nav { display: flex; flex-wrap: wrap; gap: 12px; justify-content: end; }
+.candidates-list-heading a { color: var(--admin-v2-accent); font-size: .8125rem; font-weight: 700; text-underline-offset: 3px; }
+.candidates-state-panel { border-bottom: 1px solid var(--admin-v2-border); padding-bottom: 14px; }
 .candidates-table-wrap { overflow-x: auto; }
-.candidates-table-wrap table { border-collapse: collapse; width: 100%; min-width: 900px; }
-.candidates-table-wrap th, .candidates-table-wrap td { border-bottom: 1px solid var(--admin-v2-border); padding: 12px; text-align: left; vertical-align: top; }
-.candidates-table-wrap th { white-space: nowrap; }
-.candidates-table-wrap small { display: block; margin-top: 4px; }
-.candidates-probability { color: var(--admin-v2-accent); font-weight: 700; white-space: nowrap; }
+.candidates-table-wrap table { border-collapse: collapse; min-width: 980px; width: 100%; }
+.candidates-table-wrap caption { clip: rect(0 0 0 0); clip-path: inset(50%); height: 1px; overflow: hidden; position: absolute; white-space: nowrap; width: 1px; }
+.candidates-table-wrap th, .candidates-table-wrap td { border-bottom: 1px solid var(--admin-v2-border); padding: 9px 8px; text-align: left; vertical-align: middle; }
+.candidates-table-wrap th { color: #64748b; font-size: .75rem; font-weight: 700; white-space: nowrap; }
+.candidates-table-wrap td { font-size: .8125rem; }
+.candidates-table-wrap tbody tr:last-child td { border-bottom: 0; }
+.candidates-table-wrap small { color: #64748b; display: block; font-size: .75rem; margin-top: 3px; }
+.candidates-rank { color: #334155; text-align: center !important; width: 5%; }
+.candidates-rank strong { align-items: center; background: #f1f5f9; border-radius: 50%; display: inline-flex; height: 26px; justify-content: center; width: 26px; }
+.candidates-station { min-width: 170px; }
+.candidates-station strong { font-size: .875rem; }
+.candidates-probability { color: var(--admin-v2-accent); font-size: .9375rem !important; font-weight: 800; white-space: nowrap; }
+.candidates-target-time { color: #0f172a; font-weight: 700; min-width: 136px; }
+.candidates-data-state { background: #e8f7ee; border-radius: 999px; color: #166534; display: inline-block; font-size: .6875rem; font-weight: 700; padding: 3px 7px; white-space: nowrap; }
+.candidates-recurrence, .candidates-recurrence-unavailable { color: #64748b; font-size: .75rem; }
 .candidates-recurrence summary { cursor: pointer; }
 .candidates-recurrence dl { display: grid; gap: 6px; margin: 10px 0 0; }
 .candidates-recurrence dl div { display: flex; gap: 8px; }
 .candidates-recurrence dt { font-weight: 700; }
 .candidates-recurrence dd { margin: 0; }
-.candidates-recurrence-unavailable { color: #475569; }
-.candidates-empty, .candidates-load-more-error { margin: 0; }
-@media (max-width: 760px) { .candidates-header { display: grid; } .candidates-context { justify-content: start; } }
+.candidates-empty, .candidates-load-more-error { color: #475569; margin: 0; padding: 12px 0; }
+.candidates-coverage { display: grid; gap: 12px; padding: 14px 16px; }
+.candidates-coverage-heading { align-items: baseline; display: flex; gap: 12px; justify-content: space-between; }
+.candidates-coverage h2 { font-size: .875rem; }
+.candidates-coverage p { color: #64748b; font-size: .75rem; margin: 0; }
+.candidates-coverage-values { display: grid; gap: 12px; grid-template-columns: repeat(5, minmax(110px, 1fr)); }
+@media (max-width: 1280px) { .candidates-coverage-values { grid-template-columns: repeat(3, minmax(110px, 1fr)); } }
+@media (max-width: 900px) { .candidates-decision-context { grid-template-columns: 1fr; } .candidates-controls { border-bottom: 1px solid var(--admin-v2-border); border-right: 0; } .candidates-context { justify-content: start; } }
+@media (max-width: 760px) { .candidates-header, .candidates-list-heading { align-items: start; display: grid; } .candidates-reference-time { text-align: left; } .candidates-list-heading nav { justify-content: start; } .candidates-coverage-heading { align-items: start; display: grid; } .candidates-coverage-values { grid-template-columns: repeat(2, minmax(110px, 1fr)); } }

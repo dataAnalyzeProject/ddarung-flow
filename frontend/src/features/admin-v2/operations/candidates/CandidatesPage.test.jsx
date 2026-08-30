@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import CandidatesPage from './CandidatesPage';
 
 const first = {
@@ -18,14 +18,27 @@ describe('CandidatesPage', () => {
     render(<CandidatesPage createAdapter={adapterFor(() => Promise.resolve(first))} />);
     expect(await screen.findByRole('heading', { name: '집중관리 목록' })).toBeInTheDocument();
     const rows = screen.getAllByRole('row');
-    expect(rows[1]).toHaveTextContent(/2두 번째1002재고 확인 필요50.0%.*NORMAL/);
-    expect(rows[2]).toHaveTextContent(/1첫 번째10010대90.0%.*NORMAL/);
+    expect(rows[1]).toHaveTextContent(/2두 번째100250.0%.*재고 확인 필요NORMAL/);
+    expect(rows[2]).toHaveTextContent(/1첫 번째100190.0%.*0대NORMAL/);
     expect(screen.getByText('반복 품절 근거 없음 (RECURRENCE_PROFILE_MISSING)')).toBeInTheDocument();
     expect(screen.getByText('데이터 범위')).toBeInTheDocument();
     expect(screen.queryByText(/CRITICAL|HIGH|WATCH|위험 단계/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByText(/반복 품절 근거 · 표본 12건/));
     expect(screen.getByText('품절 에피소드')).toBeInTheDocument();
     expect(screen.getAllByText('0대')).toHaveLength(2);
+  });
+
+  test('places decision fields before supporting row evidence', async () => {
+    render(<CandidatesPage createAdapter={adapterFor(() => Promise.resolve(first))} />);
+    await screen.findByRole('heading', { name: '집중관리 목록' });
+    const headers = screen.getAllByRole('columnheader').map((header) => header.textContent);
+    expect(headers).toEqual(['순위', '대여소', '대여 부족 확률', '예상 시점', '현재 재고', '후보 데이터 상태', '반복 품절 근거']);
+    const firstCandidateCells = screen.getAllByRole('row')[1].querySelectorAll('td');
+    expect(firstCandidateCells[0]).toHaveTextContent('2');
+    expect(firstCandidateCells[1]).toHaveTextContent('두 번째1002');
+    expect(firstCandidateCells[2]).toHaveTextContent('50.0%');
+    expect(firstCandidateCells[3]).toHaveTextContent(/2026/);
+    expect(firstCandidateCells[6]).toHaveTextContent('반복 품절 근거 없음');
   });
 
   test('sends selected filters and passes nextCursor without interpreting it', async () => {
@@ -40,14 +53,20 @@ describe('CandidatesPage', () => {
   });
 
   test.each([
-    [{ items: [], dataState: 'NORMAL' }, '표시할 항목 없음'],
-    [{ items: [], dataState: 'MISSING' }, '일부 정보만 사용 가능'],
-    [{ items: [], dataState: 'DELAYED' }, '정보 갱신 지연'],
-    [{ items: [], dataState: 'INSUFFICIENT_DATA' }, '판단에 필요한 정보 부족'],
-    [{ items: [], dataState: 'UNAVAILABLE' }, '현재 사용할 수 없음'],
-  ])('renders root %s state distinctly', async (partial, label) => {
+    [{ items: [], dataState: 'NORMAL' }, '표시할 항목 없음', 'candidates-root-state--normal'],
+    [{ items: [], dataState: 'MISSING' }, '일부 정보만 사용 가능', 'candidates-root-state--missing'],
+    [{ items: [], dataState: 'DELAYED' }, '정보 갱신 지연', 'candidates-root-state--delayed'],
+    [{ items: [], dataState: 'INSUFFICIENT_DATA' }, '판단에 필요한 정보 부족', 'candidates-root-state--insufficient-data'],
+    [{ items: [], dataState: 'UNAVAILABLE' }, '현재 사용할 수 없음', 'candidates-root-state--unavailable'],
+  ])('renders root %s state distinctly', async (partial, label, stateClass) => {
     render(<CandidatesPage createAdapter={adapterFor(() => Promise.resolve({ ...first, ...partial }))} />);
     expect(await screen.findByText(label)).toBeInTheDocument();
+    expect(within(screen.getByLabelText('목록 기준')).getByText(partial.dataState)).toHaveClass('candidates-root-state', stateClass);
+  });
+
+  test('uses a neutral root state badge for an unsupported source value', async () => {
+    render(<CandidatesPage createAdapter={adapterFor(() => Promise.resolve({ ...first, dataState: 'UNKNOWN_SOURCE_STATE' }))} />);
+    expect(await screen.findByText('UNKNOWN_SOURCE_STATE')).toHaveClass('candidates-root-state', 'candidates-root-state--unknown');
   });
 
   test.each([[403, 'OPS_CANDIDATE_READ'], [500, null]])('renders access/error state for request failures', async (status, permission) => {
