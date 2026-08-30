@@ -10,6 +10,7 @@ jest.mock("./features/login/authApi", () => ({
   startSocialLogin: jest.fn(),
 }));
 jest.mock("./features/station-detail/stationRhythmApi", () => ({ fetchStationDetail: jest.fn(), fetchStationRhythm: jest.fn() }));
+jest.mock("./features/admin-v2/shell/AdminV2ProductionApp", () => () => <section data-testid="admin-v2-production-app">production admin v2</section>);
 
 beforeEach(() => {
   window.localStorage.clear();
@@ -135,6 +136,15 @@ test('renders forbidden admin-v2 routes without auth or domain placeholder data'
   expect(await screen.findByText('ADMIN_PERMISSION_DENIED')).toBeInTheDocument();
   expect(screen.queryByText('UI-MODEL-04')).not.toBeInTheDocument();
   expect(screen.queryByText('FIXTURE / API_NOT_CONNECTED')).not.toBeInTheDocument();
+  expect(getCurrentUser).not.toHaveBeenCalled();
+});
+
+test.each(['/admin/ops', '/admin/ops/risk-map', '/admin/ops/candidates'])('routes nested production admin paths to the production v2 app without the general session check: %s', (path) => {
+  window.history.replaceState({}, '', path);
+
+  render(<App />);
+
+  expect(screen.getByTestId('admin-v2-production-app')).toBeInTheDocument();
   expect(getCurrentUser).not.toHaveBeenCalled();
 });
 

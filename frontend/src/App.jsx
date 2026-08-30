@@ -9,7 +9,8 @@ import IntroPage from './features/intro/IntroPage';
 import AdminAccessGate from './features/admin/AdminAccessGate';
 import AdminApp from './features/admin/AdminApp';
 import AdminV2PreviewApp from './features/admin-v2/shell/AdminV2PreviewApp';
-import { isAdminV2PreviewPath } from './features/admin-v2/routes/routeMap';
+import AdminV2ProductionApp from './features/admin-v2/shell/AdminV2ProductionApp';
+import { isAdminV2PreviewPath, isAdminV2ProductionPath } from './features/admin-v2/routes/routeMap';
 import StationDetailPage from './features/station-detail/StationDetailPage';
 import JourneyPlannerPage from './features/journey/JourneyPlannerPage';
 import JourneyResultPage from './features/journey/JourneyResultPage';
@@ -39,7 +40,8 @@ function App() {
   const isLoginPath = window.location.pathname === '/login';
   const isLegacyAdminPreviewPath = process.env.NODE_ENV !== 'production' && new URLSearchParams(window.location.search).has('adminPreview');
   const isAdminV2Preview = isAdminV2PreviewPath(window.location.pathname);
-  const skipSessionCheck = isLegacyAdminPreviewPath || isAdminV2Preview;
+  const isAdminV2Production = isAdminV2ProductionPath(window.location.pathname);
+  const skipSessionCheck = isLegacyAdminPreviewPath || isAdminV2Preview || isAdminV2Production;
   const [{ route, stationId }, setRoute] = useState(routeFromHash);
   const [authState, setAuthState] = useState('loading');
   const [user, setUser] = useState(null);
@@ -99,6 +101,10 @@ function App() {
 
   if (isAdminV2Preview) {
     return <AdminV2PreviewApp />;
+  }
+
+  if (isAdminV2Production) {
+    return <AdminV2ProductionApp />;
   }
 
   if (isLegacyAdminPreviewPath) {

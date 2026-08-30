@@ -9,7 +9,7 @@ import ReasonDialog from './components/ReasonDialog';
 import AsyncStatePanel from './components/AsyncStatePanel';
 import { createFixtureAdminAccessAdapter } from './adapters/fixtureAdminAccessAdapter';
 import { ASYNC_STATES } from './states/adminStates';
-import { defaultRoute, isAdminV2PreviewPath, resolvePreviewRoute, ROUTES, validateRouteMetadata, visibleConsoles } from './routes/routeMap';
+import { defaultRoute, isAdminV2PreviewPath, isAdminV2ProductionPath, PRODUCTION_RELEASED_ROUTE_IDS, resolveCanonicalRoute, resolvePreviewRoute, ROUTES, validateRouteMetadata, visibleConsoles } from './routes/routeMap';
 
 function setPreviewUrl(path) { window.history.replaceState({}, '', path); }
 async function waitForShell() { await waitFor(() => expect(screen.queryByText('불러오는 중')).not.toBeInTheDocument()); }
@@ -297,6 +297,17 @@ describe('admin v2 fixture access and routes', () => {
   test('production disables the preview helper', () => {
     expect(isAdminV2PreviewPath('/admin-v2-preview/ops', 'production')).toBe(false);
     expect(isAdminV2PreviewPath('/admin-v2-preview/ops', 'test')).toBe(true);
+  });
+
+  test('canonical production routes apply the release gate before permissions', () => {
+    expect(PRODUCTION_RELEASED_ROUTE_IDS).toEqual(['UI-OPS-01', 'UI-OPS-02']);
+    expect(resolveCanonicalRoute('/admin/ops', { permissions: ['OPS_DASHBOARD_READ'] })).toMatchObject({ type: 'ALLOW', route: { id: 'UI-OPS-01' } });
+    expect(resolveCanonicalRoute('/admin/ops/risk-map', { permissions: [] })).toMatchObject({ type: 'FORBIDDEN', route: { requiredPermission: 'OPS_RISK_MAP_READ' } });
+    expect(resolveCanonicalRoute('/admin/ops/candidates', { permissions: ['OPS_CANDIDATE_READ'] })).toMatchObject({ type: 'RELEASE_NOT_AVAILABLE', route: { id: 'UI-OPS-03' } });
+    expect(resolveCanonicalRoute('/admin/models', { permissions: ['MODEL_METRICS_READ'] })).toMatchObject({ type: 'RELEASE_NOT_AVAILABLE', route: { id: 'UI-MODEL-01' } });
+    expect(resolveCanonicalRoute('/admin/not-real', { permissions: [] }).type).toBe('NOT_FOUND');
+    expect(isAdminV2ProductionPath('/admin')).toBe(false);
+    expect(isAdminV2ProductionPath('/admin/ops')).toBe(true);
   });
 });
 
