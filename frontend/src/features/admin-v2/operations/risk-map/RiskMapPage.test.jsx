@@ -24,6 +24,32 @@ test('selects a public station number and opens detail drawer', async () => {
   expect(screen.getByText('대여소 번호')).toBeInTheDocument();
 });
 
+test('keeps the selected station drawer open when focusing it refreshes the map viewport', async () => {
+  let reportBounds;
+  let selectStation;
+  const map = { setStations: jest.fn(), focusStation: jest.fn(() => reportBounds('bbox-after-pan')), destroy: jest.fn() };
+  const loadList = jest.fn(() => Promise.resolve(riskMapFixture()));
+  render(<RiskMapPage
+    createDataAdapter={() => ({ loadList, loadDetail: (number) => Promise.resolve(detailFixture(number)) })}
+    loadMapSdk={() => Promise.resolve({})}
+    createMapAdapter={(node, maps, callbacks) => { reportBounds = callbacks.onViewportChange; selectStation = callbacks.onStationSelect; return map; }}
+  />);
+
+  await waitFor(() => expect(reportBounds).toBeDefined());
+  fireEvent.click(await screen.findByRole('button', { name: /광화문역 1번 출구/ }));
+  await screen.findByRole('dialog');
+  await waitFor(() => expect(loadList).toHaveBeenCalledWith(expect.objectContaining({ bbox: 'bbox-after-pan' })));
+  expect(map.focusStation).toHaveBeenCalledWith(expect.objectContaining({ station: expect.objectContaining({ stationNumber: '1001' }) }));
+  expect(screen.getByRole('dialog')).toBeInTheDocument();
+  expect(screen.getByText('대여소 번호')).toBeInTheDocument();
+
+  act(() => selectStation('1002'));
+  await screen.findByRole('heading', { name: '시청역 7번 출구' });
+  act(() => reportBounds('bbox-after-marker'));
+  await waitFor(() => expect(loadList).toHaveBeenCalledWith(expect.objectContaining({ bbox: 'bbox-after-marker' })));
+  expect(screen.getByRole('dialog')).toBeInTheDocument();
+});
+
 test('keeps the list available when map provider fails and supports cursor append', async () => {
   render(<RiskMapPage createDataAdapter={adapter('PAGINATED')} loadMapSdk={noMap} />);
   await screen.findByText('더 보기');
