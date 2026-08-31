@@ -57,6 +57,9 @@ public class AdminAccessService {
     @Transactional
     public RoleUpdateResult replaceRoles(PrincipalDetails principal, UUID publicUserId,
                                          AdminAccessDtos.DesiredSetRequest request) {
+        if (!principal.getAdminPermissions().contains(AdminPermission.ACCESS_READ)) {
+            return RoleUpdateResult.error("ADMIN_PERMISSION_DENIED", "역할 조회 권한이 없습니다.");
+        }
         Users actor = principal.getUsers();
         String normalizedReason = normalizeReason(request == null ? null : request.reason());
         if (request == null || request.expectedVersion() == null || request.expectedVersion() < 0

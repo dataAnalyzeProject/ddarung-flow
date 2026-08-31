@@ -327,6 +327,122 @@ class AdminAccessIntegrationTest {
     }
 
     @Test
+    void canonicalPutNoOpRequiresAccessReadAndDoesNotExposeRoleData() throws Exception {
+        Users actor = saveUser("no-read-no-op", UserRole.ADMIN);
+        Users target = saveUser("no-read-no-op-target", UserRole.ADMIN);
+        roleRepository.saveAndFlush(new AdminUserRole(target.getId(), AdminRole.OPS_VIEWER, actor.getId(),
+                OffsetDateTime.now().minusMinutes(1), null, "existing role", 0));
+
+        mockMvc.perform(put("/api/v1/admin/users/{id}/roles", target.getPublicId())
+                        .with(csrf()).with(authentication(tokenFor(actor)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"expectedVersion":0,"assignments":[{"roleCode":"OPS_VIEWER","expiresAt":null}],"reason":"same desired role"}
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ADMIN_PERMISSION_DENIED"))
+                .andExpect(jsonPath("$.publicUserId").doesNotExist())
+                .andExpect(jsonPath("$.displayName").doesNotExist())
+                .andExpect(jsonPath("$.accountRole").doesNotExist())
+                .andExpect(jsonPath("$.adminRoles").doesNotExist())
+                .andExpect(jsonPath("$.assignments").doesNotExist())
+                .andExpect(jsonPath("$.roleCodes").doesNotExist())
+                .andExpect(jsonPath("$.effectivePermissions").doesNotExist())
+                .andExpect(jsonPath("$.expiresAt").doesNotExist());
+    }
+
+    @Test
+    void canonicalPutKeepsAuthenticationAndAccountRoleBoundaries() throws Exception {
+        String body = """
+                {"expectedVersion":0,"assignments":[],"reason":"same desired role"}
+                """;
+
+        mockMvc.perform(put("/api/v1/admin/users/{id}/roles", UUID.randomUUID())
+                        .with(csrf()).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_REQUIRED"));
+
+        Users user = saveUser("user-desired-set", UserRole.USER);
+        mockMvc.perform(put("/api/v1/admin/users/{id}/roles", UUID.randomUUID())
+                        .with(csrf()).with(authentication(tokenFor(user)))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ADMIN_ACCESS_DENIED"));
+    }
+
+    @Test
+    void canonicalPutNoOpWithAccessReadKeepsExistingStateWithoutAudit() throws Exception {
+        Users actor = saveUser("access-read-no-op", UserRole.ADMIN);
+        Users target = saveUser("access-read-no-op-target", UserRole.ADMIN);
+        roleRepository.saveAndFlush(new AdminUserRole(target.getId(), AdminRole.OPS_VIEWER, actor.getId(),
+                OffsetDateTime.now().minusMinutes(1), null, "existing role", 0));
+
+        mockMvc.perform(put("/api/v1/admin/users/{id}/roles", target.getPublicId())
+                        .with(csrf()).with(authentication(tokenFor(actor, AdminRole.ACCESS_ADMIN)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"expectedVersion":0,"assignments":[{"roleCode":"OPS_VIEWER","expiresAt":null}],"reason":"same desired role"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.publicUserId").value(target.getPublicId().toString()))
+                .andExpect(jsonPath("$.adminRoles[0].roleCode").value("OPS_VIEWER"))
+                .andExpect(jsonPath("$.version").value(0));
+
+        assertThat(auditRepository.findByTargetTypeAndTargetId("ADMIN_ROLE", target.getPublicId().toString())).isEmpty();
+        assertThat(roleRepository.findAllByUserIdOrderByRoleCodeAsc(target.getId())).singleElement()
+                .extracting(AdminUserRole::getRoleCode).isEqualTo(AdminRole.OPS_VIEWER);
+    }
+
+    @Test
+    void accessReadAloneCannotGrantOrRevokeDesiredSetRoles() throws Exception {
+        Users actor = saveUser("access-read-only", UserRole.ADMIN);
+        Users target = saveUser("access-read-only-target", UserRole.ADMIN);
+        roleRepository.saveAndFlush(new AdminUserRole(target.getId(), AdminRole.OPS_VIEWER, actor.getId(),
+                OffsetDateTime.now().minusMinutes(1), null, "existing role", 0));
+        PrincipalDetails accessReadOnly = new PrincipalDetails(actor, Set.of(AdminRole.ACCESS_ADMIN),
+                Set.of(AdminPermission.ACCESS_READ));
+
+        mockMvc.perform(put("/api/v1/admin/users/{id}/roles", target.getPublicId())
+                        .with(csrf()).with(authentication(new UsernamePasswordAuthenticationToken(
+                                accessReadOnly, null, accessReadOnly.getAuthorities())))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"expectedVersion":0,"assignments":[{"roleCode":"OPS_VIEWER","expiresAt":null},{"roleCode":"AUDITOR","expiresAt":null}],"reason":"role grant"}
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ADMIN_PERMISSION_DENIED"));
+
+        mockMvc.perform(put("/api/v1/admin/users/{id}/roles", target.getPublicId())
+                        .with(csrf()).with(authentication(new UsernamePasswordAuthenticationToken(
+                                accessReadOnly, null, accessReadOnly.getAuthorities())))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"expectedVersion":0,"assignments":[],"reason":"role revoke"}
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ADMIN_PERMISSION_DENIED"));
+
+        assertThat(roleRepository.findAllByUserIdOrderByRoleCodeAsc(target.getId())).singleElement()
+                .extracting(AdminUserRole::getRoleCode).isEqualTo(AdminRole.OPS_VIEWER);
+    }
+
+    @Test
+    void replaceRolesNoOpRequiresAccessReadBeforeReturningCurrentAssignments() {
+        Users actor = saveUser("service-no-read-no-op", UserRole.ADMIN);
+        Users target = saveUser("service-no-read-no-op-target", UserRole.ADMIN);
+        roleRepository.saveAndFlush(new AdminUserRole(target.getId(), AdminRole.OPS_VIEWER, actor.getId(),
+                OffsetDateTime.now().minusMinutes(1), null, "existing role", 0));
+
+        AdminAccessService.RoleUpdateResult result = accessService.replaceRoles(principal(actor), target.getPublicId(),
+                new AdminAccessDtos.DesiredSetRequest(0L, List.of(
+                        new AdminAccessDtos.RoleAssignmentRequest(AdminRole.OPS_VIEWER, null)), "same desired role"));
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.errorCode()).isEqualTo("ADMIN_PERMISSION_DENIED");
+        assertThat(result.response()).isNull();
+    }
+
+    @Test
     void rejectsTrimmedShortReasonAndRequiresAllAssignmentsRemovedBeforeAdminDemotion() throws Exception {
         Users actor = saveUser("legacy-actor", UserRole.ADMIN);
         Users target = saveUser("legacy-target", UserRole.ADMIN);
@@ -588,7 +704,7 @@ class AdminAccessIntegrationTest {
                 now.minusMinutes(1), now.plusHours(2), "기존 모델 승인자", 0));
 
         PrincipalDetails assignOnly = new PrincipalDetails(actor, Set.of(AdminRole.ACCESS_ADMIN),
-                Set.of(AdminPermission.ACCESS_ASSIGN));
+                Set.of(AdminPermission.ACCESS_READ, AdminPermission.ACCESS_ASSIGN));
         mockMvc.perform(put("/api/v1/admin/users/{id}/roles", target.getPublicId())
                         .with(csrf()).with(authentication(new UsernamePasswordAuthenticationToken(
                                 assignOnly, null, assignOnly.getAuthorities())))
@@ -599,7 +715,7 @@ class AdminAccessIntegrationTest {
                 .andExpect(jsonPath("$.code").value("ADMIN_PERMISSION_DENIED"));
 
         PrincipalDetails revokeOnly = new PrincipalDetails(actor, Set.of(AdminRole.ACCESS_ADMIN),
-                Set.of(AdminPermission.ACCESS_REVOKE));
+                Set.of(AdminPermission.ACCESS_READ, AdminPermission.ACCESS_REVOKE));
         assertThat(accessService.replaceRoles(revokeOnly, target.getPublicId(),
                 new AdminAccessDtos.DesiredSetRequest(0L, List.of(
                         new AdminAccessDtos.RoleAssignmentRequest(AdminRole.MODEL_APPROVER, now.plusHours(1))),
