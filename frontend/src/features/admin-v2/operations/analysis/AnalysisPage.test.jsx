@@ -78,6 +78,7 @@ describe('AnalysisPage', () => {
     fireEvent.click(screen.getByRole('button', { name: '시간대별' }));
     expect(screen.getByText('불러오는 중')).toBeInTheDocument();
     expect(screen.queryByText('요일별 관측 요약')).not.toBeInTheDocument();
+    expect(screen.queryByText('OPS_ANALYSIS_STOCKOUT_V1')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '요일별' }));
     await screen.findByText('요일별 관측 요약');
     resolveHour(payload('HOUR'));
@@ -142,10 +143,13 @@ describe('AnalysisPage', () => {
   test('keeps the HOUR tab and retry after a transient HOUR failure', async () => {
     let hourAttempts = 0;
     const transient = Object.assign(new Error('temporary'), { status: 503, code: 'OPS_ANALYSIS_TEMPORARY' });
+    const hourPayload = payload('HOUR');
+    hourPayload.ruleVersion = 'OPS_ANALYSIS_HOUR_TEST_V1';
+    hourPayload.windowRuleVersion = 'OPS_ANALYSIS_HOUR_WINDOW_TEST_V1';
     const load = jest.fn(({ view }) => {
       if (view === 'WEEKDAY') return Promise.resolve(payload('WEEKDAY'));
       hourAttempts += 1;
-      return hourAttempts === 1 ? Promise.reject(transient) : Promise.resolve(payload('HOUR'));
+      return hourAttempts === 1 ? Promise.reject(transient) : Promise.resolve(hourPayload);
     });
     render(<AnalysisPage createAdapter={() => ({ load })} />);
     await screen.findByText('요일별 관측 요약');
@@ -153,17 +157,25 @@ describe('AnalysisPage', () => {
     expect(await screen.findByText('오류가 발생했습니다')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '시간대별' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.queryByText('요일별 관측 요약')).not.toBeInTheDocument();
+    expect(screen.queryByText('OPS_ANALYSIS_STOCKOUT_V1')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
     expect(await screen.findByText('시간대별 관측 요약')).toBeInTheDocument();
+    expect(screen.getByText('OPS_ANALYSIS_HOUR_TEST_V1')).toBeInTheDocument();
+    expect(screen.getByText('OPS_ANALYSIS_HOUR_WINDOW_TEST_V1')).toBeInTheDocument();
     expect(load).toHaveBeenLastCalledWith(expect.objectContaining({ view: 'HOUR' }));
   });
 
-  test.each([[401, 'AUTH_REQUIRED'], [403, 'ADMIN_PERMISSION_DENIED']])('fails closed for %s access errors without retrying', async (status, code) => {
+  test.each([[401, 'AUTH_REQUIRED'], [403, 'ADMIN_PERMISSION_DENIED']])('fails closed for %s access errors without retrying or showing prior view context', async (status, code) => {
     const error = Object.assign(new Error('denied'), { status, code });
-    render(<AnalysisPage createAdapter={() => ({ load: jest.fn().mockRejectedValue(error) })} />);
+    const load = jest.fn(({ view }) => view === 'WEEKDAY' ? Promise.resolve(payload('WEEKDAY')) : Promise.reject(error));
+    render(<AnalysisPage createAdapter={() => ({ load })} />);
+    await screen.findByText('요일별 관측 요약');
+    fireEvent.click(screen.getByRole('button', { name: '시간대별' }));
     expect(await screen.findByText('필요 권한: OPS_ANALYSIS_READ')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '다시 시도' })).not.toBeInTheDocument();
     expect(screen.queryByText('요일별 관측 요약')).not.toBeInTheDocument();
+    expect(screen.queryByText('OPS_ANALYSIS_STOCKOUT_V1')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '시간대별' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   test('fails closed for an unknown data state', async () => {
