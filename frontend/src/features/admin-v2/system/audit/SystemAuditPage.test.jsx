@@ -23,10 +23,11 @@ describe('SystemAuditPage', () => {
     expect(screen.getByLabelText('감사 이력 필터')).toBeInTheDocument();
   });
 
-  test.each([[401, 'AUTH_REQUIRED'], [403, 'AUDIT_PERMISSION_DENIED']])('fails closed for %i with AUDIT_READ', async (status, code) => {
+  test.each([[401, 'AUTH_REQUIRED'], [403, 'ADMIN_ACCESS_DENIED'], [403, 'ADMIN_PERMISSION_DENIED']])('fails closed for %i with AUDIT_READ and no retry', async (status, code) => {
     render(<SystemAuditPage createAdapter={adapterFor(() => Promise.reject({ status, code }))} />);
     expect(await screen.findByText(`필요 권한: AUDIT_READ`)).toBeInTheDocument();
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '다시 시도' })).not.toBeInTheDocument();
   });
 
   test('renders network or server failures without stale rows and can retry', async () => {

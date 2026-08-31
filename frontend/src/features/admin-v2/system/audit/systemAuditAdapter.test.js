@@ -1,6 +1,7 @@
 import { createSystemAuditAdapter, createSystemAuditQuery, normalizeSystemAuditPage } from './systemAuditAdapter';
 
 function response(body, status = 200) { return { ok: status >= 200 && status < 300, status, json: async () => body }; }
+function responseWithoutBody(status) { return { ok: false, status, json: async () => { throw new Error('body unavailable'); } }; }
 
 const safeItem = {
   action: 'ROLE_CHANGE', targetType: 'USER', actorRoleCodes: ['AUDITOR'], result: 'SUCCESS', reasonCode: 'ROLE_CHANGED', occurredAt: '2026-08-31T09:00:00+09:00',
@@ -47,8 +48,23 @@ describe('system audit adapter', () => {
     expect(page.items[0]).not.toHaveProperty('actorRole');
   });
 
-  test.each([[401, 'AUTH_REQUIRED'], [403, 'AUDIT_PERMISSION_DENIED'], [500, 'AUDIT_READ_FAILED']])('maps HTTP %i to a safe error code', async (status, code) => {
-    global.fetch.mockResolvedValue(response({}, status));
+  test.each([
+    [401, 'AUTH_REQUIRED'],
+    [403, 'ADMIN_ACCESS_DENIED'],
+    [403, 'ADMIN_PERMISSION_DENIED'],
+    [500, 'AUDIT_READ_FAILED'],
+  ])('preserves the source-backed HTTP %i error code', async (status, code) => {
+    global.fetch.mockResolvedValue(response({ code }, status));
     await expect(createSystemAuditAdapter().load()).rejects.toMatchObject({ status, code });
+  });
+
+  test('uses ADMIN_PERMISSION_DENIED only as the safe fallback for a body-less 403', async () => {
+    global.fetch.mockResolvedValue(responseWithoutBody(403));
+    await expect(createSystemAuditAdapter().load()).rejects.toMatchObject({ status: 403, code: 'ADMIN_PERMISSION_DENIED' });
+  });
+
+  test('uses AUDIT_READ_FAILED as the safe fallback for a body-less 500', async () => {
+    global.fetch.mockResolvedValue(responseWithoutBody(500));
+    await expect(createSystemAuditAdapter().load()).rejects.toMatchObject({ status: 500, code: 'AUDIT_READ_FAILED' });
   });
 });

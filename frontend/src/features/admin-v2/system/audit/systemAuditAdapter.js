@@ -67,7 +67,12 @@ export function createSystemAuditAdapter() {
         throw new SystemAuditApiError();
       }
       if (!response.ok) {
-        const code = response.status === 401 ? 'AUTH_REQUIRED' : response.status === 403 ? 'AUDIT_PERMISSION_DENIED' : 'AUDIT_READ_FAILED';
+        let body = {};
+        try {
+          body = await response.json();
+        } catch (_) { /* response body is optional */ }
+        const fallback = response.status === 401 ? 'AUTH_REQUIRED' : response.status === 403 ? 'ADMIN_PERMISSION_DENIED' : 'AUDIT_READ_FAILED';
+        const code = typeof body?.code === 'string' ? body.code : fallback;
         throw new SystemAuditApiError({ status: response.status, code });
       }
       try {

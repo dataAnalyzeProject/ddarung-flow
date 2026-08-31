@@ -59,7 +59,7 @@ export default function SystemAuditPage({ createAdapter }) {
     </form>
     <section className="system-audit-content" aria-label="감사 이력 결과">
       {loading ? <AsyncStatePanel state="LOADING" /> : null}
-      {error ? <><AsyncStatePanel state={isAccessError(error) ? 'FORBIDDEN' : 'ERROR'} code={error.code} requiredPermission={isAccessError(error) ? 'AUDIT_READ' : undefined} /><button type="button" onClick={() => setRetryVersion((version) => version + 1)}>다시 시도</button></> : null}
+      {error ? <><AsyncStatePanel state={isAccessError(error) ? 'FORBIDDEN' : 'ERROR'} code={error.code} requiredPermission={isAccessError(error) ? 'AUDIT_READ' : undefined} />{!isAccessError(error) ? <button type="button" onClick={() => setRetryVersion((version) => version + 1)}>다시 시도</button> : null}</> : null}
       {!loading && !error && data?.items.length === 0 ? <AsyncStatePanel state="EMPTY" /> : null}
       {!loading && !error && data?.items.length ? <>
         <div className="system-audit-table-wrap"><table><caption>관리자 변경 이력</caption><thead><tr><th scope="col">발생 시각</th><th scope="col">작업</th><th scope="col">대상 유형</th><th scope="col">수행 역할</th><th scope="col">결과</th><th scope="col">사유 코드</th></tr></thead><tbody>{data.items.map((item, index) => <tr key={`${item.occurredAt}-${item.action}-${index}`}><td>{formatDate(item.occurredAt)}</td><td>{item.action}</td><td>{item.targetType}</td><td>{item.actorRoleCodes.join(', ')}</td><td><span className={`system-audit-result system-audit-result--${item.result.toLowerCase()}`} aria-label={`결과: ${item.result}`}>{item.result}</span></td><td>{item.reasonCode || '-'}</td></tr>)}</tbody></table></div>
