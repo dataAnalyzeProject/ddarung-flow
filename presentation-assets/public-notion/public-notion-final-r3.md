@@ -52,20 +52,11 @@ DDARUNG FLOW는 ‘현재 재고가 있나?’와 ‘도착했을 때 필요한 
 
 ![대여소 상세](../consumer/notion/06-station-detail.png)
 
-## 5. Input UX Extension — Natural Language Journey
+## 5. 보조 입력 UX — 자연어 Journey
 
-자연어 Journey는 별도 추천 서비스가 아니라 Consumer Core로 들어가기 위한 보조 입력이다. 사용자가 문장으로 의도를 표현하면, 같은 출발지·목적지·이동 조건·필요 수량을 구성해 기존 흐름으로 이어진다.
+Journey는 별도의 추천 서비스가 아니라 Consumer Core로 들어가기 위한 선택적 보조 입력이다. 사용자가 자연어로 의도를 표현하면 출발지·목적지·출발 희망 시각·필요 자전거 수를 기존 Consumer Core 검색 조건으로 구조화한다.
 
-![자연어 Journey 입력](../journey/notion/02-natural-language.png)
-
-![Journey 입력과 Consumer Core의 연결](../consumer/notion/journey-input-extension.png)
-
-<details>
-<summary>보조 결과 화면 보기</summary>
-
-![Journey 결과](../journey/notion/03-journey-result.png)
-
-</details>
+장소·경로·현재 재고·대여 가능성 예측·거리·시간은 Consumer Core와 검증된 도구의 결과를 사용한다. AI는 이 수치나 실제 장소를 새로 생성하는 source of truth가 아니다.
 
 ## 6. Data & ML Evidence
 
