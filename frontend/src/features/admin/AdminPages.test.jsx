@@ -6,7 +6,7 @@ import { listAdminAuditLogs } from "./adminAuditLogsApi";
 import { createAdminExport, downloadAdminExport, listAdminExports } from "./adminExportsApi";
 import { activateAdminModel, approveAdminModel, listAdminModels, rollbackAdminModel, validateAdminModel } from "./adminModelOpsApi";
 import { getAdminOverview } from "./adminOverviewApi";
-import { getAdminPerformance } from "./adminPerformanceApi";
+import { getAdminPerformanceBase, getAdminPerformanceDiagnostics } from "./adminPerformanceApi";
 import AdminShell from "./AdminShell";
 
 jest.mock("./qnaAdminApi", () => ({
@@ -26,9 +26,12 @@ jest.mock("./adminExportsApi", () => ({
 }));
 jest.mock("./adminModelOpsApi", () => ({ listAdminModels: jest.fn(), validateAdminModel: jest.fn(), approveAdminModel: jest.fn(), activateAdminModel: jest.fn(), rollbackAdminModel: jest.fn() }));
 jest.mock("./adminOverviewApi", () => ({ getAdminOverview: jest.fn() }));
-jest.mock("./adminPerformanceApi", () => ({ getAdminPerformance: jest.fn() }));
+jest.mock("./adminPerformanceApi", () => ({ getAdminPerformanceBase: jest.fn(), getAdminPerformanceDiagnostics: jest.fn() }));
+jest.mock("./AdminAccuracyMap", () => ({ __esModule: true, default: ({ segments }) => <div data-testid="accuracy-map-segments">{segments.map((segment) => segment.segmentValue).join(",")}</div> }));
 
 const qnaPage = { items: [{ id: 104, title: "Q&A 질문", body: "질문 내용", category: "SERVICE", visibility: "PUBLIC", status: "PENDING", answers: [] }] };
+const baseMetrics = (overrides = {}) => ({ artifactSha256: "base-sha", modelVersion: "model-base", generatedAt: "2026-08-31T09:00:00Z", combinations: Array.from({ length: 20 }, (_, index) => ({ horizonMinutes: 60, requiredBikeCount: index + 1, sampleCount: 1000, brierScore: 0.03 })), calibrationBins: [{ binLowerPercent: 0, binUpperPercent: 10, sampleCount: 1000, actualRate: .1, meanPredicted: .2 }], segments: [{ axis: "STATION", segmentValue: "MISLEADING_BASE_STATION", sampleCount: 1000, brierScore: .99, skillScore: -1, status: "OK" }, { axis: "HOUR_BUCKET_X_STATION_SIZE", segmentValue: "MISLEADING_BASE_SEGMENT", sampleCount: 1000, brierScore: .99, skillScore: -1, status: "OK" }], ...overrides });
+const diagnosticSnapshot = (overrides = {}) => ({ artifactSha256: "base-sha", modelVersion: "model-base", generatedAt: "2026-08-31T09:00:00Z", segments: [{ axis: "HOUR_BUCKET_X_STATION_SIZE", segmentValue: "DIAGNOSTIC_SEGMENT", sampleCount: 1000, brierScore: .06, skillScore: .1, status: "OK" }, { axis: "STATION", segmentValue: "DIAGNOSTIC_STATION", sampleCount: 1000, brierScore: .04, skillScore: .2, status: "OK" }], ...overrides });
 
 beforeEach(() => {
   listAdminQuestions.mockResolvedValue(qnaPage);
@@ -43,7 +46,8 @@ beforeEach(() => {
   listAdminModels.mockResolvedValue([{ id: 1, version: "v17", state: "ACTIVE", createdAt: "2026-08-26T10:00:00+09:00" }, { id: 2, version: "v18", state: "APPROVED", createdAt: "2026-08-26T10:01:00+09:00" }]);
   validateAdminModel.mockResolvedValue({}); approveAdminModel.mockResolvedValue({}); activateAdminModel.mockResolvedValue({}); rollbackAdminModel.mockResolvedValue({});
   getAdminOverview.mockResolvedValue({ serviceStatus: "NORMAL", dataFreshness: { ageMinutes: 12, status: "NORMAL" }, activeModel: { state: "NONE" }, pending: { exports: 1, modelApprovals: 2, qnaUnanswered: 3 } });
-  getAdminPerformance.mockResolvedValue({ combinations: Array.from({ length: 20 }, (_, index) => ({ horizonMinutes: 60, requiredBikeCount: index + 1, sampleCount: 1000, brierScore: 0.03 })), calibrationBins: [{ binLowerPercent: 0, binUpperPercent: 10, sampleCount: 1000, actualRate: .1, meanPredicted: .2 }], segments: [{ axis: "HOUR_BUCKET_X_STATION_SIZE", segmentValue: "COMMUTE_AM:SMALL", sampleCount: 1000, brierScore: .06, skillScore: .1, status: "OK" }] });
+  getAdminPerformanceBase.mockResolvedValue(baseMetrics());
+  getAdminPerformanceDiagnostics.mockResolvedValue(diagnosticSnapshot());
 });
 
 const renderPage = (menuId, actorRole, onAction = jest.fn()) => {
@@ -72,14 +76,14 @@ test("dashboard shows actual and predicted calibration series with a legend", as
 });
 
 test("dashboard renders a sampled zero actual rate as a calibration bar", async () => {
-  getAdminPerformance.mockResolvedValueOnce({ combinations: Array.from({ length: 20 }, (_, index) => ({ horizonMinutes: 60, requiredBikeCount: index + 1, sampleCount: 1000, brierScore: 0.030425997143861183 })), calibrationBins: [{ binLowerPercent: 0, binUpperPercent: 10, sampleCount: 10, actualRate: 0, meanPredicted: .2 }], segments: [] });
+  getAdminPerformanceBase.mockResolvedValueOnce(baseMetrics({ calibrationBins: [{ binLowerPercent: 0, binUpperPercent: 10, sampleCount: 10, actualRate: 0, meanPredicted: .2 }] }));
   renderPage("dashboard", "ADMIN");
   expect(await screen.findByLabelText("0-10% · 표본 10 · 실제 비율 0.0% · 예측 확률 20.0%")).toBeInTheDocument();
   expect(screen.getAllByTestId("calibration-actual")).toHaveLength(1);
 });
 
 test("dashboard renders a zero-sample calibration bin without bars", async () => {
-  getAdminPerformance.mockResolvedValueOnce({ combinations: Array.from({ length: 20 }, (_, index) => ({ horizonMinutes: 60, requiredBikeCount: index + 1, sampleCount: 1000, brierScore: 0.030425997143861183 })), calibrationBins: [{ binLowerPercent: 10, binUpperPercent: 20, sampleCount: 0, actualRate: 0, meanPredicted: 0 }], segments: [] });
+  getAdminPerformanceBase.mockResolvedValueOnce(baseMetrics({ calibrationBins: [{ binLowerPercent: 10, binUpperPercent: 20, sampleCount: 0, actualRate: 0, meanPredicted: 0 }] }));
   renderPage("dashboard", "ADMIN");
   expect(await screen.findByLabelText("10-20% · 표본 없음")).toBeInTheDocument();
   expect(screen.getByText("표본 없음")).toBeInTheDocument();
@@ -91,20 +95,61 @@ test("dashboard formats heatmap Brier scores to four decimals", async () => {
   expect(await screen.findByText("0.0300")).toBeInTheDocument();
 });
 
+test("dashboard uses diagnostics segments and never consumes misleading base segments", async () => {
+  renderPage("dashboard", "ADMIN");
+  expect(await screen.findByText("DIAGNOSTIC_SEGMENT")).toBeInTheDocument();
+  expect(screen.getByTestId("accuracy-map-segments")).toHaveTextContent("DIAGNOSTIC_STATION");
+  expect(screen.queryByText("MISLEADING_BASE_SEGMENT")).not.toBeInTheDocument();
+  expect(screen.getByTestId("accuracy-map-segments")).not.toHaveTextContent("MISLEADING_BASE_STATION");
+  expect(getAdminPerformanceDiagnostics).toHaveBeenCalledWith("base-sha");
+});
+
+test.each([
+  [403, "진단 접근 제한"],
+  [404, "진단 정보를 사용할 수 없습니다"],
+  [500, "진단 정보를 불러오지 못했습니다"],
+])("dashboard keeps base metrics when diagnostics returns %i", async (status, expectedMessage) => {
+  getAdminPerformanceDiagnostics.mockRejectedValueOnce({ status });
+  renderPage("dashboard", "ADMIN");
+  expect(await screen.findByText(expectedMessage)).toBeInTheDocument();
+  expect(screen.getByText("0.0300")).toBeInTheDocument();
+  expect(screen.queryByText("DIAGNOSTIC_SEGMENT")).not.toBeInTheDocument();
+});
+
+test("dashboard rejects diagnostics with a different snapshot identity", async () => {
+  getAdminPerformanceDiagnostics.mockResolvedValueOnce(diagnosticSnapshot({ artifactSha256: "other-sha" }));
+  renderPage("dashboard", "ADMIN");
+  expect(await screen.findByText("DIAGNOSTICS_SNAPSHOT_MISMATCH")).toBeInTheDocument();
+  expect(screen.queryByText("DIAGNOSTIC_SEGMENT")).not.toBeInTheDocument();
+});
+
+test("an older diagnostics response cannot overwrite a newer base generation", async () => {
+  let resolveOlderDiagnostics;
+  getAdminPerformanceBase.mockResolvedValueOnce(baseMetrics()).mockResolvedValueOnce(baseMetrics({ artifactSha256: "new-sha", modelVersion: "model-new", generatedAt: "2026-08-31T10:00:00Z" }));
+  getAdminPerformanceDiagnostics.mockImplementationOnce(() => new Promise((resolve) => { resolveOlderDiagnostics = resolve; })).mockResolvedValueOnce(diagnosticSnapshot({ artifactSha256: "new-sha", modelVersion: "model-new", generatedAt: "2026-08-31T10:00:00Z", segments: [{ axis: "HOUR_BUCKET_X_STATION_SIZE", segmentValue: "NEW_DIAGNOSTICS", sampleCount: 1000, brierScore: .02, skillScore: .3, status: "OK" }] }));
+  renderPage("dashboard", "ADMIN");
+  await waitFor(() => expect(getAdminPerformanceDiagnostics).toHaveBeenCalledWith("base-sha"));
+  fireEvent.click(screen.getByRole("button", { name: "다시 시도" }));
+  expect(await screen.findByText("NEW_DIAGNOSTICS")).toBeInTheDocument();
+  resolveOlderDiagnostics(diagnosticSnapshot({ segments: [{ axis: "HOUR_BUCKET_X_STATION_SIZE", segmentValue: "OLD_DIAGNOSTICS", sampleCount: 1000, brierScore: .9, skillScore: -1, status: "OK" }] }));
+  await waitFor(() => expect(screen.queryByText("OLD_DIAGNOSTICS")).not.toBeInTheDocument());
+  expect(screen.getByText("NEW_DIAGNOSTICS")).toBeInTheDocument();
+});
+
 test("admin top bar no longer labels live pages as fixture data", () => {
   render(<AdminShell activeMenuId="dashboard" actorRole="ADMIN" onMenu={jest.fn()} onAction={jest.fn()}><div>내용</div></AdminShell>);
   expect(screen.queryByText(/fixture 기준/i)).not.toBeInTheDocument();
 });
 
 test("dashboard renders a missing skill score as a dash", async () => {
-  getAdminPerformance.mockResolvedValueOnce({ combinations: Array.from({ length: 20 }, (_, index) => ({ horizonMinutes: 60, requiredBikeCount: index + 1, sampleCount: 1000, brierScore: 0.03 })), calibrationBins: [{ binLowerPercent: 0, actualRate: .1, meanPredicted: .2 }], segments: [{ axis: "HOUR_BUCKET_X_STATION_SIZE", segmentValue: "COMMUTE_AM:SMALL", sampleCount: 1000, brierScore: .06123, skillScore: null, status: "OK" }, { axis: "STATION", segmentValue: "ST-1", sampleCount: 190, skillScore: null, shortageRecall: null, status: "OK" }] });
+  getAdminPerformanceDiagnostics.mockResolvedValueOnce(diagnosticSnapshot({ segments: [{ axis: "HOUR_BUCKET_X_STATION_SIZE", segmentValue: "COMMUTE_AM:SMALL", sampleCount: 1000, brierScore: .06123, skillScore: null, status: "OK" }, { axis: "STATION", segmentValue: "ST-1", sampleCount: 190, skillScore: null, shortageRecall: null, status: "OK" }] }));
   renderPage("dashboard", "ADMIN");
   expect(await screen.findByText("0.0612")).toBeInTheDocument();
   expect(screen.getAllByText("-").length).toBeGreaterThan(0);
 });
 
 test("dashboard keeps the page when model performance is not yet available", async () => {
-  getAdminPerformance.mockRejectedValueOnce({ status: 404 });
+  getAdminPerformanceBase.mockRejectedValueOnce({ status: 404 });
   renderPage("dashboard", "ADMIN");
   expect(await screen.findByText("평가 결과가 아직 없습니다")).toBeInTheDocument();
   expect(screen.getAllByText("NORMAL").length).toBeGreaterThan(0);
