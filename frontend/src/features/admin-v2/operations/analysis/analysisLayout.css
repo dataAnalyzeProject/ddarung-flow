@@ -65,7 +65,56 @@
   justify-self: start;
 }
 
+.analysis-coverage {
+  display: grid;
+  gap: 0;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: 10px 14px;
+}
+
+.analysis-coverage > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 1px 14px;
+}
+
+.analysis-coverage > div + div {
+  border-left: 1px solid #e2e8f0;
+}
+
+.analysis-coverage span {
+  color: #1e293b;
+  font-size: .9rem;
+  font-weight: 800;
+}
+
+.analysis-bucket {
+  grid-template-columns: 34px minmax(70px, 1fr) 42px minmax(102px, auto);
+}
+
+.analysis-bucket-track {
+  background: #e8edf5;
+  border-radius: 999px;
+  height: 15px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.analysis-bucket-fill {
+  background: #3269d4;
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  width: var(--comparison-fill);
+}
+
 @media (max-width: 1280px) and (min-width: 1121px) {
+  .analysis-coverage {
+    align-items: center;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
   .analysis-main-grid {
     grid-template-columns: minmax(230px, .75fr) minmax(0, 1.75fr);
   }
@@ -85,27 +134,41 @@
 }
 
 @media (max-width: 1120px) {
-  .analysis-bucket {
-    display: grid;
-    gap: 5px;
-    grid-template-columns: 1fr;
+  .analysis-coverage {
+    align-items: center;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .analysis-bucket-grid {
-    grid-template-columns: repeat(4, minmax(130px, 1fr));
+    grid-template-columns: 1fr;
   }
 
-  .analysis-bucket strong {
-    text-align: left;
-  }
-
-  .analysis-bucket small {
-    white-space: normal;
+  .analysis-bucket {
+    grid-template-columns: 34px minmax(120px, 1fr) 42px minmax(132px, auto);
   }
 }
 
 @media (max-width: 760px) {
-  .analysis-bucket-grid {
-    grid-template-columns: repeat(2, minmax(120px, 1fr));
+  .analysis-coverage {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 10px;
+  }
+
+  .analysis-coverage > div:nth-child(3) {
+    border-left: 0;
+  }
+
+  .analysis-coverage > div:nth-child(n + 3) {
+    border-top: 1px solid #e2e8f0;
+    padding-top: 10px;
+  }
+
+  .analysis-bucket {
+    grid-template-columns: 34px minmax(80px, 1fr) 42px;
+  }
+
+  .analysis-bucket small {
+    grid-column: 2 / -1;
+    white-space: normal;
   }
 }
