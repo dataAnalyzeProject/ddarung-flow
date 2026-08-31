@@ -20,8 +20,8 @@ describe('AnalysisPage', () => {
     expect(screen.getByText('미래 예측이 아닌 과거 실제 관측을 요일·시간대별로 확인합니다.')).toBeInTheDocument();
     expect(screen.getByText('OPS_ANALYSIS_STOCKOUT_V1')).toBeInTheDocument();
     expect(screen.getByText('OPS_ANALYSIS_WINDOW_V1')).toBeInTheDocument();
-    expect(screen.getByText('프로필 66.6%')).toBeInTheDocument();
-    expect(screen.getAllByLabelText(/요일 .* 표본/)).toHaveLength(168);
+    expect(screen.getByText('66.6%')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /요일 .* 표본/ })).toHaveLength(168);
     expect(screen.getAllByText('2곳').length).toBeGreaterThan(0);
     expect(screen.getByRole('columnheader', { name: '0시' })).toBeInTheDocument();
     expect(screen.getByText('30%')).toBeInTheDocument();
@@ -96,6 +96,59 @@ describe('AnalysisPage', () => {
     fireEvent.click(screen.getByRole('button', { name: '시간대별' }));
     expect(await screen.findByText('시간대별 관측 요약')).toBeInTheDocument();
     expect(load).toHaveBeenLastCalledWith(expect.objectContaining({ view: 'HOUR' }));
+  });
+
+  test('renders normalized bucket comparison tracks without changing actual rates or context', async () => {
+    const result = payload();
+    result.buckets[0] = { key: 1, sampleCount: 10, contributingStationCount: 2, observedStockoutRate: .1 };
+    result.buckets[1] = { key: 2, sampleCount: 20, contributingStationCount: 4, observedStockoutRate: .2 };
+    result.buckets[2] = { key: 3, sampleCount: 0, contributingStationCount: 0, observedStockoutRate: null };
+    result.buckets[3] = { key: 4, sampleCount: 30, contributingStationCount: 6, observedStockoutRate: 0 };
+    render(<AnalysisPage createAdapter={() => ({ load: jest.fn().mockResolvedValue(result) })} />);
+    const monday = await screen.findByRole('img', { name: /월요일 비교 막대 .* 실제 품절 관측률 10.0%/ });
+    const tuesday = screen.getByRole('img', { name: /화요일 비교 막대 .* 실제 품절 관측률 20.0%/ });
+    const wednesday = screen.getByRole('img', { name: /수요일 비교 막대 .* 표본 부족 .* 관측 정보 없음/ });
+    expect(monday.querySelector('.analysis-bucket-fill')).toHaveStyle({ '--comparison-fill': '50%' });
+    expect(tuesday.querySelector('.analysis-bucket-fill')).toHaveStyle({ '--comparison-fill': '100%' });
+    expect(wednesday.querySelector('.analysis-bucket-fill')).toBeNull();
+    expect(screen.getByRole('img', { name: /목요일 비교 막대 .* 실제 품절 관측률 0.0%/ }).querySelector('.analysis-bucket-fill')).toHaveStyle({ '--comparison-fill': '6%' });
+    expect(screen.getByText('10.0%')).toBeInTheDocument();
+    expect(screen.getByText('20.0%')).toBeInTheDocument();
+    expect(screen.getByText('0.0%')).toBeInTheDocument();
+    expect(screen.getByText('표본 10건 · 기여 2곳')).toBeInTheDocument();
+    expect(screen.getByText('표본 20건 · 기여 4곳')).toBeInTheDocument();
+  });
+
+  test('keeps bucket comparison semantics after switching to HOUR', async () => {
+    const weekday = payload('WEEKDAY');
+    const hour = payload('HOUR');
+    hour.buckets[0].observedStockoutRate = .05;
+    hour.buckets[1].observedStockoutRate = .2;
+    render(<AnalysisPage createAdapter={() => ({ load: jest.fn(({ view }) => Promise.resolve(view === 'HOUR' ? hour : weekday)) })} />);
+    await screen.findByText('요일별 관측 요약');
+    fireEvent.click(screen.getByRole('button', { name: '시간대별' }));
+    const zeroHour = await screen.findByRole('img', { name: /0시 비교 막대 .* 실제 품절 관측률 5.0%/ });
+    const oneHour = screen.getByRole('img', { name: /1시 비교 막대 .* 실제 품절 관측률 20.0%/ });
+    expect(zeroHour.querySelector('.analysis-bucket-fill')).toHaveStyle({ '--comparison-fill': '25%' });
+    expect(oneHour.querySelector('.analysis-bucket-fill')).toHaveStyle({ '--comparison-fill': '100%' });
+  });
+
+  test('shows only the four compact coverage summary values', async () => {
+    const result = payload();
+    result.coverage = { ...result.coverage, selectedWindowProfileCount: 17, profileCoverageRate: .721, cellCoverageRate: .438, usableCellCount: 11, expectedCellCount: 13 };
+    render(<AnalysisPage createAdapter={() => ({ load: jest.fn().mockResolvedValue(result) })} />);
+    const coverage = await screen.findByLabelText('커버리지 요약');
+    expect(coverage).toHaveTextContent('Selected Window Profiles');
+    expect(coverage).toHaveTextContent('Profile Coverage');
+    expect(coverage).toHaveTextContent('Cell Coverage');
+    expect(coverage).toHaveTextContent('Usable / Expected Cells');
+    expect(coverage).toHaveTextContent('17');
+    expect(coverage).toHaveTextContent('72.1%');
+    expect(coverage).toHaveTextContent('43.8%');
+    expect(coverage).toHaveTextContent('11 / 13');
+    expect(screen.queryByText('활성 공개 대여소')).not.toBeInTheDocument();
+    expect(screen.queryByText('프로필 보유')).not.toBeInTheDocument();
+    expect(screen.queryByText('파싱 완료')).not.toBeInTheDocument();
   });
 
   test('keeps insufficient data distinct from a zero observed rate', async () => {
