@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStatePanel from '../../components/AsyncStatePanel';
 
 const DAYS = ['월', '화', '수', '목', '금', '토', '일'];
-const DATA_STATES = { DELAYED: 'DELAYED', MISSING: 'PARTIAL', INSUFFICIENT_DATA: 'INSUFFICIENT_DATA', UNAVAILABLE: 'UNAVAILABLE' };
+const DATA_STATES = { EMPTY: 'EMPTY', DELAYED: 'DELAYED', MISSING: 'EMPTY', INSUFFICIENT_DATA: 'INSUFFICIENT_DATA', UNAVAILABLE: 'UNAVAILABLE' };
 const COVERAGE = [
   ['activePublicStationCount', '활성 공개 대여소'], ['profileAvailableCount', '프로필 보유'], ['selectedWindowProfileCount', '선택 창 프로필'],
   ['parsedProfileCount', '파싱 완료'], ['usableCellCount', '사용 가능 셀'], ['expectedCellCount', '예상 셀'],
@@ -16,6 +16,17 @@ function cellLabel(day, hour, cell) { return `${DAYS[day - 1]}요일 ${hour}시 
 function heatmapStyle(rate) {
   if (rate == null) return undefined;
   return { '--heatmap-intensity': Math.min(1, Math.max(0, rate)) };
+}
+
+function DataStatePanel({ dataState }) {
+  if (dataState === 'MISSING') return <section className="analysis-data-state" aria-live="polite" aria-label="관측 데이터 누락 상태"><strong>관측 데이터가 누락되었습니다.</strong><p>MISSING · 관측 근거가 없어 분석 차트를 표시하지 않습니다.</p></section>;
+  return <AsyncStatePanel state={DATA_STATES[dataState] || 'UNAVAILABLE'} code={dataState === 'EMPTY' ? 'EMPTY' : undefined} />;
+}
+
+function RequestErrorPanel({ error, onRetry }) {
+  const state = stateForError(error);
+  const retryable = state !== 'FORBIDDEN';
+  return <div className="analysis-request-state"><AsyncStatePanel state={state} code={error?.code} requiredPermission={state === 'FORBIDDEN' ? 'OPS_ANALYSIS_READ' : undefined} />{retryable ? <button type="button" className="analysis-retry" onClick={onRetry}>다시 시도</button> : null}</div>;
 }
 
 function Heatmap({ cells }) {
@@ -41,6 +52,7 @@ export default function AnalysisPage({ createAdapter }) {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [retryVersion, setRetryVersion] = useState(0);
   const generation = useRef(0);
   const adapter = useMemo(() => createAdapter(), [createAdapter]);
 
@@ -56,19 +68,19 @@ export default function AnalysisPage({ createAdapter }) {
       if (!controller.signal.aborted && generation.current === current) setLoading(false);
     });
     return () => controller.abort();
-  }, [adapter, view]);
+  }, [adapter, view, retryVersion]);
 
   if (loading && !result) return <AsyncStatePanel state="LOADING" />;
-  if (error) return <AsyncStatePanel state={stateForError(error)} code={error.code} requiredPermission={stateForError(error) === 'FORBIDDEN' ? 'OPS_ANALYSIS_READ' : undefined} />;
 
   const uiState = result?.dataState === 'NORMAL' ? 'SUCCESS' : (DATA_STATES[result?.dataState] || 'UNAVAILABLE');
-  const showData = result?.dataState !== 'UNAVAILABLE' && (result?.dataState === 'NORMAL' || Object.hasOwn(DATA_STATES, result?.dataState));
-  const waitingForView = loading && result?.view !== view;
+  const hasRequestedResult = result?.view === view;
+  const showData = !error && hasRequestedResult && ['NORMAL', 'DELAYED', 'INSUFFICIENT_DATA'].includes(result?.dataState);
+  const waitingForView = loading && !hasRequestedResult;
   const coverage = result?.coverage || {};
   return <main className="analysis-page" aria-label="반복 품절 패턴">
     <header className="analysis-header"><div><p className="analysis-eyebrow">UI-OPS-04 · OBSERVED_STOCKOUT_RATE</p><h1>반복 품절 패턴</h1><p>미래 예측이 아닌 과거 실제 관측을 요일·시간대별로 확인합니다.</p></div><dl><div><dt>기준 시각</dt><dd>{time(result?.referenceTime)}</dd></div><div><dt>생성 시각</dt><dd>{time(result?.generatedAt)}</dd></div></dl></header>
     <section className="analysis-context" aria-label="분석 조건과 데이터 상태"><div className="analysis-tabs" aria-label="분석 보기"><button type="button" aria-pressed={view === 'WEEKDAY'} onClick={() => setView('WEEKDAY')}>요일별</button><button type="button" aria-pressed={view === 'HOUR'} onClick={() => setView('HOUR')}>시간대별</button></div><div><b>risk type</b><span>{result?.riskType || '확인 정보 없음'}</span></div>{loading ? <p className="analysis-refreshing" role="status">선택한 보기를 불러오는 중입니다.</p> : null}</section>
-    {waitingForView ? <AsyncStatePanel state="LOADING" /> : <>{uiState !== 'SUCCESS' ? <AsyncStatePanel state={uiState} code={result?.dataState === 'MISSING' ? 'MISSING' : undefined} /> : null}
+    {waitingForView ? <AsyncStatePanel state="LOADING" /> : error ? <RequestErrorPanel error={error} onRetry={() => setRetryVersion((version) => version + 1)} /> : <>{uiState !== 'SUCCESS' ? <DataStatePanel dataState={result?.dataState} /> : null}
     {showData ? <><section className="analysis-meta-grid" aria-label="관측 창과 분석 근거"><div><b>선택된 관측 창</b><strong>{result?.selectedWindowStart && result?.selectedWindowEnd ? `${result.selectedWindowStart} ~ ${result.selectedWindowEnd}` : '확인 정보 없음'}</strong></div><div><b>data state</b><mark className={`analysis-state analysis-state--${String(result?.dataState || 'unknown').toLowerCase()}`}>{result?.dataState || 'UNAVAILABLE'}</mark></div><div><b>metric</b><strong>{result?.metric || '확인 정보 없음'}</strong></div><div><b>rule version</b><strong>{result?.ruleVersion || '확인 정보 없음'}</strong></div><div><b>window rule version</b><strong>{result?.windowRuleVersion || '확인 정보 없음'}</strong></div></section>
     <section className="analysis-coverage" aria-labelledby="analysis-coverage-heading"><div><h2 id="analysis-coverage-heading">커버리지</h2><p>표본과 사용 가능 범위</p></div><div className="analysis-coverage-grid">{COVERAGE.map(([key, label]) => <div key={key}><b>{label}</b><span>{count(coverage[key])}</span></div>)}</div><div className="analysis-rates"><span>프로필 {percent(coverage.profileCoverageRate)}</span><span>셀 {percent(coverage.cellCoverageRate)}</span></div></section>
     <div className="analysis-main-grid"><Buckets result={result || { view, buckets: [] }} /><Heatmap cells={result?.weekdayHourCells} /></div>

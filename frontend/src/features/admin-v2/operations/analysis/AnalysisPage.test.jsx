@@ -105,10 +105,65 @@ describe('AnalysisPage', () => {
     expect(screen.getAllByText('0.0%').length).toBeGreaterThan(0);
   });
 
-  test('shows a permission state without treating it as an empty analysis', async () => {
-    const error = Object.assign(new Error('denied'), { status: 403, code: 'ADMIN_PERMISSION_DENIED' });
+  test.each([
+    ['EMPTY', '표시할 항목 없음'],
+    ['MISSING', '관측 데이터가 누락되었습니다.'],
+    ['DELAYED', '정보 갱신 지연'],
+    ['INSUFFICIENT_DATA', '판단에 필요한 정보 부족'],
+    ['UNAVAILABLE', '현재 사용할 수 없음'],
+  ])('keeps the known %s state explicit', async (dataState, expectedCopy) => {
+    const result = payload();
+    result.dataState = dataState;
+    render(<AnalysisPage createAdapter={() => ({ load: jest.fn().mockResolvedValue(result) })} />);
+    expect(await screen.findByText(expectedCopy)).toBeInTheDocument();
+    if (dataState === 'EMPTY' || dataState === 'MISSING' || dataState === 'UNAVAILABLE') expect(screen.queryByText('요일별 관측 요약')).not.toBeInTheDocument();
+  });
+
+  test('renders EMPTY without unavailable copy or a fabricated chart', async () => {
+    const result = payload();
+    result.dataState = 'EMPTY';
+    render(<AnalysisPage createAdapter={() => ({ load: jest.fn().mockResolvedValue(result) })} />);
+    expect(await screen.findByText('표시할 항목 없음')).toBeInTheDocument();
+    expect(screen.queryByText('현재 사용할 수 없음')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '요일별 관측 요약' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '요일별' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('renders MISSING as data absence rather than generic partial data', async () => {
+    const result = payload();
+    result.dataState = 'MISSING';
+    render(<AnalysisPage createAdapter={() => ({ load: jest.fn().mockResolvedValue(result) })} />);
+    expect(await screen.findByText('관측 데이터가 누락되었습니다.')).toBeInTheDocument();
+    expect(screen.getByText(/MISSING · 관측 근거가 없어 분석 차트를 표시하지 않습니다/)).toBeInTheDocument();
+    expect(screen.queryByText('일부 정보만 사용 가능')).not.toBeInTheDocument();
+    expect(screen.queryByText('현재 사용할 수 없음')).not.toBeInTheDocument();
+  });
+
+  test('keeps the HOUR tab and retry after a transient HOUR failure', async () => {
+    let hourAttempts = 0;
+    const transient = Object.assign(new Error('temporary'), { status: 503, code: 'OPS_ANALYSIS_TEMPORARY' });
+    const load = jest.fn(({ view }) => {
+      if (view === 'WEEKDAY') return Promise.resolve(payload('WEEKDAY'));
+      hourAttempts += 1;
+      return hourAttempts === 1 ? Promise.reject(transient) : Promise.resolve(payload('HOUR'));
+    });
+    render(<AnalysisPage createAdapter={() => ({ load })} />);
+    await screen.findByText('요일별 관측 요약');
+    fireEvent.click(screen.getByRole('button', { name: '시간대별' }));
+    expect(await screen.findByText('오류가 발생했습니다')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '시간대별' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByText('요일별 관측 요약')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
+    expect(await screen.findByText('시간대별 관측 요약')).toBeInTheDocument();
+    expect(load).toHaveBeenLastCalledWith(expect.objectContaining({ view: 'HOUR' }));
+  });
+
+  test.each([[401, 'AUTH_REQUIRED'], [403, 'ADMIN_PERMISSION_DENIED']])('fails closed for %s access errors without retrying', async (status, code) => {
+    const error = Object.assign(new Error('denied'), { status, code });
     render(<AnalysisPage createAdapter={() => ({ load: jest.fn().mockRejectedValue(error) })} />);
     expect(await screen.findByText('필요 권한: OPS_ANALYSIS_READ')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '다시 시도' })).not.toBeInTheDocument();
+    expect(screen.queryByText('요일별 관측 요약')).not.toBeInTheDocument();
   });
 
   test('fails closed for an unknown data state', async () => {

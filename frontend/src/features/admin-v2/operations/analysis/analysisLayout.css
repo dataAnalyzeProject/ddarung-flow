@@ -43,6 +43,28 @@
   color: #0f172a;
 }
 
+.analysis-data-state,
+.analysis-request-state {
+  display: grid;
+  gap: 8px;
+}
+
+.analysis-data-state {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 10px;
+  color: #9a3412;
+  padding: 14px;
+}
+
+.analysis-data-state p {
+  font-size: .8125rem;
+}
+
+.analysis-retry {
+  justify-self: start;
+}
+
 @media (max-width: 1280px) and (min-width: 1121px) {
   .analysis-main-grid {
     grid-template-columns: minmax(230px, .75fr) minmax(0, 1.75fr);
