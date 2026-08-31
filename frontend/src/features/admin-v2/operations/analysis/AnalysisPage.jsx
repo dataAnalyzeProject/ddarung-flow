@@ -75,7 +75,7 @@ export default function AnalysisPage({ createAdapter }) {
   const currentResult = !loading && !error && result?.view === view ? result : null;
   const uiState = currentResult?.dataState === 'NORMAL' ? 'SUCCESS' : (DATA_STATES[currentResult?.dataState] || 'UNAVAILABLE');
   const showData = ['NORMAL', 'DELAYED', 'INSUFFICIENT_DATA'].includes(currentResult?.dataState);
-  const waitingForView = loading;
+  const waitingForView = !currentResult && !error;
   const coverage = currentResult?.coverage || {};
   return <main className="analysis-page" aria-label="반복 품절 패턴">
     <header className="analysis-header"><div><p className="analysis-eyebrow">UI-OPS-04 · OBSERVED_STOCKOUT_RATE</p><h1>반복 품절 패턴</h1><p>미래 예측이 아닌 과거 실제 관측을 요일·시간대별로 확인합니다.</p></div><dl><div><dt>기준 시각</dt><dd>{time(currentResult?.referenceTime)}</dd></div><div><dt>생성 시각</dt><dd>{time(currentResult?.generatedAt)}</dd></div></dl></header>

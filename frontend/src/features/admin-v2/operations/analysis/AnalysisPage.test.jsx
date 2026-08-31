@@ -77,6 +77,7 @@ describe('AnalysisPage', () => {
     await screen.findByText('요일별 관측 요약');
     fireEvent.click(screen.getByRole('button', { name: '시간대별' }));
     expect(screen.getByText('불러오는 중')).toBeInTheDocument();
+    expect(screen.queryByText('현재 사용할 수 없음')).not.toBeInTheDocument();
     expect(screen.queryByText('요일별 관측 요약')).not.toBeInTheDocument();
     expect(screen.queryByText('OPS_ANALYSIS_STOCKOUT_V1')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '요일별' }));
