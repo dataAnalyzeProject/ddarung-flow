@@ -3,7 +3,7 @@ import PermissionAwareNav from '../components/PermissionAwareNav';
 import ReferenceTimeBar from '../components/ReferenceTimeBar';
 import { routesForConsole } from '../routes/routeMap';
 
-export default function AdminV2Shell({ consoles, activeConsole, activeRoute, access, onConsoleSelect, onRouteNavigate, children }) {
+export default function AdminV2Shell({ consoles, activeConsole, activeRoute, access, allowedRouteIds = null, onConsoleSelect, onRouteNavigate, children }) {
   return <div className="admin-v2-shell">
     <header className="admin-v2-header">
       <p className="admin-v2-product-name">따릉이 관리자</p>
@@ -13,7 +13,7 @@ export default function AdminV2Shell({ consoles, activeConsole, activeRoute, acc
       </div>
     </header>
     <div className="admin-v2-layout">
-      <aside className="admin-v2-sidebar"><PermissionAwareNav routes={routesForConsole(activeConsole, access.permissions)} activeRouteId={activeRoute?.id} onNavigate={onRouteNavigate} /></aside>
+      <aside className="admin-v2-sidebar"><PermissionAwareNav routes={routesForConsole(activeConsole, access.permissions, allowedRouteIds)} activeRouteId={activeRoute?.id} onNavigate={onRouteNavigate} /></aside>
       <div className="admin-v2-content">{children}</div>
     </div>
   </div>;

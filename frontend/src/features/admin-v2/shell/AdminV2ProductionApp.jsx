@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createLiveAdminAccessAdapter } from '../adapters/liveAdminAccessAdapter';
-import { PRODUCTION_RELEASED_ROUTE_IDS, resolveCanonicalRoute, ROUTES, routesForConsole, visibleConsoles } from '../routes/routeMap';
+import { PRODUCTION_RELEASED_ROUTE_IDS, resolveCanonicalRoute, routesForConsole, visibleConsoles } from '../routes/routeMap';
 import AsyncStatePanel from '../components/AsyncStatePanel';
 import AdminV2Shell from './AdminV2Shell';
 import '../adminV2.css';
@@ -15,13 +15,6 @@ function stateForAccess(access) {
 
 function browserLocation() {
   return { pathname: window.location.pathname, search: window.location.search };
-}
-
-function releasedShellAccess(access) {
-  const releasedPermissions = new Set(
-    ROUTES.filter((route) => PRODUCTION_RELEASED_ROUTE_IDS.includes(route.id)).map((route) => route.requiredPermission),
-  );
-  return { ...access, permissions: access.permissions.filter((permission) => releasedPermissions.has(permission)) };
 }
 
 export default function AdminV2ProductionApp({ pathname, search, createAccessAdapter = createLiveAdminAccessAdapter }) {
@@ -76,15 +69,15 @@ export default function AdminV2ProductionApp({ pathname, search, createAccessAda
   if (resolution.type === 'FORBIDDEN') return <AsyncStatePanel state="FORBIDDEN" code="ADMIN_PERMISSION_DENIED" requiredPermission={resolution.route.requiredPermission} />;
 
   const route = resolution.route;
-  const shellAccess = releasedShellAccess(access);
-  const consoles = visibleConsoles(shellAccess.permissions);
+  const consoles = visibleConsoles(access.permissions, PRODUCTION_RELEASED_ROUTE_IDS);
   const Page = route.Component;
   return <AdminV2Shell
     consoles={consoles}
     activeConsole={route.console}
     activeRoute={route}
-    access={shellAccess}
-    onConsoleSelect={(consoleId) => navigate(routesForConsole(consoleId, shellAccess.permissions)[0].canonicalPath)}
+    access={access}
+    allowedRouteIds={PRODUCTION_RELEASED_ROUTE_IDS}
+    onConsoleSelect={(consoleId) => navigate(routesForConsole(consoleId, access.permissions, PRODUCTION_RELEASED_ROUTE_IDS)[0].canonicalPath)}
     onRouteNavigate={(nextRoute) => navigate(nextRoute.canonicalPath)}
   ><Page route={route} /></AdminV2Shell>;
 }

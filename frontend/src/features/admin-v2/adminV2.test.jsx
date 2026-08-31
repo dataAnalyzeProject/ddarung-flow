@@ -9,7 +9,7 @@ import ReasonDialog from './components/ReasonDialog';
 import AsyncStatePanel from './components/AsyncStatePanel';
 import { createFixtureAdminAccessAdapter } from './adapters/fixtureAdminAccessAdapter';
 import { ASYNC_STATES } from './states/adminStates';
-import { defaultRoute, isAdminV2PreviewPath, isAdminV2ProductionPath, PRODUCTION_RELEASED_ROUTE_IDS, resolveCanonicalRoute, resolvePreviewRoute, ROUTES, validateRouteMetadata, visibleConsoles } from './routes/routeMap';
+import { defaultRoute, isAdminV2PreviewPath, isAdminV2ProductionPath, PRODUCTION_RELEASED_ROUTE_IDS, resolveCanonicalRoute, resolvePreviewRoute, ROUTES, routesForConsole, validateRouteMetadata, visibleConsoles } from './routes/routeMap';
 
 function setPreviewUrl(path) { window.history.replaceState({}, '', path); }
 async function waitForShell() { await waitFor(() => expect(screen.queryByText('불러오는 중')).not.toBeInTheDocument()); }
@@ -257,13 +257,13 @@ describe('admin v2 fixture access and routes', () => {
       { id: 'UI-OPS-05', canonicalPath: '/admin/ops/data', previewPath: '/admin-v2-preview/ops/data', title: '데이터 상태', console: 'OPS', requiredPermission: 'DATA_STATUS_READ' },
       { id: 'UI-OPS-06', canonicalPath: '/admin/ops/reports', previewPath: '/admin-v2-preview/ops/reports', title: '운영 리포트', console: 'OPS', requiredPermission: 'OPS_REPORT_EXPORT' },
       { id: 'UI-OPS-07', canonicalPath: '/admin/ops/digital-twin', previewPath: '/admin-v2-preview/ops/digital-twin', title: '디지털 트윈', console: 'OPS', requiredPermission: 'OPS_SCENARIO_READ' },
-      { id: 'UI-MODEL-01', canonicalPath: '/admin/models', previewPath: '/admin-v2-preview/models', title: '모델 현황', console: 'MODEL', requiredPermission: 'MODEL_METRICS_READ' },
+      { id: 'UI-MODEL-01', canonicalPath: '/admin/models', previewPath: '/admin-v2-preview/models', title: '모델 운영 현황', console: 'MODEL', requiredPermission: 'MODEL_METRICS_READ' },
       { id: 'UI-MODEL-02', canonicalPath: '/admin/models/performance', previewPath: '/admin-v2-preview/models/performance', title: '성능·신뢰도', console: 'MODEL', requiredPermission: 'MODEL_METRICS_READ' },
       { id: 'UI-MODEL-03', canonicalPath: '/admin/models/diagnostics', previewPath: '/admin-v2-preview/models/diagnostics', title: '세그먼트·대여소 진단', console: 'MODEL', requiredPermission: 'MODEL_DIAGNOSTICS_READ' },
       { id: 'UI-MODEL-04', canonicalPath: '/admin/models/releases', previewPath: '/admin-v2-preview/models/releases', title: '배포·복원', console: 'MODEL', requiredPermission: 'MODEL_RELEASE_READ' },
       { id: 'UI-SYS-01', canonicalPath: '/admin/system/support', previewPath: '/admin-v2-preview/system/support', title: '문의 관리', console: 'SYSTEM', requiredPermission: 'QNA_READ' },
-      { id: 'UI-SYS-02', canonicalPath: '/admin/system/access', previewPath: '/admin-v2-preview/system/access', title: '계정·권한', console: 'SYSTEM', requiredPermission: 'ACCESS_READ' },
-      { id: 'UI-SYS-03', canonicalPath: '/admin/system/audit', previewPath: '/admin-v2-preview/system/audit', title: '감사 로그', console: 'SYSTEM', requiredPermission: 'AUDIT_READ' },
+      { id: 'UI-SYS-02', canonicalPath: '/admin/system/access', previewPath: '/admin-v2-preview/system/access', title: '관리자 역할·권한', console: 'SYSTEM', requiredPermission: 'ACCESS_READ' },
+      { id: 'UI-SYS-03', canonicalPath: '/admin/system/audit', previewPath: '/admin-v2-preview/system/audit', title: '관리자 변경 이력', console: 'SYSTEM', requiredPermission: 'AUDIT_READ' },
       { id: 'UI-SYS-04', canonicalPath: '/admin/system/health', previewPath: '/admin-v2-preview/system/health', title: '서비스 상태', console: 'SYSTEM', requiredPermission: 'SYSTEM_STATUS_READ' },
       { id: 'UI-SYS-05', canonicalPath: '/admin/system/journey-ops', previewPath: '/admin-v2-preview/system/journey-ops', title: 'AI·도구 운영', console: 'SYSTEM', requiredPermission: 'AI_OPS_READ' },
     ]);
@@ -300,21 +300,34 @@ describe('admin v2 fixture access and routes', () => {
   });
 
   test('canonical production routes apply the release gate before permissions', () => {
-    expect(PRODUCTION_RELEASED_ROUTE_IDS).toEqual(['UI-OPS-01', 'UI-OPS-02', 'UI-OPS-03', 'UI-OPS-04']);
+    expect(PRODUCTION_RELEASED_ROUTE_IDS).toEqual(['UI-OPS-01', 'UI-OPS-02', 'UI-OPS-03', 'UI-OPS-04', 'UI-MODEL-01', 'UI-SYS-02', 'UI-SYS-03']);
     expect(resolveCanonicalRoute('/admin/ops', { permissions: ['OPS_DASHBOARD_READ'] })).toMatchObject({ type: 'ALLOW', route: { id: 'UI-OPS-01' } });
     expect(resolveCanonicalRoute('/admin/ops/risk-map', { permissions: [] })).toMatchObject({ type: 'FORBIDDEN', route: { requiredPermission: 'OPS_RISK_MAP_READ' } });
     expect(resolveCanonicalRoute('/admin/ops/candidates', { permissions: ['OPS_CANDIDATE_READ'] })).toMatchObject({ type: 'ALLOW', route: { id: 'UI-OPS-03' } });
     expect(resolveCanonicalRoute('/admin/ops/analysis', { permissions: ['OPS_ANALYSIS_READ'] })).toMatchObject({ type: 'ALLOW', route: { id: 'UI-OPS-04', canonicalPath: '/admin/ops/analysis', title: '반복 품절 패턴', requiredPermission: 'OPS_ANALYSIS_READ' } });
     expect(resolveCanonicalRoute('/admin/ops/analysis', { permissions: [] })).toMatchObject({ type: 'FORBIDDEN', route: { id: 'UI-OPS-04', requiredPermission: 'OPS_ANALYSIS_READ' } });
-    ['UI-OPS-05', 'UI-OPS-06', 'UI-OPS-07', 'UI-MODEL-01', 'UI-SYS-01'].forEach((id) => {
+    ['UI-OPS-05', 'UI-OPS-06', 'UI-OPS-07', 'UI-MODEL-02', 'UI-MODEL-03', 'UI-MODEL-04', 'UI-SYS-01', 'UI-SYS-04', 'UI-SYS-05'].forEach((id) => {
       const route = ROUTES.find((candidate) => candidate.id === id);
       expect(resolveCanonicalRoute(route.canonicalPath, { permissions: [route.requiredPermission] })).toMatchObject({ type: 'RELEASE_NOT_AVAILABLE', route: { id } });
     });
     expect(resolvePreviewRoute('/admin-v2-preview/ops/analysis', { permissions: ['OPS_ANALYSIS_READ'] })).toMatchObject({ type: 'ALLOW', route: { id: 'UI-OPS-04', previewPath: '/admin-v2-preview/ops/analysis' } });
-    expect(resolveCanonicalRoute('/admin/models', { permissions: ['MODEL_METRICS_READ'] })).toMatchObject({ type: 'RELEASE_NOT_AVAILABLE', route: { id: 'UI-MODEL-01' } });
+    expect(resolveCanonicalRoute('/admin/models', { permissions: ['MODEL_METRICS_READ'] })).toMatchObject({ type: 'ALLOW', route: { id: 'UI-MODEL-01', title: '모델 운영 현황' } });
+    expect(resolveCanonicalRoute('/admin/models/performance', { permissions: ['MODEL_METRICS_READ'] })).toMatchObject({ type: 'RELEASE_NOT_AVAILABLE', route: { id: 'UI-MODEL-02' } });
+    expect(resolveCanonicalRoute('/admin/system/access', { permissions: ['ACCESS_READ'] })).toMatchObject({ type: 'ALLOW', route: { id: 'UI-SYS-02', title: '관리자 역할·권한' } });
+    expect(resolveCanonicalRoute('/admin/system/audit', { permissions: ['AUDIT_READ'] })).toMatchObject({ type: 'ALLOW', route: { id: 'UI-SYS-03', title: '관리자 변경 이력' } });
     expect(resolveCanonicalRoute('/admin/not-real', { permissions: [] }).type).toBe('NOT_FOUND');
     expect(isAdminV2ProductionPath('/admin')).toBe(false);
     expect(isAdminV2ProductionPath('/admin/ops')).toBe(true);
+  });
+
+  test('route-ID discovery is conjunctive in production and unrestricted in preview', () => {
+    const modelPermissions = ['MODEL_METRICS_READ', 'MODEL_RELEASE_READ'];
+    expect(routesForConsole('MODEL', modelPermissions, ['UI-MODEL-01']).map(({ id }) => id)).toEqual(['UI-MODEL-01']);
+    expect(routesForConsole('MODEL', modelPermissions).map(({ id }) => id)).toEqual(['UI-MODEL-01', 'UI-MODEL-02', 'UI-MODEL-04']);
+    expect(visibleConsoles(['QNA_READ'], PRODUCTION_RELEASED_ROUTE_IDS)).toEqual([]);
+    expect(visibleConsoles(['ACCESS_READ'], PRODUCTION_RELEASED_ROUTE_IDS)).toEqual(['SYSTEM']);
+    expect(defaultRoute(readyAccess(['MODEL_ENGINEER'], ['MODEL_METRICS_READ'], 'MODEL'), PRODUCTION_RELEASED_ROUTE_IDS)).toMatchObject({ id: 'UI-MODEL-01' });
+    expect(resolvePreviewRoute('/admin-v2-preview/models/performance', { permissions: ['MODEL_METRICS_READ'] })).toMatchObject({ type: 'ALLOW', route: { id: 'UI-MODEL-02' } });
   });
 });
 
