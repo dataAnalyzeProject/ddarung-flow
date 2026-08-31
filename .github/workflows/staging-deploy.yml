@@ -34,6 +34,7 @@ jobs:
     outputs:
       latest: ${{ steps.candidate.outputs.latest }}
       build_matrix: ${{ steps.matrix.outputs.build_matrix }}
+      has_builds: ${{ steps.matrix.outputs.has_builds }}
       frontend_tag: ${{ steps.matrix.outputs.frontend_tag }}
       backend_tag: ${{ steps.matrix.outputs.backend_tag }}
       inference_tag: ${{ steps.matrix.outputs.inference_tag }}
@@ -122,8 +123,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          matrix='[]'
           if [ "${{ steps.candidate.outputs.latest }}" != true ]; then
             echo 'build_matrix=[]' >> "$GITHUB_OUTPUT"
+            echo 'has_builds=false' >> "$GITHUB_OUTPUT"
             exit 0
           fi
           parent_sha=$(git rev-parse "$DEPLOY_SHA^")
@@ -132,8 +135,6 @@ jobs:
           contexts=(./frontend ./backend ./infra/inference .)
           dockerfiles=(./frontend/Dockerfile ./backend/Dockerfile ./infra/inference/Dockerfile ./infra/inventory-refresher/Dockerfile)
           paths=(frontend backend infra/inference pipeline)
-          matrix='[]'
-
           for index in "${!components[@]}"; do
             component=${components[$index]}
             context=${contexts[$index]}
@@ -160,6 +161,11 @@ jobs:
             printf '%s_tag=%s\n' "$output_name" "$tag" >> "$GITHUB_OUTPUT"
           done
           printf 'build_matrix=%s\n' "$matrix" >> "$GITHUB_OUTPUT"
+          if jq -e 'length > 0' <<< "$matrix" >/dev/null; then
+            echo 'has_builds=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'has_builds=false' >> "$GITHUB_OUTPUT"
+          fi
 
   build-images:
     name: build-and-push-${{ matrix.component }}
@@ -168,7 +174,8 @@ jobs:
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'main' &&
-      needs.detect-changes.outputs.latest == 'true'
+      needs.detect-changes.outputs.latest == 'true' &&
+      needs.detect-changes.outputs.has_builds == 'true'
     runs-on: ubuntu-latest
     environment: oci-staging
     strategy:
