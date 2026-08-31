@@ -41,6 +41,20 @@ describe('AnalysisPage', () => {
     expect(screen.getByText('빈 칸은 0%가 아니라 관측 정보가 없는 상태입니다.')).toBeInTheDocument();
   });
 
+  test('keeps the selected heatmap cell sample context visible and changes it on selection', async () => {
+    const result = payload();
+    result.weekdayHourCells[0].sampleCount = 10;
+    result.weekdayHourCells[0].contributingStationCount = 2;
+    result.weekdayHourCells[1].observedStockoutRate = .42;
+    result.weekdayHourCells[1].sampleCount = 88;
+    result.weekdayHourCells[1].contributingStationCount = 6;
+    render(<AnalysisPage createAdapter={() => ({ load: jest.fn().mockResolvedValue(result) })} />);
+    expect(await screen.findByText('sampleCount 10')).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText(/월요일 1시 · 품절 관측률 42.0%/));
+    expect(screen.getByText('sampleCount 88')).toBeInTheDocument();
+    expect(screen.getByText('contributingStationCount 6')).toBeInTheDocument();
+  });
+
   test('does not fabricate a missing window rule version', async () => {
     const result = payload();
     result.windowRuleVersion = null;
@@ -62,6 +76,8 @@ describe('AnalysisPage', () => {
     render(<AnalysisPage createAdapter={() => ({ load })} />);
     await screen.findByText('요일별 관측 요약');
     fireEvent.click(screen.getByRole('button', { name: '시간대별' }));
+    expect(screen.getByText('불러오는 중')).toBeInTheDocument();
+    expect(screen.queryByText('요일별 관측 요약')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '요일별' }));
     await screen.findByText('요일별 관측 요약');
     resolveHour(payload('HOUR'));

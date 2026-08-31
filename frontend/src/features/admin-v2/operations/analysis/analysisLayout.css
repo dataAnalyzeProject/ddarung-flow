@@ -16,7 +16,31 @@
 }
 
 .analysis-heatmap-cell {
+  border: 1px solid rgb(194 65 12 / .16);
+  color: #0f172a;
   height: 29px;
+}
+
+.analysis-heatmap-cell:focus-visible {
+  outline: 3px solid #0f172a;
+  outline-offset: 2px;
+}
+
+.analysis-heatmap-detail {
+  align-items: center;
+  background: #f8fafc;
+  border-radius: 6px;
+  color: #334155;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: .7rem;
+  gap: 8px 14px;
+  margin: 10px 0 0;
+  padding: 9px 10px;
+}
+
+.analysis-heatmap-detail b {
+  color: #0f172a;
 }
 
 @media (max-width: 1120px) {
@@ -26,11 +50,21 @@
     grid-template-columns: 1fr;
   }
 
+  .analysis-bucket-grid {
+    grid-template-columns: repeat(4, minmax(130px, 1fr));
+  }
+
   .analysis-bucket strong {
     text-align: left;
   }
 
   .analysis-bucket small {
     white-space: normal;
+  }
+}
+
+@media (max-width: 760px) {
+  .analysis-bucket-grid {
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
   }
 }
