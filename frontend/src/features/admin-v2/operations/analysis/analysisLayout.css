@@ -1,0 +1,111 @@
+.analysis-bucket {
+  align-items: center;
+  gap: 7px;
+  grid-template-columns: 34px minmax(70px, 1fr) 42px 102px;
+}
+
+.analysis-bucket strong {
+  font-size: .82rem;
+  text-align: right;
+}
+
+.analysis-bucket small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.analysis-heatmap-cell {
+  border: 1px solid rgb(194 65 12 / .16);
+  color: #0f172a;
+  height: 29px;
+}
+
+.analysis-heatmap-cell:focus-visible {
+  outline: 3px solid #0f172a;
+  outline-offset: 2px;
+}
+
+.analysis-heatmap-detail {
+  align-items: center;
+  background: #f8fafc;
+  border-radius: 6px;
+  color: #334155;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: .7rem;
+  gap: 8px 14px;
+  margin: 10px 0 0;
+  padding: 9px 10px;
+}
+
+.analysis-heatmap-detail b {
+  color: #0f172a;
+}
+
+.analysis-data-state,
+.analysis-request-state {
+  display: grid;
+  gap: 8px;
+}
+
+.analysis-data-state {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 10px;
+  color: #9a3412;
+  padding: 14px;
+}
+
+.analysis-data-state p {
+  font-size: .8125rem;
+}
+
+.analysis-retry {
+  justify-self: start;
+}
+
+@media (max-width: 1280px) and (min-width: 1121px) {
+  .analysis-main-grid {
+    grid-template-columns: minmax(230px, .75fr) minmax(0, 1.75fr);
+  }
+
+  .analysis-heatmap {
+    padding: 12px;
+  }
+
+  .analysis-heatmap table {
+    min-width: 540px;
+  }
+
+  .analysis-heatmap-cell {
+    height: 38px;
+    min-width: 18px;
+  }
+}
+
+@media (max-width: 1120px) {
+  .analysis-bucket {
+    display: grid;
+    gap: 5px;
+    grid-template-columns: 1fr;
+  }
+
+  .analysis-bucket-grid {
+    grid-template-columns: repeat(4, minmax(130px, 1fr));
+  }
+
+  .analysis-bucket strong {
+    text-align: left;
+  }
+
+  .analysis-bucket small {
+    white-space: normal;
+  }
+}
+
+@media (max-width: 760px) {
+  .analysis-bucket-grid {
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
+  }
+}
