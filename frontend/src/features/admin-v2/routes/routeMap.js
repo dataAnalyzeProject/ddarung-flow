@@ -17,19 +17,19 @@ import SystemJourneyOps from '../system/journey-ops/index.jsx';
 import { CONSOLE_ORDER, hasPermission, PERMISSIONS } from '../permissions/permissions.js';
 
 export const PREVIEW_PREFIX = '/admin-v2-preview';
-export const PRODUCTION_RELEASED_ROUTE_IDS = ['UI-OPS-01', 'UI-OPS-02', 'UI-OPS-03', 'UI-OPS-04', 'UI-MODEL-01', 'UI-SYS-02', 'UI-SYS-03'];
+export const PRODUCTION_RELEASED_ROUTE_IDS = ['UI-OPS-01', 'UI-OPS-02', 'UI-OPS-03', 'UI-OPS-04', 'UI-OPS-05', 'UI-MODEL-01', 'UI-MODEL-04', 'UI-SYS-02', 'UI-SYS-03'];
 export const ROUTES = [
   ['UI-OPS-01', 'OPS', '/admin/ops', '/ops', '운영 상황판', 'OPS_DASHBOARD_READ', OperationsOverview],
   ['UI-OPS-02', 'OPS', '/admin/ops/risk-map', '/ops/risk-map', '수급 위험 지도', 'OPS_RISK_MAP_READ', OperationsRiskMap],
   ['UI-OPS-03', 'OPS', '/admin/ops/candidates', '/ops/candidates', '집중관리 목록', 'OPS_CANDIDATE_READ', OperationsCandidates],
   ['UI-OPS-04', 'OPS', '/admin/ops/analysis', '/ops/analysis', '반복 품절 패턴', 'OPS_ANALYSIS_READ', OperationsAnalysis],
-  ['UI-OPS-05', 'OPS', '/admin/ops/data', '/ops/data', '데이터 상태', 'DATA_STATUS_READ', OperationsData],
+  ['UI-OPS-05', 'OPS', '/admin/ops/data', '/ops/data', '운영 데이터 상태', 'DATA_STATUS_READ', OperationsData],
   ['UI-OPS-06', 'OPS', '/admin/ops/reports', '/ops/reports', '운영 리포트', 'OPS_REPORT_EXPORT', OperationsReports],
   ['UI-OPS-07', 'OPS', '/admin/ops/digital-twin', '/ops/digital-twin', '디지털 트윈', 'OPS_SCENARIO_READ', OperationsDigitalTwin],
   ['UI-MODEL-01', 'MODEL', '/admin/models', '/models', '모델 운영 현황', 'MODEL_METRICS_READ', ModelOverview],
   ['UI-MODEL-02', 'MODEL', '/admin/models/performance', '/models/performance', '성능·신뢰도', 'MODEL_METRICS_READ', ModelPerformance],
   ['UI-MODEL-03', 'MODEL', '/admin/models/diagnostics', '/models/diagnostics', '세그먼트·대여소 진단', 'MODEL_DIAGNOSTICS_READ', ModelDiagnostics],
-  ['UI-MODEL-04', 'MODEL', '/admin/models/releases', '/models/releases', '배포·복원', 'MODEL_RELEASE_READ', ModelReleases],
+  ['UI-MODEL-04', 'MODEL', '/admin/models/releases', '/models/releases', '모델 버전 관리', 'MODEL_RELEASE_READ', ModelReleases],
   ['UI-SYS-01', 'SYSTEM', '/admin/system/support', '/system/support', '문의 관리', 'QNA_READ', SystemSupport],
   ['UI-SYS-02', 'SYSTEM', '/admin/system/access', '/system/access', '관리자 역할·권한', 'ACCESS_READ', SystemAccess],
   ['UI-SYS-03', 'SYSTEM', '/admin/system/audit', '/system/audit', '관리자 변경 이력', 'AUDIT_READ', SystemAudit],

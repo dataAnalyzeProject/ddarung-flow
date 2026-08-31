@@ -4,12 +4,14 @@ import AdminV2ProductionApp from './AdminV2ProductionApp';
 jest.mock('../operations/overview/index.jsx', () => () => <h1>LIVE OPS</h1>);
 jest.mock('../operations/risk-map/index.jsx', () => () => <h1>LIVE RISK MAP</h1>);
 jest.mock('../operations/candidates/index.jsx', () => () => <main className="candidates-page"><h1>LIVE CANDIDATES</h1></main>);
+jest.mock('../operations/data/index.jsx', () => () => <h1>LIVE OPS DATA</h1>);
 jest.mock('../model/overview/index.jsx', () => () => <h1>LIVE MODEL OVERVIEW</h1>);
+jest.mock('../model/releases/index.jsx', () => () => <h1>LIVE MODEL RELEASES</h1>);
 jest.mock('../system/access/index.jsx', () => () => <h1>LIVE SYSTEM ACCESS</h1>);
 jest.mock('../system/audit/index.jsx', () => () => <h1>LIVE SYSTEM AUDIT</h1>);
 
 const allPermissions = [
-  'OPS_DASHBOARD_READ', 'OPS_RISK_MAP_READ', 'OPS_CANDIDATE_READ', 'OPS_ANALYSIS_READ', 'MODEL_METRICS_READ', 'MODEL_RELEASE_READ', 'ACCESS_READ', 'AUDIT_READ', 'QNA_READ',
+  'OPS_DASHBOARD_READ', 'OPS_RISK_MAP_READ', 'OPS_CANDIDATE_READ', 'OPS_ANALYSIS_READ', 'DATA_STATUS_READ', 'MODEL_METRICS_READ', 'MODEL_RELEASE_READ', 'ACCESS_READ', 'AUDIT_READ', 'QNA_READ',
 ];
 
 function readyAccess(permissions = ['OPS_DASHBOARD_READ', 'OPS_RISK_MAP_READ']) {
@@ -110,7 +112,7 @@ describe('AdminV2ProductionApp', () => {
     expect(container.querySelectorAll('main')).toHaveLength(1);
   });
 
-  test('shows every console with a released permitted route and no unreleased OPS item', async () => {
+  test('shows OPS05 but no unreleased OPS item', async () => {
     render(<AdminV2ProductionApp pathname="/admin/ops" createAccessAdapter={adapterFor(readyAccess(allPermissions))} />);
 
     expect(await screen.findByRole('button', { name: '운영 상황판' })).toBeInTheDocument();
@@ -119,16 +121,48 @@ describe('AdminV2ProductionApp', () => {
     expect(screen.getByRole('button', { name: '반복 품절 패턴' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '모델' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '시스템' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '데이터 상태' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '운영 데이터 상태' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '운영 리포트' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '디지털 트윈' })).not.toBeInTheDocument();
   });
 
-  test('keeps an unreleased sibling hidden when it shares MODEL_METRICS_READ', async () => {
-    render(<AdminV2ProductionApp pathname="/admin/models" createAccessAdapter={adapterFor(readyAccess(['MODEL_METRICS_READ', 'MODEL_RELEASE_READ'], 'MODEL'))} />);
+  test('shows only MODEL01 with MODEL_METRICS_READ', async () => {
+    render(<AdminV2ProductionApp pathname="/admin/models" createAccessAdapter={adapterFor(readyAccess(['MODEL_METRICS_READ'], 'MODEL'))} />);
 
     expect(await screen.findByRole('heading', { name: 'LIVE MODEL OVERVIEW' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '모델 운영 현황' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '성능·신뢰도' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '모델 버전 관리' })).not.toBeInTheDocument();
+  });
+
+  test('shows MODEL01 and MODEL04 while keeping their unreleased sibling hidden', async () => {
+    render(<AdminV2ProductionApp pathname="/admin/models" createAccessAdapter={adapterFor(readyAccess(['MODEL_METRICS_READ', 'MODEL_RELEASE_READ'], 'MODEL'))} />);
+
+    expect(await screen.findByRole('heading', { name: 'LIVE MODEL OVERVIEW' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '모델 운영 현황' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '모델 버전 관리' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '성능·신뢰도' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '배포·복원' })).not.toBeInTheDocument();
+  });
+
+  test.each([
+    ['/admin/ops/data', 'DATA_STATUS_READ', 'LIVE OPS DATA', '운영 데이터 상태'],
+    ['/admin/models/releases', 'MODEL_RELEASE_READ', 'LIVE MODEL RELEASES', '모델 버전 관리'],
+  ])('renders %s only with its released-route permission', async (pathname, permission, heading, title) => {
+    render(<AdminV2ProductionApp pathname={pathname} createAccessAdapter={adapterFor(readyAccess([permission], pathname.includes('/models/') ? 'MODEL' : 'OPS'))} />);
+
+    expect(await screen.findByRole('heading', { name: heading })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: title })).toBeInTheDocument();
+  });
+
+  test.each([
+    ['/admin/ops/data', 'DATA_STATUS_READ'],
+    ['/admin/models/releases', 'MODEL_RELEASE_READ'],
+  ])('rejects %s without %s', async (pathname, permission) => {
+    render(<AdminV2ProductionApp pathname={pathname} createAccessAdapter={adapterFor(readyAccess([], pathname.includes('/models/') ? 'MODEL' : 'OPS'))} />);
+
+    expect(await screen.findByText('ADMIN_PERMISSION_DENIED')).toBeInTheDocument();
+    expect(screen.getByText(`필요 권한: ${permission}`)).toBeInTheDocument();
   });
 
   test.each([
