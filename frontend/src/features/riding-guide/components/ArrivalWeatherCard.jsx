@@ -1,18 +1,6 @@
 import GuideIcon from "./GuideIcon";
 import { PRECIP_TEXT, SKY_TEXT } from "../data/ridingGuideLabels";
 
-// Fallback fixture: used only when no live arrivalWeather prop is supplied
-// (e.g. the guide is opened without going through a prediction first).
-export const weatherFixtureFallback = {
-  status: "NORMAL",
-  temperatureC: 24,
-  precipitationProbabilityPercent: 10,
-  precipitationType: "NONE",
-  skyStatus: "CLEAR",
-  rainGuidance: false,
-  issuedAt: null,
-};
-
 export function weatherConditionText(weather) {
   if (weather.precipitationType && weather.precipitationType !== "NONE") {
     return PRECIP_TEXT[weather.precipitationType] || weather.precipitationType;
@@ -30,7 +18,8 @@ function WeatherLoading() {
 }
 
 function WeatherUnavailableNotice({ weather }) {
-  const message = weather.message
+  const message = weather?.message
+    || (!weather ? "도착 예정시간의 날씨 정보가 없습니다." : null)
     || (weather.status === "MISSING" ? "도착 예정시간의 날씨 예보가 없습니다." : "날씨 예보를 불러오지 못했습니다.");
   return (
     <div className="guide-air-unavailable" role="status">
@@ -41,14 +30,14 @@ function WeatherUnavailableNotice({ weather }) {
 }
 
 export default function ArrivalWeatherCard({ weather, isLoading = false }) {
-  const resolvedWeather = weather || weatherFixtureFallback;
+  const resolvedWeather = weather;
 
   return (
     <section className="guide-card guide-weather" aria-labelledby="arrival-weather-title">
       <h2 id="arrival-weather-title">도착지 날씨</h2>
       {isLoading ? (
         <WeatherLoading />
-      ) : resolvedWeather.status === "MISSING" || resolvedWeather.status === "UNAVAILABLE" ? (
+      ) : !resolvedWeather || resolvedWeather.status === "MISSING" || resolvedWeather.status === "UNAVAILABLE" ? (
         <WeatherUnavailableNotice weather={resolvedWeather} />
       ) : (
         <div className="guide-weather-body">

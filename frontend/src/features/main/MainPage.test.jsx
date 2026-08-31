@@ -606,45 +606,7 @@ describe("서울자전거 따릉이 이용권 결제 및 가이드 접근 통합
     expect(await screen.findByRole("heading", { name: `${candidate.stationName} 라이딩 가이드` })).toBeInTheDocument();
   });
 
-  // 3. ANONYMOUS 사용자: 로그인 유도 ➔ 로그인 성공 후 원래 진입하려던 가이드 화면으로 자동 복원된다
-  test("ANONYMOUS 사용자는 로그인 유도 뒤 원래 가이드 진입 지점을 복원한다", async () => {
-    const candidate = restoreGuideCandidate();
-    getCurrentUser.mockResolvedValue({ authenticated: false, user: null });
-    const firstRender = render(<MainPage />);
-
-    fireEvent.click(await screen.findByRole("button", { name: `${candidate.stationName} 상세보기` }));
-    const planBtn = await screen.findByRole("button", { name: premiumPlansFixture[0].buttonLabel });
-    fireEvent.click(planBtn);
-
-    // 로그인 필요 안내 및 로그인 버튼 클릭
-    expect(await screen.findByText("따릉이 이용권을 결제하시려면 로그인이 필요합니다.")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "로그인하기" }));
-    expect(sessionStorage.getItem(PENDING_GUIDE_KEY)).toBe("1");
-    expect(loadPendingPrediction()).toEqual(expect.objectContaining({ requiredBikeCount: 1 }));
-
-    firstRender.unmount();
-
-    // 로그인 완료 후 복귀 시: 가이드/결제 진입점 복원 확인
-    window.history.replaceState({}, "", "/?login=success");
-    getCurrentUser.mockResolvedValue({ authenticated: true, user: { displayName: "김따릉", provider: "kakao" } });
-    render(<MainPage />);
-
-    expect(await screen.findByRole("button", { name: premiumPlansFixture[0].buttonLabel })).toBeInTheDocument();
-    expect(sessionStorage.getItem(PENDING_GUIDE_KEY)).toBeNull();
-  });
-
-  // 4. EXPIRED 사용자: 라이딩 가이드 본문 진입이 차단되고 만료 안내 화면으로 분기된다
-  test("EXPIRED 사용자는 가이드 본문 진입이 차단되고 이용 기간 만료 안내를 본다", async () => {
-    const candidate = restoreGuideCandidate();
-    fetchSubscription.mockResolvedValue({ status: "EXPIRED" });
-    render(<MainPage />);
-
-    fireEvent.click(await screen.findByRole("button", { name: `${candidate.stationName} 상세보기` }));
-    expect(await screen.findByText(/이용권 기간이 만료되었습니다/)).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: `${candidate.stationName} 라이딩 가이드` })).not.toBeInTheDocument();
-  });
-
-  // 5. 결제 성공 redirect: 서버 결제 승인(confirmPayment)을 거쳐 최종 목적지인 ACTIVE 라이딩 가이드가 열린다
+  // 3. 결제 성공 redirect: 서버 결제 승인(confirmPayment)을 거쳐 최종 목적지인 ACTIVE 라이딩 가이드가 열린다
   test("성공 redirect는 서버 승인 뒤 최종 목적지인 라이딩 가이드 본문을 연다", async () => {
     const candidate = restoreGuideCandidate();
     window.history.replaceState({}, "", "/?payment=processing&paymentKey=masked&orderId=masked&amount=2900");

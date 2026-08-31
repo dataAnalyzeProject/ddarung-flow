@@ -4,7 +4,7 @@ import { formatPercent } from "../data/ridingGuideFormatters";
 
 export function getGuideAvailabilityMetric(candidate) {
   if (!candidate) {
-    return { icon: "bike", label: "대여 가능성", value: "87%", note: "매우 높음", tone: "safe" };
+    return { icon: "bike", label: "대여 가능성", value: "-", note: "정보 없음", tone: "" };
   }
   const level = candidate.availabilityLevel;
   return {
@@ -18,7 +18,7 @@ export function getGuideAvailabilityMetric(candidate) {
 
 export function getGuideRainMetric(arrivalWeather) {
   if (!arrivalWeather) {
-    return { icon: "rain", label: "강수확률", value: "10%", note: "낮음", tone: "blue" };
+    return { icon: "rain", label: "강수확률", value: "-", note: "정보 없음", tone: "" };
   }
   if (arrivalWeather.status === "MISSING" || arrivalWeather.status === "UNAVAILABLE") {
     return { icon: "rain", label: "강수확률", value: "-", note: "정보 없음", tone: "" };
@@ -36,10 +36,10 @@ export function getGuideRainMetric(arrivalWeather) {
 export function computeOverallVerdict(candidate, arrivalWeather) {
   if (!candidate) {
     return {
-      rating: "좋음",
-      ringPercent: 87,
+      rating: "확인 필요",
+      ringPercent: 0,
       message: (
-        <>지금 출발하면<br />자전거 이용을 <span>추천해요.</span></>
+        <>대여 가능성을 아직 확인할 수 없어요.<br />예측을 실행한 뒤 <span>다시 확인해주세요.</span></>
       ),
     };
   }
@@ -113,10 +113,12 @@ export default function OverallGuideCard({ verdict, metrics = [], onRouteBack })
           </div>
         ))}
       </dl>
-      <div className="guide-eco-tip">
-        <GuideIcon name="leaf" />
-        <p><strong>오후 6시 전까지 이용하기 좋아요.</strong><span>장거리 이동 시에는 미세먼지 변화를 확인하세요.</span></p>
-      </div>
+      {verdict.rating === "좋음" && (
+        <div className="guide-eco-tip">
+          <GuideIcon name="leaf" />
+          <p><strong>출발 전 최신 정보를 다시 확인하세요.</strong><span>장거리 이동 시에는 미세먼지 변화를 확인하세요.</span></p>
+        </div>
+      )}
       <button className="guide-route-back" type="button" onClick={onRouteBack}>
         <GuideIcon name="route" />
         경로 다시 보기

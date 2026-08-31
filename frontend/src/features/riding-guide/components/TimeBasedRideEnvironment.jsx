@@ -1,13 +1,3 @@
-// Fallback fixture: used only when no live arrivalWeather prop is supplied
-// (e.g. the guide is opened without going through a prediction first).
-export const hourlyFixture = [
-  { time: "09시", temperature: "21°C", rain: "10%", condition: "추천", tone: "safe" },
-  { time: "11시", temperature: "24°C", rain: "10%", condition: "추천", tone: "safe", current: true },
-  { time: "13시", temperature: "26°C", rain: "20%", condition: "추천", tone: "safe" },
-  { time: "15시", temperature: "25°C", rain: "30%", condition: "주의", tone: "caution" },
-  { time: "17시", temperature: "23°C", rain: "50%", condition: "주의", tone: "caution" },
-];
-
 export function buildHourlyRows(arrivalWeather) {
   if (!arrivalWeather || !Array.isArray(arrivalWeather.hourlyForecasts) || arrivalWeather.hourlyForecasts.length === 0) {
     return null;
@@ -29,13 +19,14 @@ export function buildHourlyRows(arrivalWeather) {
 }
 
 export default function TimeBasedRideEnvironment({ hours = [] }) {
+  const hasHours = hours.length > 0;
   return (
     <section className="guide-card guide-hourly" aria-labelledby="hourly-title">
       <header className="guide-card-heading">
         <h2 id="hourly-title">시간대별 라이딩 환경</h2>
-        <p><span className="safe" />추천 <span className="caution" />주의</p>
+        {hasHours && <p><span className="safe" />추천 <span className="caution" />주의</p>}
       </header>
-      <div className="guide-hourly-timeline" aria-label="시간대별 변화">
+      {hasHours ? <><div className="guide-hourly-timeline" aria-label="시간대별 변화">
         <span aria-hidden="true" />
         {hours.map((hour) => (
           <div className={hour.current ? "current" : ""} key={hour.time}>
@@ -78,7 +69,7 @@ export default function TimeBasedRideEnvironment({ hours = [] }) {
             </tr>
           </tbody>
         </table>
-      </div>
+      </div></> : <p className="guide-prediction-empty" role="status">시간대별 날씨 예보 정보가 없습니다.</p>}
     </section>
   );
 }
