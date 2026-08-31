@@ -7,7 +7,6 @@ import OperationsReports from '../operations/reports/index.jsx';
 import OperationsDigitalTwin from '../operations/digital-twin/index.jsx';
 import ModelOverview from '../model/overview/index.jsx';
 import ModelPerformance from '../model/performance/index.jsx';
-import ModelDiagnostics from '../model/diagnostics/index.jsx';
 import ModelReleases from '../model/releases/index.jsx';
 import SystemSupport from '../system/support/index.jsx';
 import SystemAccess from '../system/access/index.jsx';
@@ -27,8 +26,7 @@ export const ROUTES = [
   ['UI-OPS-06', 'OPS', '/admin/ops/reports', '/ops/reports', '운영 리포트', 'OPS_REPORT_EXPORT', OperationsReports],
   ['UI-OPS-07', 'OPS', '/admin/ops/digital-twin', '/ops/digital-twin', '디지털 트윈', 'OPS_SCENARIO_READ', OperationsDigitalTwin],
   ['UI-MODEL-01', 'MODEL', '/admin/models', '/models', '모델 운영 현황', 'MODEL_METRICS_READ', ModelOverview],
-  ['UI-MODEL-02', 'MODEL', '/admin/models/performance', '/models/performance', '성능·신뢰도', 'MODEL_METRICS_READ', ModelPerformance],
-  ['UI-MODEL-03', 'MODEL', '/admin/models/diagnostics', '/models/diagnostics', '세그먼트·대여소 진단', 'MODEL_DIAGNOSTICS_READ', ModelDiagnostics],
+  ['UI-MODEL-02', 'MODEL', '/admin/models/performance', '/models/performance', '모델 검증', 'MODEL_METRICS_READ', ModelPerformance],
   ['UI-MODEL-04', 'MODEL', '/admin/models/releases', '/models/releases', '모델 버전 관리', 'MODEL_RELEASE_READ', ModelReleases],
   ['UI-SYS-01', 'SYSTEM', '/admin/system/support', '/system/support', '사용자 문의', 'QNA_READ', SystemSupport],
   ['UI-SYS-02', 'SYSTEM', '/admin/system/access', '/system/access', '관리자 역할·권한', 'ACCESS_READ', SystemAccess],
