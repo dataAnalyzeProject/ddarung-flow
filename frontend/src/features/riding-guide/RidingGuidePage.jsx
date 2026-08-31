@@ -1,6 +1,5 @@
 import AppHeader from "../../shared/AppHeader";
 import "./RidingGuidePage.css";
-import { airQualityNormalFixture } from "./data/airQualityMock";
 import { formatClockTime } from "./data/ridingGuideFormatters";
 import RidingGuideHeader from "./components/RidingGuideHeader";
 import OverallGuideCard, {
@@ -9,8 +8,8 @@ import OverallGuideCard, {
   getGuideAvailabilityMetric,
   getGuideRainMetric,
 } from "./components/OverallGuideCard";
-import TimeBasedRideEnvironment, { buildHourlyRows, hourlyFixture } from "./components/TimeBasedRideEnvironment";
-import ArrivalWeatherCard, { weatherFixtureFallback } from "./components/ArrivalWeatherCard";
+import TimeBasedRideEnvironment, { buildHourlyRows } from "./components/TimeBasedRideEnvironment";
+import ArrivalWeatherCard from "./components/ArrivalWeatherCard";
 import AirQualityCard, { getGuideKhaiMetric } from "./components/AirQualityCard";
 import PredictionSummaryCard from "./components/PredictionSummaryCard";
 import CautionCard from "./components/CautionCard";
@@ -27,11 +26,11 @@ export default function RidingGuidePage({
   authState,
   user,
   onLogout,
-  airQuality = airQualityNormalFixture,
+  airQuality = null,
   isAirQualityLoading = false,
 }) {
   const returnToPrediction = () => onBack?.();
-  const weatherData = arrivalWeather || weatherFixtureFallback;
+  const weatherData = arrivalWeather;
   const guideMetricsWithAirQuality = [
     getGuideAvailabilityMetric(candidate),
     getGuideRainMetric(arrivalWeather),
@@ -39,8 +38,8 @@ export default function RidingGuidePage({
   ];
   const verdict = computeOverallVerdict(candidate, arrivalWeather);
   const introCopy = computeIntroCopy(verdict);
-  const hourlyRows = buildHourlyRows(arrivalWeather) || hourlyFixture;
-  const arrivalTimeLabel = formatClockTime(candidate?.arrivalAt) || "11:05";
+  const hourlyRows = buildHourlyRows(arrivalWeather) || [];
+  const arrivalTimeLabel = formatClockTime(candidate?.arrivalAt) || "정보 없음";
 
   return (
     <main className="riding-guide-shell">

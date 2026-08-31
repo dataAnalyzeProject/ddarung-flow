@@ -167,11 +167,11 @@ describe("라이딩 가이드 대기질 상태", () => {
     expect(within(airCard).queryByText("천호 측정소")).not.toBeInTheDocument();
   });
 
-  test("대기질 상태와 무관하게 대여 확률과 종합 추천 문구는 바뀌지 않는다", () => {
+  test("대기질이 없어도 candidate가 없으면 긍정 대여 판정을 만들지 않는다", () => {
     render(<RidingGuidePage airQuality={airQualityUnavailableFixture} onBack={jest.fn()} />);
 
-    expect(screen.getByText("87%")).toBeInTheDocument();
-    expect(screen.getByText("추천해요.")).toBeInTheDocument();
+    expect(screen.getByText("확인 필요")).toBeInTheDocument();
+    expect(screen.queryByText("추천해요.")).not.toBeInTheDocument();
   });
 
   test("측정소와의 거리 정보가 있으면 대기질 카드에 별도 행으로 표시한다", () => {
@@ -247,13 +247,17 @@ describe("라이딩 가이드 대기질 상태", () => {
     expect(screen.getByText("대여 가능성이나 날씨·대기질 상황을 확인하고 이용해주세요.")).toBeInTheDocument();
   });
 
-  test("candidate가 없으면 고정 지표(87%·추천해요)와 안내 문구를 보여준다", () => {
+  test("candidate·날씨·대기질이 없으면 fixture 숫자와 긍정 추천 대신 정보 없음 상태를 보여준다", () => {
     render(<RidingGuidePage onBack={jest.fn()} />);
 
-    expect(screen.getByText("87%")).toBeInTheDocument();
-    expect(screen.getByText("추천해요.")).toBeInTheDocument();
+    expect(screen.getByText("확인 필요")).toBeInTheDocument();
+    expect(screen.getByText(/도착 예정시간 정보 없음 기준/)).toBeInTheDocument();
     expect(screen.getByText(/실제 예측을 실행하면/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "1~5대 누적확률 보기" })).not.toBeInTheDocument();
+    ["87%", "24°C", "10%", "11:05", "10:00", "10:32"].forEach((value) => {
+      expect(screen.queryByText(value)).not.toBeInTheDocument();
+    });
+    expect(screen.queryByText("추천해요.")).not.toBeInTheDocument();
   });
 
   test("대여소 상세보기 링크는 더 이상 표시하지 않는다", () => {
@@ -462,18 +466,20 @@ describe("라이딩 가이드 카드 분리 (FE-4.6)", () => {
 });
 
 describe("라이딩 가이드 카드 방어 렌더링 회귀 테스트", () => {
-  test("ArrivalWeatherCard는 weather prop이 없어도 크래시 없이 기본값으로 렌더링된다", () => {
+  test("ArrivalWeatherCard는 weather prop이 없어도 크래시 없이 정보 없음 상태로 렌더링된다", () => {
     render(<ArrivalWeatherCard weather={null} />);
 
     expect(screen.getByRole("heading", { name: "도착지 날씨" })).toBeInTheDocument();
-    expect(screen.getByText("24°C")).toBeInTheDocument();
+    expect(screen.getByText("도착 예정시간의 날씨 정보가 없습니다.")).toBeInTheDocument();
+    expect(screen.queryByText("24°C")).not.toBeInTheDocument();
   });
 
-  test("DataStatusFooter는 weather prop이 없어도 크래시 없이 기본값으로 렌더링된다", () => {
+  test("DataStatusFooter는 weather prop이 없어도 크래시 없이 고정 시각 없이 렌더링된다", () => {
     render(<DataStatusFooter weather={null} airQuality={null} />);
 
     expect(screen.getByLabelText("데이터 상태")).toBeInTheDocument();
-    expect(screen.getByText("10:00")).toBeInTheDocument();
+    expect(screen.queryByText("10:00")).not.toBeInTheDocument();
+    expect(screen.queryByText("10:32")).not.toBeInTheDocument();
   });
 
   test("PredictionSummaryCard는 requiredBikeCount가 0이어도 대수를 포함한 문장을 표시한다", () => {

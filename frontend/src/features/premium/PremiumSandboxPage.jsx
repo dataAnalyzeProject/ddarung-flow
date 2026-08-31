@@ -90,7 +90,7 @@ export default function PremiumSandboxPage({
                 setCustomFeedback({
                   type: 'success',
                   icon: '⭐',
-                  message: '따릉이 이용권 결제가 성공적으로 완료되었습니다! 지금부터 자유롭게 이용하실 수 있습니다.',
+                  message: 'Sandbox 테스트 플랜 결제가 완료되었습니다. 라이딩 가이드 접근 상태를 확인할 수 있습니다.',
                 });
               } else {
                 throw new Error('FETCH_FAILED');
@@ -102,7 +102,7 @@ export default function PremiumSandboxPage({
                   setCustomFeedback({
                     type: 'success',
                     icon: '⭐',
-                    message: '따릉이 이용권 상세 정보가 성공적으로 동기화되었습니다.',
+                    message: 'Sandbox 가이드 접근 상태가 성공적으로 동기화되었습니다.',
                   });
                 } else {
                   setCustomFeedback({
@@ -120,7 +120,7 @@ export default function PremiumSandboxPage({
               setCustomFeedback({
                 type: 'warning',
                 icon: 'ℹ️',
-                message: '결제는 정상 승인되었습니다! 상세 만료일을 불러오지 못한 경우 상태 새로고침을 눌러주세요.',
+                  message: 'Sandbox 결제는 정상 승인되었습니다. 가이드 접근 상세를 불러오지 못하면 상태 새로고침을 눌러주세요.',
                 action: {
                   label: '상태 새로고침',
                   onClick: handleRetry,
@@ -200,19 +200,19 @@ export default function PremiumSandboxPage({
         return {
           type: 'info',
           icon: '⏳',
-          message: '결제 요청을 안전하게 처리하고 있습니다. 잠시만 기다려 주세요…',
+          message: 'Sandbox 테스트 결제 요청을 처리하고 있습니다. 잠시만 기다려 주세요…',
         };
       case 'ACTIVE':
         return {
           type: 'success',
           icon: '⭐',
-          message: '따릉이 이용권을 보유 중입니다. 서울시 전역 따릉이를 자유롭게 이용하실 수 있습니다.',
+          message: 'Sandbox 라이딩 가이드 접근 상태가 활성화되었습니다. 실제 따릉이 이용권 구매는 아닙니다.',
         };
       case 'EXPIRED':
         return {
           type: 'warning',
           icon: '⌛',
-          message: '이용권 기간이 만료되었습니다. 이용권을 결제하시면 따릉이를 다시 이용하실 수 있습니다.',
+          message: 'Sandbox 가이드 접근 기간이 만료되었습니다. 실제 따릉이 이용 자격과는 관계없습니다.',
         };
       case 'ANONYMOUS':
         return null;
@@ -229,7 +229,7 @@ export default function PremiumSandboxPage({
       setCustomFeedback({
         type: 'warning',
         icon: '🔒',
-        message: '따릉이 이용권을 결제하시려면 로그인이 필요합니다.',
+        message: 'Sandbox 테스트 플랜을 결제하려면 로그인이 필요합니다.',
         action: {
           label: '로그인하기',
           onClick: () => {
@@ -289,7 +289,7 @@ export default function PremiumSandboxPage({
   const planDisplayName =
     currentPlan?.name ||
     internalSubscription?.planName ||
-    (isSubscribed ? '따릉이 정기 이용권 (보유 중)' : '미보유 (이용권 결제 필요)');
+    (isSubscribed ? '라이딩 가이드 테스트 플랜 (활성)' : '미보유 (테스트 플랜 결제 필요)');
 
   return (
     <div className="premium-sandbox-shell">
@@ -298,27 +298,27 @@ export default function PremiumSandboxPage({
       <main className="premium-sandbox-main">
         {/* 1. 상단 히어로 영역 */}
         <section className="premium-sandbox__hero">
-          <span className="premium-sandbox__badge">SEOUL BIKE PASS</span>
+          <span className="premium-sandbox__badge">SANDBOX TEST · 실제 과금 없음</span>
           <h1 className="premium-sandbox__title">
-            기다림 없는 따릉이 여정,<br />
-            <span>서울자전거 따릉이 이용권</span>으로 함께하세요
+            라이딩 가이드 접근 흐름을,<br />
+            <span>Sandbox 테스트 플랜</span>으로 확인하세요
           </h1>
           <p className="premium-sandbox__desc">
-            따릉이 플로우에서 실시간 예측을 확인하고, 실제 탑승을 위한 따릉이 이용권을 간편하게 결제하세요.
+            Toss sandbox checkout과 가이드 접근 상태를 검증합니다. 실제 따릉이 이용권 구매나 실제 과금은 아닙니다.
           </p>
 
           {/* 내 현재 이용권 현황 카드 (선택한 이용권 & 보유 이용권 통합 노출) */}
           <div className="premium-sandbox__status-card">
             <div className="premium-sandbox__status-info">
               <span className="premium-sandbox__status-label">
-                {isSubscribed ? '현재 이용권 보유 상태' : selectedPlan ? '선택한 이용권' : '현재 이용권 상태'}
+                {isSubscribed ? '현재 sandbox 가이드 접근 상태' : selectedPlan ? '선택한 테스트 플랜' : '현재 sandbox 가이드 접근 상태'}
               </span>
               <strong className="premium-sandbox__status-plan">
                 {isSubscribed
                   ? `⭐ ${planDisplayName}`
                   : selectedPlan
                   ? `👉 ${selectedPlan.name} (${selectedPlan.priceDuration || `${selectedPlan.duration} · ${selectedPlan.price}`})`
-                  : '미보유 (이용권 결제 필요)'}
+                  : '미보유 (테스트 플랜 결제 필요)'}
               </strong>
               {/* 남은 기간 및 만료일 표시: 상세 정보(endsAt)가 온전히 확보되었을 때만 렌더링 */}
               {isSubscribed && hasSubscriptionDetails && (
@@ -328,7 +328,7 @@ export default function PremiumSandboxPage({
               )}
             </div>
             {isSubscribed ? (
-              <div className="premium-sandbox__status-badge active">이용권 보유</div>
+              <div className="premium-sandbox__status-badge active">가이드 접근 활성</div>
             ) : isBusy ? (
               <div className="premium-sandbox__status-badge processing">연결 중…</div>
             ) : (
@@ -337,32 +337,32 @@ export default function PremiumSandboxPage({
           </div>
         </section>
 
-        {/* 2. 따릉이 이용 안내 3종 그리드 */}
+        {/* 2. Sandbox 범위 안내 */}
         <section className="premium-sandbox__benefits">
           <div className="premium-sandbox__benefit-card">
             <div className="premium-sandbox__benefit-icon">🚲</div>
-            <h3>서울시 전역 2,700+ 대여소</h3>
-            <p>서울시 어디서나 원하는 대여소에서 자유롭게 대여하고 반납할 수 있습니다.</p>
+            <h3>라이딩 가이드 접근 테스트</h3>
+            <p>따라가요 라이딩 가이드 화면의 접근 상태와 표시 흐름을 확인합니다.</p>
           </div>
 
           <div className="premium-sandbox__benefit-card">
             <div className="premium-sandbox__benefit-icon">🔄</div>
-            <h3>반납 후 무제한 재대여</h3>
-            <p>기본 대여 시간(1시간) 내에 반납 후 다시 대여하면 이용 기간 동안 무제한으로 탈 수 있습니다.</p>
+            <h3>실제 이용권 구매 아님</h3>
+            <p>서울자전거 따릉이 이용 자격이나 대여 권한을 제공하지 않습니다.</p>
           </div>
 
           <div className="premium-sandbox__benefit-card">
             <div className="premium-sandbox__benefit-icon">🎯</div>
-            <h3>실시간 대여소 예측 연동</h3>
-            <p>따릉이 플로우의 실시간 재고 예측과 최적 경로 안내를 함께 활용하여 쾌적하게 이동하세요.</p>
+            <h3>Toss sandbox 상태 검증</h3>
+            <p>테스트 금액, checkout callback, ACTIVE·EXPIRED 상태 전이를 확인합니다.</p>
           </div>
         </section>
 
         {/* 3. 요금제 플랜 카드 선택 영역 */}
         <section className="premium-sandbox__pricing">
           <div className="premium-sandbox__pricing-header">
-            <h2>서울자전거 따릉이 정기 이용권</h2>
-            <p>30일 또는 365일 단위로 자동 갱신 없이 안전하게 결제하세요</p>
+            <h2>라이딩 가이드 sandbox 테스트 플랜</h2>
+            <p>30일 또는 365일 테스트 플랜으로 checkout과 가이드 접근 상태를 확인합니다.</p>
           </div>
 
           {/* 상태별 실시간 안내 알림 배너 */}
@@ -395,7 +395,7 @@ export default function PremiumSandboxPage({
                   {plan.isFeatured && <div className="premium-sandbox__plan-ribbon">🔥 365일 패스</div>}
                   <div className="premium-sandbox__plan-head">
                     <h3>{plan.name}</h3>
-                    <p className="premium-sandbox__plan-desc">{plan.duration} 이용권 · {plan.policyText}</p>
+                    <p className="premium-sandbox__plan-desc">{plan.duration} 테스트 기간 · {plan.policyText}</p>
                   </div>
                   <div className="premium-sandbox__plan-price">
                     <strong>{plan.price}</strong>
@@ -412,7 +412,7 @@ export default function PremiumSandboxPage({
                     disabled={isSubscribed || isBusy}
                     onClick={() => handlePlanSelect(plan.planCode)}
                   >
-                    {isSubscribed ? '이용권 보유 중' : isBusy ? '연결 중…' : plan.buttonLabel}
+                    {isSubscribed ? '가이드 접근 활성' : isBusy ? '연결 중…' : plan.buttonLabel}
                   </button>
                 </div>
               );
@@ -424,15 +424,15 @@ export default function PremiumSandboxPage({
         <footer className="premium-sandbox__trust">
           <div className="premium-sandbox__trust-item">
             <span>🔒</span>
-            <p>토스페이먼츠 안전 결제 시스템 적용</p>
+            <p>토스페이먼츠 sandbox 테스트 결제</p>
           </div>
           <div className="premium-sandbox__trust-item">
             <span>⚡</span>
-            <p>결제 즉시 따릉이 이용권 활성화</p>
+            <p>결제 후 sandbox 가이드 접근 상태 활성화</p>
           </div>
           <div className="premium-sandbox__trust-item">
             <span>🤝</span>
-            <p>기간 만료 후 자동 연장 없는 안전한 이용권</p>
+            <p>실제 따릉이 이용권 구매·실제 과금 없음</p>
           </div>
         </footer>
       </main>

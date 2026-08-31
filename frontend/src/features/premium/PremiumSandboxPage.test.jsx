@@ -22,10 +22,10 @@ describe('PremiumSandboxPage 정밀 단위 테스트 스위트', () => {
 
     const monthlyBtn = screen.getByRole('button', { name: premiumPlansFixture[0].buttonLabel });
     expect(monthlyBtn).toBeInTheDocument();
-    expect(monthlyBtn.textContent).toContain('30일 이용권 결제하기');
+    expect(monthlyBtn.textContent).toContain('30일 테스트 플랜 결제하기');
 
     fireEvent.click(monthlyBtn);
-    expect(screen.getByText('따릉이 이용권을 결제하시려면 로그인이 필요합니다.')).toBeInTheDocument();
+    expect(screen.getByText('Sandbox 테스트 플랜을 결제하려면 로그인이 필요합니다.')).toBeInTheDocument();
 
     const loginActionBtn = screen.getByRole('button', { name: '로그인하기' });
     fireEvent.click(loginActionBtn);
@@ -43,8 +43,10 @@ describe('PremiumSandboxPage 정밀 단위 테스트 스위트', () => {
       />
     );
 
-    expect(screen.getByText('✓ 서울시 전역 2,700+ 대여소 따릉이 자유 이용')).toBeInTheDocument();
-    expect(screen.getByText('✓ 1회 1시간 이용 후 반납 시 무제한 재대여')).toBeInTheDocument();
+    expect(screen.getAllByText('✓ 실제 따릉이 이용권 구매 또는 이용 자격을 부여하지 않음')).toHaveLength(2);
+    expect(screen.getByText('SANDBOX TEST · 실제 과금 없음')).toBeInTheDocument();
+    expect(screen.getByText('실제 이용권 구매 아님')).toBeInTheDocument();
+    expect(screen.getByText('✓ Toss checkout·callback·구독 상태 전이 검증')).toBeInTheDocument();
 
     const monthlyBtn = screen.getByRole('button', { name: premiumPlansFixture[0].buttonLabel });
     fireEvent.click(monthlyBtn);
@@ -117,9 +119,9 @@ describe('PremiumSandboxPage 정밀 단위 테스트 스위트', () => {
     // 백엔드 데이터 수신 및 특정 카드 current 분리 검증
     await waitFor(() => {
       expect(subscriptionApi.fetchSubscription).toHaveBeenCalled();
-      expect(screen.getByText('이용권 보유')).toBeInTheDocument();
+      expect(screen.getAllByText('가이드 접근 활성')).toHaveLength(3);
       const statusCard = document.querySelector('.premium-sandbox__status-card');
-      expect(within(statusCard).getByText(/따릉이 365일 정기권/)).toBeInTheDocument();
+      expect(within(statusCard).getByText(/365일 라이딩 가이드 테스트 플랜/)).toBeInTheDocument();
 
       const yearlyCard = screen.getByTestId('plan-card-PREMIUM_YEARLY_365D');
       const monthlyCard = screen.getByTestId('plan-card-PREMIUM_MONTHLY_30D');
@@ -151,8 +153,8 @@ describe('PremiumSandboxPage 정밀 단위 테스트 스위트', () => {
     fireEvent.click(yearlyBtn);
 
     const statusCard = document.querySelector('.premium-sandbox__status-card');
-    expect(within(statusCard).getByText('선택한 이용권')).toBeInTheDocument();
-    expect(within(statusCard).getByText(/따릉이 365일 정기권 \(365일 · 29,000원\)/)).toBeInTheDocument();
+    expect(within(statusCard).getByText('선택한 테스트 플랜')).toBeInTheDocument();
+    expect(within(statusCard).getByText(/365일 라이딩 가이드 테스트 플랜 \(365일 · 29,000원\)/)).toBeInTheDocument();
 
     // 2) 토스 SDK 호출 대기 후 취소(onCancel) 콜백 실행
     await waitFor(() => {
@@ -165,8 +167,8 @@ describe('PremiumSandboxPage 정밀 단위 테스트 스위트', () => {
 
     // 3) 취소 후: 상단 카드에서 선택된 이용권 정보가 초기화되고 '미보유 (이용권 결제 필요)'로 안전 복귀 확인!
     await waitFor(() => {
-      expect(within(statusCard).getByText('미보유 (이용권 결제 필요)')).toBeInTheDocument();
-      expect(within(statusCard).queryByText('선택한 이용권')).not.toBeInTheDocument();
+      expect(within(statusCard).getByText('미보유 (테스트 플랜 결제 필요)')).toBeInTheDocument();
+      expect(within(statusCard).queryByText('선택한 테스트 플랜')).not.toBeInTheDocument();
       expect(screen.getByText(/결제가 취소되었습니다/)).toBeInTheDocument();
     });
   });
@@ -188,8 +190,8 @@ describe('PremiumSandboxPage 정밀 단위 테스트 스위트', () => {
     expect(onSelectPlan).toHaveBeenCalledWith({ planCode: 'PREMIUM_MONTHLY_30D' });
 
     const statusCard = document.querySelector('.premium-sandbox__status-card');
-    expect(within(statusCard).getByText('선택한 이용권')).toBeInTheDocument();
-    expect(within(statusCard).getByText(/따릉이 30일 정기권 \(30일 · 2,900원\)/)).toBeInTheDocument();
+    expect(within(statusCard).getByText('선택한 테스트 플랜')).toBeInTheDocument();
+    expect(within(statusCard).getByText(/30일 라이딩 가이드 테스트 플랜 \(30일 · 2,900원\)/)).toBeInTheDocument();
 
     // 2) 부모(MainPage)가 결제 완료 후 accessState를 "ACTIVE"로 전환하며 결제한 30일권 user 객체 전달
     rerender(
@@ -208,9 +210,9 @@ describe('PremiumSandboxPage 정밀 단위 테스트 스위트', () => {
     );
 
     // 3) '선택한 이용권' 문구는 완전히 소멸되고, '⭐ 따릉이 30일 정기권' 보유 상품명이 명시되며, 30일 카드에만 current가 부착됨을 검증!
-    expect(within(statusCard).queryByText('선택한 이용권')).not.toBeInTheDocument();
-    expect(within(statusCard).getByText(/따릉이 30일 정기권/)).toBeInTheDocument();
-    expect(within(statusCard).getByText('이용권 보유')).toBeInTheDocument();
+    expect(within(statusCard).queryByText('선택한 테스트 플랜')).not.toBeInTheDocument();
+    expect(within(statusCard).getByText(/30일 라이딩 가이드 테스트 플랜/)).toBeInTheDocument();
+    expect(within(statusCard).getByText('가이드 접근 활성')).toBeInTheDocument();
 
     const monthlyCard = screen.getByTestId('plan-card-PREMIUM_MONTHLY_30D');
     const yearlyCard = screen.getByTestId('plan-card-PREMIUM_YEARLY_365D');
@@ -228,8 +230,8 @@ describe('PremiumSandboxPage 정밀 단위 테스트 스위트', () => {
     render(<PremiumSandboxPage authState="authenticated" />);
 
     await waitFor(() => {
-      expect(screen.getByText('이용권 보유')).toBeInTheDocument();
-      expect(screen.getByText(/결제는 정상 승인되었습니다/)).toBeInTheDocument();
+      expect(screen.getAllByText('가이드 접근 활성')).toHaveLength(3);
+      expect(screen.getByText(/Sandbox 결제는 정상 승인되었습니다/)).toBeInTheDocument();
     });
 
     const refreshBtn = screen.getByRole('button', { name: '상태 새로고침' });
@@ -251,7 +253,7 @@ describe('PremiumSandboxPage 정밀 단위 테스트 스위트', () => {
     fireEvent.click(retryBtn);
 
     await waitFor(() => {
-      expect(screen.getByText(/따릉이 이용권 상세 정보가 성공적으로 동기화되었습니다/)).toBeInTheDocument();
+      expect(screen.getByText(/Sandbox 가이드 접근 상태가 성공적으로 동기화되었습니다/)).toBeInTheDocument();
     });
   });
 
@@ -294,8 +296,8 @@ describe('PremiumSandboxPage 정밀 단위 테스트 스위트', () => {
   });
 
   // 10. EXPIRED 상태: 이용 기간 만료 안내 배너 노출 검증
-  test('EXPIRED 상태에서는 이용권 기간 만료 안내 배너가 표시된다', () => {
+  test('EXPIRED 상태에서는 sandbox 가이드 접근 기간 만료 안내 배너가 표시된다', () => {
     render(<PremiumSandboxPage authState="authenticated" accessState="EXPIRED" />);
-    expect(screen.getByText(/이용권 기간이 만료되었습니다/)).toBeInTheDocument();
+    expect(screen.getByText(/Sandbox 가이드 접근 기간이 만료되었습니다/)).toBeInTheDocument();
   });
 });
