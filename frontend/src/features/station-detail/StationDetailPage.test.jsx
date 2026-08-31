@@ -19,13 +19,15 @@ test("formats collection time, renders nearby stations, and saves then removes a
   render(<StationDetailPage stationId="ST-10" authState="authenticated" />);
   expect(await screen.findByText(/8월 27일/)).toBeInTheDocument();
   expect(screen.queryByText("2026-08-27T03:34:49.386901Z")).not.toBeInTheDocument();
-  expect(await screen.findByRole("button", { name: "가까운 대여소" })).toBeInTheDocument();
+  expect(await screen.findByText("가까운 대여소")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "즐겨찾기" }));
   await waitFor(() => expect(saveFavorite).toHaveBeenCalledWith({ stationId: 108, stationName: "테스트" }));
   expect(await screen.findByRole("button", { name: "즐겨찾기 해제" })).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "즐겨찾기 해제" }));
   await waitFor(() => expect(removeFavorite).toHaveBeenCalledWith(1));
   expect(await screen.findByRole("button", { name: "즐겨찾기" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "즐겨찾기" }));
+  await waitFor(() => expect(saveFavorite).toHaveBeenCalledTimes(2));
 });
 
 test("loads a stored favorite by station number and removes that same favorite", async () => {
@@ -38,8 +40,46 @@ test("loads a stored favorite by station number and removes that same favorite",
 });
 
 test("MISSING is not rendered as zero bikes", async () => {
+  fetchStationDetail.mockResolvedValueOnce({ stationId: "ST-10", stationNumber: "108", stationName: "테스트", latitude: 37.5, longitude: 127, collectedAt: "2026-08-27T03:34:49.386901Z", availableBikeCount: null, inventoryStatus: "MISSING" });
   render(<StationDetailPage stationId="ST-10" authState="authenticated" />);
-  expect(await screen.findByRole("heading", { name: /테스트/ })).toBeInTheDocument();
+  expect((await screen.findAllByText("수집 누락")).length).toBeGreaterThan(0);
+  expect(screen.queryByText("0대")).not.toBeInTheDocument();
+});
+
+test("keeps delayed inventory distinct from normal inventory", async () => {
+  fetchStationDetail.mockResolvedValueOnce({ stationId: "ST-10", stationNumber: "108", stationName: "테스트", latitude: 37.5, longitude: 127, collectedAt: "2026-08-27T03:34:49.386901Z", availableBikeCount: 4, inventoryStatus: "DELAYED" });
+  render(<StationDetailPage stationId="ST-10" authState="authenticated" />);
+  expect(await screen.findByText("4대")).toBeInTheDocument();
+  expect(screen.getByText("지연")).toBeInTheDocument();
+});
+
+test("keeps rhythm 404 silent while retaining the rest of the station page", async () => {
+  fetchStationRhythm.mockRejectedValueOnce(new Error("RHYTHM_NOT_AVAILABLE"));
+  render(<StationDetailPage stationId="ST-10" authState="authenticated" />);
+  expect(await screen.findByRole("heading", { name: "테스트" })).toBeInTheDocument();
+  expect(screen.queryByText("RHYTHM_NOT_AVAILABLE")).not.toBeInTheDocument();
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+});
+
+test("renders an auth loading state without loading station data", () => {
+  render(<StationDetailPage stationId="ST-10" authState="loading" />);
+  expect(screen.getByText("로그인 정보를 확인하고 있습니다.")).toBeInTheDocument();
+  expect(fetchStationDetail).not.toHaveBeenCalled();
+});
+
+test("uses the nearby station navigation without showing inventory or predictions", async () => {
+  const onNavigate = jest.fn();
+  render(<StationDetailPage stationId="ST-10" authState="authenticated" onNavigate={onNavigate} />);
+  fireEvent.click(await screen.findByRole("button", { name: "상세 보기" }));
+  expect(onNavigate).toHaveBeenCalledWith("station", "ST-11");
+  expect(screen.queryByText(/확률|거리/)).not.toBeInTheDocument();
+});
+
+test("does not expose a raw rhythm error code", async () => {
+  fetchStationRhythm.mockRejectedValueOnce(new Error("RHYTHM_PROVIDER_ERROR"));
+  render(<StationDetailPage stationId="ST-10" authState="authenticated" />);
+  expect(await screen.findByRole("alert")).toHaveTextContent("평소 패턴을 불러오지 못했습니다.");
+  expect(screen.queryByText("RHYTHM_PROVIDER_ERROR")).not.toBeInTheDocument();
 });
 
 test("does not render a heatmap when fewer than 20 cells remain", async () => {
