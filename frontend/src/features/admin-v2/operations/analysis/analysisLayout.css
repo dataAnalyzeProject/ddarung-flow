@@ -43,6 +43,25 @@
   color: #0f172a;
 }
 
+@media (max-width: 1280px) and (min-width: 1121px) {
+  .analysis-main-grid {
+    grid-template-columns: minmax(230px, .75fr) minmax(0, 1.75fr);
+  }
+
+  .analysis-heatmap {
+    padding: 12px;
+  }
+
+  .analysis-heatmap table {
+    min-width: 540px;
+  }
+
+  .analysis-heatmap-cell {
+    height: 38px;
+    min-width: 18px;
+  }
+}
+
 @media (max-width: 1120px) {
   .analysis-bucket {
     display: grid;
