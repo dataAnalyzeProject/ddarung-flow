@@ -3,7 +3,7 @@ import AnalysisPage from './AnalysisPage';
 
 function payload(view = 'WEEKDAY') {
   return {
-    referenceTime: '2026-08-30T12:00:00Z', generatedAt: '2026-08-30T12:01:00Z', view, riskType: 'RENTAL', ruleVersion: 'OPS_ANALYSIS_STOCKOUT_V1', metric: 'OBSERVED_STOCKOUT_RATE', dataState: 'NORMAL',
+    referenceTime: '2026-08-30T12:00:00Z', generatedAt: '2026-08-30T12:01:00Z', view, riskType: 'RENTAL', ruleVersion: 'OPS_ANALYSIS_STOCKOUT_V1', windowRuleVersion: 'OPS_ANALYSIS_WINDOW_V1', metric: 'OBSERVED_STOCKOUT_RATE', dataState: 'NORMAL',
     selectedWindowStart: '2026-08-01', selectedWindowEnd: '2026-08-28', selectedWindowProfileCount: 2, excludedDifferentWindowProfileCount: 1,
     coverage: { activePublicStationCount: 3, profileAvailableCount: 3, selectedWindowProfileCount: 2, parsedProfileCount: 2, usableCellCount: 2, expectedCellCount: 336, profileCoverageRate: .666, cellCoverageRate: .006 },
     buckets: Array.from({ length: view === 'HOUR' ? 24 : 7 }, (_, key) => ({ key: view === 'HOUR' ? key : key + 1, sampleCount: key === 0 ? 10 : 0, contributingStationCount: key === 0 ? 2 : 0, observedStockoutRate: key === 0 ? .3 : null })),
@@ -19,12 +19,35 @@ describe('AnalysisPage', () => {
     expect(await screen.findByRole('heading', { name: '반복 품절 패턴' })).toBeInTheDocument();
     expect(screen.getByText('미래 예측이 아닌 과거 실제 관측을 요일·시간대별로 확인합니다.')).toBeInTheDocument();
     expect(screen.getByText('OPS_ANALYSIS_STOCKOUT_V1')).toBeInTheDocument();
+    expect(screen.getByText('OPS_ANALYSIS_WINDOW_V1')).toBeInTheDocument();
     expect(screen.getByText('프로필 66.6%')).toBeInTheDocument();
     expect(screen.getAllByLabelText(/요일 .* 표본/)).toHaveLength(168);
     expect(screen.getAllByText('2곳').length).toBeGreaterThan(0);
     expect(screen.getByRole('columnheader', { name: '0시' })).toBeInTheDocument();
     expect(screen.getByText('30%')).toBeInTheDocument();
     expect(load).toHaveBeenCalledWith(expect.objectContaining({ view: 'WEEKDAY' }));
+  });
+
+  test('uses continuous orange heatmap intensity while keeping zero distinct from missing', async () => {
+    const result = payload();
+    result.weekdayHourCells[0].observedStockoutRate = 0;
+    result.weekdayHourCells[1].observedStockoutRate = null;
+    render(<AnalysisPage createAdapter={() => ({ load: jest.fn().mockResolvedValue(result) })} />);
+    const zero = await screen.findByLabelText(/월요일 0시 · 품절 관측률 0.0%/);
+    const missing = screen.getByLabelText(/월요일 1시 · 표본 부족/);
+    expect(zero).toHaveStyle({ '--heatmap-intensity': '0' });
+    expect(zero).not.toHaveClass('analysis-heatmap-cell--empty');
+    expect(missing).toHaveClass('analysis-heatmap-cell--empty');
+    expect(screen.getByText('빈 칸은 0%가 아니라 관측 정보가 없는 상태입니다.')).toBeInTheDocument();
+  });
+
+  test('does not fabricate a missing window rule version', async () => {
+    const result = payload();
+    result.windowRuleVersion = null;
+    render(<AnalysisPage createAdapter={() => ({ load: jest.fn().mockResolvedValue(result) })} />);
+    const evidence = await screen.findByRole('region', { name: '관측 창과 분석 근거' });
+    expect(evidence).toHaveTextContent('window rule version');
+    expect(evidence).toHaveTextContent('확인 정보 없음');
   });
 
   test('switches only the approved view and ignores a stale request', async () => {
@@ -38,8 +61,8 @@ describe('AnalysisPage', () => {
     });
     render(<AnalysisPage createAdapter={() => ({ load })} />);
     await screen.findByText('요일별 관측 요약');
-    fireEvent.click(screen.getByRole('button', { name: 'HOUR' }));
-    fireEvent.click(screen.getByRole('button', { name: 'WEEKDAY' }));
+    fireEvent.click(screen.getByRole('button', { name: '시간대별' }));
+    fireEvent.click(screen.getByRole('button', { name: '요일별' }));
     await screen.findByText('요일별 관측 요약');
     resolveHour(payload('HOUR'));
     await Promise.resolve();
@@ -52,7 +75,7 @@ describe('AnalysisPage', () => {
     const load = jest.fn(({ view }) => Promise.resolve(payload(view)));
     render(<AnalysisPage createAdapter={() => ({ load })} />);
     await screen.findByText('요일별 관측 요약');
-    fireEvent.click(screen.getByRole('button', { name: 'HOUR' }));
+    fireEvent.click(screen.getByRole('button', { name: '시간대별' }));
     expect(await screen.findByText('시간대별 관측 요약')).toBeInTheDocument();
     expect(load).toHaveBeenLastCalledWith(expect.objectContaining({ view: 'HOUR' }));
   });

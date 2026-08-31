@@ -1,0 +1,36 @@
+.analysis-bucket {
+  align-items: center;
+  gap: 7px;
+  grid-template-columns: 34px minmax(70px, 1fr) 42px 102px;
+}
+
+.analysis-bucket strong {
+  font-size: .82rem;
+  text-align: right;
+}
+
+.analysis-bucket small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.analysis-heatmap-cell {
+  height: 29px;
+}
+
+@media (max-width: 1120px) {
+  .analysis-bucket {
+    display: grid;
+    gap: 5px;
+    grid-template-columns: 1fr;
+  }
+
+  .analysis-bucket strong {
+    text-align: left;
+  }
+
+  .analysis-bucket small {
+    white-space: normal;
+  }
+}
