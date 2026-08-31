@@ -45,7 +45,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
     @BeforeEach void clear() { reset(runs); users.deleteAll(); }
 
-    @Test void baseRemainsCompatibleAndRequiresMetricsPermission() throws Exception {
+    @Test void baseExcludesDiagnosticsAndRequiresMetricsPermission() throws Exception {
         latest(run(SHA_A, "model-a", "2026-08-26T11:40:00Z", payload("legacy", 0)));
 
         mvc.perform(get(BASE)).andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("AUTH_REQUIRED"));
@@ -53,10 +53,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         mvc.perform(get(BASE).with(authentication(auth(UserRole.ADMIN, Set.of())))).andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("ADMIN_PERMISSION_DENIED"));
         mvc.perform(get(BASE).with(authentication(auth(UserRole.ADMIN, Set.of(AdminPermission.MODEL_METRICS_READ)))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.artifactSha256").value(SHA_A))
+                .andExpect(jsonPath("$.modelVersion").value("model-a"))
+                .andExpect(jsonPath("$.generatedAt").value("2026-08-26T11:40:00Z"))
                 .andExpect(jsonPath("$.evaluation.method").value("FIXED_WINDOW_REPLAY"))
                 .andExpect(jsonPath("$.combinations[0].sampleCount").value(0))
-                .andExpect(jsonPath("$.segments[0].state").value("UNKNOWN_INSUFFICIENT_SAMPLES"))
-                .andExpect(jsonPath("$.segments[0].brier").value(nullValue()))
+                .andExpect(jsonPath("$.segments").doesNotExist())
                 .andExpect(jsonPath("$.calibrationBins[0].meanPredicted").value(nullValue()));
     }
 
