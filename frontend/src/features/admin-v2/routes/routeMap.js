@@ -17,12 +17,12 @@ import SystemJourneyOps from '../system/journey-ops/index.jsx';
 import { CONSOLE_ORDER, hasPermission, PERMISSIONS } from '../permissions/permissions.js';
 
 export const PREVIEW_PREFIX = '/admin-v2-preview';
-export const PRODUCTION_RELEASED_ROUTE_IDS = ['UI-OPS-01', 'UI-OPS-02', 'UI-OPS-03'];
+export const PRODUCTION_RELEASED_ROUTE_IDS = ['UI-OPS-01', 'UI-OPS-02', 'UI-OPS-03', 'UI-OPS-04'];
 export const ROUTES = [
   ['UI-OPS-01', 'OPS', '/admin/ops', '/ops', '운영 상황판', 'OPS_DASHBOARD_READ', OperationsOverview],
   ['UI-OPS-02', 'OPS', '/admin/ops/risk-map', '/ops/risk-map', '수급 위험 지도', 'OPS_RISK_MAP_READ', OperationsRiskMap],
   ['UI-OPS-03', 'OPS', '/admin/ops/candidates', '/ops/candidates', '집중관리 목록', 'OPS_CANDIDATE_READ', OperationsCandidates],
-  ['UI-OPS-04', 'OPS', '/admin/ops/analysis', '/ops/analysis', '지역·시간대 분석', 'OPS_ANALYSIS_READ', OperationsAnalysis],
+  ['UI-OPS-04', 'OPS', '/admin/ops/analysis', '/ops/analysis', '반복 품절 패턴', 'OPS_ANALYSIS_READ', OperationsAnalysis],
   ['UI-OPS-05', 'OPS', '/admin/ops/data', '/ops/data', '데이터 상태', 'DATA_STATUS_READ', OperationsData],
   ['UI-OPS-06', 'OPS', '/admin/ops/reports', '/ops/reports', '운영 리포트', 'OPS_REPORT_EXPORT', OperationsReports],
   ['UI-OPS-07', 'OPS', '/admin/ops/digital-twin', '/ops/digital-twin', '디지털 트윈', 'OPS_SCENARIO_READ', OperationsDigitalTwin],

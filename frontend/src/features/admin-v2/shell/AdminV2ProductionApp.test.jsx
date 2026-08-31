@@ -113,7 +113,7 @@ describe('AdminV2ProductionApp', () => {
     expect(await screen.findByRole('button', { name: '운영 상황판' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '수급 위험 지도' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '집중관리 목록' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '지역·시간대 분석' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '반복 품절 패턴' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '모델' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '시스템' })).not.toBeInTheDocument();
   });
