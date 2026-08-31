@@ -1,0 +1,25 @@
+.system-access-page { display: grid; gap: 20px; }
+.system-access-header, .system-access-card { background: var(--admin-v2-surface); border: 1px solid var(--admin-v2-border); border-radius: 12px; padding: 24px; }
+.system-access-header p:first-child { color: var(--admin-v2-accent); font-size: .8rem; font-weight: 800; margin: 0; }
+.system-access-header h1 { margin: 6px 0; }
+.system-access-layout { display: grid; gap: 20px; grid-template-columns: minmax(260px, .8fr) minmax(0, 1.6fr); }
+.system-access-card form, .system-access-card nav, .system-access-summary { align-items: end; display: flex; flex-wrap: wrap; gap: 10px; }
+.system-access-card input, .system-access-card textarea { box-sizing: border-box; display: block; max-width: 100%; width: 100%; }
+.system-access-card button { cursor: pointer; }
+.system-access-users, .system-access-diff { list-style: none; margin: 16px 0; padding: 0; }
+.system-access-users { display: grid; gap: 6px; }
+.system-access-users button { display: flex; justify-content: space-between; padding: 10px; text-align: left; width: 100%; }
+.system-access-users button[aria-pressed='true'] { background: var(--admin-v2-accent-soft); border-color: var(--admin-v2-accent); }
+.system-access-summary { margin: 0; }
+.system-access-summary div { display: grid; gap: 2px; }
+.system-access-summary dt { color: var(--admin-v2-muted); font-size: .8rem; }
+.system-access-summary dd { margin: 0; }
+.system-access-role { border-top: 1px solid var(--admin-v2-border); padding: 12px 0; }
+.system-access-role p, .system-access-role small { color: var(--admin-v2-muted); display: block; margin: 6px 0; }
+.system-access-role input[type='datetime-local'] { margin-top: 4px; }
+.system-access-diff li { display: flex; gap: 8px; justify-content: space-between; padding: 5px 0; }
+.system-access-diff span { color: var(--admin-v2-muted); }
+.system-access-warning { background: #fff7ed; border-left: 4px solid #f59e0b; padding: 10px; }
+.system-access-error { color: #b42318; font-weight: 700; }
+.system-access-reason { display: grid; gap: 4px; margin: 16px 0; }
+@media (max-width: 860px) { .system-access-layout { grid-template-columns: 1fr; } }
