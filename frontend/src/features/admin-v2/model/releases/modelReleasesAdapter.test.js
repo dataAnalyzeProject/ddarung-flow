@@ -37,9 +37,10 @@ describe('modelReleasesAdapter', () => {
     global.fetch = jest.fn().mockResolvedValueOnce(response({ permissions: ['MODEL_RELEASE_READ', 'MODEL_METRICS_READ'] })).mockResolvedValueOnce(response(batches)).mockResolvedValueOnce(response([{ version: 'safe-v1', state: 'DRAFT', createdAt: '2026-08-31T00:00:00Z' }]));
     const result = await createLiveModelReleasesAdapter().load({}); expect(result.registry).toEqual(expect.objectContaining({ state: 'ERROR', error: expect.objectContaining({ code: 'MODEL_REGISTRY_RESPONSE_INVALID' }) }));
   });
-  test.each([['VALIDATE', 1, '/api/v1/admin/models/1/validate'], ['APPROVE', 1, '/api/v1/admin/models/1/approve'], ['REJECT', 1, '/api/v1/admin/models/1/reject'], ['ACTIVATE', 1, '/api/v1/admin/models/1/activate'], ['ROLLBACK', undefined, '/api/v1/admin/models/rollback']])('uses source-defined %s endpoint without expectedVersion', async (type, id, path) => {
-    global.fetch = jest.fn().mockResolvedValue(response({})); await createLiveModelReleasesAdapter().action({ type, id });
-    expect(global.fetch).toHaveBeenCalledWith(`http://localhost:8080${path}`, expect.objectContaining({ method: 'POST', credentials: 'include' }));
-    expect(global.fetch.mock.calls[0][1].body).toBeUndefined();
+  test.each([['VALIDATE', 1, '/api/v1/admin/models/1/validate'], ['APPROVE', 1, '/api/v1/admin/models/1/approve'], ['REJECT', 1, '/api/v1/admin/models/1/reject'], ['ACTIVATE', 1, '/api/v1/admin/models/1/activate'], ['ROLLBACK', undefined, '/api/v1/admin/models/rollback']])('uses source-defined %s endpoint with CSRF and without expectedVersion', async (type, id, path) => {
+    global.fetch = jest.fn().mockResolvedValueOnce(response({ headerName: 'X-CSRF-TOKEN', token: 'test-csrf-token' })).mockResolvedValueOnce(response({})); await createLiveModelReleasesAdapter().action({ type, id });
+    expect(global.fetch).toHaveBeenNthCalledWith(1, 'http://localhost:8080/api/v1/auth/csrf', expect.objectContaining({ method: 'GET', credentials: 'include' }));
+    expect(global.fetch).toHaveBeenNthCalledWith(2, `http://localhost:8080${path}`, expect.objectContaining({ method: 'POST', credentials: 'include', headers: { 'X-CSRF-TOKEN': 'test-csrf-token' } }));
+    expect(global.fetch.mock.calls[1][1].body).toBeUndefined();
   });
 });

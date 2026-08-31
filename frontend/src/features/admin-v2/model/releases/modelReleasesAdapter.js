@@ -9,9 +9,9 @@ export class ModelReleasesApiError extends Error {
 }
 
 function isObject(value) { return value !== null && typeof value === 'object'; }
-async function request(path, { signal, method = 'GET', body } = {}) {
+async function request(path, { signal, method = 'GET', body, headers } = {}) {
   let response;
-  try { response = await fetch(`${API_BASE_URL}${path}`, { method, credentials: 'include', signal, ...(body === undefined ? {} : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }) }); }
+  try { response = await fetch(`${API_BASE_URL}${path}`, { method, credentials: 'include', signal, ...(body === undefined ? { ...(headers ? { headers } : {}) } : { headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) }) }); }
   catch (error) { if (error?.name === 'AbortError') throw error; throw new ModelReleasesApiError(); }
   let payload = null;
   try { payload = await response.json(); } catch (_) { /* error bodies are optional */ }
@@ -44,6 +44,6 @@ export function createLiveModelReleasesAdapter() {
   return {
     async load({ signal }) { const [permissions, batches] = await Promise.all([loadAccess(signal), loadBatches(signal)]); const [registry, history] = await Promise.all([loadRegistry(signal, permissions), loadHistory(signal, permissions)]); return { permissions, batches, registry, history }; },
     async refresh({ signal, permissions }) { const [registry, history] = await Promise.all([loadRegistry(signal, permissions || []), loadHistory(signal, permissions || [])]); return { registry, history }; },
-    async action({ type, id, payload, signal }) { return request(actionPath(type, id), { signal, method: 'POST', body: payload }); },
+    async action({ type, id, payload, signal }) { const csrf = await request('/api/v1/auth/csrf', { signal }); return request(actionPath(type, id), { signal, method: 'POST', headers: { [csrf.headerName]: csrf.token }, body: payload }); },
   };
 }
