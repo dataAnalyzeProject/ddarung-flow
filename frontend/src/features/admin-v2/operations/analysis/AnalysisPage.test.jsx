@@ -108,10 +108,10 @@ describe('AnalysisPage', () => {
     const monday = await screen.findByRole('img', { name: /월요일 비교 막대 .* 실제 품절 관측률 10.0%/ });
     const tuesday = screen.getByRole('img', { name: /화요일 비교 막대 .* 실제 품절 관측률 20.0%/ });
     const wednesday = screen.getByRole('img', { name: /수요일 비교 막대 .* 표본 부족 .* 관측 정보 없음/ });
-    expect(monday.querySelector('.analysis-bucket-fill')).toHaveStyle({ '--comparison-fill': '50%' });
-    expect(tuesday.querySelector('.analysis-bucket-fill')).toHaveStyle({ '--comparison-fill': '100%' });
+    expect(monday.querySelector('.analysis-bucket-fill')).toHaveStyle({ '--comparison-fill': '40%' });
+    expect(tuesday.querySelector('.analysis-bucket-fill')).toHaveStyle({ '--comparison-fill': '80%' });
     expect(wednesday.querySelector('.analysis-bucket-fill')).toBeNull();
-    expect(screen.getByRole('img', { name: /목요일 비교 막대 .* 실제 품절 관측률 0.0%/ }).querySelector('.analysis-bucket-fill')).toHaveStyle({ '--comparison-fill': '6%' });
+    expect(screen.getByRole('img', { name: /목요일 비교 막대 .* 실제 품절 관측률 0.0% .* 시각 비교용 길이 0%/ }).querySelector('.analysis-bucket-fill')).toHaveStyle({ '--comparison-fill': '0%' });
     expect(screen.getByText('10.0%')).toBeInTheDocument();
     expect(screen.getByText('20.0%')).toBeInTheDocument();
     expect(screen.getByText('0.0%')).toBeInTheDocument();
@@ -129,8 +129,18 @@ describe('AnalysisPage', () => {
     fireEvent.click(screen.getByRole('button', { name: '시간대별' }));
     const zeroHour = await screen.findByRole('img', { name: /0시 비교 막대 .* 실제 품절 관측률 5.0%/ });
     const oneHour = screen.getByRole('img', { name: /1시 비교 막대 .* 실제 품절 관측률 20.0%/ });
-    expect(zeroHour.querySelector('.analysis-bucket-fill')).toHaveStyle({ '--comparison-fill': '25%' });
-    expect(oneHour.querySelector('.analysis-bucket-fill')).toHaveStyle({ '--comparison-fill': '100%' });
+    expect(zeroHour.querySelector('.analysis-bucket-fill')).toHaveStyle({ '--comparison-fill': '20%' });
+    expect(oneHour.querySelector('.analysis-bucket-fill')).toHaveStyle({ '--comparison-fill': '80%' });
+  });
+
+  test('keeps every numeric zero at a zero comparison fill without treating it as missing', async () => {
+    const result = payload();
+    result.buckets = result.buckets.map((bucket, index) => ({ ...bucket, sampleCount: index + 1, contributingStationCount: index + 2, observedStockoutRate: 0 }));
+    render(<AnalysisPage createAdapter={() => ({ load: jest.fn().mockResolvedValue(result) })} />);
+    const monday = await screen.findByRole('img', { name: /월요일 비교 막대 .* 실제 품절 관측률 0.0% .* 시각 비교용 길이 0%/ });
+    expect(screen.getAllByRole('img', { name: /비교 막대 .* 실제 품절 관측률 0.0% .* 시각 비교용 길이 0%/ })).toHaveLength(7);
+    expect(monday.querySelector('.analysis-bucket-fill')).toHaveStyle({ '--comparison-fill': '0%' });
+    expect(screen.getByText('표본 1건 · 기여 2곳')).toBeInTheDocument();
   });
 
   test('shows only the four compact coverage summary values', async () => {

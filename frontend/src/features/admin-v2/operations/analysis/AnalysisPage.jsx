@@ -47,16 +47,18 @@ function Heatmap({ cells }) {
 function Buckets({ result }) {
   const hourly = result.view === 'HOUR';
   const observedRates = (result.buckets || []).map((bucket) => bucket.observedStockoutRate).filter((rate) => rate != null);
-  const comparisonCeiling = observedRates.length ? Math.max(...observedRates) : null;
+  const maxObservedRate = observedRates.length ? Math.max(...observedRates) : null;
+  // This next display tick is only a relative-comparison scale; the percentage text remains the source value.
+  const comparisonCeiling = maxObservedRate > 0 ? (Math.floor((maxObservedRate * 100) / 5) + 1) * 5 / 100 : null;
   const comparisonFill = (rate) => {
-    if (rate == null || comparisonCeiling == null) return null;
-    if (comparisonCeiling <= 0) return '100%';
-    return `${Math.max(6, Math.min(100, (rate / comparisonCeiling) * 100))}%`;
+    if (rate == null) return null;
+    if (rate <= 0 || comparisonCeiling == null) return '0%';
+    return `${Math.min(100, (rate / comparisonCeiling) * 100)}%`;
   };
   return <section className="analysis-buckets" aria-labelledby="analysis-buckets-heading"><div className="analysis-section-heading"><div><h2 id="analysis-buckets-heading">{hourly ? '시간대별' : '요일별'} 관측 요약</h2><p>{hourly ? '시간대별로 합산한 과거 품절 관측률입니다.' : '요일별로 합산한 과거 품절 관측률입니다.'}</p></div></div><div className="analysis-bucket-grid">{(result.buckets || []).map((bucket) => {
     const label = hourly ? `${bucket.key}시` : `${DAYS[bucket.key - 1]}요일`;
     const fill = comparisonFill(bucket.observedStockoutRate);
-    return <article key={bucket.key} className="analysis-bucket"><span>{label}</span><div className="analysis-bucket-track" role="img" aria-label={`${label} 비교 막대 · 실제 품절 관측률 ${percent(bucket.observedStockoutRate)} · ${fill == null ? '관측 정보 없음' : '현재 보기의 관측 버킷과 비교한 길이'}`}>{fill == null ? null : <i className="analysis-bucket-fill" style={{ '--comparison-fill': fill }} />}</div><strong>{percent(bucket.observedStockoutRate)}</strong><small>표본 {count(bucket.sampleCount)}건 · 기여 {count(bucket.contributingStationCount)}곳</small></article>;
+    return <article key={bucket.key} className="analysis-bucket"><span>{label}</span><div className="analysis-bucket-track" role="img" aria-label={`${label} 비교 막대 · 실제 품절 관측률 ${percent(bucket.observedStockoutRate)} · ${fill == null ? '관측 정보 없음' : `시각 비교용 길이 ${fill} (실제 값 아님)`}`}>{fill == null ? null : <i className="analysis-bucket-fill" style={{ '--comparison-fill': fill }} />}</div><strong>{percent(bucket.observedStockoutRate)}</strong><small>표본 {count(bucket.sampleCount)}건 · 기여 {count(bucket.contributingStationCount)}곳</small></article>;
   })}</div></section>;
 }
 
