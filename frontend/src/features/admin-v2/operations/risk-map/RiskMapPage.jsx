@@ -32,6 +32,7 @@ export default function RiskMapPage({ createDataAdapter, loadMapSdk = loadKakaoM
   const detailController = useRef(null);
   const bboxTimer = useRef(null);
   const generation = useRef(0);
+  const selectRef = useRef(null);
 
   const setManagedFilters = useCallback((next) => {
     const normalized = { ...filters, ...next };
@@ -67,6 +68,9 @@ export default function RiskMapPage({ createDataAdapter, loadMapSdk = loadKakaoM
     detailController.current?.abort();
     setDetail(null);
     setDetailError(null);
+  }, [filters]);
+
+  useEffect(() => {
     load();
     return () => listController.current?.abort();
   }, [load]);
@@ -78,7 +82,7 @@ export default function RiskMapPage({ createDataAdapter, loadMapSdk = loadKakaoM
     loadMapSdk().then((maps) => {
       if (!active) return;
       instance = createMapAdapter(mapNode.current, maps, {
-        onStationSelect: setSelectedStationNumber,
+        onStationSelect: (number) => selectRef.current?.(number, false),
         onViewportChange: (next) => {
           window.clearTimeout(bboxTimer.current);
           bboxTimer.current = window.setTimeout(() => { if (active) setBbox(next); }, 250);
@@ -104,10 +108,11 @@ export default function RiskMapPage({ createDataAdapter, loadMapSdk = loadKakaoM
     return () => controller.abort();
   }, [adapter, filters, selectedStationNumber]);
 
-  const select = (number) => {
+  function select(number, focusMap = true) {
     setSelectedStationNumber(number);
-    mapAdapter?.focusStation(items.find((item) => item.station.stationNumber === number));
-  };
+    if (focusMap) mapAdapter?.focusStation(items.find((item) => item.station.stationNumber === number));
+  }
+  selectRef.current = select;
   const uiState = error ? (error.status === 401 || error.status === 403 ? 'FORBIDDEN' : 'ERROR') : STATE[result?.dataState] || 'SUCCESS';
 
   return <main className="risk-map-page" aria-label="수급 위험 지도">
