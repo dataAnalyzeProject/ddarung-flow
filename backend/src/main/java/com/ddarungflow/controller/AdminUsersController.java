@@ -56,6 +56,7 @@ public class AdminUsersController {
     }
 
     @PutMapping("/{publicUserId}/roles")
+    @PreAuthorize("hasAuthority('ACCESS_READ')")
     public ResponseEntity<?> replaceRoles(@AuthenticationPrincipal PrincipalDetails principal,
                                           @PathVariable UUID publicUserId,
                                           @Valid @RequestBody AdminAccessDtos.DesiredSetRequest request) {
