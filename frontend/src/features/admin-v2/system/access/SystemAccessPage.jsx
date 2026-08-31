@@ -8,7 +8,7 @@ const PAGE_SIZE = 20;
 const SORT = 'displayName,asc';
 const DIFF_LABELS = { ADDED: '추가', REMOVED: '제거', EXPIRY_EXTENDED: '만료 연장/추가', EXPIRY_REDUCED: '만료 단축', UNCHANGED: '변경 없음' };
 const HIGH_RISK_ROLE_CODES = new Set(['OPS_MANAGER', 'MODEL_APPROVER', 'ACCESS_ADMIN', 'SUPER_ADMIN']);
-function isHighRiskRole(role) { return Boolean(role && (HIGH_RISK_ROLE_CODES.has(role.roleCode) || role.protectedRole || role.systemRole)); }
+function isHighRiskRole(role) { return Boolean(role && HIGH_RISK_ROLE_CODES.has(role.roleCode)); }
 
 function normalizeReason(value) { return value.replace(/\s+/g, ' ').trim(); }
 function sameInstant(left, right) { return left === right || (left && right && new Date(left).getTime() === new Date(right).getTime()); }

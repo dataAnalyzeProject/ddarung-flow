@@ -69,6 +69,17 @@ describe('SystemAccessPage', () => {
     expect(screen.getAllByText('운영 기준 관리자').length).toBeGreaterThan(0);
   });
 
+  test('does not treat a system catalog role as high-risk unless its code is high-risk', async () => {
+    const catalogWithSystemViewer = catalog.map((role) => role.roleCode === 'OPS_VIEWER' ? { ...role, systemRole: true } : role);
+    const systemPage = { ...page, roles: catalogWithSystemViewer };
+    render(<SystemAccessPage createAdapter={adapterFor({ loadPage: jest.fn().mockResolvedValue(systemPage) })} />);
+    fireEvent.click(await screen.findByRole('button', { name: /관리자 A/ }));
+    await screen.findByRole('heading', { name: '관리자 A' });
+    expect(screen.getByText('고위험 역할').parentElement).toHaveTextContent('없음');
+    fireEvent.click(screen.getByLabelText('운영 조회자 역할'));
+    expect(screen.queryByText('고위험 역할의 변경입니다. 서버의 마지막 SUPER_ADMIN 및 자기 보호 검증이 적용됩니다.')).not.toBeInTheDocument();
+  });
+
   test('ACCESS_READ alone cannot enable either grant or revoke request', async () => {
     const readOnly = { ...page, access: { permissions: ['ACCESS_READ'] } };
     render(<SystemAccessPage createAdapter={adapterFor({ loadPage: jest.fn().mockResolvedValue(readOnly) })} />);
