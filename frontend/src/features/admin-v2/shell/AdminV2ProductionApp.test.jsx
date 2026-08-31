@@ -7,6 +7,7 @@ jest.mock('../operations/candidates/index.jsx', () => () => <main className="can
 jest.mock('../operations/data/index.jsx', () => () => <h1>LIVE OPS DATA</h1>);
 jest.mock('../model/overview/index.jsx', () => () => <h1>LIVE MODEL OVERVIEW</h1>);
 jest.mock('../model/releases/index.jsx', () => () => <h1>LIVE MODEL RELEASES</h1>);
+jest.mock('../system/support/index.jsx', () => () => <h1>LIVE SYSTEM SUPPORT</h1>);
 jest.mock('../system/access/index.jsx', () => () => <h1>LIVE SYSTEM ACCESS</h1>);
 jest.mock('../system/audit/index.jsx', () => () => <h1>LIVE SYSTEM AUDIT</h1>);
 
@@ -173,7 +174,22 @@ describe('AdminV2ProductionApp', () => {
 
     expect(await screen.findByRole('heading', { name: heading })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: title })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '문의 관리' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '사용자 문의' })).not.toBeInTheDocument();
+  });
+
+  test('renders the released SYS01 direct URL and navigation with QNA_READ', async () => {
+    render(<AdminV2ProductionApp pathname="/admin/system/support" createAccessAdapter={adapterFor(readyAccess(['QNA_READ'], 'SYSTEM'))} />);
+
+    expect(await screen.findByRole('heading', { name: 'LIVE SYSTEM SUPPORT' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '사용자 문의' })).toBeInTheDocument();
+  });
+
+  test('forbids the SYS01 direct URL without QNA_READ', async () => {
+    render(<AdminV2ProductionApp pathname="/admin/system/support" createAccessAdapter={adapterFor(readyAccess(['ACCESS_READ'], 'SYSTEM'))} />);
+
+    expect(await screen.findByText('ADMIN_PERMISSION_DENIED')).toBeInTheDocument();
+    expect(screen.getByText('필요 권한: QNA_READ')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'LIVE SYSTEM SUPPORT' })).not.toBeInTheDocument();
   });
 
   test('rejects a released system route without its permission', async () => {
