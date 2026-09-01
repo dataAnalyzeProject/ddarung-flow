@@ -463,14 +463,40 @@ describe('admin v2 accessible primitives', () => {
     mockMatchMedia(true);
     function DrawerHarness() {
       const [open, setOpen] = useState(false);
-      return <><main className="admin-v2-shell"><button type="button" onClick={() => setOpen(true)}>대여소 선택</button></main><DetailDrawer variant="contextual" open={open} title="대여소 상세" onClose={() => setOpen(false)}><button type="button">첫 동작</button></DetailDrawer></>;
+      return <><main className="admin-v2-shell"><button type="button" onClick={() => setOpen(true)}>대여소 선택</button></main>{open ? <DetailDrawer variant="contextual" open title="대여소 상세" onClose={() => setOpen(false)}><button type="button">첫 동작</button></DetailDrawer> : null}</>;
     }
     render(<DrawerHarness />);
     const trigger = screen.getByRole('button', { name: '대여소 선택' });
     fireEvent.pointerDown(trigger);
+    trigger.focus();
     fireEvent.click(trigger);
     const drawer = screen.getByRole('dialog', { name: '대여소 상세' });
     fireEvent.keyDown(drawer, { key: 'Escape' });
+    expect(trigger).toHaveFocus();
+  });
+
+  test('contextual mobile drawer restores focus after removing shell inertness', () => {
+    mockMatchMedia(true);
+    function DrawerHarness() {
+      const [open, setOpen] = useState(false);
+      return <><main className="admin-v2-shell"><button type="button" onClick={() => setOpen(true)}>대여소 선택</button></main>{open ? <DetailDrawer variant="contextual" open title="대여소 상세" onClose={() => setOpen(false)}><button type="button">첫 동작</button></DetailDrawer> : null}</>;
+    }
+    render(<DrawerHarness />);
+    const shell = document.querySelector('.admin-v2-shell');
+    const trigger = screen.getByRole('button', { name: '대여소 선택' });
+    const nativeFocus = trigger.focus.bind(trigger);
+    const inertStatesAtFocus = [];
+    jest.spyOn(trigger, 'focus').mockImplementation(() => {
+      inertStatesAtFocus.push(shell.hasAttribute('inert'));
+      nativeFocus();
+    });
+
+    fireEvent.pointerDown(trigger);
+    trigger.focus();
+    fireEvent.click(trigger);
+    fireEvent.keyDown(screen.getByRole('dialog', { name: '대여소 상세' }), { key: 'Escape' });
+
+    expect(inertStatesAtFocus.at(-1)).toBe(false);
     expect(trigger).toHaveFocus();
   });
 
