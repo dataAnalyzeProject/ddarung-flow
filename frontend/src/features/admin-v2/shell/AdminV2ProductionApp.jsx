@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createLiveAdminAccessAdapter } from '../adapters/liveAdminAccessAdapter';
-import { PRODUCTION_RELEASED_ROUTE_IDS, resolveCanonicalRoute, routesForConsole, visibleConsoles } from '../routes/routeMap';
+import { defaultRoute, PRODUCTION_RELEASED_ROUTE_IDS, resolveCanonicalRoute, routesForConsole, visibleConsoles } from '../routes/routeMap';
 import AsyncStatePanel from '../components/AsyncStatePanel';
 import AdminV2Shell from './AdminV2Shell';
 import '../adminV2.css';
@@ -60,8 +60,18 @@ export default function AdminV2ProductionApp({ pathname, search, createAccessAda
     setLocation({ pathname: nextPath, search: location.search });
   }, [location.search]);
 
+  useEffect(() => {
+    if (access?.state !== 'READY' || location.pathname !== '/admin') return;
+    const route = defaultRoute(access, PRODUCTION_RELEASED_ROUTE_IDS);
+    if (route) navigate(route.canonicalPath, true);
+  }, [access, location.pathname, navigate]);
+
   if (!access) return <AsyncStatePanel state="LOADING" />;
   if (access.state !== 'READY') return <AsyncStatePanel state={stateForAccess(access)} code={access.code} onRetry={() => setRetryVersion((version) => version + 1)} />;
+
+  if (location.pathname === '/admin') {
+    return <AsyncStatePanel state={defaultRoute(access, PRODUCTION_RELEASED_ROUTE_IDS) ? 'LOADING' : 'EMPTY'} code="RELEASE_NOT_AVAILABLE" />;
+  }
 
   const resolution = resolveCanonicalRoute(location.pathname, access);
   if (resolution.type === 'NOT_FOUND') return <AsyncStatePanel state="EMPTY" code="NOT_FOUND" />;

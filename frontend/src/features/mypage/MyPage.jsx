@@ -96,14 +96,6 @@ export default function MyPage({ onNavigate }) {
                   </span>
                   <span className="mypage-chev" aria-hidden="true">›</span>
                 </button>
-                {user.role === "ADMIN" && <button type="button" className="mypage-service-item" onClick={() => onNavigate?.("admin")}>
-                  <span className="mypage-svc-icon" aria-hidden="true">⚙</span>
-                  <span>
-                    <strong>관리자 콘솔</strong>
-                    <small>서비스 운영 관리</small>
-                  </span>
-                  <span className="mypage-chev" aria-hidden="true">›</span>
-                </button>}
               </article>
             </div>
 

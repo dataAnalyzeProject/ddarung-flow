@@ -16,8 +16,8 @@ const allPermissions = [
   'OPS_DASHBOARD_READ', 'OPS_RISK_MAP_READ', 'OPS_CANDIDATE_READ', 'OPS_ANALYSIS_READ', 'DATA_STATUS_READ', 'MODEL_METRICS_READ', 'MODEL_RELEASE_READ', 'ACCESS_READ', 'AUDIT_READ', 'QNA_READ',
 ];
 
-function readyAccess(permissions = ['OPS_DASHBOARD_READ', 'OPS_RISK_MAP_READ']) {
-  return { state: 'READY', adminRoles: ['SUPER_ADMIN'], permissions, defaultConsole: 'OPS', generatedAt: '2026-08-30T00:00:00Z', source: 'LIVE' };
+function readyAccess(permissions = ['OPS_DASHBOARD_READ', 'OPS_RISK_MAP_READ'], defaultConsole = 'OPS') {
+  return { state: 'READY', adminRoles: ['SUPER_ADMIN'], permissions, defaultConsole, generatedAt: '2026-08-30T00:00:00Z', source: 'LIVE' };
 }
 
 function adapterFor(access) {
@@ -38,6 +38,13 @@ describe('AdminV2ProductionApp', () => {
     await waitFor(() => expect(resolve).toBeDefined());
     await act(async () => resolve(readyAccess()));
     expect(screen.getByRole('heading', { name: 'LIVE OPS' })).toBeInTheDocument();
+  });
+
+  test('redirects the exact admin entry to the first released route allowed by live default-console access', async () => {
+    render(<AdminV2ProductionApp pathname="/admin" createAccessAdapter={adapterFor(readyAccess(['MODEL_METRICS_READ'], 'MODEL'))} />);
+
+    expect(await screen.findByRole('heading', { name: 'LIVE MODEL OVERVIEW' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/admin/models');
   });
 
   test('renders live reference time without fixture, preview, or development markers', async () => {

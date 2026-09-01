@@ -1,10 +1,11 @@
+import { useEffect, useState } from "react";
 import logo from "../assets/main/ddaragayo-logo.png";
+import { createLiveAdminAccessAdapter } from "../features/admin-v2/adapters/liveAdminAccessAdapter";
 import "./AppHeader.css";
 
 export default function AppHeader({
   activeRoute = "main",
   authState = "anonymous",
-  canEnterAdmin = false,
   onBeforeLogin,
   onHome,
   onLogout,
@@ -12,6 +13,27 @@ export default function AppHeader({
   user,
 }) {
   const isAuthenticated = authState === "authenticated" || authState === "logging-out";
+  const [canEnterAdmin, setCanEnterAdmin] = useState(false);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setCanEnterAdmin(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    createLiveAdminAccessAdapter().load()
+      .then((access) => {
+        if (!cancelled) setCanEnterAdmin(access.state === "READY");
+      })
+      .catch(() => {
+        if (!cancelled) setCanEnterAdmin(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated]);
   const goHome = () => {
     if (onHome) {
       onHome();
