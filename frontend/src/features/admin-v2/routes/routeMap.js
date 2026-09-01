@@ -16,7 +16,7 @@ import SystemJourneyOps from '../system/journey-ops/index.jsx';
 import { CONSOLE_ORDER, hasPermission, PERMISSIONS } from '../permissions/permissions.js';
 
 export const PREVIEW_PREFIX = '/admin-v2-preview';
-export const PRODUCTION_RELEASED_ROUTE_IDS = ['UI-OPS-01', 'UI-OPS-02', 'UI-OPS-03', 'UI-OPS-04', 'UI-OPS-05', 'UI-MODEL-01', 'UI-MODEL-04', 'UI-SYS-01', 'UI-SYS-02', 'UI-SYS-03'];
+export const PRODUCTION_RELEASED_ROUTE_IDS = ['UI-OPS-01', 'UI-OPS-02', 'UI-OPS-03', 'UI-OPS-04', 'UI-OPS-05', 'UI-MODEL-01', 'UI-MODEL-02', 'UI-MODEL-04', 'UI-SYS-01', 'UI-SYS-02', 'UI-SYS-03'];
 export const ROUTES = [
   ['UI-OPS-01', 'OPS', '/admin/ops', '/ops', '운영 상황판', 'OPS_DASHBOARD_READ', OperationsOverview],
   ['UI-OPS-02', 'OPS', '/admin/ops/risk-map', '/ops/risk-map', '수급 위험 지도', 'OPS_RISK_MAP_READ', OperationsRiskMap],
