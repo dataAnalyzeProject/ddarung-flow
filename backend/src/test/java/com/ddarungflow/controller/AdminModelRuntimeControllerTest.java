@@ -64,7 +64,11 @@ class AdminModelRuntimeControllerTest {
             .andExpect(jsonPath("$.supportedQuantities[4]").value(5))
             .andExpect(jsonPath("$.objectKey").doesNotExist())
             .andExpect(jsonPath("$.pointerKey").doesNotExist())
-            .andExpect(jsonPath("$.bucket").doesNotExist());
+            .andExpect(jsonPath("$.bucket").doesNotExist())
+            .andExpect(jsonPath("$.namespace").doesNotExist())
+            .andExpect(jsonPath("$.localPath").doesNotExist())
+            .andExpect(jsonPath("$.token").doesNotExist())
+            .andExpect(jsonPath("$.credential").doesNotExist());
     }
 
     @Test void mapsUnavailableInferenceToControlledError() throws Exception {

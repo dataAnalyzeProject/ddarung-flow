@@ -23,4 +23,19 @@ describe('ModelReleasesPage', () => {
     const action = jest.fn().mockRejectedValue({ code: 'MODEL_PROMOTION_GATE_FAILED' }); render(<ModelReleasesPage createAdapter={adapterFor({ ...base, permissions: [...base.permissions, 'MODEL_VALIDATE'] }, action)} />); const button = await screen.findByRole('button', { name: 'safe-v1 검증' }); fireEvent.click(button);
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('MODEL_PROMOTION_GATE_FAILED')); expect(screen.getByText('safe-v1')).toBeInTheDocument();
   });
+  test('prevents duplicate lifecycle submissions while an action is pending', async () => {
+    let resolveAction; const action = jest.fn(() => new Promise((resolve) => { resolveAction = resolve; }));
+    const registry = { state: 'SUCCESS', data: [{ ...base.registry.data[0], version: 'safe-v1' }, { ...base.registry.data[0], id: 2, version: 'safe-v2' }] };
+    render(<ModelReleasesPage createAdapter={adapterFor({ ...base, permissions: [...base.permissions, 'MODEL_VALIDATE'], registry }, action)} />);
+    const first = await screen.findByRole('button', { name: 'safe-v1 검증' }); fireEvent.click(first);
+    await waitFor(() => expect(action).toHaveBeenCalledTimes(1)); fireEvent.click(screen.getByRole('button', { name: 'safe-v2 검증' }));
+    expect(action).toHaveBeenCalledTimes(1); resolveAction({}); await waitFor(() => expect(first).not.toBeDisabled());
+  });
+  test('does not expose registry private references and preserves unavailable history semantics', async () => {
+    const registry = { state: 'SUCCESS', data: [{ ...base.registry.data[0], artifactKey: 'private/object', objectKey: 'internal/key', internalPath: '/var/private', secretLike: 'not-for-ui' }] };
+    render(<ModelReleasesPage createAdapter={adapterFor({ ...base, permissions: [...base.permissions, 'AUDIT_READ'], registry, history: { state: 'UNAVAILABLE', code: 'MODEL_LIFECYCLE_AUDIT_SCOPE_UNAVAILABLE' } })} />);
+    await waitFor(() => expect(screen.getByText('safe-v1')).toBeInTheDocument());
+    expect(screen.queryByText(/private\/object|internal\/key|\/var\/private|not-for-ui/)).not.toBeInTheDocument();
+    expect(screen.getByText('변경 이력 확인 불가')).toBeInTheDocument(); expect(screen.getByText('MODEL_LIFECYCLE_AUDIT_SCOPE_UNAVAILABLE')).toBeInTheDocument();
+  });
 });

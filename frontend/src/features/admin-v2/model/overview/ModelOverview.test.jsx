@@ -6,6 +6,10 @@ const runtime = { state: 'SUCCESS', data: { status: 'NORMAL', modelVersion: 'dat
 const registry = { state: 'SUCCESS', data: [{ id: 1, version: 'registry-v1', state: 'ACTIVE', createdAt: '2026-08-31T00:00:00Z' }] };
 
 describe('ModelOverview', () => {
+  test('keeps the page loading state until independent sources resolve', () => {
+    render(<ModelOverview createAdapter={() => ({ load: jest.fn(() => new Promise(() => {})) })} />);
+    expect(screen.getByRole('region', { name: '불러오는 중 상태' })).toBeInTheDocument();
+  });
   test('shows the exact live runtime identity independently of registry lifecycle', async () => {
     render(<ModelOverview createAdapter={adapterFor({ runtime, registry, registryStateCounts: { DRAFT: 0, VALIDATED: 0, APPROVED: 0, ACTIVE: 1, RETIRED: 0 } })} />);
     await waitFor(() => expect(screen.getByRole('heading', { name: 'data-3.1-runtime-pointer' })).toBeInTheDocument());
@@ -22,5 +26,12 @@ describe('ModelOverview', () => {
   test('renders registry access denial without hiding a successful runtime', async () => {
     render(<ModelOverview createAdapter={adapterFor({ runtime, registry: { state: 'FORBIDDEN', error: { code: 'ADMIN_PERMISSION_DENIED' } }, registryStateCounts: null })} />);
     await waitFor(() => expect(screen.getByText('data-3.1-runtime-pointer')).toBeInTheDocument()); expect(screen.getByText(/필요 권한: MODEL_METRICS_READ/)).toBeInTheDocument();
+  });
+  test('keeps registry errors independent and preserves navigation contracts', async () => {
+    render(<ModelOverview createAdapter={adapterFor({ runtime, registry: { state: 'ERROR', error: { code: 'MODEL_REGISTRY_RESPONSE_INVALID' } }, registryStateCounts: null })} />);
+    await waitFor(() => expect(screen.getByText('MODEL_REGISTRY_RESPONSE_INVALID')).toBeInTheDocument());
+    expect(screen.getByText('data-3.1-runtime-pointer')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '모델 검증' })).toHaveAttribute('href', '/admin/models/performance');
+    expect(screen.getByRole('link', { name: '모델 버전 관리' })).toHaveAttribute('href', '/admin/models/releases');
   });
 });

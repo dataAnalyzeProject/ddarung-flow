@@ -17,5 +17,11 @@ describe('modelOverviewAdapter', () => {
     global.fetch = jest.fn().mockResolvedValueOnce(response({ status: 'NORMAL' })).mockResolvedValueOnce(response([]));
     const result = await createLiveModelOverviewAdapter().load({}); expect(result.runtime.error.code).toBe('MODEL_RUNTIME_RESPONSE_INVALID');
   });
+  test('keeps malformed registry success distinct from an empty registry', async () => {
+    global.fetch = jest.fn().mockResolvedValueOnce(response(runtime)).mockResolvedValueOnce(response({ items: [] }));
+    const result = await createLiveModelOverviewAdapter().load({});
+    expect(result.registry).toEqual(expect.objectContaining({ state: 'ERROR', error: expect.objectContaining({ code: 'MODEL_REGISTRY_RESPONSE_INVALID' }) }));
+    expect(result.registryStateCounts).toBeNull();
+  });
   test('derives lifecycle counts only from source rows', () => { expect(deriveRegistryStateCounts([{ state: 'DRAFT' }, { state: 'REJECTED' }])).toEqual({ DRAFT: 1, VALIDATED: 0, APPROVED: 0, ACTIVE: 0, RETIRED: 0 }); });
 });

@@ -1,9 +1,16 @@
 import hashlib
+import json
 import os
+import sys
 import tempfile
+import threading
+import types
 import unittest
 from datetime import datetime, timezone
-from unittest.mock import Mock
+from http.server import HTTPServer
+from urllib.error import HTTPError
+from urllib.request import Request, urlopen
+from unittest.mock import Mock, patch
 
 import app
 
@@ -233,4 +240,156 @@ class RuntimeModelTests(unittest.TestCase):
         self.assertEqual("a" * 64, response["artifactSha256"])
         self.assertEqual([60, 120, 180, 240], response["supportedHorizons"])
         self.assertEqual([1, 2, 3, 4, 5], response["supportedQuantities"])
+
+
+class RuntimeIdentityLoadTests(unittest.TestCase):
+    def bundle(self):
+        return PredictionTests().bundle()
+
+    def fake_oci(self):
+        return types.SimpleNamespace(
+            auth=types.SimpleNamespace(signers=types.SimpleNamespace(InstancePrincipalsSecurityTokenSigner=lambda: object())),
+            object_storage=types.SimpleNamespace(ObjectStorageClient=lambda *_, **__: object()),
+        )
+
+    def test_pointer_load_uses_pointer_identity_not_legacy_environment_checksum(self):
+        legacy_sha = "a" * 64
+        artifact_sha = "b" * 64
+        pointer = {"model_version": "runtime-pointer-version", "artifact": {"sha256": artifact_sha}}
+        settings = {
+            "MODEL_MODE": "pointer", "MODEL_SHA256": legacy_sha,
+            "OCI_OBJECT_NAMESPACE": "namespace", "MODEL_BUCKET": "bucket",
+        }
+        with patch.dict(sys.modules, {"oci": self.fake_oci(), "joblib": types.SimpleNamespace()}), patch.object(app, "load_pointer_model", return_value=(self.bundle(), pointer)):
+            _, identity = app.load_model(settings)
+        self.assertNotEqual(legacy_sha, artifact_sha)
+        self.assertEqual({
+            "model_version": "runtime-pointer-version",
+            "artifact_sha256": artifact_sha,
+            "model_source": "verified_inactive_pointer",
+        }, identity)
+
+    def test_local_and_legacy_load_preserve_actual_artifact_identity_conventions(self):
+        bundle = self.bundle()
+        local_content = b"verified-local-artifact"
+        local_sha = hashlib.sha256(local_content).hexdigest()
+        legacy_sha = "c" * 64
+        with tempfile.NamedTemporaryFile(delete=False) as artifact:
+            artifact.write(local_content)
+            local_path = artifact.name
+        try:
+            joblib = types.SimpleNamespace(load=Mock(return_value=bundle))
+            with patch.dict(sys.modules, {"joblib": joblib}):
+                _, local_identity = app.load_model({"MODEL_MODE": "local", "MODEL_LOCAL_PATH": local_path, "MODEL_SHA256": local_sha})
+            with patch.dict(sys.modules, {"joblib": joblib, "oci": self.fake_oci()}), patch.object(app, "download_and_verify"):
+                _, legacy_identity = app.load_model({
+                    "MODEL_MODE": "legacy", "MODEL_SHA256": legacy_sha,
+                    "OCI_OBJECT_NAMESPACE": "namespace", "MODEL_BUCKET": "bucket", "MODEL_OBJECT_KEY": "private/key",
+                })
+        finally:
+            os.unlink(local_path)
+        model_name = bundle["model_name"]
+        self.assertEqual({"model_version": f"{model_name}@{local_sha[:12]}", "artifact_sha256": local_sha, "model_source": "local_verified"}, local_identity)
+        self.assertEqual({"model_version": f"{model_name}@{legacy_sha[:12]}", "artifact_sha256": legacy_sha, "model_source": "legacy_verified"}, legacy_identity)
+
+
+class RuntimeHandlerTests(unittest.TestCase):
+    def bundle(self):
+        return PredictionTests().bundle()
+
+    def start_server(self, state):
+        server = HTTPServer(("127.0.0.1", 0), app.InferenceHandler)
+        server.model_state = state
+        server.health_response = {"status": "healthy"}
+        server.settings = {"OCI_OBJECT_NAMESPACE": "namespace", "MODEL_BUCKET": "bucket"}
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        return server, thread
+
+    def stop_server(self, server, thread):
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+    def url(self, server, path):
+        return f"http://127.0.0.1:{server.server_port}{path}"
+
+    def get_json(self, server, path):
+        with urlopen(self.url(server, path)) as response:
+            return response.status, json.loads(response.read())
+
+    def post_json(self, server, path, payload):
+        request = Request(self.url(server, path), data=json.dumps(payload).encode(), method="POST", headers={"Content-Type": "application/json"})
+        with urlopen(request) as response:
+            return response.status, json.loads(response.read() or b"{}")
+
+    def state(self, version="runtime-old", sha="a" * 64, loaded_at=datetime(2026, 1, 1, tzinfo=timezone.utc)):
+        return app.model_state(self.bundle(), version, sha, "verified_inactive_pointer", loaded_at)
+
+    def fake_oci(self):
+        return types.SimpleNamespace(
+            auth=types.SimpleNamespace(signers=types.SimpleNamespace(InstancePrincipalsSecurityTokenSigner=lambda: object())),
+            object_storage=types.SimpleNamespace(ObjectStorageClient=lambda *_, **__: object()),
+        )
+
+    def reload_payload(self):
+        return {"pointerKey": "models/active-pointer.json", "pointerSha256": "d" * 64}
+
+    def active_pointer(self, sha="b" * 64):
+        return {"model_version": "runtime-new", "artifact": {"sha256": sha}}
+
+    def test_reload_success_atomically_publishes_new_identity_after_smoke(self):
+        old_state = self.state()
+        server, thread = self.start_server(old_state)
+        try:
+            with patch.dict(sys.modules, {"oci": self.fake_oci()}), patch.object(app, "load_pointer_model", return_value=(self.bundle(), self.active_pointer())):
+                status, _ = self.post_json(server, "/internal/model-reloads", self.reload_payload())
+            self.assertEqual(200, status)
+            self.assertIsNot(server.model_state, old_state)
+            self.assertEqual("runtime-new", server.model_state["model_version"])
+            self.assertEqual("b" * 64, server.model_state["artifact_sha256"])
+            self.assertEqual("verified_active_pointer", server.model_state["model_source"])
+            self.assertNotEqual(old_state["loaded_at"], server.model_state["loaded_at"])
+        finally:
+            self.stop_server(server, thread)
+
+    def test_reload_failure_returns_503_and_preserves_the_entire_old_state(self):
+        old_state = self.state()
+        server, thread = self.start_server(old_state)
+        try:
+            with patch.dict(sys.modules, {"oci": self.fake_oci()}), patch.object(app, "load_pointer_model", side_effect=RuntimeError("invalid pointer")):
+                with self.assertRaises(HTTPError) as error:
+                    self.post_json(server, "/internal/model-reloads", self.reload_payload())
+            self.assertEqual(503, error.exception.code)
+            self.assertIs(server.model_state, old_state)
+            self.assertEqual("runtime-old", server.model_state["model_version"])
+            self.assertEqual("a" * 64, server.model_state["artifact_sha256"])
+            self.assertEqual("2026-01-01T00:00:00Z", server.model_state["loaded_at"])
+            self.assertIs(old_state["bundle"], server.model_state["bundle"])
+        finally:
+            self.stop_server(server, thread)
+
+    def test_runtime_readback_http_has_exact_safe_fields_and_matches_predict_model_version(self):
+        server, thread = self.start_server(self.state(version="runtime-live"))
+        try:
+            runtime_status, runtime = self.get_json(server, "/internal/runtime-model")
+            predict_status, prediction = self.post_json(server, "/predict", {"candidates": [{
+                "stationId": "ST-4", "stationNumber": "102", "currentBikeCount": 1,
+                "featureAsOf": "2026-08-17T14:00:00+09:00",
+            }]})
+            health_status, health = self.get_json(server, "/health")
+            self.assertEqual(200, runtime_status)
+            self.assertEqual({"status", "modelVersion", "artifactSha256", "modelSource", "loadedAt", "supportedHorizons", "supportedQuantities"}, set(runtime))
+            self.assertEqual(200, predict_status)
+            self.assertEqual(runtime["modelVersion"], prediction["modelVersion"])
+            self.assertEqual(200, health_status)
+            self.assertEqual("healthy", health["status"])
+            with self.assertRaises(HTTPError) as error:
+                self.get_json(server, "/unknown")
+            self.assertEqual(404, error.exception.code)
+            rendered = json.dumps(runtime)
+            for forbidden in ("objectKey", "pointerKey", "MODEL_OBJECT_KEY", "MODEL_POINTER_KEY", "namespace", "bucket", "MODEL_LOCAL_PATH", "token", "credential", "secret"):
+                self.assertNotIn(forbidden, rendered)
+        finally:
+            self.stop_server(server, thread)
 

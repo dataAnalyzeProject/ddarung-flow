@@ -16,5 +16,32 @@ describe('modelReleasesAdapter', () => {
   test('uses source-defined actions with CSRF', async () => {
     global.fetch = jest.fn().mockResolvedValueOnce(response({ headerName: 'X-CSRF-TOKEN', token: 'test-csrf-token' })).mockResolvedValueOnce(response({})); await createLiveModelReleasesAdapter().action({ type: 'VALIDATE', id: 1 }); expect(global.fetch).toHaveBeenNthCalledWith(2, 'http://localhost:8080/api/v1/admin/models/1/validate', expect.objectContaining({ method: 'POST', headers: { 'X-CSRF-TOKEN': 'test-csrf-token' } }));
   });
-  test('uses real lifecycle permissions', () => { expect(availableActions({ state: 'DRAFT' }, ['MODEL_ARTIFACT_REGISTER', 'MODEL_VALIDATE'])).toEqual(['REGISTER', 'VALIDATE']); expect(availableActions({ state: 'APPROVED' }, ['MODEL_ACTIVATE'])).toEqual(['ACTIVATE']); });
+  test.each([
+    ['VALIDATE', 1, '/api/v1/admin/models/1/validate'],
+    ['APPROVE', 1, '/api/v1/admin/models/1/approve'],
+    ['REJECT', 1, '/api/v1/admin/models/1/reject'],
+    ['ACTIVATE', 1, '/api/v1/admin/models/1/activate'],
+    ['ROLLBACK', undefined, '/api/v1/admin/models/rollback'],
+  ])('maps %s with CSRF and no uncontracted action body', async (type, id, path) => {
+    global.fetch = jest.fn().mockResolvedValueOnce(response({ headerName: 'X-CSRF-TOKEN', token: 'test-csrf-token' })).mockResolvedValueOnce(response({}));
+    await createLiveModelReleasesAdapter().action({ type, id });
+    expect(global.fetch).toHaveBeenNthCalledWith(2, `http://localhost:8080${path}`, expect.objectContaining({ method: 'POST', credentials: 'include', headers: { 'X-CSRF-TOKEN': 'test-csrf-token' } }));
+    expect(global.fetch.mock.calls[1][1].body).toBeUndefined();
+  });
+  test('keeps malformed registry, history limits, and refresh batch-free', async () => {
+    global.fetch = jest.fn().mockResolvedValueOnce(response({ permissions: ['MODEL_RELEASE_READ', 'MODEL_METRICS_READ', 'AUDIT_READ'] })).mockResolvedValueOnce(response(runtime)).mockResolvedValueOnce(response([{ version: 'missing-id', state: 'DRAFT', createdAt: '2026-09-01T00:00:00Z' }]));
+    const loaded = await createLiveModelReleasesAdapter().load({});
+    expect(loaded.registry).toEqual(expect.objectContaining({ state: 'ERROR', error: expect.objectContaining({ code: 'MODEL_REGISTRY_RESPONSE_INVALID' }) }));
+    expect(loaded.history).toEqual({ state: 'UNAVAILABLE', code: 'MODEL_LIFECYCLE_AUDIT_SCOPE_UNAVAILABLE' });
+    global.fetch = jest.fn().mockResolvedValueOnce(response(runtime)).mockResolvedValueOnce(response([]));
+    const refreshed = await createLiveModelReleasesAdapter().refresh({ permissions: ['MODEL_METRICS_READ'] });
+    expect(refreshed.registry).toEqual({ state: 'SUCCESS', data: [] }); expect(refreshed.history).toEqual({ state: 'ACCESS_LIMITED', permission: 'AUDIT_READ' });
+    expect(global.fetch).not.toHaveBeenCalledWith(expect.stringContaining('prediction-batches'), expect.anything());
+  });
+  test('uses real lifecycle permissions including register and rollback', () => {
+    expect(availableActions({ state: 'DRAFT' }, ['MODEL_ARTIFACT_REGISTER', 'MODEL_VALIDATE'])).toEqual(['REGISTER', 'VALIDATE']);
+    expect(availableActions({ state: 'VALIDATED' }, ['MODEL_APPROVE'])).toEqual(['APPROVE', 'REJECT']);
+    expect(availableActions({ state: 'APPROVED' }, ['MODEL_ACTIVATE'])).toEqual(['ACTIVATE']);
+    expect(availableActions({ state: 'ACTIVE' }, ['MODEL_ROLLBACK'])).toEqual(['ROLLBACK']);
+  });
 });
