@@ -325,7 +325,7 @@ describe('admin v2 fixture access and routes', () => {
     expect(resolveCanonicalRoute('/admin/system/access', { permissions: ['ACCESS_READ'] })).toMatchObject({ type: 'ALLOW', route: { id: 'UI-SYS-02', title: '관리자 역할·권한' } });
     expect(resolveCanonicalRoute('/admin/system/audit', { permissions: ['AUDIT_READ'] })).toMatchObject({ type: 'ALLOW', route: { id: 'UI-SYS-03', title: '관리자 변경 이력' } });
     expect(resolveCanonicalRoute('/admin/not-real', { permissions: [] }).type).toBe('NOT_FOUND');
-    expect(isAdminV2ProductionPath('/admin')).toBe(false);
+    expect(isAdminV2ProductionPath('/admin')).toBe(true);
     expect(isAdminV2ProductionPath('/admin/ops')).toBe(true);
   });
 
