@@ -2,10 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStatePanel from '../../components/AsyncStatePanel';
 import './modelPerformance.css';
 
-const HORIZONS = [60, 120, 180, 240];
-const REQUIRED_BIKE_COUNTS = [1, 2, 3, 4, 5];
-
-function requestState(error) { return error?.status === 401 || error?.status === 403 ? 'FORBIDDEN' : 'ERROR'; }
 function formatNumber(value, digits = 4) { return typeof value === 'number' && Number.isFinite(value) ? value.toFixed(digits) : '—'; }
 function formatCount(value) { return typeof value === 'number' ? value.toLocaleString('ko-KR') : '확인 정보 없음'; }
 function formatTime(value) {
@@ -15,18 +11,23 @@ function formatTime(value) {
 function shortSha(value) { return value.length > 18 ? `${value.slice(0, 12)}…${value.slice(-6)}` : value; }
 
 function BaseError({ error, onRetry }) {
-  const forbidden = requestState(error) === 'FORBIDDEN';
-  return <div className="model-performance-request-error"><AsyncStatePanel state={forbidden ? 'FORBIDDEN' : 'ERROR'} code={error?.code} requiredPermission={forbidden ? 'MODEL_METRICS_READ' : undefined} />{!forbidden ? <button type="button" onClick={onRetry}>다시 시도</button> : null}</div>;
+  if (error?.status === 404 && error?.code === 'MODEL_PERFORMANCE_NOT_FOUND') {
+    return <div className="model-performance-request-error"><AsyncStatePanel state="EMPTY" code={error.code} /></div>;
+  }
+  if (error?.status === 401) {
+    return <div className="model-performance-request-error"><AsyncStatePanel state="FORBIDDEN" code="AUTH_REQUIRED" /></div>;
+  }
+  if (error?.status === 403) {
+    return <div className="model-performance-request-error"><AsyncStatePanel state="FORBIDDEN" code={error?.code} requiredPermission="MODEL_METRICS_READ" /></div>;
+  }
+  return <div className="model-performance-request-error"><AsyncStatePanel state="ERROR" code={error?.code} /><button type="button" onClick={onRetry}>다시 시도</button></div>;
 }
 
 function ReliabilityTable({ combinations }) {
-  const byCombination = new Map(combinations.map((row) => [`${row?.horizonMinutes}-${row?.requiredBikeCount}`, row]));
-  return <section className="model-performance-section" aria-labelledby="reliability-heading"><div className="model-performance-section-heading"><div><h2 id="reliability-heading">조합별 신뢰도</h2><p>H1–H4 × 필요 자전거 1–5대의 source-returned 평가 결과입니다.</p></div><span>20개 조합</span></div><div className="model-performance-table-wrap"><table><caption>시간 구간과 필요 자전거 수별 Brier score 및 표본 수</caption><thead><tr><th scope="col">예측 구간</th>{REQUIRED_BIKE_COUNTS.map((count) => <th key={count} scope="col">{count}대</th>)}</tr></thead><tbody>{HORIZONS.map((horizon) => <tr key={horizon}><th scope="row">H{horizon / 60}</th>{REQUIRED_BIKE_COUNTS.map((count) => {
-    const row = byCombination.get(`${horizon}-${count}`);
-    const missing = !row;
-    const insufficient = !missing && row.brierScore == null;
-    return <td key={count}><strong>{missing ? '확인 정보 없음' : insufficient ? '표본 부족' : formatNumber(row.brierScore)}</strong><small>{missing ? 'source 조합 없음' : insufficient ? 'UNKNOWN_INSUFFICIENT_SAMPLES' : `표본 ${formatCount(row.sampleCount)}`}</small></td>;
-  })}</tr>)}</tbody></table></div><p className="model-performance-note">Brier가 null인 조합은 표본 기준을 충족하지 않아 수치로 대체하지 않습니다. 전체 가중 수치는 source에 없으므로 표시하지 않습니다.</p></section>;
+  return <section className="model-performance-section" aria-labelledby="reliability-heading"><div className="model-performance-section-heading"><div><h2 id="reliability-heading">조합별 신뢰도</h2><p>source가 반환한 평가 조합만 표시합니다.</p></div><span>{combinations.length}개 조합</span></div><div className="model-performance-table-wrap"><table><caption>source 반환 조합의 Brier score 및 표본 수</caption><thead><tr><th scope="col">예측 구간</th><th scope="col">필요 자전거</th><th scope="col">Brier score</th><th scope="col">표본 수</th></tr></thead><tbody>{combinations.map((row, index) => {
+    const insufficient = row?.brierScore == null;
+    return <tr key={`${row?.horizonMinutes}-${row?.requiredBikeCount}-${index}`}><th scope="row">H{row?.horizonMinutes / 60}</th><td>{row?.requiredBikeCount}대</td><td><strong>{insufficient ? '표본 부족' : formatNumber(row.brierScore)}</strong>{insufficient ? <small>UNKNOWN_INSUFFICIENT_SAMPLES</small> : null}</td><td>{formatCount(row?.sampleCount)}</td></tr>;
+  })}</tbody></table></div><p className="model-performance-note">Brier가 null인 조합은 표본 기준을 충족하지 않아 수치로 대체하지 않습니다. 전체 가중 수치는 source에 없으므로 표시하지 않습니다.</p></section>;
 }
 
 function Calibration({ evaluation, bins }) {
@@ -37,8 +38,10 @@ function Calibration({ evaluation, bins }) {
 
 function Diagnostics({ state, result, error }) {
   if (state === 'LOADING') return <section className="model-performance-diagnostics" aria-labelledby="diagnostics-heading"><h2 id="diagnostics-heading">진단</h2><p>진단 권한과 source를 확인하는 중입니다.</p></section>;
+  if (state === 'AUTH_REQUIRED') return <section className="model-performance-diagnostics" aria-labelledby="diagnostics-heading"><h2 id="diagnostics-heading">진단</h2><AsyncStatePanel state="FORBIDDEN" code="AUTH_REQUIRED" /></section>;
   if (state === 'FORBIDDEN') return <section className="model-performance-diagnostics" aria-labelledby="diagnostics-heading"><h2 id="diagnostics-heading">진단</h2><p><strong>진단 접근 제한</strong> — MODEL_DIAGNOSTICS_READ 권한이 있어야 별도 진단 source를 표시합니다.</p></section>;
-  if (state === 'ERROR') return <section className="model-performance-diagnostics" aria-labelledby="diagnostics-heading"><h2 id="diagnostics-heading">진단</h2><p>{error?.code === 'DIAGNOSTICS_SNAPSHOT_MISMATCH' ? '진단 스냅샷 일치 확인 불가' : '진단 정보를 사용할 수 없습니다.'}</p></section>;
+  if (state === 'UNAVAILABLE') return <section className="model-performance-diagnostics" aria-labelledby="diagnostics-heading"><h2 id="diagnostics-heading">진단</h2><p><strong>{error?.status === 404 ? '진단 source가 현재 없습니다.' : '진단 source와 통신할 수 없습니다.'}</strong></p>{error?.code ? <p>{error.code}</p> : null}</section>;
+  if (state === 'ERROR') return <section className="model-performance-diagnostics" aria-labelledby="diagnostics-heading"><h2 id="diagnostics-heading">진단</h2><p>{error?.code === 'DIAGNOSTICS_SNAPSHOT_MISMATCH' ? '진단 스냅샷 일치 확인 불가' : '진단 서버 오류입니다.'}</p>{error?.code ? <p>{error.code}</p> : null}</section>;
   const segments = result?.segments || [];
   return <section className="model-performance-diagnostics" aria-labelledby="diagnostics-heading"><div className="model-performance-section-heading"><div><h2 id="diagnostics-heading">진단</h2><p>H2 · 필요 자전거 3대의 별도 diagnostics source입니다.</p></div><span>MODEL_DIAGNOSTICS_READ</span></div>{segments.length ? <div className="model-performance-table-wrap"><table><caption>source-returned 진단 구간</caption><thead><tr><th scope="col">축</th><th scope="col">구간</th><th scope="col">표본</th><th scope="col">Brier</th></tr></thead><tbody>{segments.map((segment, index) => <tr key={`${segment?.axis}-${segment?.segmentValue}-${index}`}><td>{segment?.axis || '확인 정보 없음'}</td><td>{segment?.segmentValue || '확인 정보 없음'}</td><td>{formatCount(segment?.sampleCount)}</td><td>{segment?.brierScore == null ? 'UNKNOWN_INSUFFICIENT_SAMPLES' : formatNumber(segment.brierScore)}</td></tr>)}</tbody></table></div> : <p>진단 source에 표시할 항목이 없습니다.</p>}</section>;
 }
@@ -63,7 +66,14 @@ export default function ModelPerformancePage({ createAdapter }) {
       adapter.loadDiagnostics(nextBase, { signal: controller.signal }).then((result) => {
         if (!controller.signal.aborted && generation.current === current) setDiagnostics({ state: 'SUCCESS', result, error: null });
       }).catch((nextError) => {
-        if (!controller.signal.aborted && generation.current === current && nextError?.name !== 'AbortError') setDiagnostics({ state: requestState(nextError) === 'FORBIDDEN' ? 'FORBIDDEN' : 'ERROR', result: null, error: nextError });
+        if (!controller.signal.aborted && generation.current === current && nextError?.name !== 'AbortError') {
+          const state = nextError?.status === 401 ? 'AUTH_REQUIRED'
+            : nextError?.status === 403 ? 'FORBIDDEN'
+              : nextError?.code === 'DIAGNOSTICS_SNAPSHOT_MISMATCH' ? 'ERROR'
+                : nextError?.status === 404 ? 'UNAVAILABLE'
+                  : nextError?.status == null ? 'UNAVAILABLE' : 'ERROR';
+          setDiagnostics({ state, result: null, error: nextError });
+        }
       });
     }).catch((nextError) => {
       if (!controller.signal.aborted && generation.current === current && nextError?.name !== 'AbortError') setError(nextError);
