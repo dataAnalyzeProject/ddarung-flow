@@ -1,3 +1,5 @@
+import { adminFetch } from '../../auth/adminSession.js';
+
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080';
 const SAFE_ERROR_CODES = new Set(['AUTH_REQUIRED', 'ADMIN_ACCESS_DENIED', 'ADMIN_PERMISSION_DENIED', 'QNA_CONFLICT', 'QNA_NOT_FOUND', 'QNA_ACCESS_DENIED', 'QNA_INVALID_REQUEST', 'CSRF_TOKEN_UNAVAILABLE']);
 
@@ -17,7 +19,7 @@ function validDate(value) { return typeof value === 'string' && !Number.isNaN(ne
 async function request(path, { signal, method = 'GET', body, headers } = {}) {
   let response;
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
+    response = await adminFetch(`${API_BASE_URL}${path}`, {
       method,
       credentials: 'include',
       signal,

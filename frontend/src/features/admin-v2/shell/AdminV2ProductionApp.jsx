@@ -3,6 +3,7 @@ import { createLiveAdminAccessAdapter } from '../adapters/liveAdminAccessAdapter
 import { defaultRoute, PRODUCTION_RELEASED_ROUTE_IDS, resolveCanonicalRoute, routesForConsole, visibleConsoles } from '../routes/routeMap';
 import AsyncStatePanel from '../components/AsyncStatePanel';
 import AdminV2Shell from './AdminV2Shell';
+import { currentAdminReturnTarget, storeAdminReturnTarget, subscribeAdminAuthRequired } from '../auth/adminSession.js';
 import '../adminV2.css';
 
 function accessFailure() {
@@ -17,7 +18,9 @@ function browserLocation() {
   return { pathname: window.location.pathname, search: window.location.search };
 }
 
-export default function AdminV2ProductionApp({ pathname, search, createAccessAdapter = createLiveAdminAccessAdapter }) {
+function browserLoginRedirect(path) { window.location.replace(path); }
+
+export default function AdminV2ProductionApp({ pathname, search, createAccessAdapter = createLiveAdminAccessAdapter, navigateToLogin = browserLoginRedirect }) {
   const initial = browserLocation();
   const suppliedPathname = pathname ?? initial.pathname;
   const suppliedSearch = search ?? initial.search;
@@ -26,6 +29,15 @@ export default function AdminV2ProductionApp({ pathname, search, createAccessAda
   const [retryVersion, setRetryVersion] = useState(0);
   const generation = useRef(0);
   const previousProps = useRef({ pathname: suppliedPathname, search: suppliedSearch });
+  const wasReady = useRef(false);
+  const redirectedForAuth = useRef(false);
+
+  const redirectToLogin = useCallback((expired) => {
+    if (redirectedForAuth.current) return;
+    redirectedForAuth.current = true;
+    storeAdminReturnTarget(currentAdminReturnTarget());
+    navigateToLogin(expired ? '/login?login=expired' : '/login');
+  }, [navigateToLogin]);
 
   useEffect(() => {
     if (previousProps.current.pathname === suppliedPathname && previousProps.current.search === suppliedSearch) return;
@@ -53,6 +65,15 @@ export default function AdminV2ProductionApp({ pathname, search, createAccessAda
       });
     return () => controller.abort();
   }, [createAccessAdapter, retryVersion]);
+
+  useEffect(() => subscribeAdminAuthRequired(() => {
+    if (wasReady.current) redirectToLogin(true);
+  }), [redirectToLogin]);
+
+  useEffect(() => {
+    if (access?.state === 'READY') wasReady.current = true;
+    if (access?.state === 'AUTH_REQUIRED' && !wasReady.current) redirectToLogin(false);
+  }, [access, redirectToLogin]);
 
   const navigate = useCallback((nextPath, replace = false) => {
     const nextUrl = `${nextPath}${location.search}`;
@@ -89,5 +110,6 @@ export default function AdminV2ProductionApp({ pathname, search, createAccessAda
     allowedRouteIds={PRODUCTION_RELEASED_ROUTE_IDS}
     onConsoleSelect={(consoleId) => navigate(routesForConsole(consoleId, access.permissions, PRODUCTION_RELEASED_ROUTE_IDS)[0].canonicalPath)}
     onRouteNavigate={(nextRoute) => navigate(nextRoute.canonicalPath)}
+    showLogout
   ><Page route={route} /></AdminV2Shell>;
 }

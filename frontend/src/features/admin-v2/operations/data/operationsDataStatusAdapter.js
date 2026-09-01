@@ -1,3 +1,5 @@
+import { adminFetch } from '../../auth/adminSession.js';
+
 export class OperationsDataStatusApiError extends Error {
   constructor({ status, code, message }) {
     super(message || code || '운영 데이터 상태를 불러오지 못했습니다.');
@@ -12,7 +14,7 @@ export function createOperationsDataStatusAdapter() {
     async load({ signal }) {
       try {
         const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080';
-        const response = await fetch(`${apiBaseUrl}/api/v1/admin/ops/data-status`, { credentials: 'include', signal });
+        const response = await adminFetch(`${apiBaseUrl}/api/v1/admin/ops/data-status`, { credentials: 'include', signal });
         if (response.ok) return response.json();
         let body = {};
         try { body = await response.json(); } catch (_) { /* response body is optional */ }

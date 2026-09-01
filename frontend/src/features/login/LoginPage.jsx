@@ -93,7 +93,7 @@ function LoginStatusPanel({ loginStatus, userInfo, predictionData, isPredicted, 
     [LOGIN_STATUS.FAILED]: ["로그인에 실패했습니다.", "소셜 로그인 연결을 확인한 후 다시 시도해주세요."],
     [LOGIN_STATUS.CANCELLED]: ["로그인 취소", "로그인 처리 중 사용자가 로그인을 취소했습니다."],
     [LOGIN_STATUS.LOGGING_OUT]: ["로그아웃 처리 중입니다.", "세션 정보를 안전하게 정리하고 있어요."],
-    [LOGIN_STATUS.EXPIRED]: ["로그인 만료", "로그인 세션이 만료되어 자동으로 로그아웃 처리되었습니다."],
+    [LOGIN_STATUS.EXPIRED]: ["세션이 만료되었습니다.", "다시 로그인해 주세요."],
     [LOGIN_STATUS.LOGGED_OUT]: ["로그아웃 되었습니다.", "로그아웃 처리되었습니다. 다시 로그인이 필요한 경우 소셜 로그인을 선택해주세요."],
   }[loginStatus];
 
@@ -131,6 +131,10 @@ export default function LoginPage({ initialStatus, mockOutcome, initialPredictio
     }
     if (loginResult === "expired") {
       setLoginStatus(LOGIN_STATUS.EXPIRED);
+      return;
+    }
+    if (new URLSearchParams(window.location.search).get("logout") === "success") {
+      setLoginStatus(LOGIN_STATUS.LOGGED_OUT);
       return;
     }
 

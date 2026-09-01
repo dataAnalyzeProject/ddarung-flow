@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import AdminV2ProductionApp from './AdminV2ProductionApp';
+import { publishAdminAuthRequired } from '../auth/adminSession.js';
 
 jest.mock('../operations/overview/index.jsx', () => () => <h1>LIVE OPS</h1>);
 jest.mock('../operations/risk-map/index.jsx', () => () => <h1>LIVE RISK MAP</h1>);
@@ -66,8 +67,17 @@ describe('AdminV2ProductionApp', () => {
     expect(screen.getByRole('heading', { name: 'LIVE RISK MAP' })).toBeInTheDocument();
   });
 
+  test('redirects anonymous admin access to login and stores the exact safe route', async () => {
+    const navigateToLogin = jest.fn();
+    window.history.replaceState({}, '', '/admin/ops/risk-map?horizonMinutes=120');
+    render(<AdminV2ProductionApp navigateToLogin={navigateToLogin} createAccessAdapter={adapterFor({ state: 'AUTH_REQUIRED', code: 'AUTH_REQUIRED', adminRoles: [], permissions: [], defaultConsole: null })} />);
+
+    await waitFor(() => expect(navigateToLogin).toHaveBeenCalledWith('/login'));
+    expect(sessionStorage.getItem('ddarung.admin.return-target.v1')).toBe('/admin/ops/risk-map?horizonMinutes=120');
+    expect(screen.queryByRole('navigation', { name: '관리자 메뉴' })).not.toBeInTheDocument();
+  });
+
   test.each([
-    [{ state: 'AUTH_REQUIRED', code: 'AUTH_REQUIRED', adminRoles: [], permissions: [], defaultConsole: null }, 'AUTH_REQUIRED'],
     [{ state: 'ADMIN_ACCESS_DENIED', code: 'ADMIN_ACCESS_DENIED', adminRoles: [], permissions: [], defaultConsole: null }, 'ADMIN_ACCESS_DENIED'],
     [{ state: 'ACCESS_ERROR', code: 'ADMIN_ACCESS_UNAVAILABLE', adminRoles: [], permissions: [], defaultConsole: null }, 'ADMIN_ACCESS_UNAVAILABLE'],
   ])('keeps %s access failures outside the shell', async (access, code) => {
@@ -75,6 +85,18 @@ describe('AdminV2ProductionApp', () => {
 
     expect(await screen.findByText(code)).toBeInTheDocument();
     expect(screen.queryByRole('navigation', { name: '관리자 메뉴' })).not.toBeInTheDocument();
+  });
+
+  test('redirects one ready shell on repeated admin auth-required signals', async () => {
+    const navigateToLogin = jest.fn();
+    render(<AdminV2ProductionApp pathname="/admin/ops" navigateToLogin={navigateToLogin} createAccessAdapter={adapterFor(readyAccess())} />);
+
+    expect(await screen.findByRole('heading', { name: 'LIVE OPS' })).toBeInTheDocument();
+    publishAdminAuthRequired();
+    publishAdminAuthRequired();
+
+    await waitFor(() => expect(navigateToLogin).toHaveBeenCalledWith('/login?login=expired'));
+    expect(navigateToLogin).toHaveBeenCalledTimes(1);
   });
 
   test('retry clears stale content and reloads access', async () => {

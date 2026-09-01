@@ -1,3 +1,5 @@
+import { adminFetch } from '../../auth/adminSession.js';
+
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080';
 
 export class ModelReleasesApiError extends Error {
@@ -10,7 +12,7 @@ export class ModelReleasesApiError extends Error {
 function isObject(value) { return value !== null && typeof value === 'object'; }
 async function request(path, { signal, method = 'GET', body, headers } = {}) {
   let response;
-  try { response = await fetch(`${API_BASE_URL}${path}`, { method, credentials: 'include', signal, ...(body === undefined ? { ...(headers ? { headers } : {}) } : { headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) }) }); }
+  try { response = await adminFetch(`${API_BASE_URL}${path}`, { method, credentials: 'include', signal, ...(body === undefined ? { ...(headers ? { headers } : {}) } : { headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) }) }); }
   catch (error) { if (error?.name === 'AbortError') throw error; throw new ModelReleasesApiError(); }
   let payload = null;
   try { payload = await response.json(); } catch (_) { /* error bodies are optional */ }

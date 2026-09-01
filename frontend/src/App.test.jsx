@@ -17,6 +17,7 @@ jest.mock("./features/admin-v2/adapters/liveAdminAccessAdapter", () => ({
 
 beforeEach(() => {
   window.localStorage.clear();
+  window.sessionStorage.clear();
   getCurrentUser.mockResolvedValue({ authenticated: false, user: null });
   fetchStationDetail.mockResolvedValue({ stationName: "대여소 테스트", availableBikeCount: 1, inventoryStatus: "NORMAL" });
   fetchStationRhythm.mockRejectedValue(new Error("RHYTHM_NOT_AVAILABLE"));
@@ -88,6 +89,16 @@ test("shows the existing login page at the login URL", async () => {
   render(<App />);
 
   expect(await screen.findByTitle(/Kakao/i)).toBeInTheDocument();
+});
+
+test('clears a saved admin return target after OAuth cancellation', async () => {
+  window.history.replaceState({}, '', '/?login=cancelled');
+  window.localStorage.setItem(INTRO_SEEN_KEY, 'true');
+  window.sessionStorage.setItem('ddarung.admin.return-target.v1', '/admin/ops');
+
+  render(<App />);
+
+  await waitFor(() => expect(window.sessionStorage.getItem('ddarung.admin.return-target.v1')).toBeNull());
 });
 
 test("routes the exact admin URL to the production Admin v2 app without a general session check", () => {

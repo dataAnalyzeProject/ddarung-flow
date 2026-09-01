@@ -15,6 +15,7 @@ import JourneyResultPage from './features/journey/JourneyResultPage';
 import { isJourneyEnabled } from './features/journey/journeyFeatureFlag';
 import { hasSeenIntro } from './features/intro/introStorage';
 import { getCurrentUser, logout } from './features/login/authApi';
+import { clearAdminReturnTarget, consumeAdminReturnTarget } from './features/admin-v2/auth/adminSession.js';
 
 const HASH_ROUTES = ['qna', 'archive', 'alerts', 'mypage'];
 
@@ -50,6 +51,16 @@ function App() {
     const syncRoute = () => setRoute(routeFromHash());
     window.addEventListener('hashchange', syncRoute);
     return () => window.removeEventListener('hashchange', syncRoute);
+  }, []);
+
+  useEffect(() => {
+    const loginResult = new URLSearchParams(window.location.search).get('login');
+    if (loginResult === 'success') {
+      const returnTarget = consumeAdminReturnTarget();
+      if (returnTarget) window.location.replace(returnTarget);
+      return;
+    }
+    if (loginResult === 'failed' || loginResult === 'cancelled') clearAdminReturnTarget();
   }, []);
 
   useEffect(() => {

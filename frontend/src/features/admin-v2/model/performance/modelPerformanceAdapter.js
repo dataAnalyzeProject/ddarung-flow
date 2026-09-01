@@ -1,3 +1,5 @@
+import { adminFetch } from '../../auth/adminSession.js';
+
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080';
 
 export class ModelPerformanceApiError extends Error {
@@ -48,7 +50,7 @@ function runtimeProjection(body) {
 
 async function request(path, signal) {
   try {
-    const response = await fetch(`${API_BASE_URL}${path}`, { credentials: 'include', signal });
+    const response = await adminFetch(`${API_BASE_URL}${path}`, { credentials: 'include', signal });
     let body = {};
     try { body = await response.json(); } catch (_) { /* body is optional on errors */ }
     if (!response.ok) throw new ModelPerformanceApiError({ status: response.status, code: body.code, message: body.message });

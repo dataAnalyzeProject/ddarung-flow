@@ -103,7 +103,7 @@ describe('LoginPage 핵심 테스트', () => {
     test('세션 만료 복귀 주소에서 만료 안내를 표시한다', () => {
         window.history.pushState({}, '', '/?login=expired');
         render(<LoginPage />);
-        expect(screen.getByText(/로그인 만료/i)).toBeInTheDocument();
+    expect(screen.getByText(/세션이 만료되었습니다/i)).toBeInTheDocument();
         window.history.pushState({}, '', '/');
     });
 

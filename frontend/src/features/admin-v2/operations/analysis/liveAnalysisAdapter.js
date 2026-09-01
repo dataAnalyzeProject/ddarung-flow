@@ -1,3 +1,5 @@
+import { adminFetch } from '../../auth/adminSession.js';
+
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080';
 
 export class AnalysisApiError extends Error {
@@ -13,7 +15,7 @@ export function createLiveAnalysisAdapter() {
   return {
     async load({ view, signal }) {
       const query = new URLSearchParams({ view, riskType: 'RENTAL' });
-      const response = await fetch(`${API_BASE_URL}/api/v1/admin/ops/analysis?${query}`, { credentials: 'include', signal });
+      const response = await adminFetch(`${API_BASE_URL}/api/v1/admin/ops/analysis?${query}`, { credentials: 'include', signal });
       if (response.ok) return response.json();
       let body = {};
       try { body = await response.json(); } catch (_) { /* response body is optional */ }
