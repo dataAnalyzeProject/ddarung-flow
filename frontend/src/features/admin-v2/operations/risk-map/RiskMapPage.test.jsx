@@ -8,12 +8,13 @@ function readyMap(node, maps, callbacks) { callbacks.onViewportChange('126,37,12
 
 afterEach(() => window.history.replaceState({}, '', '/'));
 
+function makeError(error) { return Object.assign(new Error(error.message || 'error'), error); }
+
 test('keeps the route heading while loading and renders zero inventory without fabricating null probability', async () => {
   window.history.replaceState({}, '', '/admin-v2-preview/ops/risk-map?horizonMinutes=120&requiredBikeCount=2');
   render(<RiskMapPage createDataAdapter={adapter()} loadMapSdk={() => Promise.resolve({})} createMapAdapter={readyMap} />);
   expect(screen.getByRole('heading', { name: '수급 위험 지도' })).toBeInTheDocument();
-  await screen.findByText('현재 0대');
-  expect(screen.getAllByText('판단 정보 부족').length).toBeGreaterThan(0);
+  expect(await screen.findByText('현재 0대')).toBeInTheDocument();
   expect(screen.getByRole('combobox', { name: '예측 horizon' }).value).toBe('120');
 });
 
@@ -116,4 +117,68 @@ test('keeps the map instance and ignores a stale bbox response after the next vi
 
   act(() => resolveFirstBbox({ ...riskMapFixture(), items: [] }));
   await waitFor(() => expect(screen.getByText('광화문역 1번 출구')).toBeInTheDocument());
+});
+
+test('keeps the map mounted on RISK_SCOPE_TOO_LARGE and waits for a narrower viewport', async () => {
+  let reportBounds;
+  const loadList = jest.fn().mockRejectedValueOnce(Object.assign(new Error('범위가 너무 넓습니다'), { code: 'RISK_SCOPE_TOO_LARGE' })).mockResolvedValueOnce(riskMapFixture());
+  const map = { setStations: jest.fn(), focusStation: jest.fn(), destroy: jest.fn() };
+  render(<RiskMapPage
+    createDataAdapter={() => ({ loadList, loadDetail: (number) => Promise.resolve(detailFixture(number)) })}
+    loadMapSdk={() => Promise.resolve({})}
+    createMapAdapter={(node, maps, callbacks) => { reportBounds = callbacks.onViewportChange; return map; }}
+  />);
+
+  await waitFor(() => expect(reportBounds).toBeDefined());
+  expect(screen.getByLabelText('위험 대여소 지도')).toBeInTheDocument();
+  expect(screen.getByText(/표시하려는 범위가 커서 현재 지도 확대가 필요합니다/)).toBeInTheDocument();
+  expect(screen.getByText(/지도를 확대하면 위험도를 계산합니다/)).toBeInTheDocument();
+  expect(screen.queryByText('오류가 발생했습니다')).not.toBeInTheDocument();
+
+  act(() => reportBounds('bbox-zoom'));
+  await waitFor(() => expect(loadList).toHaveBeenCalledWith(expect.objectContaining({ bbox: 'bbox-zoom' })));
+  await waitFor(() => expect(screen.getByText('광화문역 1번 출구')).toBeInTheDocument());
+  expect(screen.getByText('2026-08-30T09:00:00+09:00')).toBeInTheDocument();
+  expect(map.setStations).toHaveBeenLastCalledWith(expect.arrayContaining([expect.objectContaining({ station: expect.objectContaining({ stationNumber: '1001' }) })]), null);
+  expect(map.destroy).not.toHaveBeenCalled();
+});
+
+test('returns FORBIDDEN for 401 and 403 responses', async () => {
+  const forbidden = { status: 403, code: 'ADMIN_PERMISSION_DENIED', message: '권한이 없습니다.' };
+  render(<RiskMapPage createDataAdapter={() => ({ loadList: () => Promise.reject(makeError(forbidden)), loadDetail: (number) => Promise.resolve(detailFixture(number)) })} loadMapSdk={noMap} />);
+  expect(await screen.findByText('접근 권한 없음')).toBeInTheDocument();
+
+  const unauthorized = { status: 401, code: 'ADMIN_ACCESS_UNAVAILABLE', message: '로그인이 필요합니다.' };
+  render(<RiskMapPage createDataAdapter={() => ({ loadList: () => Promise.reject(makeError(unauthorized)), loadDetail: (number) => Promise.resolve(detailFixture(number)) })} loadMapSdk={noMap} />);
+  expect(await screen.findByText('접근 권한 없음')).toBeInTheDocument();
+});
+
+test('keeps generic error panel on 500', async () => {
+  render(<RiskMapPage createDataAdapter={() => ({ loadList: () => Promise.reject(makeError({ status: 500, code: 'OPS_RISK_MAP_ERROR', message: '오류가 발생했습니다.' })), loadDetail: (number) => Promise.resolve(detailFixture(number)) })} loadMapSdk={noMap} />);
+  expect(await screen.findByText('오류가 발생했습니다')).toBeInTheDocument();
+  expect(screen.getByText('OPS_RISK_MAP_ERROR')).toBeInTheDocument();
+});
+
+test('handles snapshot expiry without breaking map rendering', async () => {
+  render(<RiskMapPage createDataAdapter={adapter('DELAYED')} loadMapSdk={noMap} />);
+  expect(await screen.findByText('정보 갱신 지연')).toBeInTheDocument();
+  expect(screen.queryByText('오류가 발생했습니다')).not.toBeInTheDocument();
+});
+
+test('preserves zero / null / MISSING semantics', async () => {
+  const payload = riskMapFixture('MISSING');
+  payload.items = payload.items.map((item, index) => {
+    if (index !== 0) return { ...item, dataState: 'MISSING' };
+    return {
+      ...item,
+      dataState: 'MISSING',
+      station: { ...item.station, currentBikes: null },
+      rentalRisk: { ...item.rentalRisk, selectedShortageProbability: null },
+    };
+  });
+
+  render(<RiskMapPage createDataAdapter={() => ({ loadList: () => Promise.resolve(payload), loadDetail: (number) => Promise.resolve(detailFixture(number)) })} loadMapSdk={noMap} />);
+  await screen.findByText(/재고 확인 필요/);
+  expect(screen.getAllByText('판단 정보 부족').length).toBeGreaterThan(0);
+  expect(screen.getByText('현재 2대')).toBeInTheDocument();
 });
