@@ -8,6 +8,8 @@ import RiskLegend from './RiskLegend';
 import RiskStationList from './RiskStationList';
 import RiskStationDrawer from './RiskStationDrawer';
 
+const isScopeTooLargeError = (candidate) =>
+  candidate && (candidate.code === 'RISK_SCOPE_TOO_LARGE' || String(candidate.message || '').includes('RISK_SCOPE_TOO_LARGE'));
 const STATE = { NORMAL: 'SUCCESS', DELAYED: 'DELAYED', MISSING: 'PARTIAL', INSUFFICIENT_DATA: 'INSUFFICIENT_DATA', UNAVAILABLE: 'UNAVAILABLE' };
 const formatTime = (value) => value || '기준시각 없음';
 
@@ -35,7 +37,9 @@ export default function RiskMapPage({ createDataAdapter, loadMapSdk = loadKakaoM
   const generation = useRef(0);
   const selectRef = useRef(null);
   const snapshotRef = useRef(null);
-  useEffect(() => { snapshotRef.current = result?.snapshotId || null; }, [result?.snapshotId]);
+  useEffect(() => {
+    snapshotRef.current = result?.snapshotId || null;
+  }, [result?.snapshotId]);
 
   const setManagedFilters = useCallback((next) => {
     const normalized = { ...filters, ...next };
@@ -60,10 +64,30 @@ export default function RiskMapPage({ createDataAdapter, loadMapSdk = loadKakaoM
     adapter.loadList({ ...filters, bbox, limit: 100, cursor, snapshotId: append ? snapshotRef.current : null, signal: controller.signal })
       .then((next) => {
         if (controller.signal.aborted || generation.current !== current) return;
-        if (!append && next.snapshotId) window.sessionStorage.setItem(`adminOpsRiskSnapshot:${filters.horizonMinutes}:${filters.requiredBikeCount}`, next.snapshotId);
         setResult((previous) => append ? { ...next, items: [...(previous?.items || []), ...(next.items || [])] } : next);
       })
-      .catch((nextError) => { if (!controller.signal.aborted && generation.current === current) { if (nextError.code === 'RISK_SNAPSHOT_EXPIRED') { setResult(null); setSelectedStationNumber(null); setDetail(null); setSnapshotExpired(true); } else if (append) setLoadMoreError(nextError); else setError(nextError); } })
+      .catch((nextError) => {
+        if (controller.signal.aborted || generation.current !== current) return;
+        if (nextError.code === 'RISK_SNAPSHOT_EXPIRED') {
+          setResult(null);
+          setSelectedStationNumber(null);
+          setDetail(null);
+          setSnapshotExpired(true);
+          return;
+        }
+        if (append) {
+          setLoadMoreError(nextError);
+        } else if (isScopeTooLargeError(nextError)) {
+          setResult(null);
+          setError(nextError);
+          setSelectedStationNumber(null);
+          detailController.current?.abort();
+          setDetail(null);
+          setDetailError(null);
+        } else {
+          setError(nextError);
+        }
+      })
       .finally(() => { if (!controller.signal.aborted && generation.current === current) { setLoading(false); setLoadingMore(false); } });
   }, [adapter, bbox, filters]);
 
@@ -72,12 +96,12 @@ export default function RiskMapPage({ createDataAdapter, loadMapSdk = loadKakaoM
     detailController.current?.abort();
     setDetail(null);
     setDetailError(null);
+    setSnapshotExpired(false);
     setResult(null);
   }, [filters]);
 
   useEffect(() => {
-    if (!bbox) return;
-    setResult(null);
+    if (bbox === null) return;
     setSelectedStationNumber(null);
     detailController.current?.abort();
     setDetail(null);
@@ -87,10 +111,10 @@ export default function RiskMapPage({ createDataAdapter, loadMapSdk = loadKakaoM
   }, [bbox]);
 
   useEffect(() => {
-    if (!bbox) { setLoading(false); return undefined; }
+    setSnapshotExpired(false);
     load();
     return () => listController.current?.abort();
-  }, [bbox, load]);
+  }, [load]);
 
   useEffect(() => {
     if (!mapNode.current) return undefined;
@@ -111,7 +135,11 @@ export default function RiskMapPage({ createDataAdapter, loadMapSdk = loadKakaoM
   }, [createMapAdapter, loadMapSdk]);
 
   const items = useMemo(() => result?.items || [], [result]);
-  useEffect(() => { mapAdapter?.setStations(items, selectedStationNumber); }, [items, mapAdapter, selectedStationNumber]);
+  const isScopeTooLarge = isScopeTooLargeError(error);
+  const displayedItems = useMemo(() => (isScopeTooLarge ? [] : items), [isScopeTooLarge, items]);
+  const showBlockingError = error && !isScopeTooLarge;
+  const uiState = showBlockingError ? (error.status === 401 || error.status === 403 ? 'FORBIDDEN' : 'ERROR') : STATE[result?.dataState] || 'SUCCESS';
+  useEffect(() => { mapAdapter?.setStations(displayedItems, selectedStationNumber); }, [displayedItems, mapAdapter, selectedStationNumber]);
   useEffect(() => {
     if (!selectedStationNumber) return undefined;
     const controller = new AbortController();
@@ -120,7 +148,16 @@ export default function RiskMapPage({ createDataAdapter, loadMapSdk = loadKakaoM
     setDetailLoading(true); setDetail(null); setDetailError(null);
     adapter.loadDetail(selectedStationNumber, { ...filters, snapshotId: result?.snapshotId, signal: controller.signal })
       .then((next) => { if (!controller.signal.aborted) setDetail(next); })
-      .catch((next) => { if (!controller.signal.aborted) { if (next.code === 'RISK_SNAPSHOT_EXPIRED') { setResult(null); setSelectedStationNumber(null); setSnapshotExpired(true); } else setDetailError(next); } })
+      .catch((next) => {
+        if (controller.signal.aborted) return;
+        if (next.code === 'RISK_SNAPSHOT_EXPIRED') {
+          setResult(null);
+          setSelectedStationNumber(null);
+          setSnapshotExpired(true);
+          return;
+        }
+        setDetailError(next);
+      })
       .finally(() => { if (!controller.signal.aborted) setDetailLoading(false); });
     return () => controller.abort();
   }, [adapter, filters, result?.snapshotId, selectedStationNumber]);
@@ -130,7 +167,6 @@ export default function RiskMapPage({ createDataAdapter, loadMapSdk = loadKakaoM
     if (focusMap) mapAdapter?.focusStation(items.find((item) => item.station.stationNumber === number));
   }
   selectRef.current = select;
-  const uiState = error ? (error.status === 401 || error.status === 403 ? 'FORBIDDEN' : 'ERROR') : STATE[result?.dataState] || 'SUCCESS';
 
   return <main className="risk-map-page" aria-label="수급 위험 지도">
     <header><div><p className="risk-eyebrow">UI-OPS-02</p><h1>수급 위험 지도</h1></div><div className="risk-controls">
@@ -138,22 +174,21 @@ export default function RiskMapPage({ createDataAdapter, loadMapSdk = loadKakaoM
       <label>필요 자전거 수<select value={filters.requiredBikeCount} onChange={(event) => setManagedFilters({ requiredBikeCount: Number(event.target.value) })}>{[1, 2, 3, 4, 5].map((value) => <option key={value} value={value}>{value}대</option>)}</select></label>
       <label>데이터 상태<select value={filters.dataState || ''} onChange={(event) => setManagedFilters({ dataState: event.target.value || null })}><option value="">전체</option>{['NORMAL', 'DELAYED', 'MISSING', 'INSUFFICIENT_DATA', 'UNAVAILABLE'].map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
     </div></header>
-    <section className="risk-context" aria-label="목록 기준"><span><b>목록 기준시각</b>{formatTime(result?.referenceTime)}</span><span><b>예측 horizon</b>{filters.horizonMinutes}분</span><span><b>필요 자전거 수</b>{filters.requiredBikeCount}대</span><span><b>데이터 상태</b>{result?.dataState || '불러오는 중'}</span><span><b>현재 표시</b>{items.length}곳</span></section>
+    <section className="risk-context" aria-label="목록 기준"><span><b>목록 기준시각</b>{formatTime(result?.referenceTime)}</span><span><b>예측 horizon</b>{filters.horizonMinutes}분</span><span><b>필요 자전거 수</b>{filters.requiredBikeCount}대</span><span><b>데이터 상태</b>{result?.dataState || '불러오는 중'}</span><span><b>현재 표시</b>{displayedItems.length}곳</span></section>
     {loading ? <AsyncStatePanel state="LOADING" /> : null}
-    {!loading && !bbox && !mapError ? <p className="risk-limitations" role="status">지도 범위를 확인한 뒤 위험도를 계산합니다.</p> : null}
-    {!loading && error ? <AsyncStatePanel state={uiState} code={error.code} requiredPermission={uiState === 'FORBIDDEN' ? 'OPS_RISK_MAP_READ' : undefined} /> : null}
-    {!loading && error?.code === 'RISK_SCOPE_TOO_LARGE' ? <p className="risk-limitations" role="status">지도를 확대하면 위험도를 계산합니다.</p> : null}
-    {snapshotExpired ? <p className="risk-limitations" role="status">분석 결과가 만료되었습니다. <button type="button" onClick={() => load()}>현재 지도 범위 다시 분석</button></p> : null}
-    {!error ? <>
+    {!loading && showBlockingError ? <AsyncStatePanel state={uiState} code={error.code} requiredPermission={uiState === 'FORBIDDEN' ? 'OPS_RISK_MAP_READ' : undefined} /> : null}
+    {!showBlockingError ? <>
       <p className="risk-source-notice">대여 부족 위험 기반 화면입니다. 반납 위험은 현재 지원되지 않습니다.</p>
+      {isScopeTooLarge ? <p className="risk-limitations" role="status">표시하려는 범위가 커서 현재 지도 확대가 필요합니다. 지도를 확대하면 위험도를 계산합니다.</p> : null}
+      {snapshotExpired ? <p className="risk-limitations" role="status">분석 결과가 만료되었습니다. <button type="button" onClick={() => load()}>현재 지도 범위 다시 분석</button></p> : null}
       {uiState !== 'SUCCESS' ? <AsyncStatePanel state={uiState} /> : null}
       {result?.limitations?.length ? <p className="risk-limitations">제한 사항: {result.limitations.join(', ')}</p> : null}
       <section className="risk-map-layout">
-        <section className="risk-map-panel" aria-labelledby="risk-map-heading"><h2 id="risk-map-heading">위험 지도</h2>{mapError ? <p role="status">지도 사용 불가: {mapError.message} · 목록은 계속 사용할 수 있습니다.</p> : <div ref={mapNode} className="risk-kakao-map" aria-label="위험 대여소 지도" />}<RiskLegend /></section>
-        <RiskStationList items={items} selectedStationNumber={selectedStationNumber} onSelect={select} onLoadMore={result?.nextCursor ? () => load(result.nextCursor, true) : null} loadingMore={loadingMore} />
+        <section className="risk-map-panel" aria-labelledby="risk-map-heading"><h2 id="risk-map-heading">위험 지도</h2>{mapError ? <p role="status">지도 사용 불가: {mapError.message} · 목록은 계속 사용할 수 있습니다.</p> : <div ref={mapNode} className="risk-kakao-map" aria-label="위험 대여소 지도" />}{<RiskLegend />}</section>
+        {!isScopeTooLarge ? <RiskStationList items={displayedItems} selectedStationNumber={selectedStationNumber} onSelect={select} onLoadMore={result?.nextCursor ? () => load(result.nextCursor, true) : null} loadingMore={loadingMore} /> : null}
       </section>
       {loadMoreError ? <p className="risk-limitations" role="status">추가 데이터를 불러오지 못했습니다 <button type="button" onClick={() => load(result?.nextCursor, true)}>재시도</button></p> : null}
-      {uiState === 'SUCCESS' && !items.length ? <p className="risk-empty">현재 필터/지도 범위에 해당하는 대여소가 없습니다.</p> : null}
+      {uiState === 'SUCCESS' && !isScopeTooLarge && !items.length ? <p className="risk-empty">현재 필터/지도 범위에 해당하는 대여소가 없습니다.</p> : null}
     </> : null}
     {selectedStationNumber ? <RiskStationDrawer stationNumber={selectedStationNumber} detail={detail} error={detailError} loading={detailLoading} onClose={() => { detailController.current?.abort(); setSelectedStationNumber(null); }} /> : null}
   </main>;
