@@ -54,6 +54,24 @@ function RequestError({ error, onRetry }) {
   return <div className="operations-data-request-error"><AsyncStatePanel state={forbidden ? 'FORBIDDEN' : 'ERROR'} code={error?.code} requiredPermission={forbidden ? 'DATA_STATUS_READ' : undefined} />{!forbidden ? <button type="button" onClick={onRetry}>다시 시도</button> : null}</div>;
 }
 
+function StatusLegend() {
+  return <section className="operations-data-legend" aria-label="데이터 상태 범례">
+    <div className="operations-data-legend-item operations-data-legend-item--normal"><span>정상 상태</span><strong>정상</strong></div>
+    <div className="operations-data-legend-item operations-data-legend-item--delayed"><span>지연 상태</span><strong>지연</strong></div>
+    <div className="operations-data-legend-item operations-data-legend-item--missing"><span>결측 상태</span><strong>결측</strong></div>
+    <div className="operations-data-legend-item operations-data-legend-item--unavailable"><span>사용 불가 상태</span><strong>사용 불가</strong></div>
+  </section>;
+}
+
+function SourceSummary({ result }) {
+  const rows = [
+    ['대여소 재고', result?.inventory?.latestCollectedAt, result?.inventory?.dataState, result?.inventory?.expectedStationCount == null ? '확인 정보 없음' : `기대 대여소 ${count(result.inventory.expectedStationCount)}곳`],
+    ['예측 배치', result?.prediction?.publishedAt, result?.prediction?.dataState, result?.prediction ? `커버리지 ${ratio(result.prediction.coverageRatio)}` : '현재 예측 배치 없음'],
+    ['패턴/profile', result?.profile?.latestGeneratedAt, result?.profile?.dataState, result?.profile?.profileAvailableStationCount == null ? '확인 정보 없음' : `profile 보유 ${count(result.profile.profileAvailableStationCount)}곳`],
+  ];
+  return <section className="operations-data-source-summary" aria-labelledby="operations-data-source-summary-heading"><h2 id="operations-data-source-summary-heading">데이터 소스 상태</h2><table><caption>운영 판단에 쓰는 데이터 소스별 최신 시각과 상태</caption><thead><tr><th scope="col">데이터 소스</th><th scope="col">최신 수집 시각</th><th scope="col">상태</th><th scope="col">커버리지 / 비고</th></tr></thead><tbody>{rows.map(([name, collectedAt, state, note]) => <tr key={name}><th scope="row">{name}</th><td>{time(collectedAt)}</td><td><State value={state} /></td><td>{note}</td></tr>)}</tbody></table></section>;
+}
+
 export default function OperationsDataStatusPage({ createAdapter }) {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -81,5 +99,5 @@ export default function OperationsDataStatusPage({ createAdapter }) {
 
   if (loading) return <AsyncStatePanel state="LOADING" />;
   if (error) return <RequestError error={error} onRetry={retry} />;
-  return <main className="operations-data-page" aria-label="운영 데이터 상태"><header className="operations-data-header"><div><p className="operations-data-eyebrow">UI-OPS-05 · DATA_STATUS_READ</p><h1>운영 데이터 상태</h1><p>현재 운영 위험 판단에 쓰는 데이터의 freshness/coverage 확인.</p></div><dl><Metric label="전체 데이터 상태"><State value={result?.dataState} /></Metric><Metric label="기준 시각">{time(result?.referenceTime)}</Metric><Metric label="생성 시각">{time(result?.generatedAt)}</Metric></dl></header><Inventory inventory={result?.inventory} /><div className="operations-data-supporting"><Prediction prediction={result?.prediction} /><Profile profile={result?.profile} /></div><Limitations limitations={result?.limitations} /></main>;
+  return <main className="operations-data-page" aria-label="운영 데이터 상태"><header className="operations-data-header"><div><p className="operations-data-eyebrow">UI-OPS-05 · DATA_STATUS_READ</p><h1>운영 데이터 상태</h1><p>현재 운영 위험 판단에 쓰는 데이터의 freshness/coverage 확인.</p></div><dl><Metric label="전체 데이터 상태"><State value={result?.dataState} /></Metric><Metric label="기준 시각">{time(result?.referenceTime)}</Metric><Metric label="생성 시각">{time(result?.generatedAt)}</Metric></dl></header><StatusLegend /><p className="operations-data-safety-notice">결측 데이터는 정상 값으로 대체하지 않습니다.</p><SourceSummary result={result} /><Inventory inventory={result?.inventory} /><div className="operations-data-supporting"><Prediction prediction={result?.prediction} /><Profile profile={result?.profile} /></div><Limitations limitations={result?.limitations} /></main>;
 }

@@ -103,6 +103,13 @@ describe('admin v2 fixture access and routes', () => {
     expect(screen.getByText('UI-MODEL-01')).toBeInTheDocument();
   });
 
+  test('preview supplies a read-only fixture adapter to every redesigned route without a page-specific fixture', async () => {
+    setPreviewUrl('/admin-v2-preview/ops/candidates?fixture=SUPER_ADMIN');
+    render(<AdminV2PreviewApp />);
+    expect(await screen.findByRole('heading', { name: '집중관리 목록' })).toBeInTheDocument();
+    expect(screen.queryByText('오류가 발생했습니다')).not.toBeInTheDocument();
+  });
+
   test('popstate restores the previous preview route', async () => {
     setPreviewUrl('/admin-v2-preview/ops?fixture=OPS_VIEWER&opsFixture=SUCCESS');
     render(<AdminV2PreviewApp />);
@@ -380,11 +387,13 @@ describe('admin v2 accessible primitives', () => {
     const trigger = screen.getByRole('button', { name: '상세 열기' });
     trigger.focus();
     fireEvent.click(trigger);
+    const drawer = screen.getByRole('dialog', { name: '상세' });
     const close = screen.getByRole('button', { name: '상세 닫기' });
-    expect(close).toHaveFocus();
-    fireEvent.keyDown(close, { key: 'Tab' });
-    expect(screen.getByRole('button', { name: '첫 동작' })).toHaveFocus();
-    fireEvent.keyDown(screen.getByRole('button', { name: '첫 동작' }), { key: 'Tab', shiftKey: true });
+    expect(drawer).toHaveFocus();
+    fireEvent.keyDown(drawer, { key: 'Tab' });
+    const action = screen.getByRole('button', { name: '첫 동작' });
+    expect(action).toHaveFocus();
+    fireEvent.keyDown(action, { key: 'Tab', shiftKey: true });
     expect(close).toHaveFocus();
     fireEvent.keyDown(close, { key: 'Escape' });
     expect(trigger).toHaveFocus();
