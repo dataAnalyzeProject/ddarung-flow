@@ -45,6 +45,7 @@ export default function CandidatesPage({ createAdapter }) {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadMoreError, setLoadMoreError] = useState(null);
+  const [selectedStationNumber, setSelectedStationNumber] = useState(null);
   const generation = useRef(0);
   const loadMoreController = useRef(null);
   const adapter = useMemo(() => createAdapter(), [createAdapter]);
@@ -89,6 +90,7 @@ export default function CandidatesPage({ createAdapter }) {
   const items = result?.items || [];
   const rootDataState = result?.dataState || 'UNAVAILABLE';
   const rootUiState = DATA_STATE_TO_UI[result?.dataState] || (!items.length ? 'EMPTY' : 'SUCCESS');
+  const selectedCandidate = items.find((candidate) => candidate.station?.stationNumber === selectedStationNumber) || items[0] || null;
   return <main className="candidates-page" aria-label="집중관리 목록">
     <header className="candidates-header">
       <div>
@@ -113,16 +115,19 @@ export default function CandidatesPage({ createAdapter }) {
         <span><b>위험 유형</b>{result?.riskType || 'RENTAL'}</span>
       </div>
     </section>
+    <div className="candidates-workspace">
     <section className="candidates-list" aria-labelledby="candidates-heading">
       <div className="candidates-list-heading">
         <div><h2 id="candidates-heading">우선 확인 후보</h2><p>API가 제공한 순서를 그대로 표시합니다.</p></div>
         <nav aria-label="운영 화면 이동"><a href="/admin/ops/risk-map">대여 부족 위험 지도</a><a href="/admin/ops/analysis">반복 품절 패턴</a></nav>
       </div>
       {rootUiState !== 'SUCCESS' ? <div className="candidates-state-panel"><AsyncStatePanel state={rootUiState} code={result?.dataState === 'MISSING' ? 'MISSING' : undefined} /></div> : null}
-      {items.length ? <div className="candidates-table-wrap"><table><caption>집중관리 후보 목록</caption><thead><tr><th scope="col">순위</th><th scope="col">대여소</th><th scope="col">대여 부족 확률</th><th scope="col">예상 시점</th><th scope="col">현재 재고</th><th scope="col">후보 데이터 상태</th><th scope="col">반복 품절 근거</th></tr></thead><tbody>{items.map((candidate) => <tr key={`${candidate.rank}-${candidate.station?.stationNumber}`}><td className="candidates-rank"><strong>{candidate.rank}</strong></td><td className="candidates-station"><strong>{candidate.station?.name || '이름 확인 필요'}</strong><small>{candidate.station?.stationNumber || '번호 확인 필요'}</small></td><td className="candidates-probability">{formatPercent(candidate.prediction?.selectedShortageProbability)}</td><td className="candidates-target-time">{formatTime(candidate.prediction?.predictionTargetAt)}</td><td>{formatBikes(candidate.station?.currentBikes)}</td><td><span className="candidates-data-state">{candidate.dataState || '확인 정보 없음'}</span></td><td><RecurrenceEvidence recurrence={candidate.recurrence} /></td></tr>)}</tbody></table></div> : <p className="candidates-empty">현재 조건에서 표시할 집중관리 후보가 없습니다.</p>}
+      {items.length ? <div className="candidates-table-wrap"><table><caption>집중관리 후보 목록</caption><thead><tr><th scope="col">순위</th><th scope="col">대여소</th><th scope="col">대여 부족 확률</th><th scope="col">예상 시점</th><th scope="col">현재 재고</th><th scope="col">후보 데이터 상태</th><th scope="col">반복 품절 근거</th></tr></thead><tbody>{items.map((candidate) => { const selected = candidate.station?.stationNumber === selectedCandidate?.station?.stationNumber; return <tr key={`${candidate.rank}-${candidate.station?.stationNumber}`} className={selected ? 'is-selected' : undefined}><td className="candidates-rank"><strong>{candidate.rank}</strong></td><td className="candidates-station"><button type="button" onClick={() => setSelectedStationNumber(candidate.station?.stationNumber)} aria-pressed={selected}><strong>{candidate.station?.name || '이름 확인 필요'}</strong><small>{candidate.station?.stationNumber || '번호 확인 필요'}</small></button></td><td className="candidates-probability">{formatPercent(candidate.prediction?.selectedShortageProbability)}</td><td className="candidates-target-time">{formatTime(candidate.prediction?.predictionTargetAt)}</td><td>{formatBikes(candidate.station?.currentBikes)}</td><td><span className="candidates-data-state">{candidate.dataState || '확인 정보 없음'}</span></td><td><RecurrenceEvidence recurrence={candidate.recurrence} /></td></tr>; })}</tbody></table></div> : <p className="candidates-empty">현재 조건에서 표시할 집중관리 후보가 없습니다.</p>}
       {result?.nextCursor ? <button type="button" onClick={loadMore} disabled={loadingMore}>{loadingMore ? '추가 항목을 불러오는 중' : '더 보기'}</button> : null}
       {loadMoreError ? <p role="status" className="candidates-load-more-error">추가 항목을 불러오지 못했습니다. <button type="button" onClick={loadMore}>재시도</button></p> : null}
     </section>
+    {selectedCandidate ? <aside className="candidates-detail" aria-label="선택된 후보 상세"><div><p className="candidates-detail-kicker">선택된 후보 상세</p><h2>선택된 후보: {selectedCandidate.station?.name || '이름 확인 필요'}</h2><span className="candidates-station-number">{selectedCandidate.station?.stationNumber || '번호 확인 필요'}</span></div><dl><div><dt>현재 재고</dt><dd>{formatBikes(selectedCandidate.station?.currentBikes)}</dd></div><div><dt>예측 목표 시각</dt><dd>{formatTime(selectedCandidate.prediction?.predictionTargetAt)}</dd></div><div><dt>대여 부족 확률</dt><dd className="candidates-detail-probability">{formatPercent(selectedCandidate.prediction?.selectedShortageProbability)}</dd></div><div><dt>데이터 상태</dt><dd><span className="candidates-data-state">{selectedCandidate.dataState || '확인 정보 없음'}</span></dd></div></dl><a className="candidates-map-link" href="/admin/ops/risk-map">수급 위험 지도에서 보기</a></aside> : null}
+    </div>
     <section className="candidates-coverage" aria-label="데이터 범위"><div className="candidates-coverage-heading"><h2>데이터 범위</h2>{result?.limitations?.length ? <p>제한 사항: {result.limitations.join(', ')}</p> : null}</div><div className="candidates-coverage-values">{COVERAGE_FIELDS.map(([field, label]) => <span key={field}><b>{label}</b>{result?.coverage?.[field] ?? '확인 정보 없음'}</span>)}</div></section>
   </main>;
 }

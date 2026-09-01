@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createFixtureAdminAccessAdapter } from '../adapters/fixtureAdminAccessAdapter';
-import { resolvePreviewRoute, visibleConsoles } from '../routes/routeMap';
+import { PRODUCTION_RELEASED_ROUTE_IDS, resolvePreviewRoute, visibleConsoles } from '../routes/routeMap';
 import { routesForConsole } from '../routes/routeMap';
 import AsyncStatePanel from '../components/AsyncStatePanel';
 import AdminV2Shell from './AdminV2Shell';
+import { createPreviewAdapterForRoute } from '../fixtures/previewPageAdapters';
 import '../adminV2.css';
 
 function fixtureIdFromSearch(search) { return new URLSearchParams(search).get('fixture') || 'OPS_VIEWER'; }
@@ -66,7 +67,9 @@ export default function AdminV2PreviewApp({ pathname, search, createAccessAdapte
   if (resolution.type === 'NOT_FOUND') return <AsyncStatePanel state="EMPTY" code="NOT_FOUND" />;
   if (resolution.type === 'FORBIDDEN') return <AsyncStatePanel state="FORBIDDEN" code="ADMIN_PERMISSION_DENIED" requiredPermission={resolution.route.requiredPermission} />;
   const route = resolution.route;
-  const consoles = visibleConsoles(access.permissions);
+  if (!PRODUCTION_RELEASED_ROUTE_IDS.includes(route.id)) return <AsyncStatePanel state="EMPTY" code="ROUTE_NOT_IN_REDESIGN_SCOPE" />;
+  const consoles = visibleConsoles(access.permissions, PRODUCTION_RELEASED_ROUTE_IDS);
   const Page = route.Component;
-  return <AdminV2Shell consoles={consoles} activeConsole={route.console} activeRoute={route} access={access} onConsoleSelect={(consoleId) => navigate(routesForConsole(consoleId, access.permissions)[0].previewPath)} onRouteNavigate={(nextRoute) => navigate(nextRoute.previewPath)}><Page route={route} /></AdminV2Shell>;
+  const createAdapter = createPreviewAdapterForRoute(route.id);
+  return <AdminV2Shell consoles={consoles} activeConsole={route.console} activeRoute={route} access={access} allowedRouteIds={PRODUCTION_RELEASED_ROUTE_IDS} onConsoleSelect={(consoleId) => navigate(routesForConsole(consoleId, access.permissions, PRODUCTION_RELEASED_ROUTE_IDS)[0].previewPath)} onRouteNavigate={(nextRoute) => navigate(nextRoute.previewPath)}><Page route={route} {...(createAdapter ? { createAdapter } : {})} /></AdminV2Shell>;
 }
