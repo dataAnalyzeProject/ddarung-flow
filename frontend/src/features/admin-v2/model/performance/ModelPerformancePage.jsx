@@ -46,9 +46,19 @@ function Evidence({ base }) {
   </section>;
 }
 
+function RuntimeIdentity({ runtime, base }) {
+  const available = runtime?.state === 'SUCCESS';
+  const matchesEvaluation = available && runtime.data.modelVersion === base.modelVersion && runtime.data.artifactSha256 === base.artifactSha256;
+  return <section className="model-performance-identity" aria-label="현재 서빙 모델">
+    <span className="model-performance-identity-icon" aria-hidden="true"><GaugeIcon /></span>
+    <div><p>현재 서빙 모델</p><strong>{available ? runtime.data.modelVersion : 'UNKNOWN'}</strong>{available ? <small>LIVE INFERENCE</small> : <small>실시간 inference runtime 확인 불가</small>}</div>
+    {available ? <div className="model-performance-runtime-details"><p>Artifact SHA: <span title={runtime.data.artifactSha256}>{shortSha(runtime.data.artifactSha256)}</span> · Source: {runtime.data.modelSource} · Loaded: {formatTime(runtime.data.loadedAt)}</p><p>{matchesEvaluation ? '현재 서빙 모델과 동일한 버전의 평가 결과' : '현재 서빙 모델과 평가 snapshot 버전이 다름'}</p></div> : <p>평가 snapshot은 계속 표시하며, runtime endpoint가 확인되지 않아 현재 서빙 모델은 알 수 없습니다.</p>}
+  </section>;
+}
+
 export default function ModelPerformancePage({ createAdapter }) {
   const adapter = useMemo(() => createAdapter(), [createAdapter]);
-  const [base, setBase] = useState(null);
+  const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [version, setVersion] = useState(0);
@@ -56,9 +66,12 @@ export default function ModelPerformancePage({ createAdapter }) {
 
   useEffect(() => {
     const controller = new AbortController();
-    setLoading(true); setError(null); setBase(null);
-    adapter.loadBase({ signal: controller.signal })
-      .then((nextBase) => { if (!controller.signal.aborted) setBase(nextBase); })
+    setLoading(true); setError(null); setResult(null);
+    const load = adapter.load
+      ? adapter.load({ signal: controller.signal })
+      : adapter.loadBase({ signal: controller.signal }).then((base) => ({ base, runtime: { state: 'ERROR', error: { code: 'MODEL_RUNTIME_PREVIEW_UNAVAILABLE' } } }));
+    load
+      .then((nextResult) => { if (!controller.signal.aborted) setResult(nextResult); })
       .catch((nextError) => { if (!controller.signal.aborted && nextError?.name !== 'AbortError') setError(nextError); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
@@ -66,13 +79,10 @@ export default function ModelPerformancePage({ createAdapter }) {
 
   if (loading) return <main className="model-performance-page" aria-label="성능 · 신뢰도"><AsyncStatePanel state="LOADING" /></main>;
   if (error) return <BaseError error={error} onRetry={retry} />;
+  const { base, runtime } = result;
   return <main className="model-performance-page" aria-label="성능 · 신뢰도">
     <header className="model-performance-header"><div><h1>성능 · 신뢰도</h1><p>평가 snapshot의 성능과 보정 결과를 표시합니다.</p></div><span className="model-performance-source">Source: evaluation snapshot</span></header>
-    <section className="model-performance-identity" aria-label="runtime serving identity 제한">
-      <span className="model-performance-identity-icon" aria-hidden="true"><GaugeIcon /></span>
-      <div><p>runtime serving identity —</p><strong>UNKNOWN</strong></div>
-      <p>이 정보는 모델 메타데이터 수준의 식별이며, 실제 추론이 이 식별로 실시간 서빙되었음을 증명하지 않습니다.</p>
-    </section>
+    <RuntimeIdentity runtime={runtime} base={base} />
     <Evidence base={base} />
     <div className="model-performance-detail-grid"><ReliabilityTable combinations={base.combinations} /><Calibration evaluation={base.evaluation} bins={base.calibrationBins} /></div>
   </main>;
