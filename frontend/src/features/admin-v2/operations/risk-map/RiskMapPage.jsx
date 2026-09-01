@@ -27,12 +27,15 @@ export default function RiskMapPage({ createDataAdapter, loadMapSdk = loadKakaoM
   const [mapAdapter, setMapAdapter] = useState(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadMoreError, setLoadMoreError] = useState(null);
+  const [snapshotExpired, setSnapshotExpired] = useState(false);
   const mapNode = useRef(null);
   const listController = useRef(null);
   const detailController = useRef(null);
   const bboxTimer = useRef(null);
   const generation = useRef(0);
   const selectRef = useRef(null);
+  const snapshotRef = useRef(null);
+  useEffect(() => { snapshotRef.current = result?.snapshotId || null; }, [result?.snapshotId]);
 
   const setManagedFilters = useCallback((next) => {
     const normalized = { ...filters, ...next };
@@ -53,13 +56,14 @@ export default function RiskMapPage({ createDataAdapter, loadMapSdk = loadKakaoM
     listController.current = controller;
     const current = ++generation.current;
     if (append) { setLoadingMore(true); setLoadMoreError(null); }
-    else { setLoading(true); setError(null); setLoadMoreError(null); }
-    adapter.loadList({ ...filters, bbox, limit: 100, cursor, signal: controller.signal })
+    else { setLoading(true); setError(null); setLoadMoreError(null); setSnapshotExpired(false); }
+    adapter.loadList({ ...filters, bbox, limit: 100, cursor, snapshotId: append ? snapshotRef.current : null, signal: controller.signal })
       .then((next) => {
         if (controller.signal.aborted || generation.current !== current) return;
+        if (!append && next.snapshotId) window.sessionStorage.setItem(`adminOpsRiskSnapshot:${filters.horizonMinutes}:${filters.requiredBikeCount}`, next.snapshotId);
         setResult((previous) => append ? { ...next, items: [...(previous?.items || []), ...(next.items || [])] } : next);
       })
-      .catch((nextError) => { if (!controller.signal.aborted && generation.current === current) { if (append) setLoadMoreError(nextError); else setError(nextError); } })
+      .catch((nextError) => { if (!controller.signal.aborted && generation.current === current) { if (nextError.code === 'RISK_SNAPSHOT_EXPIRED') { setResult(null); setSelectedStationNumber(null); setDetail(null); setSnapshotExpired(true); } else if (append) setLoadMoreError(nextError); else setError(nextError); } })
       .finally(() => { if (!controller.signal.aborted && generation.current === current) { setLoading(false); setLoadingMore(false); } });
   }, [adapter, bbox, filters]);
 
@@ -68,12 +72,25 @@ export default function RiskMapPage({ createDataAdapter, loadMapSdk = loadKakaoM
     detailController.current?.abort();
     setDetail(null);
     setDetailError(null);
+    setResult(null);
   }, [filters]);
 
   useEffect(() => {
+    if (!bbox) return;
+    setResult(null);
+    setSelectedStationNumber(null);
+    detailController.current?.abort();
+    setDetail(null);
+    setDetailError(null);
+    setLoadMoreError(null);
+    setSnapshotExpired(false);
+  }, [bbox]);
+
+  useEffect(() => {
+    if (!bbox) { setLoading(false); return undefined; }
     load();
     return () => listController.current?.abort();
-  }, [load]);
+  }, [bbox, load]);
 
   useEffect(() => {
     if (!mapNode.current) return undefined;
@@ -101,12 +118,12 @@ export default function RiskMapPage({ createDataAdapter, loadMapSdk = loadKakaoM
     detailController.current?.abort();
     detailController.current = controller;
     setDetailLoading(true); setDetail(null); setDetailError(null);
-    adapter.loadDetail(selectedStationNumber, { ...filters, signal: controller.signal })
+    adapter.loadDetail(selectedStationNumber, { ...filters, snapshotId: result?.snapshotId, signal: controller.signal })
       .then((next) => { if (!controller.signal.aborted) setDetail(next); })
-      .catch((next) => { if (!controller.signal.aborted) setDetailError(next); })
+      .catch((next) => { if (!controller.signal.aborted) { if (next.code === 'RISK_SNAPSHOT_EXPIRED') { setResult(null); setSelectedStationNumber(null); setSnapshotExpired(true); } else setDetailError(next); } })
       .finally(() => { if (!controller.signal.aborted) setDetailLoading(false); });
     return () => controller.abort();
-  }, [adapter, filters, selectedStationNumber]);
+  }, [adapter, filters, result?.snapshotId, selectedStationNumber]);
 
   function select(number, focusMap = true) {
     setSelectedStationNumber(number);
@@ -123,7 +140,10 @@ export default function RiskMapPage({ createDataAdapter, loadMapSdk = loadKakaoM
     </div></header>
     <section className="risk-context" aria-label="목록 기준"><span><b>목록 기준시각</b>{formatTime(result?.referenceTime)}</span><span><b>예측 horizon</b>{filters.horizonMinutes}분</span><span><b>필요 자전거 수</b>{filters.requiredBikeCount}대</span><span><b>데이터 상태</b>{result?.dataState || '불러오는 중'}</span><span><b>현재 표시</b>{items.length}곳</span></section>
     {loading ? <AsyncStatePanel state="LOADING" /> : null}
+    {!loading && !bbox && !mapError ? <p className="risk-limitations" role="status">지도 범위를 확인한 뒤 위험도를 계산합니다.</p> : null}
     {!loading && error ? <AsyncStatePanel state={uiState} code={error.code} requiredPermission={uiState === 'FORBIDDEN' ? 'OPS_RISK_MAP_READ' : undefined} /> : null}
+    {!loading && error?.code === 'RISK_SCOPE_TOO_LARGE' ? <p className="risk-limitations" role="status">지도를 확대하면 위험도를 계산합니다.</p> : null}
+    {snapshotExpired ? <p className="risk-limitations" role="status">분석 결과가 만료되었습니다. <button type="button" onClick={() => load()}>현재 지도 범위 다시 분석</button></p> : null}
     {!error ? <>
       <p className="risk-source-notice">대여 부족 위험 기반 화면입니다. 반납 위험은 현재 지원되지 않습니다.</p>
       {uiState !== 'SUCCESS' ? <AsyncStatePanel state={uiState} /> : null}

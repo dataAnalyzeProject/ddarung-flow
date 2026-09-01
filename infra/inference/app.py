@@ -239,7 +239,7 @@ def _tail_probabilities(model, rows):
 
 def predict_candidates(bundle, payload, generated_at=None, model_sha256="", model_version=""):
     candidates = payload.get("candidates") if isinstance(payload, dict) else None
-    if not isinstance(candidates, list) or not 1 <= len(candidates) <= 5:
+    if not isinstance(candidates, list) or not 1 <= len(candidates) <= 20:
         return {"status": "UNAVAILABLE", "errorCode": "INVALID_CANDIDATES", "predictions": []}
 
     model, model_name = _model_parts(bundle)

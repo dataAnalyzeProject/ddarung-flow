@@ -198,6 +198,17 @@ class PredictionTests(unittest.TestCase):
         result = app.predict_candidates(self.bundle(), {"candidates": []})
         self.assertEqual("UNAVAILABLE", result["status"])
 
+    def test_admin_bulk_accepts_twenty_and_rejects_twenty_one(self):
+        candidate = {
+            "stationId": "ST-4", "stationNumber": "102", "currentBikeCount": 11,
+            "featureAsOf": "2026-08-17T14:00:00+09:00",
+        }
+        twenty = app.predict_candidates(self.bundle(), {"candidates": [candidate] * 20})
+        twenty_one = app.predict_candidates(self.bundle(), {"candidates": [candidate] * 21})
+        self.assertEqual("NORMAL", twenty["status"])
+        self.assertEqual(20, len(twenty["predictions"]))
+        self.assertEqual("INVALID_CANDIDATES", twenty_one["errorCode"])
+
     def test_invalid_current_bike_count_is_missing(self):
         result = app.predict_candidates(self.bundle(), {"candidates": [{
             "stationId": "ST-4",

@@ -39,6 +39,18 @@ public class InferenceClient {
         if (candidates == null || candidates.isEmpty() || candidates.size() > 5) {
             throw new IllegalArgumentException("inference candidates must contain between 1 and 5 items");
         }
+        return requestPredictions(candidates);
+    }
+
+    /** Admin scopes are chunked by the caller; this method deliberately cannot exceed one 20-item request. */
+    public InferenceDtos.PredictResponse predictAdminChunk(List<InferenceDtos.CandidateRequest> candidates) {
+        if (candidates == null || candidates.isEmpty() || candidates.size() > 20) {
+            throw new IllegalArgumentException("admin inference candidates must contain between 1 and 20 items");
+        }
+        return requestPredictions(candidates);
+    }
+
+    private InferenceDtos.PredictResponse requestPredictions(List<InferenceDtos.CandidateRequest> candidates) {
         try {
             String body = objectMapper.writeValueAsString(new InferenceDtos.PredictRequest(candidates));
             HttpRequest request = HttpRequest.newBuilder(predictUri)

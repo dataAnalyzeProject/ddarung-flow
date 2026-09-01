@@ -4,12 +4,13 @@ import { detailFixture, riskMapFixture } from './riskMapFixtures';
 
 function adapter(name = 'SUCCESS') { return () => ({ loadList: ({ cursor }) => Promise.resolve(riskMapFixture(name, cursor)), loadDetail: (number) => Promise.resolve(detailFixture(number)) }); }
 function noMap() { return Promise.reject(new Error('KAKAO_MAP_KEY_MISSING')); }
+function readyMap(node, maps, callbacks) { callbacks.onViewportChange('126,37,127,38'); return { setStations: jest.fn(), focusStation: jest.fn(), destroy: jest.fn() }; }
 
 afterEach(() => window.history.replaceState({}, '', '/'));
 
 test('keeps the route heading while loading and renders zero inventory without fabricating null probability', async () => {
   window.history.replaceState({}, '', '/admin-v2-preview/ops/risk-map?horizonMinutes=120&requiredBikeCount=2');
-  render(<RiskMapPage createDataAdapter={adapter()} loadMapSdk={noMap} />);
+  render(<RiskMapPage createDataAdapter={adapter()} loadMapSdk={() => Promise.resolve({})} createMapAdapter={readyMap} />);
   expect(screen.getByRole('heading', { name: '수급 위험 지도' })).toBeInTheDocument();
   await screen.findByText('현재 0대');
   expect(screen.getAllByText('판단 정보 부족').length).toBeGreaterThan(0);
@@ -17,7 +18,7 @@ test('keeps the route heading while loading and renders zero inventory without f
 });
 
 test('selects a public station number and opens detail drawer', async () => {
-  render(<RiskMapPage createDataAdapter={adapter()} loadMapSdk={noMap} />);
+  render(<RiskMapPage createDataAdapter={adapter()} loadMapSdk={() => Promise.resolve({})} createMapAdapter={readyMap} />);
   const station = await screen.findByRole('button', { name: /광화문역 1번 출구/ });
   fireEvent.click(station);
   await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
@@ -27,7 +28,7 @@ test('selects a public station number and opens detail drawer', async () => {
   expect(screen.getByText('대여소 번호')).toBeInTheDocument();
 });
 
-test('keeps the selected station drawer open when focusing it refreshes the map viewport', async () => {
+test('clears the selected station and snapshot context when the map viewport changes', async () => {
   let reportBounds;
   let selectStation;
   const map = { setStations: jest.fn(), focusStation: jest.fn(() => reportBounds('bbox-after-pan')), destroy: jest.fn() };
@@ -35,7 +36,7 @@ test('keeps the selected station drawer open when focusing it refreshes the map 
   render(<RiskMapPage
     createDataAdapter={() => ({ loadList, loadDetail: (number) => Promise.resolve(detailFixture(number)) })}
     loadMapSdk={() => Promise.resolve({})}
-    createMapAdapter={(node, maps, callbacks) => { reportBounds = callbacks.onViewportChange; selectStation = callbacks.onStationSelect; return map; }}
+    createMapAdapter={(node, maps, callbacks) => { reportBounds = callbacks.onViewportChange; selectStation = callbacks.onStationSelect; reportBounds('bbox-initial'); return map; }}
   />);
 
   await waitFor(() => expect(reportBounds).toBeDefined());
@@ -43,27 +44,25 @@ test('keeps the selected station drawer open when focusing it refreshes the map 
   await screen.findByRole('dialog');
   await waitFor(() => expect(loadList).toHaveBeenCalledWith(expect.objectContaining({ bbox: 'bbox-after-pan' })));
   expect(map.focusStation).toHaveBeenCalledWith(expect.objectContaining({ station: expect.objectContaining({ stationNumber: '1001' }) }));
-  expect(screen.getByRole('dialog')).toBeInTheDocument();
-  expect(screen.getByText('대여소 번호')).toBeInTheDocument();
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
   act(() => selectStation('1002'));
   await screen.findByRole('heading', { name: '시청역 7번 출구' });
   act(() => reportBounds('bbox-after-marker'));
   await waitFor(() => expect(loadList).toHaveBeenCalledWith(expect.objectContaining({ bbox: 'bbox-after-marker' })));
-  expect(screen.getByRole('dialog')).toBeInTheDocument();
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });
 
-test('keeps the list available when map provider fails and supports cursor append', async () => {
-  render(<RiskMapPage createDataAdapter={adapter('PAGINATED')} loadMapSdk={noMap} />);
+test('loads only after a map bounds callback and supports cursor append', async () => {
+  render(<RiskMapPage createDataAdapter={adapter('PAGINATED')} loadMapSdk={() => Promise.resolve({})} createMapAdapter={readyMap} />);
   await screen.findByText('더 보기');
-  await screen.findByText(/지도 사용 불가/);
   fireEvent.click(screen.getByText('더 보기'));
   await screen.findByText('을지로입구역');
 });
 
 test('keeps first-page data and retry cursor when load-more fails', async () => {
   const loadList = jest.fn(({ cursor }) => cursor ? Promise.reject(Object.assign(new Error('failed'), { code: 'LOAD_MORE_FAILED' })) : Promise.resolve(riskMapFixture('PAGINATED')));
-  render(<RiskMapPage createDataAdapter={() => ({ loadList, loadDetail: (number) => Promise.resolve(detailFixture(number)) })} loadMapSdk={noMap} />);
+  render(<RiskMapPage createDataAdapter={() => ({ loadList, loadDetail: (number) => Promise.resolve(detailFixture(number)) })} loadMapSdk={() => Promise.resolve({})} createMapAdapter={readyMap} />);
   await screen.findByText('더 보기');
   fireEvent.click(screen.getByText('더 보기'));
   await screen.findByText('추가 데이터를 불러오지 못했습니다');
@@ -72,8 +71,20 @@ test('keeps first-page data and retry cursor when load-more fails', async () => 
   expect(screen.getByText('재시도')).toBeInTheDocument();
 });
 
+test('clears an expired snapshot instead of retrying its cursor and offers a fresh scoped query', async () => {
+  const loadList = jest.fn(({ cursor }) => cursor
+    ? Promise.reject(Object.assign(new Error('expired'), { status: 409, code: 'RISK_SNAPSHOT_EXPIRED' }))
+    : Promise.resolve({ ...riskMapFixture('PAGINATED'), snapshotId: 'snapshot-1' }));
+  render(<RiskMapPage createDataAdapter={() => ({ loadList, loadDetail: (number) => Promise.resolve(detailFixture(number)) })} loadMapSdk={() => Promise.resolve({})} createMapAdapter={readyMap} />);
+  fireEvent.click(await screen.findByText('더 보기'));
+  await screen.findByText('분석 결과가 만료되었습니다.');
+  expect(screen.queryByText('더 보기')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '현재 지도 범위 다시 분석' }));
+  await waitFor(() => expect(loadList).toHaveBeenLastCalledWith(expect.objectContaining({ cursor: null, snapshotId: null })));
+});
+
 test('renders the backend detail shape including direct N probability fields', async () => {
-  render(<RiskMapPage createDataAdapter={adapter()} loadMapSdk={noMap} />);
+  render(<RiskMapPage createDataAdapter={adapter()} loadMapSdk={() => Promise.resolve({})} createMapAdapter={readyMap} />);
   fireEvent.click(await screen.findByRole('button', { name: /광화문역 1번 출구/ }));
   await screen.findByText('1대 이상 확률');
   expect(screen.getByText('76% / 부족 24%')).toBeInTheDocument();
@@ -91,7 +102,7 @@ test('keeps the map instance and ignores a stale bbox response after the next vi
   render(<RiskMapPage
     createDataAdapter={() => ({ loadList, loadDetail: (number) => Promise.resolve(detailFixture(number)) })}
     loadMapSdk={() => Promise.resolve({})}
-    createMapAdapter={(node, maps, callbacks) => { reportBounds = callbacks.onViewportChange; return map; }}
+    createMapAdapter={(node, maps, callbacks) => { reportBounds = callbacks.onViewportChange; reportBounds('bbox-initial'); return map; }}
   />);
 
   await waitFor(() => expect(reportBounds).toBeDefined());

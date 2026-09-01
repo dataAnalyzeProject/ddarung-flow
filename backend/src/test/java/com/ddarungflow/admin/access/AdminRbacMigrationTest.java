@@ -46,7 +46,7 @@ class AdminRbacMigrationTest {
                 .baselineOnMigrate(true).baselineVersion(MigrationVersion.fromVersion("10")).load();
         flyway.migrate();
 
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("11");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("12");
         assertThat(jdbc.queryForObject("select count(*) from admin_roles", Integer.class)).isEqualTo(10);
         assertThat(jdbc.queryForObject("select count(*) from admin_permissions", Integer.class)).isEqualTo(30);
         assertThat(jdbc.queryForObject("select count(*) from admin_role_permissions", Integer.class)).isEqualTo(79);
