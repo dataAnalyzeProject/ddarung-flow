@@ -21,6 +21,9 @@ test('selects a public station number and opens detail drawer', async () => {
   const station = await screen.findByRole('button', { name: /광화문역 1번 출구/ });
   fireEvent.click(station);
   await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+  expect(screen.getByRole('dialog')).toHaveClass('admin-v2-drawer--contextual');
+  expect(screen.getByRole('dialog')).not.toHaveAttribute('aria-modal');
+  expect(document.querySelector('.admin-v2-drawer-backdrop')).not.toBeInTheDocument();
   expect(screen.getByText('대여소 번호')).toBeInTheDocument();
 });
 
