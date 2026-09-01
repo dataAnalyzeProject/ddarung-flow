@@ -57,7 +57,8 @@ describe('OperationsDataStatusPage', () => {
     ['INSUFFICIENT_DATA', '판단 정보 부족'],
   ])('maps %s to the localized display label %s', async (dataState, label) => {
     renderPage(jest.fn().mockResolvedValue(payload({ dataState })));
-    expect(await screen.findByText(label)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '운영 데이터 상태' })).toBeInTheDocument();
+    expect(screen.getAllByText(label).length).toBeGreaterThan(0);
     expect(screen.queryByText(dataState)).not.toBeInTheDocument();
   });
 
