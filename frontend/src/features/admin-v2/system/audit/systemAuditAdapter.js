@@ -1,3 +1,5 @@
+import { adminFetch } from '../../auth/adminSession.js';
+
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080';
 const SAFE_RESULT_VALUES = new Set(['SUCCESS', 'FAILURE']);
 
@@ -61,7 +63,7 @@ export function createSystemAuditAdapter() {
     async load({ signal, ...query } = {}) {
       let response;
       try {
-        response = await fetch(`${API_BASE_URL}/api/v1/admin/system/audit-logs?${createSystemAuditQuery(query)}`, { credentials: 'include', signal });
+        response = await adminFetch(`${API_BASE_URL}/api/v1/admin/system/audit-logs?${createSystemAuditQuery(query)}`, { credentials: 'include', signal });
       } catch (error) {
         if (error?.name === 'AbortError') throw error;
         throw new SystemAuditApiError();

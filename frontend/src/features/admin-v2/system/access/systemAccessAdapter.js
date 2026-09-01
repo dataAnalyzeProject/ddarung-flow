@@ -1,3 +1,5 @@
+import { adminFetch } from '../../auth/adminSession.js';
+
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080';
 
 export class SystemAccessApiError extends Error {
@@ -10,7 +12,7 @@ export class SystemAccessApiError extends Error {
 }
 
 async function request(path, options = {}) {
-  const response = await fetch(`${API_BASE_URL}${path}`, { credentials: 'include', ...options });
+  const response = await adminFetch(`${API_BASE_URL}${path}`, { credentials: 'include', ...options });
   if (response.ok) return response.status === 204 ? null : response.json();
   let body = {};
   try { body = await response.json(); } catch (_) { /* error bodies are optional */ }

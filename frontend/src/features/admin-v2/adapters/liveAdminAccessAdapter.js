@@ -1,3 +1,5 @@
+import { adminFetch } from '../auth/adminSession.js';
+
 function accessFailure(state = 'ACCESS_ERROR', code = 'ADMIN_ACCESS_UNAVAILABLE') {
   return {
     state,
@@ -37,7 +39,7 @@ export function createLiveAdminAccessAdapter() {
   return {
     async load({ signal } = {}) {
       try {
-        const response = await fetch(`${baseUrl}/api/v1/admin/access`, {
+        const response = await adminFetch(`${baseUrl}/api/v1/admin/access`, {
           method: 'GET',
           credentials: 'include',
           signal,

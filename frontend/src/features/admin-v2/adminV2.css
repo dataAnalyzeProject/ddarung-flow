@@ -34,6 +34,9 @@
 .admin-v2-header-context { align-items: center; display: flex; gap: 20px; justify-content: flex-end; min-width: 0; }
 .admin-v2-account-context { align-items: center; border-left: 1px solid var(--admin-v2-border); color: var(--admin-v2-muted); display: flex; font-size: .78rem; gap: 8px; max-width: 225px; padding-left: 16px; }
 .admin-v2-account-context strong { color: var(--admin-v2-ink); font-weight: 750; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-v2-logout { background: transparent; border: 1px solid var(--admin-v2-border); border-radius: 7px; color: var(--admin-v2-muted); cursor: pointer; font-size: .78rem; font-weight: 700; min-height: 32px !important; padding: 5px 9px; }
+.admin-v2-logout:hover:not(:disabled) { background: var(--admin-v2-surface); color: var(--admin-v2-ink); }
+.admin-v2-logout-error { background: #fff1f2; border-bottom: 1px solid #fecdd3; color: #9f1239; margin: 0; padding: 8px 24px; text-align: right; }
 
 .admin-v2-console-switcher { background: #f5f6f5; border: 1px solid var(--admin-v2-border); border-radius: 10px; display: flex; gap: 2px; padding: 3px; }
 .admin-v2-console-switcher button, .admin-v2-nav button { background: transparent; border: 0; border-radius: 8px; color: var(--admin-v2-muted); cursor: pointer; font-weight: 700; padding: 8px 12px; }

@@ -1,3 +1,5 @@
+import { adminFetch } from '../../auth/adminSession.js';
+
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080';
 
 export class CandidatesApiError extends Error {
@@ -23,7 +25,7 @@ function queryString({ horizonMinutes, requiredBikeCount, limit, cursor }) {
 export function createLiveCandidatesAdapter() {
   return {
     async load({ horizonMinutes, requiredBikeCount, limit, cursor, signal }) {
-      const response = await fetch(`${API_BASE_URL}/api/v1/admin/ops/candidates?${queryString({ horizonMinutes, requiredBikeCount, limit, cursor })}`, { credentials: 'include', signal });
+      const response = await adminFetch(`${API_BASE_URL}/api/v1/admin/ops/candidates?${queryString({ horizonMinutes, requiredBikeCount, limit, cursor })}`, { credentials: 'include', signal });
       if (response.ok) return response.json();
       let body = {};
       try { body = await response.json(); } catch (_) { /* response body is optional */ }

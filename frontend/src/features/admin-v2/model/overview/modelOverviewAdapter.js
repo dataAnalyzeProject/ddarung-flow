@@ -1,3 +1,5 @@
+import { adminFetch } from '../../auth/adminSession.js';
+
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080';
 
 export const REGISTRY_STATES = ['DRAFT', 'VALIDATED', 'APPROVED', 'ACTIVE', 'RETIRED'];
@@ -18,7 +20,7 @@ export function deriveRegistryStateCounts(models) {
 
 async function request(path, signal) {
   let response;
-  try { response = await fetch(`${API_BASE_URL}${path}`, { credentials: 'include', signal }); }
+  try { response = await adminFetch(`${API_BASE_URL}${path}`, { credentials: 'include', signal }); }
   catch (error) { if (error?.name === 'AbortError') throw error; throw new ModelOverviewApiError(); }
   let body = null;
   try { body = await response.json(); } catch (_) { /* error body is optional */ }
