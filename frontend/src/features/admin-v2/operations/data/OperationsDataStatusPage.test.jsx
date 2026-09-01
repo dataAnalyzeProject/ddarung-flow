@@ -30,37 +30,58 @@ describe('OperationsDataStatusPage', () => {
     expect(screen.getByRole('table', { name: /원본 재고 상태별 대여소 수/ })).toBeInTheDocument();
     expect(screen.getAllByText('0').length).toBeGreaterThan(0);
     expect(screen.getAllByText('100.0%')).toHaveLength(2);
+    expect(screen.getByText('현재 데이터 행 없음')).toBeInTheDocument();
   });
 
-  test.each(['PARTIAL', 'DELAYED', 'MISSING', 'INSUFFICIENT_DATA'])('keeps root %s as the exact visible data state', async (dataState) => {
+  test('renders compact status criteria in Korean', async () => {
+    renderPage(jest.fn().mockResolvedValue(payload()));
+    expect(await screen.findByRole('heading', { name: '상태 기준' })).toBeInTheDocument();
+    expect(screen.getAllByText('정상').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('지연').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('결측').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('사용 불가').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('일부 사용 가능').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('판단 정보 부족').length).toBeGreaterThan(0);
+    expect(screen.queryByText('정상 상태')).not.toBeInTheDocument();
+    expect(screen.queryByText('지연 상태')).not.toBeInTheDocument();
+    expect(screen.queryByText('결측 상태')).not.toBeInTheDocument();
+    expect(screen.queryByText('사용 불가 상태')).not.toBeInTheDocument();
+  });
+
+  test.each([
+    ['NORMAL', '정상'],
+    ['DELAYED', '지연'],
+    ['MISSING', '결측'],
+    ['UNAVAILABLE', '사용 불가'],
+    ['PARTIAL', '일부 사용 가능'],
+    ['INSUFFICIENT_DATA', '판단 정보 부족'],
+  ])('maps %s to the localized display label %s', async (dataState, label) => {
     renderPage(jest.fn().mockResolvedValue(payload({ dataState })));
-    expect(await screen.findByText(dataState)).toBeInTheDocument();
+    expect(await screen.findByText(label)).toBeInTheDocument();
+    expect(screen.queryByText(dataState)).not.toBeInTheDocument();
   });
 
-  test('shows null prediction as no valid batch without zero metrics', async () => {
-    renderPage(jest.fn().mockResolvedValue(payload({ prediction: null })));
-    expect(await screen.findByText('유효한 예측 배치 없음')).toBeInTheDocument();
-    expect(screen.queryByText('예측 행 수')).not.toBeInTheDocument();
-    expect(screen.queryByText('0.0%')).not.toBeInTheDocument();
-  });
-
-  test('keeps genuine inventory zero distinct from missing and null delay values', async () => {
+  test('keeps inventory row-missing and status-missing semantics distinct', async () => {
     const result = payload();
     result.inventory = { ...result.inventory, expectedStationCount: 0, latestStationCount: 0, missingStationCount: 0, p50DelayMinutes: null, p95DelayMinutes: null, inventoryStatusBreakdown: { NORMAL: 0, MISSING: 2 } };
     renderPage(jest.fn().mockResolvedValue(result));
-    expect(await screen.findByText('MISSING')).toBeInTheDocument();
+    expect(await screen.findByText('현재 데이터 행 없음')).toBeInTheDocument();
     expect(screen.getAllByText('0').length).toBeGreaterThanOrEqual(4);
     expect(screen.getAllByText('확인 정보 없음').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('수집 상태 결측')).toBeInTheDocument();
+    expect(screen.queryByText('MISSING')).not.toBeInTheDocument();
   });
 
-  test('maps exact limitation codes without fabricating scope, reason, or last-normal values', async () => {
+  test('maps limitation codes to Korean user-facing headers and copies', async () => {
     renderPage(jest.fn().mockResolvedValue(payload()));
-    expect(await screen.findByText('영향 범위는 원본 데이터로 제공되지 않습니다.')).toBeInTheDocument();
-    expect(screen.getByText('직전 정상 갱신 시각은 보존된 원본 정보가 아닙니다.')).toBeInTheDocument();
-    expect(screen.getByText('원인·사유 이력은 원본 데이터로 제공되지 않습니다.')).toBeInTheDocument();
-    expect(screen.queryByText(/affected scope/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/last normal/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/model version/i)).not.toBeInTheDocument();
+    expect(await screen.findByText('영향 범위')).toBeInTheDocument();
+    expect(screen.getByText('직전 정상 갱신 시각')).toBeInTheDocument();
+    expect(screen.getByText('원인·사유 이력')).toBeInTheDocument();
+    expect(screen.getAllByText('원본 데이터에서 제공하지 않습니다.').length).toBe(2);
+    expect(screen.getByText('보존된 원본 기록이 없습니다.')).toBeInTheDocument();
+    expect(screen.queryByText(/AFFECTED_SCOPE_NOT_SOURCE_BACKED/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/LAST_NORMAL_REFRESH_NOT_SOURCE_BACKED/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/REASON_LEDGER_NOT_SOURCE_BACKED/)).not.toBeInTheDocument();
   });
 
   test('does not render sensitive, unsupported, or unapproved dynamic response fields', async () => {
