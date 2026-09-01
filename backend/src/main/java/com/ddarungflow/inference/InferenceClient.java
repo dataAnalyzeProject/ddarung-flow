@@ -15,6 +15,7 @@ import java.util.List;
 @Component
 public class InferenceClient {
     private final URI predictUri;
+    private final URI runtimeModelUri;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
 
@@ -27,7 +28,9 @@ public class InferenceClient {
     }
 
     InferenceClient(String baseUrl, ObjectMapper objectMapper, HttpClient httpClient) {
-        this.predictUri = URI.create(baseUrl.replaceAll("/+$", "") + "/predict");
+        String normalizedBaseUrl = baseUrl.replaceAll("/+$", "");
+        this.predictUri = URI.create(normalizedBaseUrl + "/predict");
+        this.runtimeModelUri = URI.create(normalizedBaseUrl + "/internal/runtime-model");
         this.objectMapper = objectMapper;
         this.httpClient = httpClient;
     }
@@ -58,5 +61,39 @@ public class InferenceClient {
         } catch (Exception exception) {
             throw new IllegalStateException("inference request failed", exception);
         }
+    }
+
+    public InferenceDtos.RuntimeModelResponse runtimeModel() {
+        try {
+            HttpRequest request = HttpRequest.newBuilder(runtimeModelUri)
+                .timeout(Duration.ofSeconds(5))
+                .GET()
+                .build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) {
+                throw new IllegalStateException("inference runtime returned a non-200 response");
+            }
+            InferenceDtos.RuntimeModelResponse parsed = objectMapper.readValue(response.body(), InferenceDtos.RuntimeModelResponse.class);
+            if (!validRuntimeModel(parsed)) {
+                throw new IllegalStateException("inference runtime response is invalid");
+            }
+            return parsed;
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("inference runtime request was interrupted", exception);
+        } catch (Exception exception) {
+            throw new IllegalStateException("inference runtime request failed", exception);
+        }
+    }
+
+    private boolean validRuntimeModel(InferenceDtos.RuntimeModelResponse response) {
+        return response != null
+            && "NORMAL".equals(response.status())
+            && response.modelVersion() != null && !response.modelVersion().isBlank()
+            && response.artifactSha256() != null && response.artifactSha256().matches("[0-9a-f]{64}")
+            && response.modelSource() != null && response.modelSource().matches("[a-z_]+")
+            && response.loadedAt() != null
+            && List.of(60, 120, 180, 240).equals(response.supportedHorizons())
+            && List.of(1, 2, 3, 4, 5).equals(response.supportedQuantities());
     }
 }

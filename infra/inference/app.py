@@ -147,17 +147,32 @@ def load_model(settings):
                 digest.update(chunk)
         if digest.hexdigest() != settings["MODEL_SHA256"]:
             raise RuntimeError("Local model checksum does not match MODEL_SHA256")
-        return validate_distribution_artifact(joblib.load(artifact_path))
+        bundle = validate_distribution_artifact(joblib.load(artifact_path))
+        return bundle, {
+            "model_version": f"{bundle['model_name']}@{settings['MODEL_SHA256'][:12]}",
+            "artifact_sha256": settings["MODEL_SHA256"],
+            "model_source": "local_verified",
+        }
 
     import oci
 
     signer = oci.auth.signers.InstancePrincipalsSecurityTokenSigner()
     object_storage = oci.object_storage.ObjectStorageClient({}, signer=signer)
     if settings["MODEL_MODE"] == "pointer":
-        return validate_distribution_artifact(load_pointer_model(object_storage, settings)[0])
+        bundle, pointer = load_pointer_model(object_storage, settings)
+        return validate_distribution_artifact(bundle), {
+            "model_version": pointer["model_version"],
+            "artifact_sha256": pointer["artifact"]["sha256"],
+            "model_source": "verified_inactive_pointer",
+        }
     with tempfile.NamedTemporaryFile(suffix=".joblib") as artifact:
         download_and_verify(object_storage, settings, artifact.name)
-        return validate_distribution_artifact(joblib.load(artifact.name))
+        bundle = validate_distribution_artifact(joblib.load(artifact.name))
+        return bundle, {
+            "model_version": f"{bundle['model_name']}@{settings['MODEL_SHA256'][:12]}",
+            "artifact_sha256": settings["MODEL_SHA256"],
+            "model_source": "legacy_verified",
+        }
 
 
 def _model_parts(bundle):
@@ -222,7 +237,7 @@ def _tail_probabilities(model, rows):
     return tails
 
 
-def predict_candidates(bundle, payload, generated_at=None, model_sha256=""):
+def predict_candidates(bundle, payload, generated_at=None, model_sha256="", model_version=""):
     candidates = payload.get("candidates") if isinstance(payload, dict) else None
     if not isinstance(candidates, list) or not 1 <= len(candidates) <= 5:
         return {"status": "UNAVAILABLE", "errorCode": "INVALID_CANDIDATES", "predictions": []}
@@ -253,19 +268,54 @@ def predict_candidates(bundle, payload, generated_at=None, model_sha256=""):
 
     return {
         "status": "NORMAL",
-        "modelVersion": f"{model_name}@{model_sha256[:12]}",
+        "modelVersion": model_version or f"{model_name}@{model_sha256[:12]}",
         "generatedAt": generated_at.isoformat().replace("+00:00", "Z"),
         "predictions": response,
     }
 
 
+def model_state(bundle, model_version, artifact_sha256, model_source, loaded_at=None):
+    _model_parts(bundle)
+    if not isinstance(model_version, str) or not model_version:
+        raise RuntimeError("runtime model version is invalid")
+    _require_sha256(artifact_sha256, "artifact SHA-256")
+    if not isinstance(model_source, str) or not model_source:
+        raise RuntimeError("runtime model source is invalid")
+    return {
+        "bundle": bundle,
+        "model_version": model_version,
+        "artifact_sha256": artifact_sha256,
+        "model_source": model_source,
+        "loaded_at": (loaded_at or datetime.now(timezone.utc)).isoformat().replace("+00:00", "Z"),
+        "support": {
+            "horizon_minutes": list(SUPPORTED_HORIZONS),
+            "required_bike_counts": list(SUPPORTED_QUANTITIES),
+        },
+    }
+
+
+def runtime_model_response(state):
+    return {
+        "status": "NORMAL",
+        "modelVersion": state["model_version"],
+        "artifactSha256": state["artifact_sha256"],
+        "modelSource": state["model_source"],
+        "loadedAt": state["loaded_at"],
+        "supportedHorizons": state["support"]["horizon_minutes"],
+        "supportedQuantities": state["support"]["required_bike_counts"],
+    }
+
+
 class InferenceHandler(BaseHTTPRequestHandler):
     def do_GET(self):
-        if self.path != "/health":
+        if self.path == "/internal/runtime-model":
+            body = json.dumps(runtime_model_response(self.server.model_state)).encode()
+        elif self.path == "/health":
+            body = json.dumps(self.server.health_response).encode()
+        else:
             self.send_response(404)
             self.end_headers()
             return
-        body = json.dumps(self.server.health_response).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
@@ -285,10 +335,12 @@ class InferenceHandler(BaseHTTPRequestHandler):
             if length <= 0 or length > 65536:
                 raise ValueError("invalid content length")
             payload = json.loads(self.rfile.read(length))
+            state = self.server.model_state
             result = predict_candidates(
-                self.server.model_bundle,
+                state["bundle"],
                 payload,
-                model_sha256=self.server.model_sha256,
+                model_sha256=state["artifact_sha256"],
+                model_version=state["model_version"],
             )
         except Exception:
             result = {"status": "UNAVAILABLE", "errorCode": "INVALID_REQUEST", "predictions": []}
@@ -322,8 +374,13 @@ class InferenceHandler(BaseHTTPRequestHandler):
             }]}, model_sha256=pointer["artifact"]["sha256"])
             if smoke.get("status") != "NORMAL" or smoke.get("predictions", [{}])[0].get("status") != "NORMAL":
                 raise RuntimeError("post-switch smoke failed")
-            self.server.model_bundle = bundle
-            self.server.model_sha256 = pointer["artifact"]["sha256"]
+            state = model_state(
+                bundle,
+                pointer["model_version"],
+                pointer["artifact"]["sha256"],
+                "verified_active_pointer",
+            )
+            self.server.model_state = state
             self.server.health_response = {"status": "healthy", "model_source": "verified_active_pointer"}
         except Exception:
             self.send_response(503)
@@ -341,11 +398,10 @@ class InferenceHandler(BaseHTTPRequestHandler):
 
 def main():
     settings = settings_from_environment()
-    model_bundle = load_model(settings)
+    model_bundle, identity = load_model(settings)
     _model_parts(model_bundle)
     server = HTTPServer(("0.0.0.0", 8081), InferenceHandler)
-    server.model_bundle = model_bundle
-    server.model_sha256 = settings["MODEL_SHA256"]
+    server.model_state = model_state(model_bundle, **identity)
     server.settings = settings
     server.health_response = {"status": "healthy"}
     if settings["MODEL_MODE"] == "pointer":

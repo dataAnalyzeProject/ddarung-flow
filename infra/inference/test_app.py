@@ -166,6 +166,18 @@ class PredictionTests(unittest.TestCase):
         model_input = bundle["model"].predict_proba.call_args.args[0]
         self.assertEqual([102, 0, 14, 8, 0, 11, 60], list(model_input[0]))
 
+    def test_uses_loaded_runtime_model_version_for_predictions(self):
+        result = app.predict_candidates(
+            self.bundle(),
+            {"candidates": [{
+                "stationId": "ST-4", "stationNumber": "102", "currentBikeCount": 11,
+                "featureAsOf": "2026-08-17T14:00:00+09:00",
+            }]},
+            model_sha256="a" * 64,
+            model_version="data-3.1-runtime-pointer",
+        )
+        self.assertEqual("data-3.1-runtime-pointer", result["modelVersion"])
+
     def test_non_numeric_station_number_is_missing(self):
         result = app.predict_candidates(self.bundle(), {"candidates": [{
             "stationId": "ST-X",
@@ -200,4 +212,25 @@ class PredictionTests(unittest.TestCase):
         }]}
         self.assertEqual("UNAVAILABLE", app.predict_candidates(failing_bundle, payload)["predictions"][0]["status"])
         self.assertEqual("UNAVAILABLE", app.predict_candidates(invalid_bundle, payload)["predictions"][0]["status"])
+
+
+class RuntimeModelTests(unittest.TestCase):
+    def test_runtime_response_exposes_only_safe_loaded_identity(self):
+        bundle = PredictionTests().bundle()
+        state = app.model_state(
+            bundle,
+            "data-3.1-runtime-pointer",
+            "a" * 64,
+            "verified_inactive_pointer",
+            datetime(2026, 8, 31, 0, 0, tzinfo=timezone.utc),
+        )
+        response = app.runtime_model_response(state)
+        self.assertEqual({
+            "status", "modelVersion", "artifactSha256", "modelSource", "loadedAt",
+            "supportedHorizons", "supportedQuantities",
+        }, set(response))
+        self.assertEqual("data-3.1-runtime-pointer", response["modelVersion"])
+        self.assertEqual("a" * 64, response["artifactSha256"])
+        self.assertEqual([60, 120, 180, 240], response["supportedHorizons"])
+        self.assertEqual([1, 2, 3, 4, 5], response["supportedQuantities"])
 

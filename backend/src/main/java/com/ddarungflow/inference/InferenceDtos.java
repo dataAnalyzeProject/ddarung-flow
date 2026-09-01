@@ -35,4 +35,14 @@ public final class InferenceDtos {
         OffsetDateTime generatedAt,
         List<CandidatePrediction> predictions
     ) {}
+
+    public record RuntimeModelResponse(
+        String status,
+        String modelVersion,
+        String artifactSha256,
+        String modelSource,
+        OffsetDateTime loadedAt,
+        List<Integer> supportedHorizons,
+        List<Integer> supportedQuantities
+    ) {}
 }
