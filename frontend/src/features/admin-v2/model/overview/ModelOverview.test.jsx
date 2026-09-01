@@ -1,52 +1,36 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import ModelOverview from './ModelOverview';
-import OverviewRoute from './index.jsx';
 
-function adapterFor(result) { return () => ({ load: jest.fn(() => Promise.resolve(result)) }); }
-function rejectedAdapter(error) { return () => ({ load: jest.fn(() => Promise.reject(error)) }); }
-
-const success = {
-  models: [{ id: 1, version: 'model-public', state: 'VALIDATED', createdAt: '2026-08-31T00:00:00Z' }],
-  registryStateCounts: { DRAFT: 2, VALIDATED: 1, APPROVED: 3, ACTIVE: 1, RETIRED: 4 },
-};
+function adapterFor(result) { return () => ({ load: jest.fn().mockResolvedValue(result) }); }
+const runtime = { state: 'SUCCESS', data: { status: 'NORMAL', modelVersion: 'data-3.1-runtime-pointer', artifactSha256: 'a'.repeat(64), modelSource: 'verified_active_pointer', loadedAt: '2026-09-01T00:00:00Z', supportedHorizons: [60, 120, 180, 240], supportedQuantities: [1, 2, 3, 4, 5] } };
+const registry = { state: 'SUCCESS', data: [{ id: 1, version: 'registry-v1', state: 'ACTIVE', createdAt: '2026-08-31T00:00:00Z' }] };
 
 describe('ModelOverview', () => {
-  test('keeps the MODEL-01 identity visible while the source registry is loading', () => {
+  test('keeps the page loading state until independent sources resolve', () => {
     render(<ModelOverview createAdapter={() => ({ load: jest.fn(() => new Promise(() => {})) })} />);
-    expect(screen.getByText('UI-MODEL-01')).toBeInTheDocument();
     expect(screen.getByRole('region', { name: '불러오는 중 상태' })).toBeInTheDocument();
   });
-
-  test('renders UNKNOWN as a non-alarmist runtime limitation and keeps registry ACTIVE distinct', async () => {
-    render(<ModelOverview createAdapter={adapterFor(success)} />);
-    await waitFor(() => expect(screen.getByRole('heading', { name: '모델 운영 현황' })).toBeInTheDocument());
-    expect(screen.getByRole('heading', { name: 'UNKNOWN' })).toBeInTheDocument();
-    expect(screen.getByLabelText('레지스트리 ACTIVE')).toHaveTextContent('1');
-    expect(screen.getAllByText(/runtime.*serving.*readback source/i)).toHaveLength(2);
-    expect(screen.queryByText(/현재 서비스 중|latest/i)).not.toBeInTheDocument();
+  test('shows the exact live runtime identity independently of registry lifecycle', async () => {
+    render(<ModelOverview createAdapter={adapterFor({ runtime, registry, registryStateCounts: { DRAFT: 0, VALIDATED: 0, APPROVED: 0, ACTIVE: 1, RETIRED: 0 } })} />);
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'data-3.1-runtime-pointer' })).toBeInTheDocument());
+    expect(screen.getByText('LIVE INFERENCE')).toBeInTheDocument(); expect(screen.getByText('aaaaaaaaaaaa')).toBeInTheDocument(); expect(screen.getByLabelText('레지스트리 ACTIVE')).toHaveTextContent('1');
   });
-
-  test('renders source-backed zero counts for an empty registry list', async () => {
-    render(<ModelOverview createAdapter={adapterFor({ models: [], registryStateCounts: { DRAFT: 0, VALIDATED: 0, APPROVED: 0, ACTIVE: 0, RETIRED: 0 } })} />);
-    await waitFor(() => expect(screen.getByLabelText('레지스트리 DRAFT')).toHaveTextContent('0'));
-    expect(screen.getByText('총 0개')).toBeInTheDocument();
+  test('keeps runtime unknown when it is unavailable even with a registry result', async () => {
+    render(<ModelOverview createAdapter={adapterFor({ runtime: { state: 'ERROR', error: { code: 'MODEL_RUNTIME_UNAVAILABLE' } }, registry, registryStateCounts: { DRAFT: 0, VALIDATED: 0, APPROVED: 0, ACTIVE: 1, RETIRED: 0 } })} />);
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'UNKNOWN' })).toBeInTheDocument()); expect(screen.getByText('MODEL_RUNTIME_UNAVAILABLE')).toBeInTheDocument(); expect(screen.getByLabelText('레지스트리 ACTIVE')).toBeInTheDocument();
   });
-
-  test('renders the common forbidden panel for the route permission', async () => {
-    render(<ModelOverview createAdapter={rejectedAdapter({ status: 403, code: 'ADMIN_PERMISSION_DENIED' })} />);
-    await waitFor(() => expect(screen.getByText(/필요 권한: MODEL_METRICS_READ/)).toBeInTheDocument());
-    expect(screen.queryByLabelText('레지스트리 ACTIVE')).not.toBeInTheDocument();
+  test('does not turn an empty registry into zero-card emphasis', async () => {
+    render(<ModelOverview createAdapter={adapterFor({ runtime, registry: { state: 'SUCCESS', data: [] }, registryStateCounts: { DRAFT: 0, VALIDATED: 0, APPROVED: 0, ACTIVE: 0, RETIRED: 0 } })} />);
+    await waitFor(() => expect(screen.getByText('등록된 ModelOps lifecycle 항목 없음')).toBeInTheDocument()); expect(screen.queryByLabelText('레지스트리 DRAFT')).not.toBeInTheDocument();
   });
-
-  test('renders an error without replacing unavailable data with zero counts', async () => {
-    render(<ModelOverview createAdapter={rejectedAdapter({ status: 500, code: 'MODEL_REGISTRY_API_ERROR' })} />);
-    await waitFor(() => expect(screen.getByText('MODEL_REGISTRY_API_ERROR')).toBeInTheDocument());
-    expect(screen.queryByText('총 0개')).not.toBeInTheDocument();
+  test('renders registry access denial without hiding a successful runtime', async () => {
+    render(<ModelOverview createAdapter={adapterFor({ runtime, registry: { state: 'FORBIDDEN', error: { code: 'ADMIN_PERMISSION_DENIED' } }, registryStateCounts: null })} />);
+    await waitFor(() => expect(screen.getByText('data-3.1-runtime-pointer')).toBeInTheDocument()); expect(screen.getByText(/필요 권한: MODEL_METRICS_READ/)).toBeInTheDocument();
   });
-
-  test('the route bridge replaces the placeholder and keeps controller-owned navigation targets declarative', async () => {
-    render(<OverviewRoute createAdapter={adapterFor(success)} />);
-    await waitFor(() => expect(screen.getByRole('heading', { name: '모델 운영 현황' })).toBeInTheDocument());
+  test('keeps registry errors independent and preserves navigation contracts', async () => {
+    render(<ModelOverview createAdapter={adapterFor({ runtime, registry: { state: 'ERROR', error: { code: 'MODEL_REGISTRY_RESPONSE_INVALID' } }, registryStateCounts: null })} />);
+    await waitFor(() => expect(screen.getByText('MODEL_REGISTRY_RESPONSE_INVALID')).toBeInTheDocument());
+    expect(screen.getByText('data-3.1-runtime-pointer')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '모델 검증' })).toHaveAttribute('href', '/admin/models/performance');
     expect(screen.getByRole('link', { name: '모델 버전 관리' })).toHaveAttribute('href', '/admin/models/releases');
   });
