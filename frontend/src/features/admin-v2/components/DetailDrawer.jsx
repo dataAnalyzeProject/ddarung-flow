@@ -1,8 +1,9 @@
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import useOverlayFocus from '../hooks/useOverlayFocus';
 
 const contextualQuery = '(max-width: 960px)';
+const triggerSelector = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 function useContextualModal(contextual) {
   const [narrowViewport, setNarrowViewport] = useState(() => contextual && typeof window.matchMedia === 'function' ? window.matchMedia(contextualQuery).matches : false);
@@ -21,10 +22,23 @@ function useContextualModal(contextual) {
 
 export default function DetailDrawer({ open, title, children, onClose, variant = 'modal' }) {
   const titleId = useId();
+  const triggerRef = useRef(null);
   const { dialogRef, closeButtonRef, onKeyDown } = useOverlayFocus({ open, onClose });
   const contextual = variant === 'contextual';
   const narrowViewport = useContextualModal(contextual);
   const modal = !contextual || narrowViewport;
+
+  useEffect(() => {
+    if (open) return undefined;
+    const restoreTarget = triggerRef.current;
+    restoreTarget?.isConnected && restoreTarget.focus();
+    const rememberTrigger = (event) => {
+      const target = event.target instanceof Element ? event.target.closest(triggerSelector) : null;
+      if (target?.isConnected) triggerRef.current = target;
+    };
+    document.addEventListener('pointerdown', rememberTrigger, true);
+    return () => document.removeEventListener('pointerdown', rememberTrigger, true);
+  }, [open]);
 
   useEffect(() => {
     if (!open || !modal) return undefined;
