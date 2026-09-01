@@ -35,6 +35,17 @@ function diagnosticsProjection(body, base) {
   return { segments: body.segments };
 }
 
+function runtimeProjection(body) {
+  if (!body || body.status !== 'NORMAL' || !requiredString(body.modelVersion)
+    || !/^[0-9a-f]{64}$/.test(body.artifactSha256 || '') || !requiredString(body.modelSource)
+    || !requiredString(body.loadedAt)
+    || JSON.stringify(body.supportedHorizons) !== JSON.stringify([60, 120, 180, 240])
+    || JSON.stringify(body.supportedQuantities) !== JSON.stringify([1, 2, 3, 4, 5])) {
+    throw new ModelPerformanceApiError({ code: 'MODEL_RUNTIME_RESPONSE_INVALID' });
+  }
+  return body;
+}
+
 async function request(path, signal) {
   try {
     const response = await fetch(`${API_BASE_URL}${path}`, { credentials: 'include', signal });
@@ -48,8 +59,22 @@ async function request(path, signal) {
   }
 }
 
+function runtimeResult(promise) {
+  return promise.then((body) => ({ state: 'SUCCESS', data: runtimeProjection(body) })).catch((error) => {
+    if (error?.name === 'AbortError') throw error;
+    return { state: error?.status === 401 || error?.status === 403 ? 'FORBIDDEN' : 'ERROR', error };
+  });
+}
+
 export function createLiveModelPerformanceAdapter() {
   return {
+    async load({ signal }) {
+      const [base, runtime] = await Promise.all([
+        request('/api/v1/admin/model-performance', signal).then(baseProjection),
+        runtimeResult(request('/api/v1/admin/model-runtime', signal)),
+      ]);
+      return { base, runtime };
+    },
     async loadBase({ signal }) {
       return baseProjection(await request('/api/v1/admin/model-performance', signal));
     },

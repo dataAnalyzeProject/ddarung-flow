@@ -5,10 +5,42 @@ const base = {
   evaluation: { referenceHorizonMinutes: 120, referenceRequiredBikeCount: 3 }, combinations: [], calibrationBins: [],
 };
 
+const runtime = {
+  status: 'NORMAL', modelVersion: 'model-5.2', artifactSha256: 'a'.repeat(64), modelSource: 'oci://models/model-5.2',
+  loadedAt: '2026-09-01T09:10:00Z', supportedHorizons: [60, 120, 180, 240], supportedQuantities: [1, 2, 3, 4, 5],
+};
+
 function response(status, body) { return { ok: status >= 200 && status < 300, status, json: jest.fn().mockResolvedValue(body) }; }
 
 describe('model performance adapter', () => {
   afterEach(() => jest.restoreAllMocks());
+
+  test('loads evaluation and the separately validated runtime identity together', async () => {
+    global.fetch = jest.fn().mockResolvedValueOnce(response(200, base)).mockResolvedValueOnce(response(200, runtime));
+    const result = await createLiveModelPerformanceAdapter().load({});
+    expect(result).toEqual({ base, runtime: { state: 'SUCCESS', data: runtime } });
+    expect(global.fetch).toHaveBeenNthCalledWith(1, 'http://localhost:8080/api/v1/admin/model-performance', { credentials: 'include', signal: undefined });
+    expect(global.fetch).toHaveBeenNthCalledWith(2, 'http://localhost:8080/api/v1/admin/model-runtime', { credentials: 'include', signal: undefined });
+  });
+
+  test.each([
+    [{}, 'ERROR'],
+    [{ ...runtime, artifactSha256: 'A'.repeat(64) }, 'ERROR'],
+    [{ ...runtime, supportedHorizons: [60, 120] }, 'ERROR'],
+    [null, 'ERROR'],
+  ])('keeps malformed runtime response unavailable (%p)', async (runtimeBody, state) => {
+    global.fetch = jest.fn().mockResolvedValueOnce(response(200, base)).mockResolvedValueOnce(response(200, runtimeBody));
+    const result = await createLiveModelPerformanceAdapter().load({});
+    expect(result.base).toEqual(base);
+    expect(result.runtime).toMatchObject({ state, error: { code: 'MODEL_RUNTIME_RESPONSE_INVALID' } });
+  });
+
+  test('keeps runtime HTTP errors non-fatal to the evaluation snapshot', async () => {
+    global.fetch = jest.fn().mockResolvedValueOnce(response(200, base)).mockResolvedValueOnce(response(403, { code: 'ADMIN_PERMISSION_DENIED' }));
+    const result = await createLiveModelPerformanceAdapter().load({});
+    expect(result.base).toEqual(base);
+    expect(result.runtime).toMatchObject({ state: 'FORBIDDEN', error: { status: 403, code: 'ADMIN_PERMISSION_DENIED' } });
+  });
 
   test('uses credentialed, separated base and diagnostics endpoints', async () => {
     global.fetch = jest.fn().mockResolvedValueOnce(response(200, base)).mockResolvedValueOnce(response(200, { ...base, segments: [] }));
