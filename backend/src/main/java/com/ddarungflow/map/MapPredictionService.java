@@ -5,6 +5,7 @@ import com.ddarungflow.entity.StationInventoryCurrent;
 import com.ddarungflow.inference.InferenceClient;
 import com.ddarungflow.inference.InferenceDtos;
 import com.ddarungflow.inventory.InventoryStatus;
+import com.ddarungflow.inventory.CurrentInventoryEligibility;
 import com.ddarungflow.prediction.PredictionTimeCalculator;
 import com.ddarungflow.prediction.PredictionTimeResult;
 import com.ddarungflow.prediction.PredictionTimeStatus;
@@ -153,11 +154,7 @@ public class MapPredictionService {
                 bikeAvailable = invOpt.map(StationInventoryCurrent::getAvailableBikeCount).orElse(null);
                 invStatus = invOpt.map(StationInventoryCurrent::getInventoryStatus).orElse(InventoryStatus.MISSING);
                 inventoryCollectedAt = invOpt.map(StationInventoryCurrent::getCollectedAt).orElse(null);
-                if (invStatus == InventoryStatus.NORMAL
-                    && (inventoryCollectedAt == null
-                        || Duration.between(inventoryCollectedAt, requestedAt).compareTo(MAX_INVENTORY_AGE) > 0)) {
-                    invStatus = InventoryStatus.DELAYED;
-                }
+                invStatus = CurrentInventoryEligibility.status(invStatus, inventoryCollectedAt, requestedAt);
             } catch (Exception e) {
                 invStatus = InventoryStatus.UNAVAILABLE;
             }

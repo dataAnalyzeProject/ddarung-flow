@@ -12,7 +12,8 @@ public final class AdminOpsDtos {
                                Capability districtMetadata, Capability recurrence, Capability usageScale,
                                Capability nearbyAlternatives) { }
     public record Coverage(Long activeStationCount, Long inventoryAvailableCount, Long predictionAvailableCount,
-                           Long profileAvailableCount) { }
+                           Long profileAvailableCount, Integer eligibleStationCount, Integer evaluatedStationCount,
+                           Integer normalInferenceSuccessCount, Integer scopeCandidateCap) { }
     public record Coordinates(BigDecimal latitude, BigDecimal longitude) { }
     public record Probabilities(BigDecimal atLeast1Probability, BigDecimal atLeast2Probability,
                                 BigDecimal atLeast3Probability, BigDecimal atLeast4Probability,
@@ -35,10 +36,10 @@ public final class AdminOpsDtos {
     public record RiskStationListResponse(OffsetDateTime referenceTime, OffsetDateTime generatedAt, int horizonMinutes,
                                           Capabilities capabilities, String dataState, Coverage coverage,
                                           List<String> limitations, String ruleVersion, List<RiskStation> items,
-                                          String nextCursor) { }
+                                          String nextCursor, String snapshotId) { }
     public record RiskStationDetailResponse(OffsetDateTime referenceTime, OffsetDateTime generatedAt, int horizonMinutes,
                                             Capabilities capabilities, String dataState, Coverage coverage,
                                             List<String> limitations, String ruleVersion, RiskStation station,
-                                            Object returnRisk) { }
+                                            Object returnRisk, String snapshotId) { }
     public record ErrorResponse(String code, String message) { }
 }
