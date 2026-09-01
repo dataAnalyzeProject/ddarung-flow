@@ -14,6 +14,20 @@ import { defaultRoute, isAdminV2PreviewPath, isAdminV2ProductionPath, PRODUCTION
 function setPreviewUrl(path) { window.history.replaceState({}, '', path); }
 async function waitForShell() { await waitFor(() => expect(screen.queryByText('불러오는 중')).not.toBeInTheDocument()); }
 function readyAccess(adminRoles, permissions, defaultConsole = 'OPS') { return { state: 'READY', adminRoles, permissions, defaultConsole, generatedAt: '2026-08-28T09:00:00Z', source: 'FIXTURE' }; }
+const originalMatchMedia = window.matchMedia;
+
+function mockMatchMedia(initialMatches) {
+  let matches = initialMatches;
+  const listeners = new Set();
+  const mediaQuery = {
+    media: '(max-width: 960px)',
+    get matches() { return matches; },
+    addEventListener: jest.fn((event, listener) => { if (event === 'change') listeners.add(listener); }),
+    removeEventListener: jest.fn((event, listener) => { if (event === 'change') listeners.delete(listener); }),
+  };
+  window.matchMedia = jest.fn(() => mediaQuery);
+  return { change(nextMatches) { matches = nextMatches; listeners.forEach((listener) => listener({ matches, media: mediaQuery.media })); } };
+}
 
 const FORBIDDEN_FIXTURE_KEYS = new Set([
   'email', 'oauthid', 'oauth', 'providerid', 'provider', 'internaluserid',
@@ -49,7 +63,7 @@ function expectSensitiveFixtureDataAbsent(value, path = 'fixture') {
   }
 }
 
-afterEach(() => setPreviewUrl('/'));
+afterEach(() => { setPreviewUrl('/'); window.matchMedia = originalMatchMedia; });
 
 describe('admin v2 fixture access and routes', () => {
   test.each([
@@ -381,7 +395,7 @@ describe('admin v2 accessible primitives', () => {
   test('drawer supports initial focus, focus trap, Escape close, and trigger restoration', () => {
     function DrawerHarness() {
       const [open, setOpen] = useState(false);
-      return <><button type="button" onClick={() => setOpen(true)}>상세 열기</button><DetailDrawer open={open} title="상세" onClose={() => setOpen(false)}><button type="button">첫 동작</button></DetailDrawer></>;
+      return <><main className="admin-v2-shell"><button type="button" onClick={() => setOpen(true)}>상세 열기</button></main><DetailDrawer open={open} title="상세" onClose={() => setOpen(false)}><button type="button">첫 동작</button></DetailDrawer></>;
     }
     render(<DrawerHarness />);
     const trigger = screen.getByRole('button', { name: '상세 열기' });
@@ -390,6 +404,9 @@ describe('admin v2 accessible primitives', () => {
     const drawer = screen.getByRole('dialog', { name: '상세' });
     const close = screen.getByRole('button', { name: '상세 닫기' });
     expect(drawer).toHaveFocus();
+    expect(drawer).toHaveAttribute('aria-modal', 'true');
+    expect(document.querySelector('.admin-v2-drawer-backdrop')).toBeInTheDocument();
+    expect(document.querySelector('.admin-v2-shell')).toHaveAttribute('inert');
     fireEvent.keyDown(drawer, { key: 'Tab' });
     const action = screen.getByRole('button', { name: '첫 동작' });
     expect(action).toHaveFocus();
@@ -397,6 +414,68 @@ describe('admin v2 accessible primitives', () => {
     expect(close).toHaveFocus();
     fireEvent.keyDown(close, { key: 'Escape' });
     expect(trigger).toHaveFocus();
+  });
+
+  test('contextual drawer keeps desktop background interaction available', () => {
+    const onBackgroundAction = jest.fn();
+    function DrawerHarness() {
+      const [open, setOpen] = useState(false);
+      return <><main className="admin-v2-shell"><button type="button" onClick={onBackgroundAction}>배경 동작</button><button type="button" onClick={() => setOpen(true)}>상세 열기</button></main><DetailDrawer variant="contextual" open={open} title="상세" onClose={() => setOpen(false)}><button type="button">첫 동작</button></DetailDrawer></>;
+    }
+    render(<DrawerHarness />);
+    const trigger = screen.getByRole('button', { name: '상세 열기' });
+    trigger.focus();
+    fireEvent.click(trigger);
+    const drawer = screen.getByRole('dialog', { name: '상세' });
+    expect(drawer).toHaveClass('admin-v2-drawer--contextual');
+    expect(drawer).not.toHaveAttribute('aria-modal');
+    expect(document.querySelector('.admin-v2-drawer-backdrop')).not.toBeInTheDocument();
+    expect(document.querySelector('.admin-v2-shell')).not.toHaveAttribute('inert');
+    expect(fireEvent.keyDown(drawer, { key: 'Tab' })).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: '배경 동작' }));
+    expect(onBackgroundAction).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(drawer, { key: 'Escape' });
+    expect(trigger).toHaveFocus();
+  });
+
+  test('contextual drawer restores modal behavior on a narrow viewport', () => {
+    mockMatchMedia(true);
+    function DrawerHarness() {
+      const [open, setOpen] = useState(false);
+      return <><main className="admin-v2-shell"><button type="button" onClick={() => setOpen(true)}>상세 열기</button></main><DetailDrawer variant="contextual" open={open} title="상세" onClose={() => setOpen(false)}><button type="button">첫 동작</button></DetailDrawer></>;
+    }
+    render(<DrawerHarness />);
+    const trigger = screen.getByRole('button', { name: '상세 열기' });
+    trigger.focus();
+    fireEvent.click(trigger);
+    const drawer = screen.getByRole('dialog', { name: '상세' });
+    expect(drawer).toHaveClass('admin-v2-drawer--modal');
+    expect(drawer).toHaveAttribute('aria-modal', 'true');
+    expect(document.querySelector('.admin-v2-drawer-backdrop')).toBeInTheDocument();
+    expect(document.querySelector('.admin-v2-shell')).toHaveAttribute('inert');
+    fireEvent.keyDown(drawer, { key: 'Tab' });
+    expect(screen.getByRole('button', { name: '첫 동작' })).toHaveFocus();
+    fireEvent.keyDown(drawer, { key: 'Escape' });
+    expect(trigger).toHaveFocus();
+  });
+
+  test('contextual drawer changes modal semantics with the viewport while open', async () => {
+    const media = mockMatchMedia(false);
+    function DrawerHarness() {
+      const [open, setOpen] = useState(true);
+      return <><main className="admin-v2-shell"><button type="button" onClick={() => setOpen(false)}>배경 동작</button></main><DetailDrawer variant="contextual" open={open} title="상세" onClose={() => setOpen(false)}><button type="button">첫 동작</button></DetailDrawer></>;
+    }
+    render(<DrawerHarness />);
+    const drawer = screen.getByRole('dialog', { name: '상세' });
+    expect(drawer).not.toHaveAttribute('aria-modal');
+    act(() => media.change(true));
+    await waitFor(() => expect(drawer).toHaveAttribute('aria-modal', 'true'));
+    expect(document.querySelector('.admin-v2-drawer-backdrop')).toBeInTheDocument();
+    expect(document.querySelector('.admin-v2-shell')).toHaveAttribute('inert');
+    act(() => media.change(false));
+    await waitFor(() => expect(drawer).not.toHaveAttribute('aria-modal'));
+    expect(document.querySelector('.admin-v2-drawer-backdrop')).not.toBeInTheDocument();
+    expect(document.querySelector('.admin-v2-shell')).not.toHaveAttribute('inert');
   });
 
   test('dialog has unique labelled names and supports the same focus contract', () => {

@@ -63,7 +63,9 @@
 .admin-v2-map-list { display: grid; gap: 20px; grid-template-columns: minmax(0, 1.1fr) minmax(320px, .9fr); }
 
 .admin-v2-drawer-backdrop { background: rgba(16, 37, 74, .38); inset: 0; position: fixed; z-index: 29; }
-.admin-v2-drawer { background: var(--admin-v2-surface); border-left: 1px solid var(--admin-v2-border); bottom: 0; box-shadow: -12px 0 28px rgba(16, 37, 74, .10); display: flex; flex-direction: column; gap: 16px; max-width: 100%; overflow-y: auto; overscroll-behavior: contain; padding: 24px; position: fixed; right: 0; top: 0; width: min(460px, 100%); z-index: 30; }
+.admin-v2-drawer, .admin-v2-drawer *, .admin-v2-drawer *::before, .admin-v2-drawer *::after { box-sizing: border-box; }
+.admin-v2-drawer { --admin-v2-surface: #fff; --admin-v2-ink: #10254a; --admin-v2-muted: #667085; --admin-v2-accent: #0f766e; --admin-v2-accent-soft: #e4f3f0; --admin-v2-critical: #e85d50; --admin-v2-critical-soft: #fff0ed; --admin-v2-caution: #b7791f; --admin-v2-caution-soft: #fff8e8; --admin-v2-border: #e6e8ec; --admin-v2-shadow: 0 8px 24px rgba(16, 37, 74, .06); background: var(--admin-v2-surface, #fff); border-left: 1px solid var(--admin-v2-border, #e6e8ec); bottom: 0; box-shadow: -12px 0 28px rgba(16, 37, 74, .10); color: var(--admin-v2-ink, #10254a); display: flex; flex-direction: column; gap: 16px; max-width: 100%; overflow-y: auto; overscroll-behavior: contain; padding: 24px; position: fixed; right: 0; top: 0; width: min(460px, 100%); z-index: 30; }
+.admin-v2-drawer--contextual { width: min(420px, 100%); }
 .admin-v2-drawer h2 { font-size: 1.25rem; margin: 0; }
 .admin-v2-drawer > button:last-child { align-self: flex-start; margin-top: auto; }
 .admin-v2-dialog-backdrop { background: rgba(16, 37, 74, .44); display: grid; inset: 0; place-items: center; position: fixed; z-index: 40; }
