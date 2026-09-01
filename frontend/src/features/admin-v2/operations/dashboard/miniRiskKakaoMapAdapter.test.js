@@ -3,14 +3,15 @@ import { createMiniRiskKakaoMapAdapter } from './miniRiskKakaoMapAdapter';
 
 function createMaps() {
   const overlays = [];
+  const bounds = [];
   const map = { panTo: jest.fn(), setBounds: jest.fn(), setCenter: jest.fn(), setLevel: jest.fn() };
   const maps = {
     LatLng: function LatLng(latitude, longitude) { this.latitude = latitude; this.longitude = longitude; },
-    LatLngBounds: function LatLngBounds() { this.extend = jest.fn(); },
+    LatLngBounds: function LatLngBounds() { this.extend = jest.fn(); bounds.push(this); },
     Map: jest.fn(() => map),
     CustomOverlay: function CustomOverlay(options) { this.options = options; this.setMap = jest.fn(); overlays.push(this); },
   };
-  return { maps, map, overlays };
+  return { maps, map, overlays, bounds };
 }
 
 const normal = (number, riskBand = 'HIGH') => ({
@@ -62,11 +63,48 @@ test('uses stationNumber for marker selection and callback, pans to focused sour
   expect(overlays[0].setMap).toHaveBeenCalledWith(null);
 });
 
-test('safely skips empty and invalid coordinate items without viewport callbacks', () => {
+test.each([
+  ['null latitude', null, 126.978],
+  ['null longitude', 37.5665, null],
+  ['undefined latitude', undefined, 126.978],
+  ['undefined longitude', 37.5665, undefined],
+  ['empty latitude', '', 126.978],
+  ['blank longitude', 37.5665, '   '],
+  ['boolean latitude', true, 126.978],
+  ['non-numeric latitude', 'not-a-number', 126.978],
+  ['non-numeric longitude', 37.5665, 'x'],
+  ['latitude above range', 91, 126.978],
+  ['latitude below range', -91, 126.978],
+  ['longitude above range', 37.5665, 181],
+  ['longitude below range', 37.5665, -181],
+])('skips %s without creating an overlay', (_label, latitude, longitude) => {
   const { maps, overlays } = createMaps();
-  const adapter = createMiniRiskKakaoMapAdapter(document.createElement('div'), maps, { onViewportChange: jest.fn() });
-  adapter.setStations([]);
-  adapter.setStations([{ station: { stationNumber: 'bad', name: '잘못된 좌표', coordinates: { latitude: null, longitude: 'x' } }, dataState: 'NORMAL', riskBand: 'HIGH' }]);
+  const adapter = createMiniRiskKakaoMapAdapter(document.createElement('div'), maps);
+  adapter.setStations([{ station: { stationNumber: 'bad', name: '잘못된 좌표', coordinates: { latitude, longitude } }, dataState: 'NORMAL', riskBand: 'HIGH' }]);
 
   expect(overlays).toHaveLength(0);
+});
+
+test('keeps valid Seoul numeric-string coordinates', () => {
+  const { maps, overlays } = createMaps();
+  const adapter = createMiniRiskKakaoMapAdapter(document.createElement('div'), maps);
+  adapter.setStations([{ ...normal('1005'), station: { ...normal('1005').station, coordinates: { latitude: '37.5665', longitude: '126.978' } } }]);
+
+  expect(overlays).toHaveLength(1);
+  expect(overlays[0].options.position).toMatchObject({ latitude: 37.5665, longitude: 126.978 });
+});
+
+test('uses only valid source coordinates for mixed-list overlays and bounds', () => {
+  const { maps, overlays, bounds } = createMaps();
+  const onStationSelect = jest.fn();
+  const adapter = createMiniRiskKakaoMapAdapter(document.createElement('div'), maps, { onStationSelect });
+  const invalidStation = { ...normal('1002'), station: { ...normal('1002').station, coordinates: { latitude: null, longitude: 126.978 } } };
+
+  adapter.setStations([normal('1001'), invalidStation, normal('1003')]);
+
+  expect(overlays).toHaveLength(2);
+  expect(bounds).toHaveLength(1);
+  expect(bounds[0].extend).toHaveBeenCalledTimes(2);
+  expect(overlays.map((overlay) => overlay.options.content.getAttribute('aria-label'))).not.toContain(expect.stringContaining('1002'));
+  expect(onStationSelect).not.toHaveBeenCalled();
 });

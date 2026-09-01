@@ -1,5 +1,14 @@
+function parseCoordinate(value, minimum, maximum) {
+  if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) return null;
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  const coordinate = Number(value);
+  return Number.isFinite(coordinate) && coordinate >= minimum && coordinate <= maximum ? coordinate : null;
+}
+
 function isValidCoordinates(coordinates) {
-  return Number.isFinite(Number(coordinates?.latitude)) && Number.isFinite(Number(coordinates?.longitude));
+  return Boolean(coordinates)
+    && parseCoordinate(coordinates.latitude, -90, 90) !== null
+    && parseCoordinate(coordinates.longitude, -180, 180) !== null;
 }
 
 function toLatLng(maps, coordinates) {
