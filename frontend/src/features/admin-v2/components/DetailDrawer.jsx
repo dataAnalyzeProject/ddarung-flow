@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import useOverlayFocus from '../hooks/useOverlayFocus';
 
@@ -28,10 +28,14 @@ export default function DetailDrawer({ open, title, children, onClose, variant =
   const narrowViewport = useContextualModal(contextual);
   const modal = !contextual || narrowViewport;
 
+  useLayoutEffect(() => {
+    if (!open || triggerRef.current) return;
+    const activeTarget = document.activeElement instanceof Element ? document.activeElement.closest(triggerSelector) : null;
+    if (activeTarget?.isConnected) triggerRef.current = activeTarget;
+  }, [open]);
+
   useEffect(() => {
     if (open) return undefined;
-    const restoreTarget = triggerRef.current;
-    restoreTarget?.isConnected && restoreTarget.focus();
     const rememberTrigger = (event) => {
       const target = event.target instanceof Element ? event.target.closest(triggerSelector) : null;
       if (target?.isConnected) triggerRef.current = target;
@@ -49,6 +53,14 @@ export default function DetailDrawer({ open, title, children, onClose, variant =
       if (!wasInert) appShell?.removeAttribute('inert');
     };
   }, [modal, open]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    return () => {
+      const restoreTarget = triggerRef.current;
+      restoreTarget?.isConnected && restoreTarget.focus();
+    };
+  }, [open]);
 
   function onContextualKeyDown(event) {
     if (event.key === 'Escape') {
