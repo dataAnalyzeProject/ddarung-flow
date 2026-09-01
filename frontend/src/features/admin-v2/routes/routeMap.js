@@ -71,7 +71,7 @@ export function resolveCanonicalRoute(pathname, access, releasedRouteIds = PRODU
 }
 
 export function isAdminV2ProductionPath(pathname) {
-  return pathname.startsWith('/admin/');
+  return pathname === '/admin' || pathname.startsWith('/admin/');
 }
 
 export function isAdminV2PreviewPath(pathname, nodeEnv = process.env.NODE_ENV) {

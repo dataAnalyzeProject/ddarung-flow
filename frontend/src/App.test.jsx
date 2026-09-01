@@ -11,6 +11,9 @@ jest.mock("./features/login/authApi", () => ({
 }));
 jest.mock("./features/station-detail/stationRhythmApi", () => ({ fetchStationDetail: jest.fn(), fetchStationRhythm: jest.fn() }));
 jest.mock("./features/admin-v2/shell/AdminV2ProductionApp", () => () => <section data-testid="admin-v2-production-app">production admin v2</section>);
+jest.mock("./features/admin-v2/adapters/liveAdminAccessAdapter", () => ({
+  createLiveAdminAccessAdapter: () => ({ load: () => Promise.resolve({ state: "ACCESS_ERROR" }) }),
+}));
 
 beforeEach(() => {
   window.localStorage.clear();
@@ -87,22 +90,12 @@ test("shows the existing login page at the login URL", async () => {
   expect(await screen.findByTitle(/Kakao/i)).toBeInTheDocument();
 });
 
-test("does not render the admin fixture for a USER at the direct admin URL", async () => {
+test("routes the exact admin URL to the production Admin v2 app without a general session check", () => {
   window.history.replaceState({}, "", "/admin");
-  getCurrentUser.mockResolvedValue({ authenticated: true, user: { role: "USER" } });
 
   render(<App />);
 
-  expect(await screen.findByTestId("admin-access-forbidden")).toBeInTheDocument();
-  expect(screen.queryByText("운영 현황")).not.toBeInTheDocument();
-});
-
-test("renders the fixture-only admin preview without checking a session outside production", () => {
-  window.history.replaceState({}, "", "/?adminPreview=1");
-
-  render(<App />);
-
-  expect(screen.getByRole("heading", { name: "운영 현황" })).toBeInTheDocument();
+  expect(screen.getByTestId("admin-v2-production-app")).toBeInTheDocument();
   expect(getCurrentUser).not.toHaveBeenCalled();
 });
 
