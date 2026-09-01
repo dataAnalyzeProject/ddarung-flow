@@ -459,6 +459,21 @@ describe('admin v2 accessible primitives', () => {
     expect(trigger).toHaveFocus();
   });
 
+  test('contextual mobile drawer restores its pointer-selected trigger after Escape', () => {
+    mockMatchMedia(true);
+    function DrawerHarness() {
+      const [open, setOpen] = useState(false);
+      return <><main className="admin-v2-shell"><button type="button" onClick={() => setOpen(true)}>대여소 선택</button></main><DetailDrawer variant="contextual" open={open} title="대여소 상세" onClose={() => setOpen(false)}><button type="button">첫 동작</button></DetailDrawer></>;
+    }
+    render(<DrawerHarness />);
+    const trigger = screen.getByRole('button', { name: '대여소 선택' });
+    fireEvent.pointerDown(trigger);
+    fireEvent.click(trigger);
+    const drawer = screen.getByRole('dialog', { name: '대여소 상세' });
+    fireEvent.keyDown(drawer, { key: 'Escape' });
+    expect(trigger).toHaveFocus();
+  });
+
   test('contextual drawer changes modal semantics with the viewport while open', async () => {
     const media = mockMatchMedia(false);
     function DrawerHarness() {
