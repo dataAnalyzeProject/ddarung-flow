@@ -34,4 +34,19 @@ describe('model performance adapter', () => {
     await expect(createLiveModelPerformanceAdapter().loadDiagnostics(base, {})).rejects.toBeInstanceOf(ModelPerformanceApiError);
     await expect(createLiveModelPerformanceAdapter().loadDiagnostics(base, {})).rejects.toMatchObject({ status: 403, code: 'ADMIN_PERMISSION_DENIED' });
   });
+
+  test.each([
+    [401, 'AUTH_REQUIRED'],
+    [403, 'ADMIN_PERMISSION_DENIED'],
+    [404, 'MODEL_PERFORMANCE_NOT_FOUND'],
+    [500, 'MODEL_PERFORMANCE_API_ERROR'],
+  ])('preserves HTTP %i and its response code', async (status, code) => {
+    global.fetch = jest.fn().mockResolvedValue(response(status, { code }));
+    await expect(createLiveModelPerformanceAdapter().loadBase({})).rejects.toMatchObject({ status, code });
+  });
+
+  test('does not turn a transport failure into an HTTP error', async () => {
+    global.fetch = jest.fn().mockRejectedValue(new Error('network offline'));
+    await expect(createLiveModelPerformanceAdapter().loadBase({})).rejects.toMatchObject({ status: undefined, code: 'MODEL_PERFORMANCE_API_ERROR' });
+  });
 });
