@@ -14,7 +14,6 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -27,7 +26,6 @@ public class MapPredictionService {
 
     private static final BigDecimal LOW_THRESHOLD = new BigDecimal("0.40");
     private static final BigDecimal HIGH_THRESHOLD = new BigDecimal("0.70");
-    private static final Duration MAX_INVENTORY_AGE = Duration.ofMinutes(10);
 
     private final RouteCandidateService routeCandidateService;
     private final StationInventoryCurrentRepository inventoryRepository;
@@ -69,7 +67,6 @@ public class MapPredictionService {
         List<RouteCandidateService.StationDistance> candidates = routeCandidateService.findCandidates(
             originLat, originLng, destLat, destLng, travelMode
         );
-        // ROUTE mode must derive arrivalAt and prediction from the exact provider route evidence.
         return assembleCandidates(candidates, null, requiredBikeCount, null, true);
     }
 
@@ -138,7 +135,6 @@ public class MapPredictionService {
                 }
             }
 
-            // 1. Calculate arrival only when the required route evidence is available.
             OffsetDateTime arrivalAt = null;
             PredictionTimeResult timeResult = null;
             if (routeAvailable) {
@@ -173,7 +169,6 @@ public class MapPredictionService {
             OffsetDateTime featureAsOf = null;
             OffsetDateTime expiresAt = null;
 
-            // 2. Candidate-isolated inventory lookup remains factual even when route evidence is unavailable.
             try {
                 Optional<StationInventoryCurrent> invOpt = inventoryRepository.findById(station.getStationId());
                 bikeAvailable = invOpt.map(StationInventoryCurrent::getAvailableBikeCount).orElse(null);
@@ -194,8 +189,8 @@ public class MapPredictionService {
             } else if (invStatus != InventoryStatus.NORMAL || bikeAvailable == null) {
                 predictionStatus = PredictionApiDtos.PredictionStatus.MISSING;
             } else {
-                // 3. Candidate-isolated on-demand model inference.
                 predictionStatus = PredictionApiDtos.PredictionStatus.UNAVAILABLE;
+                long selectedHorizonMinutes = timeResult.horizonMinutes();
                 try {
                     InferenceDtos.PredictResponse response = inferenceClient.predict(List.of(
                         new InferenceDtos.CandidateRequest(
@@ -213,7 +208,7 @@ public class MapPredictionService {
                         predictionStatus = PredictionApiDtos.PredictionStatus.MISSING;
                     } else if ("NORMAL".equals(prediction.status())) {
                         List<InferenceDtos.ProbabilityRow> horizonRows = prediction.rows().stream()
-                            .filter(row -> row.horizonMinutes() == timeResult.horizonMinutes())
+                            .filter(row -> row.horizonMinutes() == selectedHorizonMinutes)
                             .sorted(Comparator.comparingInt(InferenceDtos.ProbabilityRow::requiredBikeCount))
                             .toList();
                         if (horizonRows.size() != 5) {
@@ -239,7 +234,7 @@ public class MapPredictionService {
                                 featureAsOfApprox.plusMinutes(row.horizonMinutes()),
                                 row.probability(),
                                 toAvailabilityLevel(row.probability()),
-                                row.horizonMinutes() == timeResult.horizonMinutes()
+                                row.horizonMinutes() == selectedHorizonMinutes
                             ))
                             .toList();
                         predictionStatus = PredictionApiDtos.PredictionStatus.NORMAL;
@@ -259,7 +254,7 @@ public class MapPredictionService {
             Integer distanceMeters;
             Integer durationSeconds;
             if (routeEvidenceRequired) {
-                // Legacy flat fields, when present, are derived from the same provider evidence only.
+                // Legacy flat fields are populated only from the same provider route evidence.
                 distanceMeters = routeDetail != null ? routeDetail.distanceMeters() : null;
                 durationSeconds = routeDetail != null ? routeDetail.durationSeconds() : null;
             } else {
