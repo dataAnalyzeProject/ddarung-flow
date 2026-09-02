@@ -19,6 +19,11 @@ public class PredictionApiDtos {
         TOO_SOON
     }
 
+    public enum RouteStatus {
+        NORMAL,
+        UNAVAILABLE
+    }
+
     public record PredictionDirectRequestDto(
         String stationId,
         BigDecimal originLatitude,
@@ -49,8 +54,8 @@ public class PredictionApiDtos {
         String stationName,
         BigDecimal latitude,
         BigDecimal longitude,
-        int distanceMeters,
-        int durationSeconds,
+        Integer distanceMeters,
+        Integer durationSeconds,
         Integer availableBikeCount,
         InventoryStatus inventoryStatus,
         OffsetDateTime inventoryCollectedAt,
@@ -67,8 +72,11 @@ public class PredictionApiDtos {
         PredictionStatus predictionStatus,
         String modelVersion,
         OffsetDateTime generatedAt,
-        java.util.List<HorizonOutlook> horizonOutlook
+        java.util.List<HorizonOutlook> horizonOutlook,
+        RouteStatus routeStatus,
+        MapApiDtos.RouteResultDto routeDetail
     ) {
+        /** Compatibility constructor for callers that predate horizonOutlook and route evidence. */
         public CandidatePredictionResponseDto(
             String stationId, String stationName, BigDecimal latitude, BigDecimal longitude, int distanceMeters,
             int durationSeconds, Integer availableBikeCount, InventoryStatus inventoryStatus,
@@ -81,7 +89,23 @@ public class PredictionApiDtos {
             this(stationId, stationName, latitude, longitude, distanceMeters, durationSeconds, availableBikeCount,
                 inventoryStatus, inventoryCollectedAt, predictionProbability, probabilities, requiredBikeCount,
                 arrivalAt, predictionTargetAt, targetOffsetMinutes, horizonMinutes, featureAsOf, expiresAt,
-                availabilityLevel, predictionStatus, modelVersion, generatedAt, null);
+                availabilityLevel, predictionStatus, modelVersion, generatedAt, null, null, null);
+        }
+
+        /** Compatibility constructor for the previous full response shape. */
+        public CandidatePredictionResponseDto(
+            String stationId, String stationName, BigDecimal latitude, BigDecimal longitude, int distanceMeters,
+            int durationSeconds, Integer availableBikeCount, InventoryStatus inventoryStatus,
+            OffsetDateTime inventoryCollectedAt, BigDecimal predictionProbability, QuantityProbabilities probabilities,
+            Integer requiredBikeCount, OffsetDateTime arrivalAt, OffsetDateTime predictionTargetAt,
+            long targetOffsetMinutes, long horizonMinutes, OffsetDateTime featureAsOf, OffsetDateTime expiresAt,
+            AvailabilityLevel availabilityLevel, PredictionStatus predictionStatus, String modelVersion,
+            OffsetDateTime generatedAt, java.util.List<HorizonOutlook> horizonOutlook
+        ) {
+            this(stationId, stationName, latitude, longitude, distanceMeters, durationSeconds, availableBikeCount,
+                inventoryStatus, inventoryCollectedAt, predictionProbability, probabilities, requiredBikeCount,
+                arrivalAt, predictionTargetAt, targetOffsetMinutes, horizonMinutes, featureAsOf, expiresAt,
+                availabilityLevel, predictionStatus, modelVersion, generatedAt, horizonOutlook, null, null);
         }
     }
 }
