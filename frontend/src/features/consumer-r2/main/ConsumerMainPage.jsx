@@ -1,0 +1,313 @@
+import { useEffect, useRef, useState } from "react";
+import heroImage from "../../../assets/consumer-r2/main/cr22-main-initial-hero-v1.webp";
+import { fetchRouteCandidates } from "../../map/candidatesApi.js";
+import { searchPlaces } from "../../map/kakaoMapApi.js";
+import { getCurrentUser } from "../../login/authApi.js";
+import { clearPendingPrediction, loadPendingPrediction, savePendingPrediction } from "../../login/loginStorage.js";
+import { adaptConsumerMainResponse, buildConsumerMainRequest } from "../adapters/main/index.js";
+import ConsumerAppHeader from "../shared/ConsumerAppHeader.jsx";
+import ConsumerIcon from "../shared/ConsumerIcon.jsx";
+import { ConsumerButton, OptionCard, SelectedPlaceCard, StatusBadge } from "../shared/ConsumerControls.jsx";
+import { AsyncState } from "../shared/ConsumerSurfaces.jsx";
+import { ConsumerContainer, ConsumerR2Theme } from "../shared/ConsumerR2Layout.jsx";
+import ConsumerRouteMap from "./ConsumerRouteMap.jsx";
+import "./main.css";
+
+const DEFAULT_SERVICES = {
+  clearPendingPrediction,
+  fetchRouteCandidates,
+  getCurrentUser,
+  loadPendingPrediction,
+  savePendingPrediction,
+  searchPlaces,
+};
+
+const DEFAULT_INPUT = { origin: "", destination: "", travelMode: "PUBLIC_TRANSIT", requiredBikeCount: 1 };
+
+function formatProbability(value) {
+  return value === null ? "확인 불가" : `${Math.round(value * 100)}%`;
+}
+
+function formatMinutes(seconds) {
+  return seconds === null ? "시간 확인 불가" : `약 ${Math.round(seconds / 60)}분`;
+}
+
+function formatDateTime(value) {
+  if (!value) return "시각 확인 불가";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "시각 확인 불가";
+  return new Intl.DateTimeFormat("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
+}
+
+function formatFare(fare) {
+  return fare === null ? "요금 확인 불가" : `${new Intl.NumberFormat("ko-KR").format(fare)}원`;
+}
+
+function formatInventory(candidate) {
+  const status = candidate.inventoryStatus;
+  if (candidate.availableBikeCount === null || status === "MISSING" || status === "UNAVAILABLE") {
+    return `현재 재고 확인 불가 · ${status || "상태 확인 불가"}`;
+  }
+  const statusLabel = status === "DELAYED" ? "지연 데이터" : status === "NORMAL" ? "정상" : (status || "상태 확인 불가");
+  return `현재 ${candidate.availableBikeCount}대 · ${statusLabel} · ${formatDateTime(candidate.inventoryCollectedAt)} 기준`;
+}
+
+function formatDistance(meters) {
+  if (meters === null) return "거리 확인 불가";
+  return meters >= 1000 ? `${(meters / 1000).toFixed(1)}km` : `${meters}m`;
+}
+
+function formatArrival(arrivalAt) {
+  if (!arrivalAt) return "도착 시각 확인 불가";
+  const date = new Date(arrivalAt);
+  if (Number.isNaN(date.getTime())) return "도착 시각 확인 불가";
+  return `${new Intl.DateTimeFormat("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false }).format(date)} 도착`;
+}
+
+function PlacePicker({ kind, label, onSelect, place, query, search, setQuery }) {
+  const [results, setResults] = useState([]);
+  const [status, setStatus] = useState("idle");
+  const requestRef = useRef(0);
+
+  useEffect(() => {
+    if (place || query.trim().length < 2) {
+      setResults([]);
+      setStatus("idle");
+      return undefined;
+    }
+    const requestId = ++requestRef.current;
+    const timer = window.setTimeout(async () => {
+      setStatus("loading");
+      try {
+        const response = await search(query.trim());
+        if (requestRef.current !== requestId) return;
+        const places = response?.places ?? [];
+        setResults(places);
+        setStatus(places.length ? "success" : "empty");
+      } catch {
+        if (requestRef.current === requestId) setStatus("error");
+      }
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [place, query, search]);
+
+  if (place) {
+    return <SelectedPlaceCard kind={kind} title={place.name} meta={place.address || "장소 제공자에서 선택 완료"} onReselect={() => { onSelect(null); setQuery(place.name); }} />;
+  }
+
+  return (
+    <div className="cr293-place-picker">
+      <label htmlFor={`cr293-${kind}`}>{label}</label>
+      <span className="cr293-place-picker__input">
+        <ConsumerIcon name="mapPin" size={20} />
+        <input id={`cr293-${kind}`} name={`${kind}Place`} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="예: 서울역…" autoComplete="off" />
+      </span>
+      {query.trim().length >= 2 ? (
+        <div className="cr293-place-picker__results" role="region" aria-label={`${label} 검색 결과`}>
+          {status === "loading" ? <p role="status">장소를 찾고 있습니다.</p> : null}
+          {status === "empty" ? <p>검색 결과가 없습니다.</p> : null}
+          {status === "error" ? <p role="alert">장소 검색에 실패했습니다. 다시 입력해 주세요.</p> : null}
+          {results.map((result) => (
+            <button key={result.placeId ?? `${result.name}-${result.latitude}`} type="button" onClick={() => { onSelect(result); setQuery(result.name); }}>
+              <strong>{result.name}</strong><span>{result.address || "주소 정보 없음"}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function SearchWorkspace({ input, onChange, onSearch, places, searchPlaces, state }) {
+  const ready = Boolean(places.origin && places.destination);
+  return (
+    <section className="cr293-search" aria-labelledby="cr293-search-title">
+      <div className="cr293-search__heading">
+        <h2 id="cr293-search-title">어디에서 출발해 어디로 갈까요?</h2>
+        <p>장소 제공자의 검색 결과를 선택하면 도착할 때 빌릴 가능성을 비교해 드려요.</p>
+      </div>
+      <div className="cr293-search__steps">
+        <div className="cr293-search__step">
+          <span className="cr293-step-number">1</span>
+          <PlacePicker kind="origin" label="출발 위치" place={places.origin} query={input.origin} setQuery={(origin) => onChange({ origin })} onSelect={(origin) => onChange({ origin: origin?.name ?? input.origin, originPlace: origin })} search={searchPlaces} />
+        </div>
+        <div className="cr293-search__step">
+          <span className="cr293-step-number">2</span>
+          <PlacePicker kind="destination" label="대여 희망 지역" place={places.destination} query={input.destination} setQuery={(destination) => onChange({ destination })} onSelect={(destination) => onChange({ destination: destination?.name ?? input.destination, destinationPlace: destination })} search={searchPlaces} />
+        </div>
+        <fieldset className="cr293-search__step">
+          <legend><span className="cr293-step-number">3</span> 이동 방법</legend>
+          <div className="cr293-options cr293-options--travel">
+            <OptionCard icon={<ConsumerIcon name="ride" />} title="도보" description="걷는 경로" selected={input.travelMode === "WALK"} onSelect={() => onChange({ travelMode: "WALK" })} />
+            <OptionCard icon={<ConsumerIcon name="transit" />} title="대중교통" description="버스·지하철 경로" selected={input.travelMode === "PUBLIC_TRANSIT"} onSelect={() => onChange({ travelMode: "PUBLIC_TRANSIT" })} />
+          </div>
+        </fieldset>
+        <fieldset className="cr293-search__step">
+          <legend><span className="cr293-step-number">4</span> 필요한 자전거</legend>
+          <div className="cr293-bike-count">
+            {[1, 2, 3, 4, 5].map((count) => <button key={count} type="button" aria-pressed={input.requiredBikeCount === count} onClick={() => onChange({ requiredBikeCount: count })}>{count}대</button>)}
+          </div>
+        </fieldset>
+      </div>
+      <ConsumerButton block size="lg" icon={<ConsumerIcon name="arrowRight" />} iconPosition="end" disabled={!ready || state === "LOADING"} loading={state === "LOADING"} loadingLabel="도착 시점 후보를 찾는 중…" onClick={onSearch}>도착할 때 빌릴 곳 찾기</ConsumerButton>
+      {state === "LOADING" ? <div className="cr293-search__loading"><AsyncState state="loading" title="도착 시점 후보를 비교하고 있습니다" description="예측과 실제 이동 경로를 같은 근거로 확인합니다." /></div> : null}
+      {!ready ? <p className="cr293-search__hint">출발 위치와 대여 희망 지역을 검색 결과에서 각각 선택해 주세요.</p> : null}
+    </section>
+  );
+}
+
+function CandidateCard({ candidate, index, onSelect, selected }) {
+  const tone = candidate.availabilityLevel === "HIGH" ? "success" : candidate.availabilityLevel === "MEDIUM" ? "warning" : "danger";
+  const unavailable = candidate.predictionStatus !== "NORMAL" || candidate.routeStatus !== "NORMAL";
+  return (
+    <button className="cr293-candidate" type="button" aria-pressed={selected} onClick={() => onSelect(candidate.stationId)}>
+      <span className="cr293-candidate__rank">{index + 1}</span>
+      <span className="cr293-candidate__body">
+        <span className="cr293-candidate__top"><strong>{candidate.stationName}</strong><StatusBadge tone={unavailable ? "neutral" : tone}>{candidate.availabilityLabel}</StatusBadge></span>
+        <span className="cr293-candidate__metric"><b>{formatProbability(candidate.probability)}</b><small>대여 가능성</small></span>
+        <span className="cr293-candidate__meta">{formatMinutes(candidate.durationSeconds)} · {formatDistance(candidate.distanceMeters)} · {formatArrival(candidate.arrivalAt)}</span>
+        <span className="cr293-candidate__inventory">{formatInventory(candidate)}</span>
+        {unavailable ? <span className="cr293-candidate__unavailable">예측 또는 경로 근거를 확인할 수 없습니다.</span> : null}
+      </span>
+    </button>
+  );
+}
+
+function RouteDetail({ candidate }) {
+  const detail = candidate.routeDetail;
+  return (
+    <section className="cr293-transit" aria-labelledby="cr293-transit-title">
+      <div className="cr293-transit__header">
+        <div><h2 id="cr293-transit-title">{candidate.stationName}까지 가는 길</h2></div>
+        <div><strong>{formatMinutes(detail.durationSeconds)}</strong><span>{formatDistance(detail.distanceMeters)} · 환승 {detail.transfers ?? "확인 불가"}회 · {formatFare(detail.fare)}</span></div>
+      </div>
+      <ol className="cr293-transit__steps">
+        {detail.steps.length ? detail.steps.map((step, index) => (
+          <li key={`${step.type}-${index}`}>
+            <span className="cr293-transit__dot" aria-hidden="true"><ConsumerIcon name={step.type === "SUBWAY" || step.type === "BUS" ? "transit" : "ride"} size={18} /></span>
+            <div><strong>{step.guidance || "이동 안내"}</strong><span>{formatMinutes(step.durationSeconds)} · {formatDistance(step.distanceMeters)}</span>{step.vehicles.length ? <small>{step.vehicles.map((vehicle) => vehicle.name).filter(Boolean).join(" · ")}</small> : null}</div>
+          </li>
+        )) : <li><div><strong>상세 이동 단계가 제공되지 않았습니다.</strong><span>경로 요약을 확인해 주세요.</span></div></li>}
+      </ol>
+    </section>
+  );
+}
+
+function ResultsWorkspace({ input, mapRenderer, onOpenRide, onOpenStation, onReset, places, result, selectedId, setSelectedId, showTransit, setShowTransit }) {
+  const resultHeadingRef = useRef(null);
+  const selected = result.candidates.find((candidate) => candidate.stationId === selectedId) ?? result.candidates[0];
+  useEffect(() => { resultHeadingRef.current?.focus(); }, []);
+  return (
+    <>
+      <section className="cr293-result-heading">
+        <div><h1 ref={resultHeadingRef} tabIndex="-1">{places.destination.name} 근처 추천 결과</h1><p>선택한 이동 경로와 도착 시각을 기준으로 비교했어요.</p></div>
+        <ConsumerButton variant="secondary" onClick={onReset}>조건 다시 선택</ConsumerButton>
+      </section>
+      <section className="cr293-condition" aria-label="선택 조건">
+        <span><ConsumerIcon name="mapPin" size={18} /> {places.origin.name} → {places.destination.name}</span>
+        <span><ConsumerIcon name={input.travelMode === "PUBLIC_TRANSIT" ? "transit" : "ride"} size={18} /> {input.travelMode === "PUBLIC_TRANSIT" ? "대중교통" : "도보"}</span>
+        <span><ConsumerIcon name="bike" size={18} /> {input.requiredBikeCount}대 필요</span>
+      </section>
+      {result.viewState === "PARTIAL" ? <AsyncState state="partial" title="일부 후보의 근거를 확인하지 못했습니다" description="확인된 후보는 그대로 비교하고, 확인 불가 값은 0으로 표시하지 않았습니다." /> : null}
+      <section className="cr293-results" aria-label="대여소 추천 결과" aria-live="polite">
+        <div className="cr293-results__list">
+          <div className="cr293-results__title"><div><h2>추천 대여소</h2></div><span>{result.candidates.length}곳</span></div>
+          {result.candidates.map((candidate, index) => <CandidateCard key={candidate.stationId ?? index} candidate={candidate} index={index} selected={selected?.stationId === candidate.stationId} onSelect={(stationId) => { setSelectedId(stationId); setShowTransit(false); }} />)}
+        </div>
+        <div className="cr293-results__map">
+          {selected?.routeDetail ? <ConsumerRouteMap candidate={selected} destination={places.destination} mapRenderer={mapRenderer} origin={places.origin} /> : <div className="cr293-route-unavailable" role="status"><ConsumerIcon name="info" /><strong>선택한 후보의 경로를 확인할 수 없습니다.</strong><span>다른 후보를 선택해 주세요.</span></div>}
+          <section className="cr293-evidence">
+            <div><h2>선택한 경로: {selected.stationName}</h2></div>
+            <div className="cr293-evidence__numbers"><span><b>{formatProbability(selected.probability)}</b><small>대여 가능성</small></span><span><b>{formatMinutes(selected.durationSeconds)}</b><small>예상 이동</small></span><span><b>{formatArrival(selected.arrivalAt)}</b><small>예상 도착</small></span></div>
+            <dl className="cr293-evidence__metadata">
+              <div><dt>현재 재고</dt><dd>{formatInventory(selected)}</dd></div>
+              <div><dt>예측 기준</dt><dd>{formatDateTime(selected.predictionTargetAt)} · horizon {selected.horizonMinutes === null ? "확인 불가" : `${selected.horizonMinutes}분`}</dd></div>
+              <div><dt>피처 기준 / 만료</dt><dd>{formatDateTime(selected.featureAsOf)} / {formatDateTime(selected.expiresAt)}</dd></div>
+            </dl>
+            <div className="cr293-evidence__actions">
+              {input.travelMode === "PUBLIC_TRANSIT" && selected.routeDetail ? <ConsumerButton variant="secondary" aria-controls="cr293-transit-detail" aria-expanded={showTransit} onClick={() => setShowTransit((value) => !value)}>{showTransit ? "경로 상세 닫기" : "대중교통 경로 상세"}</ConsumerButton> : null}
+              <ConsumerButton variant="secondary" onClick={() => onOpenStation?.(selected)}>대여소 상세</ConsumerButton>
+              <ConsumerButton onClick={() => onOpenRide?.(selected)}>라이딩 둘러보기</ConsumerButton>
+            </div>
+            <p>예측은 실제 대여를 보장하지 않습니다. 모든 수치는 위 경로 근거와 같은 응답에서 왔습니다.</p>
+          </section>
+        </div>
+      </section>
+      {showTransit && selected.routeDetail ? <div id="cr293-transit-detail"><RouteDetail candidate={selected} /></div> : null}
+    </>
+  );
+}
+
+export default function ConsumerMainPage({ mapRenderer, onLogin, onNavigate, onOpenRide, onOpenStation, services = DEFAULT_SERVICES }) {
+  const [authState, setAuthState] = useState("loading");
+  const [user, setUser] = useState(null);
+  const [input, setInput] = useState(DEFAULT_INPUT);
+  const [places, setPlaces] = useState({ origin: null, destination: null });
+  const [state, setState] = useState("INITIAL");
+  const [result, setResult] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
+  const [showTransit, setShowTransit] = useState(false);
+
+  useEffect(() => {
+    const pending = services.loadPendingPrediction?.();
+    if (pending) {
+      setInput((current) => ({ ...current, ...pending, origin: pending.routePlaces?.origin?.name ?? pending.origin ?? "", destination: pending.routePlaces?.destination?.name ?? pending.destination ?? "" }));
+      setPlaces({ origin: pending.routePlaces?.origin ?? null, destination: pending.routePlaces?.destination ?? null });
+    }
+    services.getCurrentUser()
+      .then((currentUser) => { setUser(currentUser); setAuthState("authenticated"); })
+      .catch((error) => setAuthState(error?.status === 401 || error?.status === 403 ? "anonymous" : "anonymous"));
+  }, [services]);
+
+  const updateInput = (patch) => {
+    if (Object.prototype.hasOwnProperty.call(patch, "originPlace")) setPlaces((current) => ({ ...current, origin: patch.originPlace }));
+    if (Object.prototype.hasOwnProperty.call(patch, "destinationPlace")) setPlaces((current) => ({ ...current, destination: patch.destinationPlace }));
+    const { originPlace, destinationPlace, ...inputPatch } = patch;
+    setInput((current) => ({ ...current, ...inputPatch }));
+  };
+
+  const reset = () => { setState("INITIAL"); setResult(null); setSelectedId(null); setShowTransit(false); };
+  const login = () => { if (onLogin) onLogin(); else window.location.assign("/login"); };
+  const submit = async () => {
+    if (!places.origin || !places.destination) return;
+    if (authState !== "authenticated") {
+      services.savePendingPrediction(input, places);
+      login();
+      return;
+    }
+    setState("LOADING");
+    setShowTransit(false);
+    try {
+      const response = await services.fetchRouteCandidates(buildConsumerMainRequest({ ...input, ...places }));
+      const adapted = adaptConsumerMainResponse(response?.candidates ?? response, { requiredBikeCount: input.requiredBikeCount });
+      setResult(adapted);
+      setSelectedId(adapted.selectedStationId);
+      setState(adapted.viewState);
+      services.clearPendingPrediction?.();
+    } catch (error) {
+      if (error?.message === "AUTH_REQUIRED") {
+        services.savePendingPrediction(input, places);
+        setAuthState("anonymous");
+        login();
+        return;
+      }
+      setState("ERROR");
+    }
+  };
+
+  let content;
+  if (state === "INITIAL" || state === "LOADING") content = <SearchWorkspace input={input} onChange={updateInput} onSearch={submit} places={places} searchPlaces={services.searchPlaces} state={state} />;
+  else if (state === "ERROR") content = <AsyncState state="error" title="추천 결과를 불러오지 못했습니다" description="입력은 그대로 보존했습니다. 잠시 후 다시 시도해 주세요." onAction={submit} />;
+  else if (state === "EMPTY") content = <AsyncState state="empty" title="조건에 맞는 대여소를 찾지 못했습니다" description="확인 불가 값을 0으로 바꾸지 않았습니다. 조건을 바꿔 다시 찾아보세요." actionLabel="조건 다시 선택" onAction={reset} />;
+  else content = <ResultsWorkspace input={input} mapRenderer={mapRenderer} onOpenRide={onOpenRide} onOpenStation={onOpenStation} onReset={reset} places={places} result={result} selectedId={selectedId} setSelectedId={setSelectedId} showTransit={showTransit} setShowTransit={setShowTransit} />;
+
+  return (
+    <ConsumerR2Theme className="cr293-page">
+      <ConsumerAppHeader activeItem="home" authState={authState} onLogin={login} onNavigate={onNavigate} userName={user?.displayName ?? user?.name} userTier={user?.tier?.toLowerCase()} />
+      <main id="main-content">
+        {state === "INITIAL" || state === "LOADING" ? <section className="cr293-hero"><img src={heroImage} alt="서울 도심에서 따릉이를 타고 이동하는 모습" width="1600" height="420" fetchpriority="high" /><div><h1>도착할 때 빌릴 수 있는<br />대여소를 비교해요</h1><p>지금 재고가 아니라, 내가 도착할 시점의 가능성을 알려드려요.</p></div></section> : null}
+        <ConsumerContainer className={state === "INITIAL" || state === "LOADING" ? "cr293-container--initial" : "cr293-container--result"}>{content}</ConsumerContainer>
+      </main>
+    </ConsumerR2Theme>
+  );
+}
