@@ -1,11 +1,15 @@
-# Frontend Visual Protocol R1
+# Frontend Visual Protocol R1.2
 
 Apply this protocol automatically to Consumer R2.2 frontend tasks `TASK-291` through `TASK-301`.
+
+## Canonical reference
+
+Before implementation or review, resolve the exact FINAL file through the Asset Protocol resolver for each `screenId` and state. Record the Drive file ID, canonical filename, and revision or modified time. A stale Drive index or narrative document cannot override the current manifest Sheet plus actual FINAL folder file.
 
 ## Loop
 
 ```text
-FINAL reference
+CANONICAL FINAL reference
   -> IMPLEMENT
   -> PLAYWRIGHT CAPTURE
   -> VISUAL REVIEW
@@ -14,6 +18,15 @@ FINAL reference
 ```
 
 Use the approved FINAL state and actual page at the same viewport, data/state, and interaction point. Capture at least desktop, tablet, and mobile. Cover success and at least the most important non-success state for each changed screen.
+
+Each capture record must contain:
+
+- task ID, `screenId`, and state;
+- viewport name, width, and height;
+- interaction point and data-state fixture or source;
+- reference file ID, canonical filename, and reference revision or modified time;
+- capture path and captured Git commit;
+- applied asset IDs, or `NONE`.
 
 ## Review checklist
 
@@ -28,3 +41,5 @@ Use the approved FINAL state and actual page at the same viewport, data/state, a
 Use the installed `impeccable` and `web-design-guidelines` skills when available. Record their actual use. If unavailable, record that and execute this explicit checklist; do not claim the skills ran.
 
 An acceptance-impacting mismatch returns to immediate fix and recapture. “Roughly similar” is not PASS. A missing required asset is a visual failure and routes through the Asset Protocol.
+
+When an `ASSET_GAP` exists, independent Asset Review must pass before the production copy is applied. After application, Playwright recaptures every affected required state/viewport and the Visual Reviewer performs a separate page review. `ASSET_REVIEW_PASS` never implies `PAGE_VISUAL_PASS`. Release, merge, and Notion close require the final page state.
