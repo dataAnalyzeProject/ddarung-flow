@@ -1,6 +1,8 @@
 package com.ddarungflow.journey.saved;
 
 import com.ddarungflow.dto.PrincipalDetails;
+import com.ddarungflow.journey.application.JourneyPlanService;
+import com.ddarungflow.payment.PremiumEntitlementService;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -25,6 +27,7 @@ import java.util.List;
 public class SavedJourneyController {
 
     private final SavedJourneyService service;
+    private final PremiumEntitlementService premiumEntitlement;
 
     @PostMapping
     public SavedJourneyDtos.SavedJourneyResponse save(@AuthenticationPrincipal PrincipalDetails principal,
@@ -38,6 +41,14 @@ public class SavedJourneyController {
         return service.list(userId(principal)).stream().map(this::response).toList();
     }
 
+    @PostMapping("/{savedJourneyId}/replay")
+    public JourneyPlanService.Decision replay(@AuthenticationPrincipal PrincipalDetails principal,
+                                              @PathVariable String savedJourneyId,
+                                              @RequestBody SavedJourneyDtos.ReplayRequest request) {
+        return service.replay(userId(principal), savedJourneyId, request,
+                () -> premiumEntitlement.requireActive(principal.getUsers()));
+    }
+
     @DeleteMapping("/{savedJourneyId}")
     public ResponseEntity<Void> delete(@AuthenticationPrincipal PrincipalDetails principal, @PathVariable String savedJourneyId) {
         service.delete(userId(principal), savedJourneyId);
@@ -49,7 +60,8 @@ public class SavedJourneyController {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new SavedJourneyDtos.ErrorResponse("AUTH_REQUIRED"));
     }
 
-    @ExceptionHandler({IllegalArgumentException.class, HttpMessageNotReadableException.class, JsonMappingException.class})
+    @ExceptionHandler({IllegalArgumentException.class, HttpMessageNotReadableException.class, JsonMappingException.class,
+            JourneyPlanService.InvalidJourneyInput.class})
     ResponseEntity<SavedJourneyDtos.ErrorResponse> invalid() {
         return ResponseEntity.badRequest().body(new SavedJourneyDtos.ErrorResponse("JOURNEY_INTENT_INVALID"));
     }
@@ -67,6 +79,35 @@ public class SavedJourneyController {
     @ExceptionHandler(SavedJourneyService.SavedJourneyLimitException.class)
     ResponseEntity<SavedJourneyDtos.ErrorResponse> limitReached() {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new SavedJourneyDtos.ErrorResponse("SAVED_ROUTE_LIMIT_REACHED"));
+    }
+
+    @ExceptionHandler(PremiumEntitlementService.PremiumRequired.class)
+    ResponseEntity<SavedJourneyDtos.ErrorResponse> premiumRequired() {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new SavedJourneyDtos.ErrorResponse("PREMIUM_REQUIRED"));
+    }
+
+    @ExceptionHandler(PremiumEntitlementService.EntitlementUnavailable.class)
+    ResponseEntity<SavedJourneyDtos.ErrorResponse> entitlementUnavailable() {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(new SavedJourneyDtos.ErrorResponse("PREMIUM_ENTITLEMENT_UNAVAILABLE"));
+    }
+
+    @ExceptionHandler(SavedJourneyService.PlaceReferenceUnavailableException.class)
+    ResponseEntity<SavedJourneyDtos.ErrorResponse> placeUnavailable() {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(new SavedJourneyDtos.ErrorResponse("PLACE_REFERENCE_UNAVAILABLE"));
+    }
+
+    @ExceptionHandler(JourneyPlanService.AiOutputSchemaInvalid.class)
+    ResponseEntity<SavedJourneyDtos.ErrorResponse> aiOutputInvalid() {
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body(new SavedJourneyDtos.ErrorResponse("AI_OUTPUT_SCHEMA_INVALID"));
+    }
+
+    @ExceptionHandler(JourneyPlanService.AiToolValueMismatch.class)
+    ResponseEntity<SavedJourneyDtos.ErrorResponse> aiValueMismatch() {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new SavedJourneyDtos.ErrorResponse("AI_TOOL_VALUE_MISMATCH"));
     }
 
     private Long userId(PrincipalDetails principal) {

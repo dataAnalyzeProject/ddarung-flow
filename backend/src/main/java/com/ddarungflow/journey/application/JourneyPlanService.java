@@ -87,6 +87,15 @@ public class JourneyPlanService {
                 new PlannerContext(input.requestMode() == RequestMode.NATURAL_LANGUAGE, null), requireAiEntitlement);
     }
 
+    public Decision planSavedReplay(long userId, PlanInput input) {
+        validate(input, false);
+        JourneyIntent structuredIntent = new JourneyIntent(toPlaceReference(input.origin()),
+                toPlaceReference(input.destination()), input.departureAt(), input.maxJourneyMinutes(),
+                input.requiredBikeCount(), Map.of(), Map.of(), List.of(), false);
+        return persist(userId, UUID.randomUUID().toString(), 1, input,
+                new PlannerContext(true, structuredIntent), () -> { });
+    }
+
     public Decision find(long userId, String decisionId) {
         OffsetDateTime now = OffsetDateTime.now();
         return persistence.findActiveDecision(decisionId, userId, now)
