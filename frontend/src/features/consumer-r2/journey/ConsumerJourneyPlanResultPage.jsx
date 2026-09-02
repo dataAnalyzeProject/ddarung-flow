@@ -60,12 +60,6 @@ function formatTime(value) {
   return new Intl.DateTimeFormat("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
 }
 
-function toLocalInput(value) {
-  const date = new Date(value);
-  if (!value || Number.isNaN(date.getTime())) return "";
-  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
-}
-
 function evidenceEntries(evidence = {}) {
   return Object.entries(evidence).flatMap(([kind, values]) => Object.values(values || {}).map((item) => ({ ...item, kind })));
 }
