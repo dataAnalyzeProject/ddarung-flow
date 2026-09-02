@@ -125,32 +125,43 @@
 .risk-map-legend b,
 .risk-map-marker {
   align-items: center;
-  background: #758496;
   border: 2px solid #fff;
   border-radius: 50%;
+  box-sizing: border-box;
   box-shadow: 0 1px 4px rgba(16, 37, 74, 0.2);
   color: #fff;
   display: inline-flex;
-  font-size: 0.67rem;
+  font-size: 0.625rem;
   font-weight: 800;
-  height: 24px;
+  height: 20px;
   justify-content: center;
-  width: 24px;
+  min-height: 20px;
+  min-width: 20px;
+  padding: 0;
+  width: 20px;
 }
-.risk-map-legend li:nth-child(1) b {
-  background: #ef4539;
+.risk-map-marker--critical {
+  background: #b42318;
 }
-.risk-map-legend li:nth-child(2) b {
-  background: #f47722;
+.risk-map-marker--high {
+  background: #c2410c;
 }
-.risk-map-legend li:nth-child(3) b {
-  background: #e9a706;
+.risk-map-marker--watch {
+  background: #f5c451;
+  color: var(--admin-v2-ink);
 }
-.risk-map-legend li:nth-child(4) b {
+.risk-map-marker--low {
   background: var(--admin-v2-accent);
 }
+.risk-map-marker--unknown {
+  background: #667085;
+}
+.risk-map-panel .risk-map-marker {
+  min-height: 20px;
+}
 .risk-map-marker.selected {
-  outline: 3px solid var(--admin-v2-accent);
+  outline: 2px solid var(--admin-v2-ink);
+  outline-offset: 0;
 }
 .risk-station-list {
   display: grid;
@@ -161,6 +172,17 @@
   list-style: none;
   margin: 12px 0;
   padding: 0;
+}
+.risk-list-state {
+  align-items: center;
+  color: var(--admin-v2-muted);
+  display: grid;
+  font-size: 0.82rem;
+  justify-items: center;
+  line-height: 1.6;
+  min-height: 160px;
+  padding: 24px;
+  text-align: center;
 }
 .risk-station-list li + li {
   border-top: 1px solid var(--admin-v2-border);
