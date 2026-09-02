@@ -114,6 +114,26 @@ class NotificationServiceTest {
         }
 
         @Test
+        @DisplayName("구조화 action metadata를 저장하고 기존 null action 알림도 유지한다")
+        void createInAppNotification_ActionMetadataIsAdditive() {
+            given(inAppNotificationRepository.findByUserIdAndDedupKey(1L, "qna-answered:7"))
+                    .willReturn(Optional.empty());
+            given(inAppNotificationRepository.save(any(InAppNotification.class)))
+                    .willAnswer(invocation -> invocation.getArgument(0));
+
+            InAppNotification created = notificationService.createInAppNotification(1L, "qna-answered:7",
+                    "문의 답변", "답변이 등록되었습니다.", "QNA_ANSWERED", "QNA_QUESTION", "7");
+            InAppNotification historical = InAppNotification.builder().userId(1L).dedupKey("legacy")
+                    .title("과거 알림").message("내용").notificationType("LEGACY").build();
+
+            assertThat(created.getNotificationType()).isEqualTo("QNA_ANSWERED");
+            assertThat(created.getActionType()).isEqualTo("QNA_QUESTION");
+            assertThat(created.getActionRef()).isEqualTo("7");
+            assertThat(historical.getActionType()).isNull();
+            assertThat(historical.getActionRef()).isNull();
+        }
+
+        @Test
         @DisplayName("알림 읽음 처리 재요청 시 최초 readAt 시각을 보존함")
         void markNotificationAsRead_PreservesInitialReadAt() {
             // given

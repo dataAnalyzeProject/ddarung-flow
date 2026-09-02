@@ -2,6 +2,7 @@ package com.ddarungflow.payment;
 
 import com.ddarungflow.entity.Users;
 import com.ddarungflow.dto.PrincipalDetails;
+import com.ddarungflow.notification.PremiumNotificationService;
 import org.springframework.http.ResponseEntity;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,8 +22,9 @@ class SubscriptionServiceTest {
     private final PaymentRepository payments = mock(PaymentRepository.class);
     private final PaymentEventRepository events = mock(PaymentEventRepository.class);
     private final PaymentVerifier verifier = mock(PaymentVerifier.class);
+    private final PremiumNotificationService premiumNotifications = mock(PremiumNotificationService.class);
     private final SubscriptionService service = new SubscriptionService(
-        subscriptions, payments, events, verifier, new PaymentEnvironment("sandbox", "test_sk_sandbox")
+        subscriptions, payments, events, verifier, new PaymentEnvironment("sandbox", "test_sk_sandbox"), premiumNotifications
     );
     private final Users user = Users.builder().provider("test").providerUserId("u1").displayName("tester").build();
 
@@ -30,6 +32,7 @@ class SubscriptionServiceTest {
     void initializeUserPublicId() throws ReflectiveOperationException {
         user.prePersist();
         assignId(user, 1L);
+        lenient().when(subscriptions.save(any(Subscription.class))).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     private void assignId(Users target, long id) throws ReflectiveOperationException {
@@ -103,6 +106,7 @@ class SubscriptionServiceTest {
         assertEquals(PaymentStatus.SUCCEEDED, payment.getStatus());
         ArgumentCaptor<Subscription> subscription = ArgumentCaptor.forClass(Subscription.class);
         verify(subscriptions).save(subscription.capture());
+        verify(premiumNotifications).notifyActivated(subscription.getValue(), payment.getOrderId());
         assertEquals(SubscriptionPlan.PREMIUM_YEARLY_365D, subscription.getValue().getPlan());
         assertTrue(subscription.getValue().getEndsAt().isAfter(OffsetDateTime.now().plusDays(364)));
     }
@@ -122,6 +126,7 @@ class SubscriptionServiceTest {
         verify(verifier).confirm("key-confirm", "ddarung-order-confirm", 2900);
         verify(verifier, times(2)).verify("key-confirm");
         verify(subscriptions).save(any(Subscription.class));
+        verify(premiumNotifications).notifyActivated(any(Subscription.class), eq(payment.getOrderId()));
     }
 
     @Test
@@ -137,6 +142,7 @@ class SubscriptionServiceTest {
         assertEquals(PaymentStatus.SUCCEEDED, payment.getStatus());
         verify(verifier).confirm("key-redirect", "ddarung-order-redirect", 2900);
         verify(subscriptions).save(any(Subscription.class));
+        verify(premiumNotifications).notifyActivated(any(Subscription.class), eq(payment.getOrderId()));
     }
 
     @Test
@@ -248,7 +254,7 @@ class SubscriptionServiceTest {
     @Test
     void checkoutIsBlockedWhenTheSandboxSecretIsUnavailable() {
         SubscriptionService unavailable = new SubscriptionService(
-            subscriptions, payments, events, verifier, new PaymentEnvironment("sandbox", "")
+            subscriptions, payments, events, verifier, new PaymentEnvironment("sandbox", ""), premiumNotifications
         );
 
         var result = unavailable.checkout(user, SubscriptionPlan.PREMIUM_MONTHLY_30D);
@@ -260,7 +266,7 @@ class SubscriptionServiceTest {
     @Test
     void checkoutIsBlockedInProductionEvenWhenAKeyExists() {
         SubscriptionService production = new SubscriptionService(
-            subscriptions, payments, events, verifier, new PaymentEnvironment("production", "test_sk_sandbox")
+            subscriptions, payments, events, verifier, new PaymentEnvironment("production", "test_sk_sandbox"), premiumNotifications
         );
 
         var result = production.checkout(user, SubscriptionPlan.PREMIUM_MONTHLY_30D);

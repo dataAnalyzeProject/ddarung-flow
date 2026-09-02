@@ -15,5 +15,6 @@ public class Subscription {
   @Column(nullable = false) private OffsetDateTime startsAt;
   @Column(nullable = false) private OffsetDateTime endsAt;
   public Subscription(Users user, SubscriptionPlan plan, OffsetDateTime startsAt) { this.user=user; this.plan=plan; this.status=SubscriptionStatus.ACTIVE; this.startsAt=startsAt; this.endsAt=startsAt.plus(plan.duration()); }
-  public boolean isActive(OffsetDateTime now) { if (status == SubscriptionStatus.ACTIVE && !endsAt.isAfter(now)) status=SubscriptionStatus.EXPIRED; return status == SubscriptionStatus.ACTIVE; }
+  public boolean isActive(OffsetDateTime now) { if (status == SubscriptionStatus.ACTIVE && !endsAt.isAfter(now)) expire(); return status == SubscriptionStatus.ACTIVE; }
+  public void expire() { if (status == SubscriptionStatus.ACTIVE) status = SubscriptionStatus.EXPIRED; }
 }

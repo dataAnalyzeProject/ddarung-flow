@@ -1,5 +1,6 @@
 package com.ddarungflow.payment;
 import com.ddarungflow.entity.Users;
+import com.ddarungflow.notification.PremiumNotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,9 +16,12 @@ public class SubscriptionService {
   private final PaymentEventRepository paymentEvents;
   private final PaymentVerifier paymentVerifier;
   private final PaymentEnvironment paymentEnvironment;
+  private final PremiumNotificationService premiumNotifications;
   @Transactional public Map<String,Object> current(Users user) {
     return subscriptions.findFirstByUserOrderByEndsAtDesc(user).map(s -> {
+      boolean wasActive = s.getStatus() == SubscriptionStatus.ACTIVE;
       boolean active=s.isActive(OffsetDateTime.now());
+      if (wasActive && !active) premiumNotifications.notifyExpired(s);
       return Map.<String,Object>of("status", active ? "ACTIVE" : "EXPIRED", "planId", s.getPlan().name(), "startsAt", s.getStartsAt().toString(), "endsAt", s.getEndsAt().toString());
     }).orElseGet(() -> Map.of("status", "FREE"));
   }
@@ -63,7 +67,7 @@ public class SubscriptionService {
     }
     payment.markProcessing();
     payment.markSucceeded();
-    subscriptions.save(new Subscription(payment.getUser(), payment.getPlan(), OffsetDateTime.now()));
+    activate(payment);
     paymentEvents.save(new PaymentEvent("TOSS", eventId, PaymentEventOutcome.ACTIVE));
     return Map.of("status", "ACTIVE");
   }
@@ -82,8 +86,12 @@ public class SubscriptionService {
     }
     payment.markProcessing();
     payment.markSucceeded();
-    subscriptions.save(new Subscription(payment.getUser(), payment.getPlan(), OffsetDateTime.now()));
+    activate(payment);
     return Map.of("status", "ACTIVE");
+  }
+  private void activate(Payment payment) {
+    Subscription subscription = subscriptions.save(new Subscription(payment.getUser(), payment.getPlan(), OffsetDateTime.now()));
+    premiumNotifications.notifyActivated(subscription, payment.getOrderId());
   }
   private Map<String,Object> recordFailure(String eventId) {
     paymentEvents.save(new PaymentEvent("TOSS", eventId, PaymentEventOutcome.VERIFICATION_FAILED));

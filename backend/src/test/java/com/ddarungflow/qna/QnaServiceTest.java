@@ -285,7 +285,8 @@ class QnaServiceTest {
             assertThat(question.getStatus()).isEqualTo(QnaStatus.ANSWERED);
             verify(answerRepository).save(any(QnaAnswer.class));
             verify(notificationService).createInAppNotification(question.getAuthorId(), "qna-answered:1",
-                    "문의에 답변이 등록되었습니다", question.getTitle(), "QNA_ANSWERED");
+                    "문의에 답변이 등록되었습니다", question.getTitle(), "QNA_ANSWERED",
+                    "QNA_QUESTION", "1");
         }
 
         @Test

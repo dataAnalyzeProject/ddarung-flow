@@ -46,6 +46,7 @@ public final class RetentionDtos {
                                     boolean enabled, String createdAt) {
     }
 
-    public record NotificationResponse(Long id, String title, String message, String createdAt, String readAt) {
+    public record NotificationResponse(Long id, String title, String message, String createdAt, String readAt,
+                                       String notificationType, String actionType, String actionRef) {
     }
 }
