@@ -208,7 +208,7 @@ function TransitWorkspace({ candidate, destination, mapRenderer, onClose, onOpen
         </div>
         <div className="cr293-transit-summary__primary">
           <span><small>도착 시점 대여 가능성</small><b>{formatProbability(candidate.probability)}</b></span>
-          <span><small>현재 자전거</small><b>{candidate.availableBikeCount === null ? "확인 불가" : `${candidate.availableBikeCount}대`}</b></span>
+          <span><small>현재 자전거</small><b>{formatInventory(candidate)}</b></span>
         </div>
         <div className="cr293-transit-summary__route">
           <span><small>예상 도착</small><b>{formatArrival(candidate.arrivalAt)}</b></span>

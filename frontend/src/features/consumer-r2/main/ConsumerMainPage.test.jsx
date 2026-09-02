@@ -142,3 +142,24 @@ test("shows normal zero inventory separately from missing inventory metadata", a
   expect(screen.getByRole("button", { name: /뚝섬역 1번 출구/ })).toHaveTextContent("현재 재고 확인 불가 · MISSING");
   expect(screen.getByText(/horizon 60분/)).toBeInTheDocument();
 });
+
+test.each([
+  ["DELAYED", "현재 5대 · 지연 데이터", /09:00 기준/],
+  ["MISSING", "현재 재고 확인 불가 · MISSING", null],
+])("preserves %s inventory semantics in transit detail", async (inventoryStatus, expectedInventory, expectedAsOf) => {
+  const candidate = {
+    ...candidates[0],
+    availableBikeCount: 5,
+    inventoryStatus,
+    inventoryCollectedAt: "2026-09-02T09:00:00+09:00",
+  };
+  const services = createServices({ fetchRouteCandidates: jest.fn().mockResolvedValue({ candidates: [candidate] }) });
+  render(<ConsumerMainPage services={services} mapRenderer={PreviewMap} />);
+
+  fireEvent.click(await screen.findByRole("button", { name: "대여 가능성 비교" }));
+  fireEvent.click(await screen.findByRole("button", { name: "대중교통 경로 상세" }));
+
+  expect(screen.getByRole("complementary")).toHaveTextContent(expectedInventory);
+  expect(screen.getByRole("complementary")).not.toHaveTextContent(/^현재 자전거5대$/);
+  if (expectedAsOf) expect(screen.getByRole("complementary")).toHaveTextContent(expectedAsOf);
+});
