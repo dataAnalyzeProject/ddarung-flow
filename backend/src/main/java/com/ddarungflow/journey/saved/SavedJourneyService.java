@@ -1,5 +1,8 @@
 package com.ddarungflow.journey.saved;
 
+import com.ddarungflow.journey.application.JourneyPlanService;
+import com.ddarungflow.map.KakaoMapClient;
+import com.ddarungflow.map.MapApiDtos;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -11,7 +14,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -23,6 +28,8 @@ public class SavedJourneyService {
     private final SavedJourneyRepository repository;
     private final SavedJourneyIdempotencyKeyRepository idempotencyKeys;
     private final EntityManager entityManager;
+    private final JourneyPlanService journeyPlans;
+    private final KakaoMapClient places;
 
     @Transactional
     public SavedJourneyEntity save(Long userId, String idempotencyKey, SavedJourneyDtos.SaveRequest request) {
@@ -61,6 +68,39 @@ public class SavedJourneyService {
         repository.delete(saved);
     }
 
+    public JourneyPlanService.Decision replay(Long userId, String savedJourneyId,
+                                              SavedJourneyDtos.ReplayRequest request,
+                                              Runnable requireAiEntitlement) {
+        if (userId == null || savedJourneyId == null || savedJourneyId.isBlank()) {
+            throw new IllegalArgumentException("저장 여정 ID가 필요합니다.");
+        }
+        SavedJourneyEntity saved = repository.findByUserIdAndPublicId(userId, savedJourneyId)
+                .orElseThrow(SavedJourneyNotFoundException::new);
+        SavedJourneyDtos.ReplayInput stored = replayInput(saved);
+        if (request == null || request.departureAt() == null) {
+            throw new IllegalArgumentException("새 출발시각이 필요합니다.");
+        }
+        requireAiEntitlement.run();
+
+        JourneyPlanService.Place origin = currentPlace(stored.origin());
+        JourneyPlanService.Place destination = stored.destination() == null ? null : currentPlace(stored.destination());
+        Integer requiredBikeCount = valueOrStored(request.requiredBikeCount(), stored.requiredBikeCount());
+        Integer maxJourneyMinutes = valueOrStored(request.maxJourneyMinutes(), stored.maxJourneyMinutes());
+        Map<String, Object> preferences = new LinkedHashMap<>();
+        if (stored.preferences() != null) preferences.putAll(stored.preferences());
+        if (request.preferences() != null) preferences.putAll(request.preferences());
+        List<String> hardConstraints = request.hardConstraints() == null
+                ? stored.hardConstraints() : request.hardConstraints();
+        Integer availableMinutes = request.availableMinutes() == null
+                ? stored.totalJourneyMinutes() : request.availableMinutes();
+        JourneyPlanService.PlanConstraints constraints = new JourneyPlanService.PlanConstraints(
+                availableMinutes, request.themes(), request.stopCount(), request.routeMode());
+        JourneyPlanService.PlanInput input = new JourneyPlanService.PlanInput(JourneyPlanService.RequestMode.FORM,
+                null, origin, destination, request.departureAt(), maxJourneyMinutes, requiredBikeCount,
+                preferences, hardConstraints, null, constraints);
+        return journeyPlans.planSavedReplay(userId, input);
+    }
+
     public SavedJourneyDtos.ReplayInput replayInput(SavedJourneyEntity entity) {
         try {
             return new ObjectMapper().readValue(entity.getReplayInputJson(), SavedJourneyDtos.ReplayInput.class);
@@ -83,6 +123,29 @@ public class SavedJourneyService {
         boolean bothCoordinatesPresent = place != null && place.latitude() != null && place.longitude() != null;
         boolean noCoordinates = place != null && place.latitude() == null && place.longitude() == null;
         return place != null && !blank(place.providerId()) && !blank(place.displayName()) && (bothCoordinatesPresent || noCoordinates);
+    }
+
+    private JourneyPlanService.Place currentPlace(SavedJourneyDtos.PlaceInput place) {
+        if (!validPlace(place)) throw new IllegalArgumentException("저장된 장소가 유효하지 않습니다.");
+        if (place.latitude() != null && place.longitude() != null) {
+            return new JourneyPlanService.Place(place.providerId(), place.displayName(),
+                    place.latitude().doubleValue(), place.longitude().doubleValue());
+        }
+        try {
+            MapApiDtos.PlaceSearchResponseDto resolved = places.searchPlaces(place.displayName()).stream()
+                    .filter(candidate -> place.providerId().equals(candidate.placeId()))
+                    .findFirst().orElseThrow(PlaceReferenceUnavailableException::new);
+            return new JourneyPlanService.Place(resolved.placeId(), resolved.name(),
+                    resolved.latitude().doubleValue(), resolved.longitude().doubleValue());
+        } catch (PlaceReferenceUnavailableException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            throw new PlaceReferenceUnavailableException();
+        }
+    }
+
+    private Integer valueOrStored(Integer override, Integer stored) {
+        return override == null ? stored : override;
     }
 
     private String displayName(SavedJourneyDtos.SaveRequest request) {
@@ -128,4 +191,5 @@ public class SavedJourneyService {
     public static class SavedJourneyNotFoundException extends RuntimeException { }
     public static class SavedJourneyLimitException extends RuntimeException { }
     public static class IdempotencyConflictException extends RuntimeException { }
+    public static class PlaceReferenceUnavailableException extends RuntimeException { }
 }
