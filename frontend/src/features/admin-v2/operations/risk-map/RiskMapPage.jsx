@@ -18,6 +18,7 @@ export default function RiskMapPage({ createDataAdapter, loadMapSdk = loadKakaoM
   const adapter = useMemo(() => fixture ? createFixtureRiskMapAdapter({ fixtureName: fixture }) : createDataAdapter(), [createDataAdapter, fixture]);
   const [filters, setFilters] = useState(() => parseRiskMapQuery());
   const [bbox, setBbox] = useState(null);
+  const [bboxRevision, setBboxRevision] = useState(0);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -34,6 +35,7 @@ export default function RiskMapPage({ createDataAdapter, loadMapSdk = loadKakaoM
   const listController = useRef(null);
   const detailController = useRef(null);
   const bboxTimer = useRef(null);
+  const bboxRef = useRef(null);
   const generation = useRef(0);
   const selectRef = useRef(null);
   const snapshotRef = useRef(null);
@@ -60,7 +62,7 @@ export default function RiskMapPage({ createDataAdapter, loadMapSdk = loadKakaoM
     listController.current = controller;
     const current = ++generation.current;
     if (append) { setLoadingMore(true); setLoadMoreError(null); }
-    else { setLoading(true); setError(null); setLoadMoreError(null); setSnapshotExpired(false); }
+    else { setLoading(true); setResult(null); setError(null); setLoadMoreError(null); setSnapshotExpired(false); }
     adapter.loadList({ ...filters, bbox, limit: 100, cursor, snapshotId: append ? snapshotRef.current : null, signal: controller.signal })
       .then((next) => {
         if (controller.signal.aborted || generation.current !== current) return;
@@ -115,11 +117,12 @@ export default function RiskMapPage({ createDataAdapter, loadMapSdk = loadKakaoM
       setLoading(false);
       return undefined;
     }
+    if (bboxTimer.current !== null) return undefined;
 
     setSnapshotExpired(false);
     load();
     return () => listController.current?.abort();
-  }, [bbox, load]);
+  }, [bbox, bboxRevision, load]);
 
   useEffect(() => {
     if (!mapNode.current) return undefined;
@@ -130,18 +133,38 @@ export default function RiskMapPage({ createDataAdapter, loadMapSdk = loadKakaoM
       instance = createMapAdapter(mapNode.current, maps, {
         onStationSelect: (number) => selectRef.current?.(number, false),
         onViewportChange: (next) => {
+          if (!active || bboxRef.current === next) return;
+          bboxRef.current = next;
           window.clearTimeout(bboxTimer.current);
-          bboxTimer.current = window.setTimeout(() => { if (active) setBbox(next); }, 250);
+          listController.current?.abort();
+          generation.current += 1;
+          setSelectedStationNumber(null);
+          detailController.current?.abort();
+          setDetail(null);
+          setDetailError(null);
+          setResult(null);
+          setError(null);
+          setLoadMoreError(null);
+          setSnapshotExpired(false);
+          setLoading(true);
+          bboxTimer.current = window.setTimeout(() => {
+            if (active && bboxRef.current === next) {
+              bboxTimer.current = null;
+              setBbox(next);
+              setBboxRevision((revision) => revision + 1);
+            }
+          }, 250);
         },
       });
       setMapAdapter(instance);
     }).catch((nextError) => { if (active) setMapError(nextError); });
-    return () => { active = false; window.clearTimeout(bboxTimer.current); instance?.destroy(); };
+    return () => { active = false; window.clearTimeout(bboxTimer.current); bboxTimer.current = null; instance?.destroy(); };
   }, [createMapAdapter, loadMapSdk]);
 
   const items = useMemo(() => result?.items || [], [result]);
   const isScopeTooLarge = isScopeTooLargeError(error);
-  const displayedItems = useMemo(() => (isScopeTooLarge ? [] : items), [isScopeTooLarge, items]);
+  const listState = bbox === null ? 'WAITING' : loading ? 'LOADING' : isScopeTooLarge ? 'SCOPE_TOO_LARGE' : items.length ? 'SUCCESS' : 'EMPTY';
+  const displayedItems = useMemo(() => (listState === 'SUCCESS' ? items : []), [items, listState]);
   const showBlockingError = error && !isScopeTooLarge;
   const uiState = showBlockingError ? (error.status === 401 || error.status === 403 ? 'FORBIDDEN' : 'ERROR') : STATE[result?.dataState] || 'SUCCESS';
   useEffect(() => { mapAdapter?.setStations(displayedItems, selectedStationNumber); }, [displayedItems, mapAdapter, selectedStationNumber]);
@@ -190,10 +213,9 @@ export default function RiskMapPage({ createDataAdapter, loadMapSdk = loadKakaoM
       {result?.limitations?.length ? <p className="risk-limitations">제한 사항: {result.limitations.join(', ')}</p> : null}
       <section className="risk-map-layout">
         <section className="risk-map-panel" aria-labelledby="risk-map-heading"><h2 id="risk-map-heading">위험 지도</h2>{mapError ? <p role="status">지도 사용 불가: {mapError.message} · 목록은 계속 사용할 수 있습니다.</p> : <div ref={mapNode} className="risk-kakao-map" aria-label="위험 대여소 지도" />}{<RiskLegend />}</section>
-        {!isScopeTooLarge ? <RiskStationList items={displayedItems} selectedStationNumber={selectedStationNumber} onSelect={select} onLoadMore={result?.nextCursor ? () => load(result.nextCursor, true) : null} loadingMore={loadingMore} /> : null}
+        <RiskStationList items={displayedItems} state={listState} selectedStationNumber={selectedStationNumber} onSelect={select} onLoadMore={result?.nextCursor ? () => load(result.nextCursor, true) : null} loadingMore={loadingMore} />
       </section>
       {loadMoreError ? <p className="risk-limitations" role="status">추가 데이터를 불러오지 못했습니다 <button type="button" onClick={() => load(result?.nextCursor, true)}>재시도</button></p> : null}
-      {uiState === 'SUCCESS' && !isScopeTooLarge && !items.length ? <p className="risk-empty">현재 필터/지도 범위에 해당하는 대여소가 없습니다.</p> : null}
     </> : null}
     {selectedStationNumber ? <RiskStationDrawer stationNumber={selectedStationNumber} detail={detail} error={detailError} loading={detailLoading} onClose={() => { detailController.current?.abort(); setSelectedStationNumber(null); }} /> : null}
   </main>;

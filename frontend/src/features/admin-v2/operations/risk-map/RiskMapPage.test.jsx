@@ -18,6 +18,34 @@ test('keeps the route heading while loading and renders zero inventory without f
   expect(screen.getByRole('combobox', { name: '예측 horizon' }).value).toBe('120');
 });
 
+test('keeps the station list panel while waiting for the initial bbox', () => {
+  const loadList = jest.fn();
+  render(<RiskMapPage
+    createDataAdapter={() => ({ loadList, loadDetail: (number) => Promise.resolve(detailFixture(number)) })}
+    loadMapSdk={() => new Promise(() => {})}
+    createMapAdapter={() => ({ setStations: jest.fn(), focusStation: jest.fn(), destroy: jest.fn() })}
+  />);
+
+  expect(screen.getByRole('heading', { name: '대여소 목록' })).toBeInTheDocument();
+  expect(screen.getByText('지도 범위를 확인하고 있습니다.')).toBeInTheDocument();
+  expect(loadList).not.toHaveBeenCalled();
+});
+
+test('keeps the station list panel and shows analysis progress for a new bbox', async () => {
+  let reportBounds;
+  const loadList = jest.fn(() => new Promise(() => {}));
+  render(<RiskMapPage
+    createDataAdapter={() => ({ loadList, loadDetail: (number) => Promise.resolve(detailFixture(number)) })}
+    loadMapSdk={() => Promise.resolve({})}
+    createMapAdapter={(node, maps, callbacks) => { reportBounds = callbacks.onViewportChange; return { setStations: jest.fn(), focusStation: jest.fn(), destroy: jest.fn() }; }}
+  />);
+
+  await waitFor(() => expect(reportBounds).toBeDefined());
+  act(() => reportBounds('bbox-loading'));
+  expect(await screen.findByText('현재 지도 범위의 대여소를 분석하고 있습니다.')).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: '대여소 목록' })).toBeInTheDocument();
+});
+
 test('selects a public station number and opens detail drawer', async () => {
   render(<RiskMapPage createDataAdapter={adapter()} loadMapSdk={() => Promise.resolve({})} createMapAdapter={readyMap} />);
   const station = await screen.findByRole('button', { name: /광화문역 1번 출구/ });
@@ -32,10 +60,11 @@ test('selects a public station number and opens detail drawer', async () => {
 test('clears the selected station and snapshot context when the map viewport changes', async () => {
   let reportBounds;
   let selectStation;
-  const map = { setStations: jest.fn(), focusStation: jest.fn(() => reportBounds('bbox-after-pan')), destroy: jest.fn() };
-  const loadList = jest.fn(() => Promise.resolve(riskMapFixture()));
+  const map = { setStations: jest.fn(), focusStation: jest.fn(), destroy: jest.fn() };
+  const loadList = jest.fn(() => Promise.resolve({ ...riskMapFixture(), snapshotId: 'snapshot-a' }));
+  const loadDetail = jest.fn((number) => Promise.resolve(detailFixture(number)));
   render(<RiskMapPage
-    createDataAdapter={() => ({ loadList, loadDetail: (number) => Promise.resolve(detailFixture(number)) })}
+    createDataAdapter={() => ({ loadList, loadDetail })}
     loadMapSdk={() => Promise.resolve({})}
     createMapAdapter={(node, maps, callbacks) => { reportBounds = callbacks.onViewportChange; selectStation = callbacks.onStationSelect; reportBounds('bbox-initial'); return map; }}
   />);
@@ -43,9 +72,12 @@ test('clears the selected station and snapshot context when the map viewport cha
   await waitFor(() => expect(reportBounds).toBeDefined());
   fireEvent.click(await screen.findByRole('button', { name: /광화문역 1번 출구/ }));
   await screen.findByRole('dialog');
+  await waitFor(() => expect(loadDetail).toHaveBeenCalledWith('1001', expect.objectContaining({ snapshotId: 'snapshot-a' })));
+  act(() => reportBounds('bbox-after-pan'));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(loadDetail).toHaveBeenCalledTimes(1);
   await waitFor(() => expect(loadList).toHaveBeenCalledWith(expect.objectContaining({ bbox: 'bbox-after-pan' })));
   expect(map.focusStation).toHaveBeenCalledWith(expect.objectContaining({ station: expect.objectContaining({ stationNumber: '1001' }) }));
-  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
   act(() => selectStation('1002'));
   await screen.findByRole('heading', { name: '시청역 7번 출구' });
@@ -123,15 +155,26 @@ test('keeps the map instance and ignores a stale bbox response after the next vi
   />);
 
   await waitFor(() => expect(reportBounds).toBeDefined());
+  await screen.findByText('광화문역 1번 출구');
   act(() => reportBounds('bbox-1'));
+  expect(screen.queryByText('광화문역 1번 출구')).not.toBeInTheDocument();
+  expect(screen.getByText('현재 지도 범위의 대여소를 분석하고 있습니다.')).toBeInTheDocument();
+  expect(map.setStations).toHaveBeenLastCalledWith([], null);
   await waitFor(() => expect(loadList).toHaveBeenCalledWith(expect.objectContaining({ bbox: 'bbox-1' })));
   const firstBboxCall = loadList.mock.calls.find(([request]) => request.bbox === 'bbox-1')[0];
-  act(() => reportBounds('bbox-2'));
-  await waitFor(() => expect(loadList).toHaveBeenCalledWith(expect.objectContaining({ bbox: 'bbox-2' })));
+  await act(async () => {
+    reportBounds('bbox-2');
+    const stale = riskMapFixture();
+    stale.items = stale.items.map((item, index) => index === 0 ? { ...item, station: { ...item.station, name: '이전 범위 대여소' } } : item);
+    resolveFirstBbox(stale);
+    await Promise.resolve();
+  });
   expect(firstBboxCall.signal.aborted).toBe(true);
+  expect(screen.queryByText('이전 범위 대여소')).not.toBeInTheDocument();
+  expect(screen.getByText('현재 지도 범위의 대여소를 분석하고 있습니다.')).toBeInTheDocument();
+  await waitFor(() => expect(loadList).toHaveBeenCalledWith(expect.objectContaining({ bbox: 'bbox-2' })));
   expect(map.destroy).not.toHaveBeenCalled();
 
-  act(() => resolveFirstBbox({ ...riskMapFixture(), items: [] }));
   await waitFor(() => expect(screen.getByText('광화문역 1번 출구')).toBeInTheDocument());
 });
 
@@ -147,16 +190,75 @@ test('keeps the map mounted on RISK_SCOPE_TOO_LARGE and waits for a narrower vie
 
   await waitFor(() => expect(reportBounds).toBeDefined());
   expect(screen.getByLabelText('위험 대여소 지도')).toBeInTheDocument();
+  const listPanel = screen.getByRole('heading', { name: '대여소 목록' }).closest('section');
   await waitFor(() => expect(screen.getByText((content) => content.includes('표시하려는 범위가 커서 현재 지도 확대가 필요합니다.'))).toBeInTheDocument());
   expect(screen.getByText((content) => content.includes('지도를 확대하면 위험도를 계산합니다.'))).toBeInTheDocument();
+  expect(screen.getByText('현재 지도 범위가 너무 넓습니다. 지도를 확대하면 이 범위의 대여소 목록을 확인할 수 있습니다.')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /광화문역 1번 출구/ })).not.toBeInTheDocument();
   expect(screen.queryByText('오류가 발생했습니다')).not.toBeInTheDocument();
 
   act(() => reportBounds('bbox-zoom'));
   await waitFor(() => expect(loadList).toHaveBeenCalledWith(expect.objectContaining({ bbox: 'bbox-zoom' })));
-  await waitFor(() => expect(screen.getByText('광화문역 1번 출구')).toBeInTheDocument());
+  await waitFor(() => expect(screen.getByRole('button', { name: /광화문역 1번 출구/ })).toBeInTheDocument());
+  expect(listPanel).toContainElement(screen.getByRole('button', { name: /광화문역 1번 출구/ }));
   expect(screen.getByText('2026-08-30T09:00:00+09:00')).toBeInTheDocument();
   expect(map.setStations).toHaveBeenLastCalledWith(expect.arrayContaining([expect.objectContaining({ station: expect.objectContaining({ stationNumber: '1001' }) })]), null);
   expect(map.destroy).not.toHaveBeenCalled();
+});
+
+test('reloads when a debounced viewport round trip returns to the current bbox', async () => {
+  let reportBounds;
+  const loadList = jest.fn(() => Promise.resolve(riskMapFixture()));
+  render(<RiskMapPage
+    createDataAdapter={() => ({ loadList, loadDetail: (number) => Promise.resolve(detailFixture(number)) })}
+    loadMapSdk={() => Promise.resolve({})}
+    createMapAdapter={(node, maps, callbacks) => { reportBounds = callbacks.onViewportChange; reportBounds('bbox-a'); return { setStations: jest.fn(), focusStation: jest.fn(), destroy: jest.fn() }; }}
+  />);
+
+  await screen.findByText('광화문역 1번 출구');
+  expect(loadList).toHaveBeenCalledTimes(1);
+  act(() => {
+    reportBounds('bbox-b');
+    reportBounds('bbox-a');
+  });
+
+  expect(screen.getByText('현재 지도 범위의 대여소를 분석하고 있습니다.')).toBeInTheDocument();
+  await waitFor(() => expect(loadList).toHaveBeenCalledTimes(2));
+  expect(loadList).toHaveBeenLastCalledWith(expect.objectContaining({ bbox: 'bbox-a' }));
+  expect(loadList).not.toHaveBeenCalledWith(expect.objectContaining({ bbox: 'bbox-b' }));
+  expect(await screen.findByText('광화문역 1번 출구')).toBeInTheDocument();
+});
+
+test('does not reload the previous bbox when filters change during viewport debounce', async () => {
+  let reportBounds;
+  const loadList = jest.fn(() => Promise.resolve(riskMapFixture()));
+  render(<RiskMapPage
+    createDataAdapter={() => ({ loadList, loadDetail: (number) => Promise.resolve(detailFixture(number)) })}
+    loadMapSdk={() => Promise.resolve({})}
+    createMapAdapter={(node, maps, callbacks) => { reportBounds = callbacks.onViewportChange; reportBounds('bbox-a'); return { setStations: jest.fn(), focusStation: jest.fn(), destroy: jest.fn() }; }}
+  />);
+
+  await screen.findByText('광화문역 1번 출구');
+  act(() => reportBounds('bbox-b'));
+  fireEvent.change(screen.getByRole('combobox', { name: '예측 horizon' }), { target: { value: '120' } });
+
+  expect(loadList).toHaveBeenCalledTimes(1);
+  expect(screen.getByText('현재 지도 범위의 대여소를 분석하고 있습니다.')).toBeInTheDocument();
+  await waitFor(() => expect(loadList).toHaveBeenCalledTimes(2));
+  expect(loadList).toHaveBeenLastCalledWith(expect.objectContaining({ bbox: 'bbox-b', horizonMinutes: 120 }));
+  expect(loadList).not.toHaveBeenCalledWith(expect.objectContaining({ bbox: 'bbox-a', horizonMinutes: 120 }));
+});
+
+test('shows the current viewport empty state inside the stable list panel', async () => {
+  const empty = { ...riskMapFixture(), items: [] };
+  render(<RiskMapPage
+    createDataAdapter={() => ({ loadList: () => Promise.resolve(empty), loadDetail: (number) => Promise.resolve(detailFixture(number)) })}
+    loadMapSdk={() => Promise.resolve({})}
+    createMapAdapter={readyMap}
+  />);
+
+  expect(await screen.findByText('현재 지도 범위에 표시할 대여소가 없습니다.')).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: '대여소 목록' })).toBeInTheDocument();
 });
 
 test('returns FORBIDDEN for 401 and 403 responses', async () => {
