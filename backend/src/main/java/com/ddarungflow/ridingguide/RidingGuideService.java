@@ -30,11 +30,18 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 public class RidingGuideService {
     private static final EvidenceSelectionValidator.StayMinutesBounds STAY_BOUNDS =
             new EvidenceSelectionValidator.StayMinutesBounds(10, 120);
+    private static final Pattern NUMERIC_LEXEME = Pattern.compile(
+            "[+\\-]?\\p{Nd}+(?:[.,eE+\\-_'’/:]+\\p{Nd}+)*(?:[%％٪])?");
+    private static final Pattern CANONICAL_NUMERIC_LEXEME = Pattern.compile(
+            "-?(?:0|[1-9]\\d*)(?:\\.\\d+)?%?");
+    private static final Pattern EMBEDDED_NUMERIC_LEXEME = Pattern.compile("\\p{Nd}\\p{L}+\\p{Nd}");
 
     private final PremiumEntitlementService entitlement;
     private final StationQueryService stationQueryService;
@@ -111,6 +118,7 @@ public class RidingGuideService {
             validateGeneratedText(generated);
             EvidenceSelectionValidator.ValidatedSelection validated = selectionValidator.validate(
                     bundle, generated.selection(), STAY_BOUNDS);
+            validateGroundedNumericText(generated);
             List<RidingGuideDtos.ItineraryStop> preview = generated.stops().stream()
                     .map(stop -> new RidingGuideDtos.ItineraryStop(stop.poiId(), stop.stayMinutes(), stop.rationale()))
                     .toList();
@@ -392,12 +400,55 @@ public class RidingGuideService {
         if (generated == null || generated.guideSummary() == null || generated.guideSummary().isBlank()
                 || generated.rationale() == null || generated.rationale().isBlank()
                 || generated.stops().size() > 3
-                || containsNumericToken(generated.guideSummary()) || containsNumericToken(generated.rationale())
                 || generated.stops().stream().anyMatch(stop -> stop == null || stop.rationale() == null
-                || stop.rationale().isBlank() || containsNumericToken(stop.rationale()))) {
+                || stop.rationale().isBlank())) {
             throw new JourneyAiException(JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID,
                     "riding guide output text is missing");
         }
+    }
+
+    private void validateGroundedNumericText(RidingGuideAiGateway.GuideOutput generated) {
+        validateGroundedNumericText(generated.guideSummary(), generated.factValues(), List.of());
+        validateGroundedNumericText(generated.rationale(), generated.factValues(), List.of());
+        generated.stops().forEach(stop -> validateGroundedNumericText(
+                stop.rationale(), generated.factValues(), List.of(BigDecimal.valueOf(stop.stayMinutes()))));
+    }
+
+    private void validateGroundedNumericText(
+            String text,
+            List<ConsumerAiEvidenceBundle.FactValue> factValues,
+            List<BigDecimal> stayMinutes
+    ) {
+        if (EMBEDDED_NUMERIC_LEXEME.matcher(text).find()) {
+            throw new JourneyAiException(JourneyAiErrorCode.AI_TOOL_VALUE_MISMATCH,
+                    "numeric guide text is not a canonical decimal");
+        }
+        Matcher matcher = NUMERIC_LEXEME.matcher(text);
+        while (matcher.find()) {
+            String lexeme = matcher.group();
+            if (!CANONICAL_NUMERIC_LEXEME.matcher(lexeme).matches()) {
+                throw new JourneyAiException(JourneyAiErrorCode.AI_TOOL_VALUE_MISMATCH,
+                        "numeric guide text is not a canonical decimal");
+            }
+            boolean percent = lexeme.endsWith("%");
+            String decimal = percent ? lexeme.substring(0, lexeme.length() - 1) : lexeme;
+            BigDecimal mentioned = new BigDecimal(decimal);
+            boolean groundedByFact = factValues.stream().anyMatch(fact ->
+                    mentioned.compareTo(fact.value()) == 0
+                            && (!percent || isPercentFact(fact.reference())));
+            boolean groundedByStay = !percent && stayMinutes.stream()
+                    .anyMatch(stay -> mentioned.compareTo(stay) == 0);
+            if (!groundedByFact && !groundedByStay) {
+                throw new JourneyAiException(JourneyAiErrorCode.AI_TOOL_VALUE_MISMATCH,
+                        "numeric guide text is not backed by evidence");
+            }
+        }
+    }
+
+    private boolean isPercentFact(ConsumerAiEvidenceBundle.FactReference reference) {
+        return reference != null
+                && reference.factName() != null
+                && reference.factName().toLowerCase(java.util.Locale.ROOT).endsWith("percent");
     }
 
     private boolean containsNonNormal(ConsumerAiEvidenceBundle bundle) {
@@ -444,10 +495,6 @@ public class RidingGuideService {
 
     private String nameOrUnavailable(Enum<?> value) {
         return value == null ? "UNAVAILABLE" : value.name();
-    }
-
-    private boolean containsNumericToken(String text) {
-        return text.codePoints().anyMatch(Character::isDigit);
     }
 
     private record QueryContext(Integer minutesAhead, int requiredBikeCount, JourneyCandidate journeyCandidate) { }
