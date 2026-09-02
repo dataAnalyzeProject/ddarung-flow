@@ -20,10 +20,10 @@ function station(riskBand, dataState = 'NORMAL') {
 }
 
 test.each([
-  ['CRITICAL', 'risk-map-marker--critical', 'C'],
-  ['HIGH', 'risk-map-marker--high', 'H'],
-  ['WATCH', 'risk-map-marker--watch', 'W'],
-  ['LOW', 'risk-map-marker--low', 'L'],
+  ['CRITICAL', 'riskband-marker--critical', 'C'],
+  ['HIGH', 'riskband-marker--high', 'H'],
+  ['WATCH', 'riskband-marker--watch', 'W'],
+  ['LOW', 'riskband-marker--low', 'L'],
 ])('uses the %s risk semantic class and label', (riskBand, className, label) => {
   const { adapter, overlays } = setup();
   adapter.setStations([station(riskBand)], null);
@@ -39,15 +39,15 @@ test.each([
 ])('uses unknown marker semantics for riskBand %s and dataState %s', (riskBand, dataState) => {
   const { adapter, overlays } = setup();
   adapter.setStations([station(riskBand, dataState)], null);
-  expect(overlays[0].options.content).toHaveClass('risk-map-marker--unknown');
+  expect(overlays[0].options.content).toHaveClass('riskband-marker--unknown');
   expect(overlays[0].options.content).toHaveTextContent('?');
-  expect(overlays[0].options.content).not.toHaveClass('risk-map-marker--low');
+  expect(overlays[0].options.content).not.toHaveClass('riskband-marker--low');
 });
 
 test('uses stationNumber for marker selection and cleans up overlays', () => {
   const { adapter, handlers, maps, overlays, selected, viewport } = setup();
   adapter.setStations([station('HIGH')], '1001');
-  expect(overlays[0].options.content).toHaveClass('risk-map-marker--high', 'selected');
+  expect(overlays[0].options.content).toHaveClass('riskband-marker--high', 'selected');
   fireEvent.click(overlays[0].options.content);
   expect(selected).toHaveBeenCalledWith('1001');
   handlers.idle(); expect(viewport).toHaveBeenCalledWith('126,37,127,38');
