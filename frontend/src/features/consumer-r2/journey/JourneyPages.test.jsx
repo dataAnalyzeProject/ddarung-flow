@@ -130,6 +130,7 @@ test("result renders backend segments, zero values, pathPoints and evidence gaps
   expect(screen.getAllByText("RENT").length).toBeGreaterThan(0);
   expect(screen.getAllByText("RIDE").length).toBeGreaterThan(0);
   expect(screen.getAllByText("VISIT").length).toBeGreaterThan(0);
+  expect(screen.getByRole("heading", { name: "성수 → 성수역 3번 출구" })).toBeInTheDocument();
   expect(screen.getByText("시간 0분")).toBeInTheDocument();
   expect(screen.getAllByText("0%").length).toBeGreaterThan(0);
   expect(screen.getByRole("img", { name: /실제 좌표/ })).toBeInTheDocument();

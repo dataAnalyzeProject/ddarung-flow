@@ -79,11 +79,11 @@ function evidenceTitle(item) {
   return item?.textFacts?.displayName || item?.textFacts?.stationName || item?.textFacts?.name || item?.evidenceId || "근거 없음";
 }
 
-function segmentTitle(segment, evidence) {
+function segmentTitle(segment, evidence, intent) {
   if (segment.type === "RENT" && segment.rentalFacts?.stationName) return segment.rentalFacts.stationName;
   const from = evidenceById(evidence, segment.fromEvidenceId);
   const to = evidenceById(evidence, segment.toEvidenceId);
-  if (segment.type === "ACCESS") return `${evidenceTitle(from)} → ${segment.rentalFacts?.stationName || evidenceTitle(to)}`;
+  if (segment.type === "ACCESS") return `${intent?.origin?.displayName || evidenceTitle(from)} → ${segment.rentalFacts?.stationName || evidenceTitle(to)}`;
   if (segment.type === "RIDE") return `${evidenceTitle(from)} → ${evidenceTitle(to)}`;
   return evidenceTitle(to || from);
 }
@@ -106,7 +106,7 @@ function Summary({ plan }) {
   </section>;
 }
 
-function Timeline({ plan }) {
+function Timeline({ intent, plan }) {
   return <section className="cr22-journey__timeline" aria-labelledby="timeline-title">
     <h2 id="timeline-title">시간순 일정 <small>백엔드 제공 구간</small></h2>
     {plan.segments?.length ? <ol>{plan.segments.map((segment) => {
@@ -115,7 +115,7 @@ function Timeline({ plan }) {
       const toEvidence = evidenceById(plan.evidence, segment.toEvidenceId);
       return <li className={`is-${String(segment.type).toLowerCase()}`} key={segment.segmentId}>
         <div className="cr22-journey__time"><strong>{formatTime(segment.startAt)}</strong>{segment.endAt ? <span>– {formatTime(segment.endAt)}</span> : null}<StatusBadge tone={segment.type === "VISIT" ? "premium" : segment.type === "ACCESS" ? "info" : "positive"}>{code}</StatusBadge></div>
-        <article><span className="cr22-journey__segment-icon" aria-hidden="true"><ConsumerIcon name={icon} /></span><div><h3>{segmentTitle(segment, plan.evidence)}</h3><p>{label}</p><div className="cr22-journey__facts"><span>시간 {formatDuration(segment.durationSeconds ?? (hasValue(segment.stayMinutes) ? Number(segment.stayMinutes) * 60 : null))}</span><span>거리 {formatDistance(segment.distanceMeters)}</span>{segment.travelMode ? <span>이동 {segment.travelMode}</span> : null}</div>{segment.type === "RENT" ? <div className="cr22-journey__rental-facts"><span>필요 {present(segment.rentalFacts?.requiredBikeCount, (value) => `${value}대`)}</span><span>현재 {present(segment.rentalFacts?.availableBikeCount, (value) => `${value}대`)}</span><span>가능성 {formatProbability(segment.rentalFacts?.rentalProbability)}</span></div> : null}<small className="cr22-journey__source">근거 ID: {[segment.fromEvidenceId, segment.toEvidenceId].filter(Boolean).join(" → ") || "확인되지 않음"}<br />출처: {[fromEvidence?.source, toEvidence?.source].filter(Boolean).join(" · ") || "확인되지 않음"}</small></div></article>
+        <article><span className="cr22-journey__segment-icon" aria-hidden="true"><ConsumerIcon name={icon} /></span><div><h3>{segmentTitle(segment, plan.evidence, intent)}</h3><p>{label}</p><div className="cr22-journey__facts"><span>시간 {formatDuration(segment.durationSeconds ?? (hasValue(segment.stayMinutes) ? Number(segment.stayMinutes) * 60 : null))}</span><span>거리 {formatDistance(segment.distanceMeters)}</span>{segment.travelMode ? <span>이동 {segment.travelMode}</span> : null}</div>{segment.type === "RENT" ? <div className="cr22-journey__rental-facts"><span>필요 {present(segment.rentalFacts?.requiredBikeCount, (value) => `${value}대`)}</span><span>현재 {present(segment.rentalFacts?.availableBikeCount, (value) => `${value}대`)}</span><span>가능성 {formatProbability(segment.rentalFacts?.rentalProbability)}</span></div> : null}<small className="cr22-journey__source">근거 ID: {[segment.fromEvidenceId, segment.toEvidenceId].filter(Boolean).join(" → ") || "확인되지 않음"}<br />출처: {[fromEvidence?.source, toEvidence?.source].filter(Boolean).join(" · ") || "확인되지 않음"}</small></div></article>
       </li>;
     })}</ol> : <AsyncState state="empty" title="표시할 일정 구간이 없습니다" description="백엔드가 제공한 구간이 없어 시간이나 경로를 만들지 않았습니다." />}
   </section>;
@@ -188,7 +188,7 @@ function ResultContent({ adapter, decision, onNavigate, onUpdated }) {
     <div className="cr22-journey__result-title"><div><p className="cr22-journey__breadcrumb"><ConsumerIcon name="home" size={15} /> <span aria-hidden="true">›</span> AI 플래너 <span aria-hidden="true">›</span> 결과</p><h1>{title} <StatusBadge tone="premium">PREMIUM</StatusBadge></h1><p>실제 대여·장소·경로 근거로 구성된 현재 계획입니다.</p></div><div><ConsumerButton variant="secondary" icon={<ConsumerIcon name="retry" />} onClick={() => document.getElementById("structured-replan")?.scrollIntoView()}>조건 변경 후 재추천</ConsumerButton><ConsumerButton icon={<ConsumerIcon name="plan" />} loading={action === "save"} loadingLabel="저장 중…" onClick={save}>이 계획 저장</ConsumerButton></div></div>
     {plan.status === "PARTIAL" || decision.status === "PARTIAL" ? <p className="cr22-journey__partial" role="status"><StatusBadge tone="caution">PARTIAL</StatusBadge> 일부 근거만 확인되었습니다. 확인되지 않은 값은 따로 표시합니다.</p> : null}
     {plan.status === "UNAVAILABLE" || decision.status === "UNAVAILABLE" ? <p className="cr22-journey__partial" role="status"><StatusBadge tone="danger">UNAVAILABLE</StatusBadge> 전체 일정은 만들지 못했습니다. 아래에는 백엔드가 제공한 사실 구간과 근거만 표시합니다.</p> : null}
-    <div className="cr22-journey__result-layout"><div><Summary plan={plan} /><Timeline plan={plan} /></div><aside><EvidenceMap plan={plan} /><Rationale plan={plan} /></aside></div>
+    <div className="cr22-journey__result-layout"><div><Summary plan={plan} /><Timeline intent={intent} plan={plan} /></div><aside><EvidenceMap plan={plan} /><Rationale plan={plan} /></aside></div>
     <SurfaceCard title="구조화 조건으로 다시 계획">
       <div className="cr22-journey__replan" id="structured-replan">
         <label>이용 시간<input name="availableMinutes" autoComplete="off" type="number" min="1" max="480" value={editor.availableMinutes} onChange={(event) => setEditor((current) => ({ ...current, availableMinutes: event.target.value }))} /></label>
