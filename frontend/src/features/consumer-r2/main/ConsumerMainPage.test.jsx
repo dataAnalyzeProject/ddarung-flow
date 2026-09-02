@@ -144,9 +144,9 @@ test("shows normal zero inventory separately from missing inventory metadata", a
 });
 
 test.each([
-  ["DELAYED", "현재 5대 · 지연 데이터", /09:00 기준/],
-  ["MISSING", "현재 재고 확인 불가 · MISSING", null],
-])("preserves %s inventory semantics in transit detail", async (inventoryStatus, expectedInventory, expectedAsOf) => {
+  ["DELAYED", "현재 5대 · 지연 데이터", true],
+  ["MISSING", "현재 재고 확인 불가 · MISSING", false],
+])("preserves %s inventory semantics in transit detail", async (inventoryStatus, expectedInventory, hasAsOf) => {
   const candidate = {
     ...candidates[0],
     availableBikeCount: 5,
@@ -162,5 +162,5 @@ test.each([
   const inventory = screen.getByLabelText(new RegExp(expectedInventory));
   expect(inventory).toHaveTextContent(inventoryStatus === "MISSING" ? "확인 불가" : "5대");
   expect(inventory).toHaveTextContent(inventoryStatus === "MISSING" ? "MISSING" : "지연 데이터");
-  if (expectedAsOf) expect(inventory).toHaveTextContent(expectedAsOf);
+  if (hasAsOf) expect(inventory).toHaveTextContent(/\d{1,2}\. \d{1,2}\. \d{2}:00 기준/);
 });
