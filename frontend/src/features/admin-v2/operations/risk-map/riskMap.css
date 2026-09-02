@@ -140,20 +140,20 @@
   padding: 0;
   width: 20px;
 }
-.risk-map-marker--critical {
+.riskband-marker--critical {
   background: #b42318;
 }
-.risk-map-marker--high {
+.riskband-marker--high {
   background: #c2410c;
 }
-.risk-map-marker--watch {
+.riskband-marker--watch {
   background: #f5c451;
   color: var(--admin-v2-ink);
 }
-.risk-map-marker--low {
+.riskband-marker--low {
   background: var(--admin-v2-accent);
 }
-.risk-map-marker--unknown {
+.riskband-marker--unknown {
   background: #667085;
 }
 .risk-map-panel .risk-map-marker {
