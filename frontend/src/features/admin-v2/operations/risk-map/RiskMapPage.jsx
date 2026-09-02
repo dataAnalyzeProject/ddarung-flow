@@ -111,10 +111,15 @@ export default function RiskMapPage({ createDataAdapter, loadMapSdk = loadKakaoM
   }, [bbox]);
 
   useEffect(() => {
+    if (bbox === null) {
+      setLoading(false);
+      return undefined;
+    }
+
     setSnapshotExpired(false);
     load();
     return () => listController.current?.abort();
-  }, [load]);
+  }, [bbox, load]);
 
   useEffect(() => {
     if (!mapNode.current) return undefined;

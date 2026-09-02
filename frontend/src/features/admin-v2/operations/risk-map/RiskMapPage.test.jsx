@@ -61,6 +61,22 @@ test('loads only after a map bounds callback and supports cursor append', async 
   await screen.findByText('을지로입구역');
 });
 
+test('calls loadList only after bbox is available and uses the provided bbox', async () => {
+  const loadList = jest.fn().mockResolvedValue(riskMapFixture());
+  let reportBounds;
+  render(<RiskMapPage
+    createDataAdapter={() => ({ loadList, loadDetail: (number) => Promise.resolve(detailFixture(number)) })}
+    loadMapSdk={() => Promise.resolve({})}
+    createMapAdapter={(node, maps, callbacks) => { reportBounds = callbacks.onViewportChange; return { setStations: jest.fn(), focusStation: jest.fn(), destroy: jest.fn() }; }}
+  />);
+
+  expect(loadList).not.toHaveBeenCalled();
+  await waitFor(() => expect(reportBounds).toBeDefined());
+  act(() => reportBounds('126,37,127,38'));
+  await waitFor(() => expect(loadList).toHaveBeenCalledTimes(1));
+  expect(loadList).toHaveBeenCalledWith(expect.objectContaining({ bbox: '126,37,127,38', cursor: null }));
+});
+
 test('keeps first-page data and retry cursor when load-more fails', async () => {
   const loadList = jest.fn(({ cursor }) => cursor ? Promise.reject(Object.assign(new Error('failed'), { code: 'LOAD_MORE_FAILED' })) : Promise.resolve(riskMapFixture('PAGINATED')));
   render(<RiskMapPage createDataAdapter={() => ({ loadList, loadDetail: (number) => Promise.resolve(detailFixture(number)) })} loadMapSdk={() => Promise.resolve({})} createMapAdapter={readyMap} />);
@@ -126,13 +142,13 @@ test('keeps the map mounted on RISK_SCOPE_TOO_LARGE and waits for a narrower vie
   render(<RiskMapPage
     createDataAdapter={() => ({ loadList, loadDetail: (number) => Promise.resolve(detailFixture(number)) })}
     loadMapSdk={() => Promise.resolve({})}
-    createMapAdapter={(node, maps, callbacks) => { reportBounds = callbacks.onViewportChange; return map; }}
+    createMapAdapter={(node, maps, callbacks) => { reportBounds = callbacks.onViewportChange; callbacks.onViewportChange('bbox-wide'); return map; }}
   />);
 
   await waitFor(() => expect(reportBounds).toBeDefined());
   expect(screen.getByLabelText('위험 대여소 지도')).toBeInTheDocument();
-  expect(screen.getByText(/표시하려는 범위가 커서 현재 지도 확대가 필요합니다/)).toBeInTheDocument();
-  expect(screen.getByText(/지도를 확대하면 위험도를 계산합니다/)).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByText((content) => content.includes('표시하려는 범위가 커서 현재 지도 확대가 필요합니다.'))).toBeInTheDocument());
+  expect(screen.getByText((content) => content.includes('지도를 확대하면 위험도를 계산합니다.'))).toBeInTheDocument();
   expect(screen.queryByText('오류가 발생했습니다')).not.toBeInTheDocument();
 
   act(() => reportBounds('bbox-zoom'));
@@ -145,22 +161,25 @@ test('keeps the map mounted on RISK_SCOPE_TOO_LARGE and waits for a narrower vie
 
 test('returns FORBIDDEN for 401 and 403 responses', async () => {
   const forbidden = { status: 403, code: 'ADMIN_PERMISSION_DENIED', message: '권한이 없습니다.' };
-  render(<RiskMapPage createDataAdapter={() => ({ loadList: () => Promise.reject(makeError(forbidden)), loadDetail: (number) => Promise.resolve(detailFixture(number)) })} loadMapSdk={noMap} />);
+  const createMapAdapter = (node, maps, callbacks) => { callbacks.onViewportChange('126,37,127,38'); return { setStations: jest.fn(), focusStation: jest.fn(), destroy: jest.fn() }; };
+  render(<RiskMapPage createDataAdapter={() => ({ loadList: () => Promise.reject(makeError(forbidden)), loadDetail: (number) => Promise.resolve(detailFixture(number)) })} loadMapSdk={() => Promise.resolve({})} createMapAdapter={createMapAdapter} />);
   expect(await screen.findByText('접근 권한 없음')).toBeInTheDocument();
 
   const unauthorized = { status: 401, code: 'ADMIN_ACCESS_UNAVAILABLE', message: '로그인이 필요합니다.' };
-  render(<RiskMapPage createDataAdapter={() => ({ loadList: () => Promise.reject(makeError(unauthorized)), loadDetail: (number) => Promise.resolve(detailFixture(number)) })} loadMapSdk={noMap} />);
+  render(<RiskMapPage createDataAdapter={() => ({ loadList: () => Promise.reject(makeError(unauthorized)), loadDetail: (number) => Promise.resolve(detailFixture(number)) })} loadMapSdk={() => Promise.resolve({})} createMapAdapter={createMapAdapter} />);
   expect(await screen.findByText('접근 권한 없음')).toBeInTheDocument();
 });
 
 test('keeps generic error panel on 500', async () => {
-  render(<RiskMapPage createDataAdapter={() => ({ loadList: () => Promise.reject(makeError({ status: 500, code: 'OPS_RISK_MAP_ERROR', message: '오류가 발생했습니다.' })), loadDetail: (number) => Promise.resolve(detailFixture(number)) })} loadMapSdk={noMap} />);
+  const createMapAdapter = (node, maps, callbacks) => { callbacks.onViewportChange('126,37,127,38'); return { setStations: jest.fn(), focusStation: jest.fn(), destroy: jest.fn() }; };
+  render(<RiskMapPage createDataAdapter={() => ({ loadList: () => Promise.reject(makeError({ status: 500, code: 'OPS_RISK_MAP_ERROR', message: '오류가 발생했습니다.' })), loadDetail: (number) => Promise.resolve(detailFixture(number)) })} loadMapSdk={() => Promise.resolve({})} createMapAdapter={createMapAdapter} />);
   expect(await screen.findByText('오류가 발생했습니다')).toBeInTheDocument();
   expect(screen.getByText('OPS_RISK_MAP_ERROR')).toBeInTheDocument();
 });
 
 test('handles snapshot expiry without breaking map rendering', async () => {
-  render(<RiskMapPage createDataAdapter={adapter('DELAYED')} loadMapSdk={noMap} />);
+  const createMapAdapter = (node, maps, callbacks) => { callbacks.onViewportChange('126,37,127,38'); return { setStations: jest.fn(), focusStation: jest.fn(), destroy: jest.fn() }; };
+  render(<RiskMapPage createDataAdapter={adapter('DELAYED')} loadMapSdk={() => Promise.resolve({})} createMapAdapter={createMapAdapter} />);
   expect(await screen.findByText('정보 갱신 지연')).toBeInTheDocument();
   expect(screen.queryByText('오류가 발생했습니다')).not.toBeInTheDocument();
 });
@@ -177,7 +196,8 @@ test('preserves zero / null / MISSING semantics', async () => {
     };
   });
 
-  render(<RiskMapPage createDataAdapter={() => ({ loadList: () => Promise.resolve(payload), loadDetail: (number) => Promise.resolve(detailFixture(number)) })} loadMapSdk={noMap} />);
+  const createMapAdapter = (node, maps, callbacks) => { callbacks.onViewportChange('126,37,127,38'); return { setStations: jest.fn(), focusStation: jest.fn(), destroy: jest.fn() }; };
+  render(<RiskMapPage createDataAdapter={() => ({ loadList: () => Promise.resolve(payload), loadDetail: (number) => Promise.resolve(detailFixture(number)) })} loadMapSdk={() => Promise.resolve({})} createMapAdapter={createMapAdapter} />);
   await screen.findByText(/재고 확인 필요/);
   expect(screen.getAllByText('판단 정보 부족').length).toBeGreaterThan(0);
   expect(screen.getByText('현재 2대')).toBeInTheDocument();
