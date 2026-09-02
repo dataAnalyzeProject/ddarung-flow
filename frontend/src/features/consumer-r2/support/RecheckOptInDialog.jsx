@@ -40,10 +40,15 @@ export default function RecheckOptInDialog({ busy = false, kind = "SEARCH_RECHEC
     if (!open) return undefined;
     const openedAt = now();
     restoreFocusRef.current = document.activeElement;
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     setDepartureAt(defaultDeparture(openedAt));
     setError("");
     window.requestAnimationFrame(() => inputRef.current?.focus());
-    return () => restoreFocusRef.current?.focus?.();
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      restoreFocusRef.current?.focus?.();
+    };
   }, [open, now]);
 
   if (!open) return null;

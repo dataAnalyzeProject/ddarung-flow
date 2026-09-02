@@ -36,6 +36,7 @@ test("traps focus, closes with Escape, and restores the opener", async () => {
   const opener = screen.getByRole("button", { name: "열기" });
   opener.focus();
   rerender(<Fixture />);
+  expect(document.body).toHaveStyle({ overflow: "hidden" });
   await waitFor(() => expect(screen.getByLabelText(/출발 시각/)).toHaveFocus());
   const close = screen.getByRole("button", { name: "재확인 신청 닫기" });
   const submit = screen.getByRole("button", { name: "15분 전 알림 받기" });
@@ -47,5 +48,6 @@ test("traps focus, closes with Escape, and restores the opener", async () => {
   fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
   expect(onClose).toHaveBeenCalled();
   rerender(<Fixture open={false} />);
+  expect(document.body.style.overflow).toBe("");
   expect(opener).toHaveFocus();
 });

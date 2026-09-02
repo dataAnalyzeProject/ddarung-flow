@@ -92,7 +92,7 @@
 .cr22-support__event-mark.is-premium { background: var(--cr22-color-purple-soft); color: var(--cr22-color-purple); }
 .cr22-support__meta i { color: var(--cr22-color-blue-dark); font-size: .7rem; font-style: normal; font-weight: 900; }
 .cr22-support__dialog-backdrop { position: fixed; z-index: 1000; inset: 0; padding: 1rem; display: grid; place-items: center; background: rgba(5, 18, 39, .58); }
-.cr22-support__dialog { width: min(100%, 31rem); max-height: calc(100vh - 2rem); padding: clamp(1.25rem, 4vw, 2rem); overflow-y: auto; border-radius: var(--cr22-radius-lg); background: #fff; box-shadow: var(--cr22-shadow-raised); }
+.cr22-support__dialog { width: min(100%, 31rem); max-height: calc(100vh - 2rem); padding: clamp(1.25rem, 4vw, 2rem); overflow-y: auto; overscroll-behavior: contain; border-radius: var(--cr22-radius-lg); background: #fff; box-shadow: var(--cr22-shadow-raised); }
 .cr22-support__dialog > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
 .cr22-support__dialog h2, .cr22-support__dialog p { margin: 0; }
 .cr22-support__dialog h2 { font-size: 1.45rem; line-height: 1.3; letter-spacing: -.03em; }
