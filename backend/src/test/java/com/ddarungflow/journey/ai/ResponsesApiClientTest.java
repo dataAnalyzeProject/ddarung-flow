@@ -3,6 +3,7 @@ package com.ddarungflow.journey.ai;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
@@ -50,6 +51,18 @@ class ResponsesApiClientTest {
         assertThat(input.path("requiredBikeCount").asInt()).isEqualTo(2);
         assertThat(input.toString()).doesNotContain("latitude").doesNotContain("longitude").doesNotContain("userId")
                 .doesNotContain("Authorization").doesNotContain("cookie").doesNotContain("secret");
+    }
+
+    @Test
+    void genericStructuredOutputKeepsCallerInstructionsAndJsonInputWithoutChangingJourneyTransport() throws Exception {
+        JsonNode input = mapper.readTree("{\"evidence\":{\"rentalCandidates\":{}}}");
+        JsonNode schema = mapper.readTree("{\"type\":\"object\"}");
+
+        JsonNode payload = mapper.readTree(client.requestBody(input, "Use evidence only.", "riding_guide", schema));
+
+        assertThat(payload.path("instructions").asText()).isEqualTo("Use evidence only.");
+        assertThat(mapper.readTree(payload.path("input").asText())).isEqualTo(input);
+        assertThat(payload.path("text").path("format").path("name").asText()).isEqualTo("riding_guide");
     }
 
     @Test
