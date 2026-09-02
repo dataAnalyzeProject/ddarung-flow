@@ -8,6 +8,7 @@ import { ConsumerContainer, ConsumerR2Theme } from "../shared/ConsumerR2Layout.j
 import "./guide.css";
 
 const AVAILABILITY_LABELS = { HIGH: "높음", MEDIUM: "중간", LOW: "낮음" };
+const INVENTORY_LABELS = { NORMAL: "정상 수집", DELAYED: "지연 데이터", MISSING: "확인 불가", UNAVAILABLE: "확인 불가" };
 const SKY_LABELS = { CLEAR: "맑음", SUNNY: "맑음", CLOUDY: "흐림", OVERCAST: "흐림" };
 const AIR_LABELS = { GOOD: "좋음", MODERATE: "보통", BAD: "나쁨", VERY_BAD: "매우 나쁨" };
 
@@ -60,7 +61,7 @@ function FactualOverview({ guide }) {
     <section className="cr22-guide__facts" aria-labelledby="guide-facts-title">
       <h2 className="cr22-sr-only" id="guide-facts-title">현재 라이딩 정보</h2>
       <FactItem icon="bike" label="도착 시점 대여 가능성" state={rental?.status} value={formatPercent(rental?.numeric.rentalProbability)} detail={availability} />
-      <FactItem icon="bike" label="현재 자전거" state={rental?.status} value={formatCount(rental?.numeric.availableBikeCount)} detail={rental?.text.inventoryStatus || "상태 확인 불가"} />
+      <FactItem icon="bike" label="현재 자전거" state={rental?.status} value={formatCount(rental?.numeric.availableBikeCount)} detail={INVENTORY_LABELS[rental?.text.inventoryStatus] || "상태 확인 불가"} />
       <FactItem icon="info" label="도착 시점 기온" state={weather?.status} value={formatTemperature(weather?.numeric.temperatureCelsius)} detail={sky} />
       <FactItem icon="info" label="현재 대기질" state={airQuality?.status} value={airGrade} detail={airQuality?.numeric.pm25 === null || airQuality?.numeric.pm25 === undefined ? "미세먼지 확인 불가" : `미세먼지 ${formatNumber(airQuality.numeric.pm25)}㎍/㎥`} />
       <p className="cr22-guide__facts-note"><ConsumerIcon name="info" size={17} /> 이 정보는 서버가 수집한 대여 예측·날씨·대기질 근거이며, AI가 새로 만든 값이 아닙니다.</p>
@@ -74,7 +75,6 @@ function AiSummary({ guide }) {
       <section className="cr22-guide__panel cr22-guide__ai-unavailable" aria-labelledby="guide-ai-title" role="status">
         <header><span aria-hidden="true"><ConsumerIcon name="info" /></span><h2 id="guide-ai-title">AI 요약을 지금 제공할 수 없습니다</h2></header>
         <p>AI 설명은 숨겼습니다. 위의 대여 예측·날씨·대기질 정보는 계속 확인할 수 있으며, 잠시 후 페이지를 다시 열어 재시도할 수 있습니다.</p>
-        <p className="cr22-guide__error-code">상태: {guide.aiCode || "AI_UNAVAILABLE"}</p>
       </section>
     );
   }

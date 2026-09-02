@@ -40,6 +40,8 @@ test("renders the NO PLAN guide with server facts and routes schedule creation t
   expect(await screen.findByRole("heading", { name: "Premium Riding Guide" })).toBeInTheDocument();
   expect(screen.getByText("82%")).toBeInTheDocument();
   expect(screen.getByText("7대")).toBeInTheDocument();
+  expect(screen.getByText("정상 수집")).toBeInTheDocument();
+  expect(screen.queryByText("NORMAL")).not.toBeInTheDocument();
   expect(screen.getByText("25.3°C")).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "아직 전체 일정이 없습니다" })).toBeInTheDocument();
   expect(container.querySelector(".cr22-guide__schedule img")).toHaveAttribute("width", "1200");
@@ -84,6 +86,7 @@ test("keeps factual values visible while AI and unavailable facts stay explicit"
   expect(screen.queryByText("지금 출발하기 좋은 조건이에요.")).not.toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "확인된 주변 장소" })).toBeInTheDocument();
   expect(screen.getByText("서울숲")).toBeInTheDocument();
+  expect(screen.queryByText(/AI_PROVIDER_UNAVAILABLE/)).not.toBeInTheDocument();
 });
 
 test("does not relabel unselected factual POIs as AI recommendations", async () => {
