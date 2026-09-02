@@ -43,13 +43,19 @@ function formatFare(fare) {
   return fare === null ? "요금 확인 불가" : `${new Intl.NumberFormat("ko-KR").format(fare)}원`;
 }
 
-function formatInventory(candidate) {
+function getInventoryPresentation(candidate) {
   const status = candidate.inventoryStatus;
   if (candidate.availableBikeCount === null || status === "MISSING" || status === "UNAVAILABLE") {
-    return `현재 재고 확인 불가 · ${status || "상태 확인 불가"}`;
+    const detail = status || "상태 확인 불가";
+    return { value: "확인 불가", detail, inline: `현재 재고 확인 불가 · ${detail}` };
   }
   const statusLabel = status === "DELAYED" ? "지연 데이터" : status === "NORMAL" ? "정상" : (status || "상태 확인 불가");
-  return `현재 ${candidate.availableBikeCount}대 · ${statusLabel} · ${formatDateTime(candidate.inventoryCollectedAt)} 기준`;
+  const detail = `${statusLabel} · ${formatDateTime(candidate.inventoryCollectedAt)} 기준`;
+  return { value: `${candidate.availableBikeCount}대`, detail, inline: `현재 ${candidate.availableBikeCount}대 · ${detail}` };
+}
+
+function formatInventory(candidate) {
+  return getInventoryPresentation(candidate).inline;
 }
 
 function formatDistance(meters) {
@@ -198,6 +204,7 @@ function RouteDetail({ candidate }) {
 
 function TransitWorkspace({ candidate, destination, mapRenderer, onClose, onOpenRide, onOpenStation, origin, transitHeadingRef }) {
   const unavailable = candidate.predictionStatus !== "NORMAL" || candidate.routeStatus !== "NORMAL";
+  const inventory = getInventoryPresentation(candidate);
   const tone = candidate.availabilityLevel === "HIGH" ? "success" : candidate.availabilityLevel === "MEDIUM" ? "warning" : "danger";
   return (
     <section className="cr293-transit-view" aria-label="선택한 대여소의 대중교통 경로 상세">
@@ -208,7 +215,7 @@ function TransitWorkspace({ candidate, destination, mapRenderer, onClose, onOpen
         </div>
         <div className="cr293-transit-summary__primary">
           <span><small>도착 시점 대여 가능성</small><b>{formatProbability(candidate.probability)}</b></span>
-          <span><small>현재 자전거</small><b>{formatInventory(candidate)}</b></span>
+          <span aria-label={inventory.inline}><small>현재 자전거</small><b>{inventory.value}</b><small className="cr293-transit-summary__meta">{inventory.detail}</small></span>
         </div>
         <div className="cr293-transit-summary__route">
           <span><small>예상 도착</small><b>{formatArrival(candidate.arrivalAt)}</b></span>

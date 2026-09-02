@@ -394,6 +394,12 @@ fieldset.cr293-search__step {
   font-variant-numeric: tabular-nums;
 }
 
+.cr293-transit-summary__meta {
+  font-size: 0.78rem;
+  line-height: 1.4;
+  word-break: keep-all;
+}
+
 .cr293-transit-summary__primary span:first-child b {
   color: var(--cr22-color-blue);
   font-size: clamp(2.25rem, 4vw, 3.4rem);

@@ -159,7 +159,8 @@ test.each([
   fireEvent.click(await screen.findByRole("button", { name: "대여 가능성 비교" }));
   fireEvent.click(await screen.findByRole("button", { name: "대중교통 경로 상세" }));
 
-  expect(screen.getByRole("complementary")).toHaveTextContent(expectedInventory);
-  expect(screen.getByRole("complementary")).not.toHaveTextContent(/^현재 자전거5대$/);
-  if (expectedAsOf) expect(screen.getByRole("complementary")).toHaveTextContent(expectedAsOf);
+  const inventory = screen.getByLabelText(new RegExp(expectedInventory));
+  expect(inventory).toHaveTextContent(inventoryStatus === "MISSING" ? "확인 불가" : "5대");
+  expect(inventory).toHaveTextContent(inventoryStatus === "MISSING" ? "MISSING" : "지연 데이터");
+  if (expectedAsOf) expect(inventory).toHaveTextContent(expectedAsOf);
 });
