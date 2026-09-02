@@ -6,7 +6,11 @@ Frontend only. Work in fresh context from the current task, canonical FINAL refe
 
 Compare the approved FINAL reference with a Playwright capture at the same screen, state, viewport, data, and interaction point. Verify the capture trace, then review hierarchy, dimensions, spacing, typography, alignment, density, responsive behavior, keyboard/focus, semantics, and accessibility.
 
+For an isolated preview, first verify that it rendered the feature HEAD's actual page/components/CSS, every rendered product path is clean and byte-identical to that commit, preview-only paths are separated from the product diff, every render-affecting preview-only path matches its recorded SHA-256 digest, and `capturedCommit` matches the recorded HEAD. Confirm the record labels deterministic fixtures as fixtures and that each required state has desktop, tablet, and mobile evidence. Do not convert visual fixture evidence into live route, API, auth, CSRF, map/provider, navigation, or staging acceptance.
+
 Required asset gaps or acceptance-impacting differences are findings, not waivers. Require recapture after fixes and do not pass a placeholder or fabricated factual image. Return `PAGE_VISUAL_PASS` only when every required affected capture passes.
+
+`PAGE_VISUAL_PASS` covers only the reviewed page states and viewports. It never implies `TASK-301` live-wiring or browser acceptance. Report whether the installed `impeccable` and `web-design-guidelines` skills were actually used; if unavailable, name the explicit checklist used instead.
 
 ## Asset Review mode
 
