@@ -68,6 +68,10 @@ class DefaultRidingGuideAiGatewayTest {
                 "rental:ST-4", "core-on-demand-prediction", ConsumerAiEvidenceBundle.EvidenceStatus.NORMAL,
                 OffsetDateTime.parse("2026-09-02T15:00:00+09:00"), Map.of("stationId", "ST-4"),
                 Map.of("rentalProbability", new BigDecimal("0.82")));
-        return new ConsumerAiEvidenceBundle(Map.of("rental:ST-4", rental), Map.of(), Map.of(), Map.of(), Map.of());
+        ConsumerAiEvidenceBundle.Evidence poi = new ConsumerAiEvidenceBundle.Evidence(
+                "poi:POI-1", "kakao-local", ConsumerAiEvidenceBundle.EvidenceStatus.NORMAL,
+                null, Map.of("placeId", "POI-1"), Map.of());
+        return new ConsumerAiEvidenceBundle(
+                Map.of("rental:ST-4", rental), Map.of("poi:POI-1", poi), Map.of(), Map.of(), Map.of());
     }
 }

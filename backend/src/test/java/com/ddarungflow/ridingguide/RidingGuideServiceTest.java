@@ -20,13 +20,14 @@ import com.ddarungflow.payment.PremiumEntitlementService;
 import com.ddarungflow.weather.WeatherArrivalService;
 import com.ddarungflow.weather.WeatherForecastResult;
 import com.ddarungflow.weather.WeatherStatus;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.time.Clock;
-import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -194,191 +195,204 @@ class RidingGuideServiceTest {
     }
 
     @Test
-    void groundedEvidenceNumbersAndStructuredStayMinutesAreAcceptedInText() {
+    void numericFreeExactEvidenceKeysAndEmptyFactsAreAvailable() {
         stubFactualEvidence();
-        ConsumerAiEvidenceBundle.FactReference rentalProbability = reference(
-                ConsumerAiEvidenceBundle.EvidenceType.RENTAL_CANDIDATE, "rental:ST-4", "rentalProbability");
-        ConsumerAiEvidenceBundle.FactReference availableBikeCount = reference(
-                ConsumerAiEvidenceBundle.EvidenceType.RENTAL_CANDIDATE, "rental:ST-4", "availableBikeCount");
-        ConsumerAiEvidenceBundle.FactReference rainProbability = reference(
-                ConsumerAiEvidenceBundle.EvidenceType.WEATHER, "weather:ST-4", "precipitationProbabilityPercent");
         when(ai.generate(any())).thenReturn(new RidingGuideAiGateway.GuideOutput(
-                "대여 확률은 0.82이고 현재 4대가 있습니다.", "rental:ST-4",
-                List.of(new RidingGuideAiGateway.StopOutput("poi:POI-1", 30, "30분 머무르기 좋습니다.")),
+                "근거를 확인한 라이딩 가이드입니다", "rental:ST-4",
+                List.of(new RidingGuideAiGateway.StopOutput("poi:POI-1", 10, "잠시 머무르기 좋습니다")),
                 List.of(), List.of("weather:ST-4"), List.of("air-quality:ST-4"),
-                List.of(rentalProbability, availableBikeCount, rainProbability),
-                List.of(
-                        fact(rentalProbability, "0.82"),
-                        fact(availableBikeCount, "4"),
-                        fact(rainProbability, "10")
-                ),
-                "강수 확률은 10%입니다.", List.of("EVIDENCE_BACKED")));
+                List.of(), List.of(), "서버 근거를 사용했습니다", List.of("EVIDENCE_BACKED")));
 
         RidingGuideDtos.Response response = service.generate(user, requestWithContext());
 
         assertThat(response.aiStatus()).isEqualTo(RidingGuideDtos.AiStatus.AVAILABLE);
         assertThat(response.aiCode()).isNull();
-        assertThat(response.guideSummary()).contains("0.82", "4대");
-        assertThat(response.itineraryPreview().getFirst().rationale()).contains("30분");
+        assertThat(response.itineraryPreview()).containsExactly(
+                new RidingGuideDtos.ItineraryStop("poi:POI-1", 10, "잠시 머무르기 좋습니다"));
     }
 
     @Test
-    void probabilityPercentConversionIsRejectedWithoutAnAuthoritativePercentFact() {
+    void unicodeDigitsInAnyFreeTextFailClosedAndPreserveFacts() {
         stubFactualEvidence();
-        ConsumerAiEvidenceBundle.FactReference rentalProbability = reference(
-                ConsumerAiEvidenceBundle.EvidenceType.RENTAL_CANDIDATE, "rental:ST-4", "rentalProbability");
-        when(ai.generate(any())).thenReturn(new RidingGuideAiGateway.GuideOutput(
-                "대여 확률은 82%입니다.", "rental:ST-4", List.of(), List.of(), List.of(), List.of(),
-                List.of(rentalProbability), List.of(fact(rentalProbability, "0.82")),
-                "서버 근거를 사용했습니다.", List.of()));
+        List<RidingGuideAiGateway.GuideOutput> outputs = List.of(
+                output("요약 9", "근거", "장소를 둘러보세요", 10),
+                output("요약", "근거 ９", "장소를 둘러보세요", 10),
+                output("요약", "근거", "장소 ٩를 둘러보세요", 10));
 
-        RidingGuideDtos.Response response = service.generate(user, requestWithContext());
-
-        assertThat(response.aiCode()).isEqualTo("AI_TOOL_VALUE_MISMATCH");
-        assertThat(response.guideSummary()).isNull();
-    }
-
-    @Test
-    void fullWidthDigitsAreRejectedAndFactualEvidenceIsPreserved() {
-        stubFactualEvidence();
-        when(ai.generate(any())).thenReturn(new RidingGuideAiGateway.GuideOutput(
-                "대여 확률은 ９０%입니다.", "rental:ST-4", List.of(), List.of(), List.of(), List.of(),
-                List.of(), List.of(), "서버 근거를 사용했습니다.", List.of()));
-
-        RidingGuideDtos.Response response = service.generate(user, requestWithContext());
-
-        assertThat(response.aiCode()).isEqualTo("AI_TOOL_VALUE_MISMATCH");
-        assertThat(response.guideSummary()).isNull();
-        assertThat(response.itineraryPreview()).isEmpty();
-        assertThat(response.evidence().rentalCandidates()).containsKey("rental:ST-4");
-    }
-
-    @Test
-    void commaNumberCannotBeSplitAcrossUnrelatedOneAndZeroFacts() {
-        stubFactualEvidence();
-        ConsumerAiEvidenceBundle.FactReference one = reference(
-                ConsumerAiEvidenceBundle.EvidenceType.POI, "poi:POI-2", "latitude");
-        ConsumerAiEvidenceBundle.FactReference zero = reference(
-                ConsumerAiEvidenceBundle.EvidenceType.WEATHER, "weather:ST-4", "precipitationTypeCode");
-        when(ai.generate(any())).thenReturn(new RidingGuideAiGateway.GuideOutput(
-                "거리는 1,000m입니다.", "rental:ST-4", List.of(), List.of(), List.of(), List.of(),
-                List.of(one, zero), List.of(fact(one, "1"), fact(zero, "0")),
-                "서버 근거를 사용했습니다.", List.of()));
-
-        RidingGuideDtos.Response response = service.generate(user, requestWithContext());
-
-        assertThat(response.aiCode()).isEqualTo("AI_TOOL_VALUE_MISMATCH");
-        assertThat(response.guideSummary()).isNull();
-        assertThat(response.evidence().rentalCandidates()).containsKey("rental:ST-4");
-    }
-
-    @Test
-    void malformedNumericSyntaxCannotBeSplitAcrossUnrelatedFacts() {
-        stubFactualEvidence();
-        ConsumerAiEvidenceBundle.FactReference one = reference(
-                ConsumerAiEvidenceBundle.EvidenceType.POI, "poi:POI-2", "latitude");
-        ConsumerAiEvidenceBundle.FactReference zero = reference(
-                ConsumerAiEvidenceBundle.EvidenceType.WEATHER, "weather:ST-4", "precipitationTypeCode");
-        ConsumerAiEvidenceBundle.FactReference three = reference(
-                ConsumerAiEvidenceBundle.EvidenceType.POI, "poi:POI-2", "distanceMeters");
-        ConsumerAiEvidenceBundle.FactReference negativeThree = reference(
-                ConsumerAiEvidenceBundle.EvidenceType.POI, "poi:POI-2", "longitude");
-        List<ConsumerAiEvidenceBundle.FactReference> references = List.of(one, zero, three, negativeThree);
-        List<ConsumerAiEvidenceBundle.FactValue> values = List.of(
-                fact(one, "1"), fact(zero, "0"), fact(three, "3"), fact(negativeThree, "-3"));
-
-        for (String malformed : List.of("1..0", "1,,0", "1//0", "1--0", "1e-3", "1E+3")) {
-            when(ai.generate(any())).thenReturn(new RidingGuideAiGateway.GuideOutput(
-                    "수치는 " + malformed + "입니다.", "rental:ST-4", List.of(),
-                    List.of(), List.of(), List.of(), references, values,
-                    "서버 근거를 사용했습니다.", List.of()));
-
+        for (RidingGuideAiGateway.GuideOutput output : outputs) {
+            when(ai.generate(any())).thenReturn(output);
             RidingGuideDtos.Response response = service.generate(user, requestWithContext());
 
-            assertThat(response.aiCode()).as(malformed).isEqualTo("AI_TOOL_VALUE_MISMATCH");
-            assertThat(response.guideSummary()).as(malformed).isNull();
-            assertThat(response.itineraryPreview()).as(malformed).isEmpty();
-            assertThat(response.evidence().rentalCandidates()).as(malformed).containsKey("rental:ST-4");
+            assertThat(response.aiCode()).isEqualTo("AI_TOOL_VALUE_MISMATCH");
+            assertThat(response.guideSummary()).isNull();
+            assertThat(response.itineraryPreview()).isEmpty();
+            assertThat(response.evidence().rentalCandidates()).containsKey("rental:ST-4");
         }
     }
 
     @Test
-    void ordinarySentencePeriodDoesNotJoinTheGroundedNumberToLaterText() {
+    void everyUnicodeNumberCategoryFailsInSummaryRationaleAndStopRationale() {
         stubFactualEvidence();
-        ConsumerAiEvidenceBundle.FactReference availableBikeCount = reference(
-                ConsumerAiEvidenceBundle.EvidenceType.RENTAL_CANDIDATE, "rental:ST-4", "availableBikeCount");
-        when(ai.generate(any())).thenReturn(new RidingGuideAiGateway.GuideOutput(
-                "현재 4대입니다. 이동합니다.", "rental:ST-4", List.of(), List.of(), List.of(), List.of(),
-                List.of(availableBikeCount), List.of(fact(availableBikeCount, "4")),
-                "서버 근거를 사용했습니다.", List.of()));
+        for (String number : List.of("⑨", "²", "½", "Ⅸ")) {
+            List<RidingGuideAiGateway.GuideOutput> outputs = List.of(
+                    output("요약 " + number, "근거", "장소입니다", 10),
+                    output("요약", "근거 " + number, "장소입니다", 10),
+                    output("요약", "근거", "장소 " + number, 10));
 
-        RidingGuideDtos.Response response = service.generate(user, requestWithContext());
+            for (RidingGuideAiGateway.GuideOutput output : outputs) {
+                when(ai.generate(any())).thenReturn(output);
+                RidingGuideDtos.Response response = service.generate(user, requestWithContext());
 
-        assertThat(response.aiStatus()).isEqualTo(RidingGuideDtos.AiStatus.AVAILABLE);
-        assertThat(response.aiCode()).isNull();
-        assertThat(response.guideSummary()).isEqualTo("현재 4대입니다. 이동합니다.");
+                assertThat(response.aiCode()).as(number).isEqualTo("AI_TOOL_VALUE_MISMATCH");
+                assertThat(response.guideSummary()).as(number).isNull();
+                assertThat(response.itineraryPreview()).as(number).isEmpty();
+                assertThat(response.evidence().rentalCandidates()).as(number).containsKey("rental:ST-4");
+            }
+        }
     }
 
     @Test
-    void percentSuffixRequiresAnExactAuthoritativePercentFact() {
+    void numericRationaleTagsFailClosedAndTextOnlyTagPasses() {
         stubFactualEvidence();
-        ConsumerAiEvidenceBundle.FactReference nonPercentFour = reference(
-                ConsumerAiEvidenceBundle.EvidenceType.RENTAL_CANDIDATE, "rental:ST-4", "availableBikeCount");
+        for (String tag : List.of("TAG9", "TAG９", "TAG٩", "TAG⑨", "TAGⅨ")) {
+            when(ai.generate(any())).thenReturn(new RidingGuideAiGateway.GuideOutput(
+                    "요약", "rental:ST-4", List.of(), List.of(), List.of(), List.of(),
+                    List.of(), List.of(), "근거", List.of(tag)));
+
+            RidingGuideDtos.Response response = service.generate(user, requestWithContext());
+
+            assertThat(response.aiCode()).as(tag).isEqualTo("AI_TOOL_VALUE_MISMATCH");
+            assertThat(response.guideSummary()).as(tag).isNull();
+            assertThat(response.evidence().rentalCandidates()).as(tag).containsKey("rental:ST-4");
+        }
+
         when(ai.generate(any())).thenReturn(new RidingGuideAiGateway.GuideOutput(
-                "현재 수치는 4%입니다.", "rental:ST-4", List.of(), List.of(), List.of(), List.of(),
-                List.of(nonPercentFour), List.of(fact(nonPercentFour, "4")),
-                "서버 근거를 사용했습니다.", List.of()));
-
-        RidingGuideDtos.Response rejected = service.generate(user, requestWithContext());
-
-        assertThat(rejected.aiCode()).isEqualTo("AI_TOOL_VALUE_MISMATCH");
-        assertThat(rejected.guideSummary()).isNull();
-
-        ConsumerAiEvidenceBundle.FactReference percentTen = reference(
-                ConsumerAiEvidenceBundle.EvidenceType.WEATHER, "weather:ST-4", "precipitationProbabilityPercent");
-        when(ai.generate(any())).thenReturn(new RidingGuideAiGateway.GuideOutput(
-                "강수 확률은 10%입니다.", "rental:ST-4", List.of(), List.of(), List.of(), List.of(),
-                List.of(percentTen), List.of(fact(percentTen, "10")),
-                "서버 근거를 사용했습니다.", List.of()));
-
+                "요약", "rental:ST-4", List.of(), List.of(), List.of(), List.of(),
+                List.of(), List.of(), "근거", List.of("EVIDENCE_BACKED")));
         RidingGuideDtos.Response accepted = service.generate(user, requestWithContext());
 
         assertThat(accepted.aiStatus()).isEqualTo(RidingGuideDtos.AiStatus.AVAILABLE);
-        assertThat(accepted.aiCode()).isNull();
+        assertThat(accepted.rationaleTags()).containsExactly("EVIDENCE_BACKED");
     }
 
     @Test
-    void stopRationaleCannotBorrowAnotherStopsStayMinutes() {
+    void nonEmptyFactReferencesOrValuesFailClosed() {
         stubFactualEvidence();
-        when(ai.generate(any())).thenReturn(new RidingGuideAiGateway.GuideOutput(
-                "근거 기반 가이드", "rental:ST-4",
-                List.of(
-                        new RidingGuideAiGateway.StopOutput("poi:POI-1", 30, "45분 머무르기 좋습니다."),
-                        new RidingGuideAiGateway.StopOutput("poi:POI-2", 45, "차분히 둘러보세요.")
-                ),
-                List.of(), List.of(), List.of(), List.of(), List.of(),
-                "서버 근거를 사용했습니다.", List.of()));
+        ConsumerAiEvidenceBundle.FactReference reference = reference(
+                ConsumerAiEvidenceBundle.EvidenceType.RENTAL_CANDIDATE, "rental:ST-4", "rentalProbability");
+        List<RidingGuideAiGateway.GuideOutput> outputs = List.of(
+                new RidingGuideAiGateway.GuideOutput("요약", "rental:ST-4", List.of(), List.of(), List.of(),
+                        List.of(), List.of(reference), List.of(), "근거", List.of()),
+                new RidingGuideAiGateway.GuideOutput("요약", "rental:ST-4", List.of(), List.of(), List.of(),
+                        List.of(), List.of(), List.of(fact(reference, "0.82")), "근거", List.of()));
 
-        RidingGuideDtos.Response response = service.generate(user, requestWithContext());
+        for (RidingGuideAiGateway.GuideOutput output : outputs) {
+            when(ai.generate(any())).thenReturn(output);
+            RidingGuideDtos.Response response = service.generate(user, requestWithContext());
 
+            assertThat(response.aiCode()).isEqualTo("AI_TOOL_VALUE_MISMATCH");
+            assertThat(response.guideSummary()).isNull();
+            assertThat(response.evidence().rentalCandidates()).containsKey("rental:ST-4");
+        }
+    }
+
+    @Test
+    void rawUnknownAndDuplicateEvidenceIdsFailClosed() {
+        stubFactualEvidence();
+        List<RidingGuideAiGateway.GuideOutput> outputs = List.of(
+                new RidingGuideAiGateway.GuideOutput("요약", "ST-4", List.of(), List.of(), List.of(),
+                        List.of(), List.of(), List.of(), "근거", List.of()),
+                new RidingGuideAiGateway.GuideOutput("요약", "rental:ST-4",
+                        List.of(new RidingGuideAiGateway.StopOutput("POI-1", 10, "장소입니다")),
+                        List.of(), List.of(), List.of(), List.of(), List.of(), "근거", List.of()),
+                new RidingGuideAiGateway.GuideOutput("요약", "rental:ST-4", List.of(),
+                        List.of(), List.of("weather:unknown"), List.of(), List.of(), List.of(), "근거", List.of()),
+                new RidingGuideAiGateway.GuideOutput("요약", "rental:ST-4",
+                        List.of(
+                                new RidingGuideAiGateway.StopOutput("poi:POI-1", 10, "장소입니다"),
+                                new RidingGuideAiGateway.StopOutput("poi:POI-1", 10, "장소입니다")),
+                        List.of(), List.of(), List.of(), List.of(), List.of(), "근거", List.of()));
+
+        for (RidingGuideAiGateway.GuideOutput output : outputs) {
+            when(ai.generate(any())).thenReturn(output);
+            RidingGuideDtos.Response response = service.generate(user, requestWithContext());
+
+            assertThat(response.aiCode()).isEqualTo("AI_TOOL_VALUE_MISMATCH");
+            assertThat(response.guideSummary()).isNull();
+            assertThat(response.itineraryPreview()).isEmpty();
+            assertThat(response.evidence().pois()).containsKeys("poi:POI-1", "poi:POI-2");
+        }
+    }
+
+    @Test
+    void emptyPoiEvidenceRejectsNonEmptyStopAndPreservesFactualEvidence() {
+        stubFactualEvidence();
+        when(ai.generate(any())).thenReturn(output("요약", "근거", "장소입니다", 10));
+
+        RidingGuideDtos.Response response = service.generate(user, new RidingGuideDtos.Request(
+                "ST-4", null, bd("37.4"), bd("127.1"), 30, 2, null, null));
+
+        assertThat(response.evidence().pois()).isEmpty();
+        assertThat(response.evidence().rentalCandidates()).containsKey("rental:ST-4");
         assertThat(response.aiCode()).isEqualTo("AI_TOOL_VALUE_MISMATCH");
+        assertThat(response.guideSummary()).isNull();
         assertThat(response.itineraryPreview()).isEmpty();
     }
 
     @Test
-    void numericTextMustMatchTheDeclaredAuthoritativeFactValue() {
+    void structuredStayMinutesEnforceInclusiveBounds() {
         stubFactualEvidence();
-        ConsumerAiEvidenceBundle.FactReference rentalProbability = reference(
-                ConsumerAiEvidenceBundle.EvidenceType.RENTAL_CANDIDATE, "rental:ST-4", "rentalProbability");
-        when(ai.generate(any())).thenReturn(new RidingGuideAiGateway.GuideOutput(
-                "대여 확률은 90%입니다.", "rental:ST-4", List.of(), List.of(), List.of(), List.of(),
-                List.of(rentalProbability), List.of(fact(rentalProbability, "0.82")),
-                "서버 근거를 사용했습니다.", List.of()));
+        for (int stayMinutes : List.of(9, 121)) {
+            when(ai.generate(any())).thenReturn(output("요약", "근거", "장소입니다", stayMinutes));
+            assertThat(service.generate(user, requestWithContext()).aiCode())
+                    .isEqualTo("AI_TOOL_VALUE_MISMATCH");
+        }
+        for (int stayMinutes : List.of(10, 120)) {
+            when(ai.generate(any())).thenReturn(output("요약", "근거", "장소입니다", stayMinutes));
+            RidingGuideDtos.Response response = service.generate(user, requestWithContext());
+            assertThat(response.aiStatus()).isEqualTo(RidingGuideDtos.AiStatus.AVAILABLE);
+            assertThat(response.itineraryPreview().getFirst().stayMinutes()).isEqualTo(stayMinutes);
+        }
+    }
 
-        RidingGuideDtos.Response response = service.generate(user, requestWithContext());
+    @Test
+    void gatewaySchemaUsesOnlyEvidenceMapKeysAndClosesEmptyCollections() {
+        ObjectMapper objectMapper = new ObjectMapper();
+        ConsumerAiEvidenceBundle bundle = new ConsumerAiEvidenceBundle(
+                Map.of("rental:key", evidence("rental:key")),
+                Map.of("poi:two", evidence("poi:two"), "poi:one", evidence("poi:one")),
+                Map.of("route:key", evidence("route:key")),
+                Map.of("weather:key", evidence("weather:key")),
+                Map.of("air:key", evidence("air:key")));
 
-        assertThat(response.aiCode()).isEqualTo("AI_TOOL_VALUE_MISMATCH");
-        assertThat(response.guideSummary()).isNull();
+        JsonNode schema = DefaultRidingGuideAiGateway.schema(objectMapper, bundle);
+        JsonNode properties = schema.path("properties");
+
+        assertThat(properties.path("rentalCandidateId").path("enum"))
+                .isEqualTo(objectMapper.valueToTree(List.of("rental:key")));
+        assertThat(properties.path("stops").path("items").path("properties").path("poiId")
+                .path("enum")).isEqualTo(objectMapper.valueToTree(List.of("poi:one", "poi:two")));
+        assertThat(properties.path("routeEvidenceIds").path("items").path("enum"))
+                .isEqualTo(objectMapper.valueToTree(List.of("route:key")));
+        assertThat(properties.path("weatherEvidenceIds").path("items").path("enum"))
+                .isEqualTo(objectMapper.valueToTree(List.of("weather:key")));
+        assertThat(properties.path("airQualityEvidenceIds").path("items").path("enum"))
+                .isEqualTo(objectMapper.valueToTree(List.of("air:key")));
+        assertThat(properties.path("factRefs").path("maxItems").asInt()).isZero();
+        assertThat(properties.path("factValues").path("maxItems").asInt()).isZero();
+
+        ConsumerAiEvidenceBundle withoutPois = new ConsumerAiEvidenceBundle(
+                Map.of("rental:key", evidence("rental:key")), Map.of(), Map.of(), Map.of(), Map.of());
+        JsonNode emptyProperties = DefaultRidingGuideAiGateway.schema(objectMapper, withoutPois).path("properties");
+        assertThat(emptyProperties.path("stops").path("maxItems").asInt()).isZero();
+        assertThat(emptyProperties.path("routeEvidenceIds").path("maxItems").asInt()).isZero();
+        assertThat(emptyProperties.path("weatherEvidenceIds").path("maxItems").asInt()).isZero();
+        assertThat(emptyProperties.path("airQualityEvidenceIds").path("maxItems").asInt()).isZero();
+        assertThatThrownBy(() -> DefaultRidingGuideAiGateway.schema(objectMapper,
+                new ConsumerAiEvidenceBundle(Map.of(), Map.of(), Map.of(), Map.of(), Map.of())))
+                .isInstanceOf(JourneyAiException.class)
+                .satisfies(exception -> assertThat(((JourneyAiException) exception).code())
+                        .isEqualTo(JourneyAiErrorCode.AI_TOOL_VALUE_MISMATCH));
     }
 
     @Test
@@ -420,6 +434,23 @@ class RidingGuideServiceTest {
 
     private RidingGuideDtos.Request requestWithContext() {
         return new RidingGuideDtos.Request("ST-4", null, bd("37.4"), bd("127.1"), 30, 2, "PARK", 3);
+    }
+
+    private ConsumerAiEvidenceBundle.Evidence evidence(String evidenceId) {
+        return new ConsumerAiEvidenceBundle.Evidence(evidenceId, "source",
+                ConsumerAiEvidenceBundle.EvidenceStatus.NORMAL, NOW, Map.of(), Map.of());
+    }
+
+    private RidingGuideAiGateway.GuideOutput output(
+            String summary,
+            String rationale,
+            String stopRationale,
+            int stayMinutes
+    ) {
+        return new RidingGuideAiGateway.GuideOutput(
+                summary, "rental:ST-4",
+                List.of(new RidingGuideAiGateway.StopOutput("poi:POI-1", stayMinutes, stopRationale)),
+                List.of(), List.of(), List.of(), List.of(), List.of(), rationale, List.of());
     }
 
     private PredictionApiDtos.CandidatePredictionResponseDto normalPrediction() {
