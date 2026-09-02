@@ -418,6 +418,51 @@ class KakaoMapClientTest {
             .hasMessage("ROUTE_PROVIDER_ERROR");
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"BIKE_ONLY", "ACCESSIBLE", "SHORTEST"})
+    void sendsEveryBicycleRouteModeToTheBicycleProvider(String routeMode) {
+        AtomicReference<HttpRequest> requestReference = new AtomicReference<>();
+        KakaoMapClient client = new KakaoMapClient("https://dapi.kakao.com", "test-key", request -> {
+            requestReference.set(request);
+            return response(200, """
+                {"status":"OK","route":{"properties":{"totalDistance":1520,"totalTime":410},
+                "legs":[{"steps":[{"path":{"points":[[126.9000,37.5500],[126.9770,37.5660]]}}]}]}}
+                """);
+        });
+
+        MapApiDtos.RouteResultDto route = client.fetchRoute(
+            new BigDecimal("37.5500"), new BigDecimal("126.9000"),
+            new BigDecimal("37.5660"), new BigDecimal("126.9770"), "BICYCLE", routeMode
+        ).orElseThrow();
+
+        assertThat(requestReference.get().uri().toString())
+            .contains("/v2/routing/bicycle?route_mode=" + routeMode + "&start_x=126.9000")
+            .doesNotContain("/v2/routing/walk");
+        assertThat(route.distanceMeters()).isEqualTo(1520);
+        assertThat(route.durationSeconds()).isEqualTo(410);
+        assertThat(route.travelMode()).isEqualTo("BICYCLE");
+        assertThat(route.pathPoints()).hasSize(2);
+    }
+
+    @Test
+    void bicycleProviderFailureAndInvalidSchemaRemainExplicitErrors() {
+        KakaoMapClient failed = new KakaoMapClient("https://dapi.kakao.com", "test-key",
+            request -> response(503, ""));
+        KakaoMapClient malformed = new KakaoMapClient("https://dapi.kakao.com", "test-key",
+            request -> response(200, "{\"status\":\"OK\",\"route\":{}}"));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> failed.fetchRoute(
+                new BigDecimal("37.5500"), new BigDecimal("126.9000"),
+                new BigDecimal("37.5660"), new BigDecimal("126.9770"), "BICYCLE", "BIKE_ONLY"))
+            .isInstanceOf(KakaoMapClient.ProviderException.class)
+            .hasMessage("ROUTE_PROVIDER_ERROR");
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> malformed.fetchRoute(
+                new BigDecimal("37.5500"), new BigDecimal("126.9000"),
+                new BigDecimal("37.5660"), new BigDecimal("126.9770"), "BICYCLE", "ACCESSIBLE"))
+            .isInstanceOf(KakaoMapClient.ProviderException.class)
+            .hasMessage("ROUTE_PROVIDER_ERROR");
+    }
+
     @Test
     void rejectsPublicTransitRoutesMissingRequiredSummaryFields() {
         KakaoMapClient client = new KakaoMapClient("https://dapi.kakao.com", "test-key",

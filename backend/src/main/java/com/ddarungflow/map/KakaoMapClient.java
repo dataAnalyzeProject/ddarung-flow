@@ -225,17 +225,38 @@ public class KakaoMapClient {
         BigDecimal destLng,
         String travelMode
     ) {
+        return fetchRoute(originLat, originLng, destLat, destLng, travelMode, null);
+    }
+
+    public java.util.Optional<MapApiDtos.RouteResultDto> fetchRoute(
+        BigDecimal originLat,
+        BigDecimal originLng,
+        BigDecimal destLat,
+        BigDecimal destLng,
+        String travelMode,
+        String routeMode
+    ) {
         if (originLat == null || originLng == null || destLat == null || destLng == null) {
             return java.util.Optional.empty();
         }
 
-        String mode = (travelMode != null && !travelMode.isBlank()) ? travelMode.toUpperCase() : "WALK";
+        String mode = (travelMode != null && !travelMode.isBlank())
+            ? travelMode.toUpperCase(java.util.Locale.ROOT)
+            : "WALK";
         try {
             boolean publicTransit = mode.equalsIgnoreCase("TRANSIT") || mode.equalsIgnoreCase("PUBLIC_TRANSIT");
-            String modePath = publicTransit ? "publictraffic" : "walk";
+            boolean bicycle = mode.equals("BICYCLE");
+            String normalizedRouteMode = routeMode == null ? null : routeMode.toUpperCase(java.util.Locale.ROOT);
+            if (bicycle && !("BIKE_ONLY".equals(normalizedRouteMode)
+                || "ACCESSIBLE".equals(normalizedRouteMode)
+                || "SHORTEST".equals(normalizedRouteMode))) {
+                throw new ProviderException("ROUTE_PROVIDER_ERROR");
+            }
+            String modePath = publicTransit ? "publictraffic" : bicycle ? "bicycle" : "walk";
+            String routeModeQuery = bicycle ? "route_mode=" + normalizedRouteMode + "&" : "";
             String url = String.format(
-                "%s/v2/routing/%s?start_x=%s&start_y=%s&end_x=%s&end_y=%s",
-                baseUrl, modePath, originLng, originLat, destLng, destLat
+                "%s/v2/routing/%s?%sstart_x=%s&start_y=%s&end_x=%s&end_y=%s",
+                baseUrl, modePath, routeModeQuery, originLng, originLat, destLng, destLat
             );
 
             HttpRequest request = HttpRequest.newBuilder()

@@ -85,7 +85,8 @@ public class MapApiDtos {
         BigDecimal originLongitude,
         BigDecimal destinationLatitude,
         BigDecimal destinationLongitude,
-        String travelMode
+        String travelMode,
+        String routeMode
     ) {}
 
     public record ProviderErrorResponseDto(String code, String message) {}
