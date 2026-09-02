@@ -26,8 +26,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -43,6 +45,7 @@ class AdminOpsControllerTest {
     @Autowired private MockMvc mvc;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private UsersRepository users;
+    @Autowired private AdminOpsReadService service;
     @MockBean private InferenceClient inferenceClient;
 
     @BeforeEach
@@ -91,6 +94,24 @@ class AdminOpsControllerTest {
         mvc.perform(get("/api/v1/admin/ops/risk-stations?bbox=126,37,128,38")
                         .with(authentication(auth(UserRole.ADMIN, Set.of(AdminPermission.OPS_RISK_MAP_READ)))))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("RISK_SCOPE_TOO_LARGE"));
+        verify(inferenceClient, never()).predictAdminChunk(anyList());
+    }
+
+    @Test
+    void rejectsAnOverCapScopeBeforeCheckingTheInferenceGuard() throws Exception {
+        for (int index = 0; index < 101; index++) insert("ST-" + index, String.format("%04d", index + 1), 1);
+        java.lang.reflect.Field guard = AdminOpsReadService.class.getDeclaredField("evaluating");
+        guard.setAccessible(true);
+        AtomicBoolean evaluating = (AtomicBoolean) guard.get(service);
+        evaluating.set(true);
+        try {
+            mvc.perform(get("/api/v1/admin/ops/risk-stations?bbox=126,37,128,38")
+                            .with(authentication(auth(UserRole.ADMIN, Set.of(AdminPermission.OPS_RISK_MAP_READ)))))
+                    .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("RISK_SCOPE_TOO_LARGE"));
+            verify(inferenceClient, never()).predictAdminChunk(anyList());
+        } finally {
+            evaluating.set(false);
+        }
     }
 
     @Test
