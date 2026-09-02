@@ -43,7 +43,7 @@ function QuestionForm({ initialQuestion, onCancel, onSubmit, submitting }) {
   return (
     <section aria-labelledby="qna-form-title" className="cr22-support__form-view">
       <header className="cr22-support__view-head">
-        <div><p className="cr22-support__eyebrow">Q&amp;A</p><h1 id="qna-form-title">{editing ? "질문 수정" : "질문 작성"}</h1><p>문의 내용을 확인한 뒤 답변으로 알려 드립니다.</p></div>
+        <div><p className="cr22-support__eyebrow">Q&amp;A</p><h1 id="qna-form-title" tabIndex="-1">{editing ? "질문 수정" : "질문 작성"}</h1><p>문의 내용을 확인한 뒤 답변으로 알려 드립니다.</p></div>
         <ConsumerButton disabled={submitting} onClick={onCancel} variant="ghost">목록으로</ConsumerButton>
       </header>
       <form className="cr22-support__form-card" onSubmit={submit}>
@@ -83,7 +83,7 @@ function QuestionDetail({ deleting, onBack, onDelete, onEdit, question }) {
       <article className="cr22-support__detail-card">
         <header>
           <div className="cr22-support__meta"><StatusBadge>{question.categoryLabel}</StatusBadge>{question.visibility === "PRIVATE" ? <StatusBadge tone="info">비공개</StatusBadge> : null}<QuestionStatus status={question.status} /></div>
-          <h1 id="qna-detail-title">{question.title}</h1>
+          <h1 id="qna-detail-title" tabIndex="-1">{question.title}</h1>
           <p>{question.visibility === "PRIVATE" ? "내 비공개 질문" : "공개 질문"} · {question.createdAt}</p>
         </header>
         <div className="cr22-support__question-body">{question.body}</div>
@@ -112,7 +112,7 @@ export default function ConsumerQnaPage({ adapter = consumerSupportAdapter, auth
   const [requestState, setRequestState] = useState("loading");
   const [mutationState, setMutationState] = useState("idle");
   const [message, setMessage] = useState("");
-  const headingRef = useRef(null);
+  const mainRef = useRef(null);
   const listRequestIdRef = useRef(0);
   const detailRequestIdRef = useRef(0);
   const mutationRequestIdRef = useRef(0);
@@ -173,7 +173,7 @@ export default function ConsumerQnaPage({ adapter = consumerSupportAdapter, auth
     });
     return () => { cancelled = true; };
   }, [adapter, authState, initialQuestionId]);
-  useEffect(() => { if (view !== "list") headingRef.current?.focus(); }, [view]);
+  useEffect(() => { if (view !== "list") mainRef.current?.querySelector("h1")?.focus(); }, [view]);
 
   function resetPage(setter, value) { setter(value); setPage(0); }
 
@@ -245,7 +245,7 @@ export default function ConsumerQnaPage({ adapter = consumerSupportAdapter, auth
   return (
     <ConsumerR2Theme className="cr22-support">
       <ConsumerAppHeader activeItem="qna" authState={authState} onAccount={() => onNavigate?.("mypage")} onLogin={() => onNavigate?.("login")} onNavigate={onNavigate} onNotifications={() => onNavigate?.("alerts")} userName={user?.displayName || user?.name} userTier={user?.tier} />
-      <main className="cr22-support__main" id="main-content" ref={headingRef} tabIndex="-1">
+      <main className="cr22-support__main" id="main-content" ref={mainRef}>
         <ConsumerContainer>
           {message ? <p className="cr22-support__notice" role="status">{message}</p> : null}
           {authState === "authenticated" && view === "form" ? <QuestionForm initialQuestion={selectedQuestion} onCancel={() => setView(selectedQuestion ? "detail" : "list")} onSubmit={saveQuestion} submitting={mutationState === "saving"} /> : authState === "authenticated" && view === "detail" && selectedQuestion ? <QuestionDetail deleting={mutationState === "deleting"} onBack={() => { setSelectedQuestion(null); setView("list"); }} onDelete={deleteSelected} onEdit={() => setView("form")} question={selectedQuestion} /> : <>
