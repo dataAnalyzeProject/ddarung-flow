@@ -5,4 +5,4 @@ export {
   toCurrentEvidenceSaveRequest,
   toNaturalLanguageRequest,
   toStructuredReplanRequest,
-} from "./consumerJourneyAdapter";
+} from "./consumerJourneyAdapter.js";

@@ -1,2 +1,2 @@
-export { default as ConsumerJourneyPlannerPage } from "./ConsumerJourneyPlannerPage";
-export { default as ConsumerJourneyPlanResultPage } from "./ConsumerJourneyPlanResultPage";
+export { default as ConsumerJourneyPlannerPage } from "./ConsumerJourneyPlannerPage.jsx";
+export { default as ConsumerJourneyPlanResultPage } from "./ConsumerJourneyPlanResultPage.jsx";
