@@ -1,5 +1,6 @@
 package com.ddarungflow.map;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -140,7 +141,7 @@ class KakaoMapClientTest {
 
     @Test
     @DisplayName("convertsWalkingRouteDistanceAndDuration: WALK fake 응답의 거리 820m, 시간 640초를 올바르게 변환한다")
-    void convertsWalkingRouteDistanceAndDuration() {
+    void convertsWalkingRouteDistanceAndDuration() throws Exception {
         String jsonBody = """
             {
               "status": "OK",
@@ -179,6 +180,8 @@ class KakaoMapClientTest {
         assertThat(routeOpt.get().pathPoints().get(0).longitude()).isEqualByComparingTo("126.9000");
         assertThat(routeOpt.get().pathPoints().get(1).latitude()).isEqualByComparingTo("37.5556");
         assertThat(routeOpt.get().pathPoints().get(1).longitude()).isEqualByComparingTo("126.9106");
+        assertThat(new ObjectMapper().writeValueAsString(routeOpt.get()))
+            .doesNotContain("\"transfers\"", "\"fare\"", "\"steps\"");
         assertThat(requestReference.get().uri().toString())
             .contains("/v2/routing/walk?start_x=126.9000&start_y=37.5500&end_x=126.9106&end_y=37.5556");
     }
@@ -299,6 +302,99 @@ class KakaoMapClientTest {
     }
 
     @Test
+    void normalizesPublicTransitDetailsAndSelectsTheDeterministicBestRoute() {
+        String jsonBody = """
+            {
+              "status": "OK",
+              "routes": [
+                { "properties": { "totalDistance": 5000, "totalTime": 900, "transferCount": 1 } },
+                { "properties": { "totalDistance": 4000, "totalTime": 900, "transferCount": 2 } },
+                {
+                  "properties": { "totalDistance": 4500, "totalTime": 900, "transferCount": 1, "totalFare": 1450 },
+                  "steps": [
+                    {
+                      "type": "WALK", "guidance": "역까지 걸어가세요", "distance": 120, "duration": 100,
+                      "stops": [{ "name": "출발", "x": 126.9000, "y": 37.5500 }],
+                      "path": { "points": [[126.9000, 37.5500], [126.9010, 37.5510]] }
+                    },
+                    {
+                      "type": "SUBWAY", "guidance": "2호선을 이용하세요", "distance": 4380, "time": 800,
+                      "stops": [{ "name": "시청역", "x": 126.9770, "y": 37.5660 }],
+                      "vehicles": [{ "routeName": "2호선", "vehicleType": "SUBWAY" }],
+                      "path": { "points": [[126.9010, 37.5510], [126.9770, 37.5660]] }
+                    }
+                  ]
+                }
+              ]
+            }
+            """;
+
+        MapApiDtos.RouteResultDto route = new KakaoMapClient("https://dapi.kakao.com", "test-key", request -> response(200, jsonBody))
+            .fetchRoute(new BigDecimal("37.5500"), new BigDecimal("126.9000"),
+                new BigDecimal("37.5660"), new BigDecimal("126.9770"), "PUBLIC_TRANSIT")
+            .orElseThrow();
+
+        assertThat(route.distanceMeters()).isEqualTo(4500);
+        assertThat(route.durationSeconds()).isEqualTo(900);
+        assertThat(route.transfers()).isEqualTo(1);
+        assertThat(route.fare()).isEqualTo(1450);
+        assertThat(route.steps()).extracting(MapApiDtos.RouteStepDto::type).containsExactly("WALKING", "SUBWAY");
+        assertThat(route.steps().get(0).stops()).extracting(MapApiDtos.RouteStopDto::name).containsExactly("출발");
+        assertThat(route.steps().get(1).vehicles()).containsExactly(new MapApiDtos.RouteVehicleDto("2호선", "SUBWAY"));
+        assertThat(route.pathPoints()).hasSize(4);
+    }
+
+    @Test
+    void rejectsEmptyPublicTransitRoutesWithoutWalkingFallback() {
+        KakaoMapClient client = new KakaoMapClient("https://dapi.kakao.com", "test-key",
+            request -> response(200, "{\"status\":\"OK\",\"routes\":[]}"));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> client.fetchRoute(
+                new BigDecimal("37.5500"), new BigDecimal("126.9000"),
+                new BigDecimal("37.5660"), new BigDecimal("126.9770"), "PUBLIC_TRANSIT"))
+            .isInstanceOf(KakaoMapClient.ProviderException.class)
+            .hasMessage("ROUTE_PROVIDER_ERROR");
+    }
+
+    @Test
+    void rejectsPublicTransitRoutesMissingRequiredSummaryFields() {
+        KakaoMapClient client = new KakaoMapClient("https://dapi.kakao.com", "test-key",
+            request -> response(200, "{\"status\":\"OK\",\"routes\":[{\"properties\":{\"totalTime\":900}}]}"));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> client.fetchRoute(
+                new BigDecimal("37.5500"), new BigDecimal("126.9000"),
+                new BigDecimal("37.5660"), new BigDecimal("126.9770"), "PUBLIC_TRANSIT"))
+            .isInstanceOf(KakaoMapClient.ProviderException.class)
+            .hasMessage("ROUTE_PROVIDER_ERROR");
+    }
+
+    @Test
+    void preservesAbsentOptionalPublicTransitDetailsAsNullOrEmpty() {
+        MapApiDtos.RouteResultDto route = new KakaoMapClient("https://dapi.kakao.com", "test-key",
+            request -> response(200, """
+                { "status": "OK", "routes": [{
+                  "properties": { "totalDistance": 4200, "totalTime": 1080 },
+                  "steps": [{ "type": "BUS" }]
+                }] }
+                """))
+            .fetchRoute(new BigDecimal("37.5500"), new BigDecimal("126.9000"),
+                new BigDecimal("37.5660"), new BigDecimal("126.9770"), "PUBLIC_TRANSIT")
+            .orElseThrow();
+
+        assertThat(route.transfers()).isNull();
+        assertThat(route.fare()).isNull();
+        assertThat(route.steps()).singleElement().satisfies(step -> {
+            assertThat(step.guidance()).isNull();
+            assertThat(step.distanceMeters()).isNull();
+            assertThat(step.durationSeconds()).isNull();
+            assertThat(step.stops()).isEmpty();
+            assertThat(step.vehicles()).isEmpty();
+            assertThat(step.pathPoints()).isEmpty();
+        });
+        assertThat(route.pathPoints()).isEmpty();
+    }
+
+    @Test
     @DisplayName("doesNotTreatMissingDistanceOrDurationAsSuccess: HTTP 200이지만 거리 또는 시간이 누락되면 provider 오류를 던진다")
     void doesNotTreatMissingDistanceOrDurationAsSuccess() {
         String jsonBody = """
@@ -365,5 +461,13 @@ class KakaoMapClientTest {
         assertThat(result.page()).isEqualTo(2);
         assertThat(result.hasNext()).isTrue();
         assertThat(result.places()).isEmpty();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static HttpResponse<String> response(int statusCode, String body) {
+        HttpResponse<String> response = mock(HttpResponse.class);
+        when(response.statusCode()).thenReturn(statusCode);
+        when(response.body()).thenReturn(body);
+        return response;
     }
 }
