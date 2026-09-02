@@ -1,0 +1,232 @@
+.cr22-ride {
+  min-height: 100vh;
+  background: #f8fafc;
+  color: #142640;
+}
+
+.cr22-ride__content {
+  padding-top: 24px;
+  padding-bottom: 56px;
+}
+
+.cr22-ride__back {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  background: transparent;
+  color: #5b6b80;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cr22-ride__back:hover { color: #173a58; }
+.cr22-ride__back svg { transform: rotate(180deg); }
+
+.cr22-ride__heading { margin: 18px 0 18px; }
+.cr22-ride__heading h1 {
+  margin: 0;
+  color: #102342;
+  font-size: clamp(30px, 3vw, 42px);
+  line-height: 1.15;
+  letter-spacing: -.04em;
+  text-wrap: balance;
+}
+.cr22-ride__heading p { margin: 8px 0 0; color: #64748b; font-size: 15px; }
+
+.cr22-ride__station {
+  display: inline-flex;
+  min-height: 50px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #d9e2ec;
+  border-radius: 12px;
+  padding: 8px 14px;
+  background: #fff;
+  box-shadow: 0 8px 22px rgba(24, 49, 79, .05);
+}
+.cr22-ride__station svg { color: #009d98; }
+.cr22-ride__station strong { color: #1d324d; font-size: 15px; }
+.cr22-ride__station span { border-left: 1px solid #dde5ed; padding-left: 10px; color: #66778d; font-size: 13px; }
+
+.cr22-ride__theme-scroll {
+  display: flex;
+  gap: 10px;
+  margin: 22px 0 18px;
+  overflow-x: auto;
+  scrollbar-color: #aebdcc transparent;
+  scrollbar-width: thin;
+}
+.cr22-ride__theme-scroll button,
+.cr22-ride__modes button {
+  min-height: 44px;
+  flex: 0 0 auto;
+  border: 1px solid #d8e1eb;
+  border-radius: 999px;
+  padding: 0 18px;
+  background: #fff;
+  color: #243a56;
+  font-weight: 800;
+  cursor: pointer;
+}
+.cr22-ride__theme-scroll button:hover,
+.cr22-ride__modes button:hover { border-color: #57bbb7; background: #f1fbfa; }
+.cr22-ride__theme-scroll button[aria-pressed="true"],
+.cr22-ride__modes button[aria-pressed="true"] { border-color: #009d98; background: #e6f8f5; color: #006e69; }
+
+.cr22-ride__workspace {
+  display: grid;
+  grid-template-columns: minmax(350px, 38%) minmax(0, 62%);
+  gap: 22px;
+  align-items: start;
+}
+.cr22-ride__places,
+.cr22-ride__route { min-width: 0; }
+.cr22-ride__places > ul { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+
+.cr22-ride__poi {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  border: 1px solid #dce4ed;
+  border-radius: 14px;
+  padding: 16px;
+  background: #fff;
+  box-shadow: 0 7px 20px rgba(24, 49, 79, .04);
+}
+.cr22-ride__poi.is-selected { border-color: #009d98; box-shadow: 0 9px 24px rgba(0, 138, 118, .11); }
+.cr22-ride__poi-icon {
+  display: grid;
+  width: 50px;
+  height: 50px;
+  place-items: center;
+  border-radius: 12px;
+  background: #e9f8f5;
+  color: #008c82;
+}
+.cr22-ride__poi-copy { min-width: 0; }
+.cr22-ride__poi-copy > div { display: flex; align-items: center; gap: 8px; }
+.cr22-ride__poi-copy h2 { margin: 0; overflow-wrap: anywhere; color: #172c47; font-size: 17px; line-height: 1.35; letter-spacing: -.02em; }
+.cr22-ride__poi-copy p { margin: 7px 0; overflow-wrap: anywhere; color: #66778d; font-size: 13px; line-height: 1.45; }
+.cr22-ride__poi-copy > span { display: inline-flex; align-items: center; gap: 3px; color: #52667f; font-size: 13px; font-variant-numeric: tabular-nums; }
+.cr22-ride__poi .cr22-button { min-width: 72px; }
+
+.cr22-ride__truth {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 14px 0 0;
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: #eef6ff;
+  color: #365f82;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.cr22-ride__truth svg { flex: 0 0 auto; margin-top: 2px; color: #397fbe; }
+
+.cr22-ride__route {
+  overflow: hidden;
+  border: 1px solid #dce4ed;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(24, 49, 79, .06);
+}
+.cr22-ride__map { position: relative; min-height: 470px; background: #e8eef1; }
+.cr22-ride__map-canvas { position: absolute; inset: 0; }
+.cr22-ride__map-state {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 28px;
+  background: #edf2f5;
+  color: #53667b;
+  text-align: center;
+}
+.cr22-ride-map-marker { filter: drop-shadow(0 4px 7px rgba(25, 48, 76, .16)); }
+.cr22-ride-map-marker button,
+.cr22-ride-map-marker span {
+  display: block;
+  min-height: 36px;
+  max-width: 180px;
+  overflow: hidden;
+  border: 2px solid #13a7a2;
+  border-radius: 10px;
+  padding: 6px 10px;
+  background: #fff;
+  color: #076f6b;
+  font-size: 12px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.cr22-ride-map-marker--station span { border-color: #008c82; background: #008c82; color: #fff; cursor: default; }
+.cr22-ride-map-marker.is-selected button { border-color: #075fb5; background: #075fb5; color: #fff; }
+
+.cr22-ride__route-prompt { padding: 26px; text-align: center; }
+.cr22-ride__route-prompt svg { color: #009d98; }
+.cr22-ride__route-prompt h2 { margin: 10px 0 4px; color: #1f3856; font-size: 18px; letter-spacing: -.02em; }
+.cr22-ride__route-prompt p { margin: 0; color: #68798f; font-size: 13px; }
+
+.cr22-ride__selection {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 18px 20px;
+  border-top: 1px solid #e2e8f0;
+}
+.cr22-ride__selection strong,
+.cr22-ride__selection span { display: block; }
+.cr22-ride__selection strong { color: #172c47; font-size: 17px; }
+.cr22-ride__selection span { margin-top: 3px; color: #6b7c91; font-size: 12px; }
+.cr22-ride__selection button { min-height: 44px; border: 0; background: transparent; color: #007c77; font-weight: 800; cursor: pointer; }
+.cr22-ride__selection button:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+.cr22-ride__modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 0 20px 18px; }
+.cr22-ride__modes button { width: 100%; border-radius: 10px; padding: 0 10px; font-size: 13px; }
+.cr22-ride__route .cr22-state { margin: 0 20px 20px; }
+.cr22-ride__route-summary { border-top: 1px solid #e2e8f0; padding: 20px; }
+.cr22-ride__route-summary dl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; }
+.cr22-ride__route-summary dl > div { padding: 0 16px; border-left: 1px solid #e2e8f0; }
+.cr22-ride__route-summary dl > div:first-child { padding-left: 0; border-left: 0; }
+.cr22-ride__route-summary dt { color: #6b7c91; font-size: 12px; }
+.cr22-ride__route-summary dd { margin: 5px 0 0; color: #172c47; font-size: 18px; font-weight: 900; font-variant-numeric: tabular-nums; }
+
+.cr22-ride__actions { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0 0 calc(38% + 22px); }
+
+@media (max-width: 980px) {
+  .cr22-ride__workspace { grid-template-columns: minmax(300px, 42%) minmax(0, 58%); gap: 16px; }
+  .cr22-ride__map { min-height: 430px; }
+  .cr22-ride__route-summary dl { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 0; }
+  .cr22-ride__route-summary dl > div:nth-child(3) { padding-left: 0; border-left: 0; }
+  .cr22-ride__actions { margin-left: calc(42% + 16px); }
+}
+
+@media (max-width: 760px) {
+  .cr22-ride__workspace { grid-template-columns: 1fr; }
+  .cr22-ride__route { grid-row: 1; }
+  .cr22-ride__map { min-height: 360px; }
+  .cr22-ride__actions { margin-left: 0; }
+}
+
+@media (max-width: 520px) {
+  .cr22-ride__content { padding-top: 16px; padding-bottom: 36px; }
+  .cr22-ride__heading { margin-top: 12px; }
+  .cr22-ride__station { display: grid; grid-template-columns: auto 1fr; width: 100%; }
+  .cr22-ride__station span { grid-column: 2; border: 0; padding-left: 0; }
+  .cr22-ride__poi { grid-template-columns: auto minmax(0, 1fr); }
+  .cr22-ride__poi .cr22-button { grid-column: 1 / -1; width: 100%; }
+  .cr22-ride__map { min-height: 310px; }
+  .cr22-ride__selection { align-items: flex-start; flex-direction: column; }
+  .cr22-ride__modes { grid-template-columns: 1fr; }
+  .cr22-ride__route-summary dl { grid-template-columns: 1fr 1fr; }
+  .cr22-ride__route-summary dl > div { padding: 0 10px; }
+  .cr22-ride__actions { grid-template-columns: 1fr; }
+}
