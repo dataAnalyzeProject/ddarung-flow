@@ -118,7 +118,7 @@ function PlacePicker({ kind, label, onSelect, place, query, search, setQuery }) 
   );
 }
 
-function SearchWorkspace({ input, onChange, onSearch, places, searchPlaces, state }) {
+function SearchWorkspace({ input, onChange, onOpenPlanner, onSearch, places, searchPlaces, state }) {
   const ready = Boolean(places.origin && places.destination);
   return (
     <section className="cr293-search" aria-labelledby="cr293-search-title">
@@ -149,7 +149,10 @@ function SearchWorkspace({ input, onChange, onSearch, places, searchPlaces, stat
           </div>
         </fieldset>
       </div>
-      <ConsumerButton block size="lg" icon={<ConsumerIcon name="arrowRight" />} iconPosition="end" disabled={!ready || state === "LOADING"} loading={state === "LOADING"} loadingLabel="도착 시점 후보를 찾는 중…" onClick={onSearch}>도착할 때 빌릴 곳 찾기</ConsumerButton>
+      <div className="cr293-search__actions">
+        <ConsumerButton block size="lg" icon={<ConsumerIcon name="arrowRight" />} iconPosition="end" disabled={!ready || state === "LOADING"} loading={state === "LOADING"} loadingLabel="도착 시점 후보를 찾는 중…" onClick={onSearch}>대여 가능성 비교</ConsumerButton>
+        <ConsumerButton block size="lg" variant="premium" disabled={state === "LOADING"} onClick={onOpenPlanner}>AI로 전체 일정 짜기 · PREMIUM</ConsumerButton>
+      </div>
       {state === "LOADING" ? <div className="cr293-search__loading"><AsyncState state="loading" title="도착 시점 후보를 비교하고 있습니다" description="예측과 실제 이동 경로를 같은 근거로 확인합니다." /></div> : null}
       {!ready ? <p className="cr293-search__hint">출발 위치와 대여 희망 지역을 검색 결과에서 각각 선택해 주세요.</p> : null}
     </section>
@@ -193,23 +196,65 @@ function RouteDetail({ candidate }) {
   );
 }
 
+function TransitWorkspace({ candidate, destination, mapRenderer, onClose, onOpenRide, onOpenStation, origin, transitHeadingRef }) {
+  const unavailable = candidate.predictionStatus !== "NORMAL" || candidate.routeStatus !== "NORMAL";
+  const tone = candidate.availabilityLevel === "HIGH" ? "success" : candidate.availabilityLevel === "MEDIUM" ? "warning" : "danger";
+  return (
+    <section className="cr293-transit-view" aria-label="선택한 대여소의 대중교통 경로 상세">
+      <aside className="cr293-transit-summary">
+        <div className="cr293-transit-summary__title">
+          <StatusBadge tone={unavailable ? "neutral" : tone}>{unavailable ? "확인 불가" : "추천"}</StatusBadge>
+          <h2 ref={transitHeadingRef} tabIndex="-1">{candidate.stationName}</h2>
+        </div>
+        <div className="cr293-transit-summary__primary">
+          <span><small>도착 시점 대여 가능성</small><b>{formatProbability(candidate.probability)}</b></span>
+          <span><small>현재 자전거</small><b>{candidate.availableBikeCount === null ? "확인 불가" : `${candidate.availableBikeCount}대`}</b></span>
+        </div>
+        <div className="cr293-transit-summary__route">
+          <span><small>예상 도착</small><b>{formatArrival(candidate.arrivalAt)}</b></span>
+          <span><small>대중교통</small><b>{formatMinutes(candidate.durationSeconds)}</b></span>
+        </div>
+        <p>도착 시각과 대여 가능성은 오른쪽에 표시한 동일 대중교통 경로를 기준으로 계산했습니다.</p>
+      </aside>
+      <div className="cr293-transit-view__route">
+        <ConsumerRouteMap candidate={candidate} destination={destination} mapRenderer={mapRenderer} origin={origin} />
+        <div id="cr293-transit-detail"><RouteDetail candidate={candidate} /></div>
+        <div className="cr293-transit-view__actions">
+          <ConsumerButton variant="secondary" aria-controls="cr293-transit-detail" aria-expanded="true" onClick={onClose}>경로 상세 닫기</ConsumerButton>
+          <ConsumerButton variant="secondary" onClick={() => onOpenStation?.(candidate)}>대여소 상세</ConsumerButton>
+          <ConsumerButton onClick={() => onOpenRide?.(candidate)}>라이딩 둘러보기</ConsumerButton>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function ResultsWorkspace({ input, mapRenderer, onOpenRide, onOpenStation, onReset, places, result, selectedId, setSelectedId, showTransit, setShowTransit }) {
   const resultHeadingRef = useRef(null);
+  const transitHeadingRef = useRef(null);
   const selected = result.candidates.find((candidate) => candidate.stationId === selectedId) ?? result.candidates[0];
-  useEffect(() => { resultHeadingRef.current?.focus(); }, []);
+  useEffect(() => {
+    if (showTransit) transitHeadingRef.current?.focus();
+    else resultHeadingRef.current?.focus();
+  }, [showTransit]);
   return (
     <>
-      <section className="cr293-result-heading">
-        <div><h1 ref={resultHeadingRef} tabIndex="-1">{places.destination.name} 근처 추천 결과</h1><p>선택한 이동 경로와 도착 시각을 기준으로 비교했어요.</p></div>
-        <ConsumerButton variant="secondary" onClick={onReset}>조건 다시 선택</ConsumerButton>
-      </section>
+      {!showTransit ? (
+        <section className="cr293-result-heading">
+          <div><h1 ref={resultHeadingRef} tabIndex="-1">{places.destination.name} 근처 추천 결과</h1><p>선택한 이동 경로와 도착 시각을 기준으로 비교했어요.</p></div>
+          <ConsumerButton variant="secondary" onClick={onReset}>조건 다시 선택</ConsumerButton>
+        </section>
+      ) : null}
       <section className="cr293-condition" aria-label="선택 조건">
         <span><ConsumerIcon name="mapPin" size={18} /> {places.origin.name} → {places.destination.name}</span>
         <span><ConsumerIcon name={input.travelMode === "PUBLIC_TRANSIT" ? "transit" : "ride"} size={18} /> {input.travelMode === "PUBLIC_TRANSIT" ? "대중교통" : "도보"}</span>
         <span><ConsumerIcon name="bike" size={18} /> {input.requiredBikeCount}대 필요</span>
       </section>
       {result.viewState === "PARTIAL" ? <AsyncState state="partial" title="일부 후보의 근거를 확인하지 못했습니다" description="확인된 후보는 그대로 비교하고, 확인 불가 값은 0으로 표시하지 않았습니다." /> : null}
-      <section className="cr293-results" aria-label="대여소 추천 결과" aria-live="polite">
+      {showTransit && selected.routeDetail ? (
+        <TransitWorkspace candidate={selected} destination={places.destination} mapRenderer={mapRenderer} onClose={() => setShowTransit(false)} onOpenRide={onOpenRide} onOpenStation={onOpenStation} origin={places.origin} transitHeadingRef={transitHeadingRef} />
+      ) : (
+        <section className="cr293-results" aria-label="대여소 추천 결과" aria-live="polite">
         <div className="cr293-results__list">
           <div className="cr293-results__title"><div><h2>추천 대여소</h2></div><span>{result.candidates.length}곳</span></div>
           {result.candidates.map((candidate, index) => <CandidateCard key={candidate.stationId ?? index} candidate={candidate} index={index} selected={selected?.stationId === candidate.stationId} onSelect={(stationId) => { setSelectedId(stationId); setShowTransit(false); }} />)}
@@ -232,8 +277,8 @@ function ResultsWorkspace({ input, mapRenderer, onOpenRide, onOpenStation, onRes
             <p>예측은 실제 대여를 보장하지 않습니다. 모든 수치는 위 경로 근거와 같은 응답에서 왔습니다.</p>
           </section>
         </div>
-      </section>
-      {showTransit && selected.routeDetail ? <div id="cr293-transit-detail"><RouteDetail candidate={selected} /></div> : null}
+        </section>
+      )}
     </>
   );
 }
@@ -296,7 +341,7 @@ export default function ConsumerMainPage({ mapRenderer, onLogin, onNavigate, onO
   };
 
   let content;
-  if (state === "INITIAL" || state === "LOADING") content = <SearchWorkspace input={input} onChange={updateInput} onSearch={submit} places={places} searchPlaces={services.searchPlaces} state={state} />;
+  if (state === "INITIAL" || state === "LOADING") content = <SearchWorkspace input={input} onChange={updateInput} onOpenPlanner={() => onNavigate?.("planner")} onSearch={submit} places={places} searchPlaces={services.searchPlaces} state={state} />;
   else if (state === "ERROR") content = <AsyncState state="error" title="추천 결과를 불러오지 못했습니다" description="입력은 그대로 보존했습니다. 잠시 후 다시 시도해 주세요." onAction={submit} />;
   else if (state === "EMPTY") content = <AsyncState state="empty" title="조건에 맞는 대여소를 찾지 못했습니다" description="확인 불가 값을 0으로 바꾸지 않았습니다. 조건을 바꿔 다시 찾아보세요." actionLabel="조건 다시 선택" onAction={reset} />;
   else content = <ResultsWorkspace input={input} mapRenderer={mapRenderer} onOpenRide={onOpenRide} onOpenStation={onOpenStation} onReset={reset} places={places} result={result} selectedId={selectedId} setSelectedId={setSelectedId} showTransit={showTransit} setShowTransit={setShowTransit} />;

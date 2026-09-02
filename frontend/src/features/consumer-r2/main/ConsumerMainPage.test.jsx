@@ -61,7 +61,7 @@ test("uses the route response once and changes candidate/detail views without re
   const services = createServices();
   render(<ConsumerMainPage services={services} mapRenderer={PreviewMap} />);
 
-  fireEvent.click(await screen.findByRole("button", { name: "도착할 때 빌릴 곳 찾기" }));
+  fireEvent.click(await screen.findByRole("button", { name: "대여 가능성 비교" }));
   expect(await screen.findByRole("heading", { name: "추천 대여소" })).toBeInTheDocument();
   expect(screen.getAllByText("91%")).toHaveLength(2);
   expect(screen.getByLabelText("테스트 경로 지도")).toHaveTextContent("3100m");
@@ -83,7 +83,7 @@ test("preserves input and redirects anonymous users before requesting results", 
   render(<ConsumerMainPage services={services} onLogin={onLogin} />);
 
   await waitFor(() => expect(services.getCurrentUser).toHaveBeenCalled());
-  fireEvent.click(screen.getByRole("button", { name: "도착할 때 빌릴 곳 찾기" }));
+  fireEvent.click(screen.getByRole("button", { name: "대여 가능성 비교" }));
 
   expect(services.savePendingPrediction).toHaveBeenCalledWith(expect.objectContaining({ requiredBikeCount: 1 }), places);
   expect(onLogin).toHaveBeenCalledTimes(1);
@@ -94,7 +94,7 @@ test("separates a route fetch error from the map runtime", async () => {
   const services = createServices({ fetchRouteCandidates: jest.fn().mockRejectedValue(new Error("CANDIDATE_FETCH_FAILED")) });
   render(<ConsumerMainPage services={services} mapRenderer={PreviewMap} />);
 
-  fireEvent.click(await screen.findByRole("button", { name: "도착할 때 빌릴 곳 찾기" }));
+  fireEvent.click(await screen.findByRole("button", { name: "대여 가능성 비교" }));
   expect(await screen.findByRole("heading", { name: "추천 결과를 불러오지 못했습니다" })).toBeInTheDocument();
   expect(screen.queryByLabelText("테스트 경로 지도")).not.toBeInTheDocument();
 });
@@ -105,7 +105,7 @@ test("keeps the input-only loading workspace visible without a map", async () =>
   const services = createServices({ fetchRouteCandidates: jest.fn().mockReturnValue(pendingCandidates) });
   render(<ConsumerMainPage services={services} mapRenderer={PreviewMap} />);
 
-  fireEvent.click(await screen.findByRole("button", { name: "도착할 때 빌릴 곳 찾기" }));
+  fireEvent.click(await screen.findByRole("button", { name: "대여 가능성 비교" }));
   expect(screen.getByRole("button", { name: "도착 시점 후보를 찾는 중…" })).toBeDisabled();
   expect(screen.queryByLabelText("테스트 경로 지도")).not.toBeInTheDocument();
 
@@ -116,14 +116,14 @@ test("keeps the input-only loading workspace visible without a map", async () =>
 test("renders empty and partial states without fabricating unavailable values", async () => {
   const emptyServices = createServices({ fetchRouteCandidates: jest.fn().mockResolvedValue({ candidates: [] }) });
   const { unmount } = render(<ConsumerMainPage services={emptyServices} mapRenderer={PreviewMap} />);
-  fireEvent.click(await screen.findByRole("button", { name: "도착할 때 빌릴 곳 찾기" }));
+  fireEvent.click(await screen.findByRole("button", { name: "대여 가능성 비교" }));
   expect(await screen.findByRole("heading", { name: "조건에 맞는 대여소를 찾지 못했습니다" })).toBeInTheDocument();
   unmount();
 
   const unavailable = { ...candidates[1], stationId: "ST-3", stationName: "경로 확인 대기", predictionProbability: null, predictionStatus: "UNAVAILABLE", availabilityLevel: null, routeStatus: "UNAVAILABLE", routeDetail: null, distanceMeters: 0, durationSeconds: 0, arrivalAt: null };
   const partialServices = createServices({ fetchRouteCandidates: jest.fn().mockResolvedValue({ candidates: [candidates[0], unavailable] }) });
   render(<ConsumerMainPage services={partialServices} mapRenderer={PreviewMap} />);
-  fireEvent.click(await screen.findByRole("button", { name: "도착할 때 빌릴 곳 찾기" }));
+  fireEvent.click(await screen.findByRole("button", { name: "대여 가능성 비교" }));
 
   expect(await screen.findByRole("heading", { name: "일부 후보의 근거를 확인하지 못했습니다" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /경로 확인 대기/ })).toHaveTextContent("확인 불가");
@@ -136,7 +136,7 @@ test("shows normal zero inventory separately from missing inventory metadata", a
   const missing = { ...candidates[1], availableBikeCount: null, inventoryStatus: "MISSING", inventoryCollectedAt: null };
   const services = createServices({ fetchRouteCandidates: jest.fn().mockResolvedValue({ candidates: [normalZero, missing] }) });
   render(<ConsumerMainPage services={services} mapRenderer={PreviewMap} />);
-  fireEvent.click(await screen.findByRole("button", { name: "도착할 때 빌릴 곳 찾기" }));
+  fireEvent.click(await screen.findByRole("button", { name: "대여 가능성 비교" }));
 
   expect(await screen.findAllByText(/현재 0대 · 정상/)).not.toHaveLength(0);
   expect(screen.getByRole("button", { name: /뚝섬역 1번 출구/ })).toHaveTextContent("현재 재고 확인 불가 · MISSING");
