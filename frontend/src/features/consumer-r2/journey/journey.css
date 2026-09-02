@@ -828,12 +828,24 @@ button[aria-pressed="true"] .cr22-journey__radio {
 }
 
 @media (min-width: 40rem) and (max-width: 64rem) {
+  .cr22-journey .cr22-header {
+    grid-template-columns: minmax(9rem, 11rem) 1fr;
+    gap: var(--cr22-space-3);
+    padding-top: var(--cr22-space-2);
+  }
+  .cr22-journey .cr22-header__actions { grid-column: 2; grid-row: 1; }
+  .cr22-journey .cr22-header__nav {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-content: flex-start;
+    overflow-x: auto;
+  }
+  .cr22-journey .cr22-header__nav-link { min-height: 3.25rem; }
   .cr22-journey__stepper { grid-template-columns: repeat(2, 1fr); gap: 0.9rem 0; }
   .cr22-journey__stepper li:nth-child(2)::after { display: none; }
   .cr22-journey__confirm-layout,
   .cr22-journey__clarify-layout,
   .cr22-journey__result-layout { grid-template-columns: 1fr; }
-  .cr22-journey__result-layout > aside { grid-row: 1; }
   .cr22-journey__replan { grid-template-columns: 1fr 1fr 1fr; }
   .cr22-journey__replan .cr22-button { grid-column: 1 / -1; }
 }
