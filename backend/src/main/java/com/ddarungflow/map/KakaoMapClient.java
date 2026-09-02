@@ -198,7 +198,7 @@ public class KakaoMapClient {
                             continue;
                         }
                         if (routeProperties == null
-                            || candidateDuration.asInt() < routeProperties.path("totalTime").asInt()) {
+                            || compareTransitRoutes(candidate, routeProperties) < 0) {
                             routeProperties = candidate;
                             selectedRoute = route;
                         }
@@ -226,11 +226,23 @@ public class KakaoMapClient {
                 return java.util.Optional.empty();
             }
 
+            List<MapApiDtos.RouteStepDto> transitSteps = publicTransit
+                ? extractTransitSteps(selectedRoute)
+                : List.of();
+            List<MapApiDtos.RoutePointDto> pathPoints = publicTransit
+                ? transitSteps.isEmpty()
+                    ? extractPathPoints(selectedRoute)
+                    : transitSteps.stream().flatMap(step -> step.pathPoints().stream()).toList()
+                : extractPathPoints(selectedRoute);
+
             return java.util.Optional.of(new MapApiDtos.RouteResultDto(
                 distanceMeters,
                 durationSeconds,
                 travelMode,
-                extractPathPoints(selectedRoute)
+                pathPoints,
+                publicTransit ? optionalInt(routeProperties, "transfers", "transferCount") : null,
+                publicTransit ? optionalInt(routeProperties, "fare", "totalFare") : null,
+                transitSteps
             ));
         } catch (Exception e) {
             return java.util.Optional.empty();
@@ -242,9 +254,113 @@ public class KakaoMapClient {
         return (int) Math.round((distanceMeters / 80.0) * 60.0);
     }
 
+    private int compareTransitRoutes(JsonNode candidate, JsonNode selected) {
+        int duration = Integer.compare(candidate.path("totalTime").asInt(), selected.path("totalTime").asInt());
+        if (duration != 0) return duration;
+        Integer candidateTransfers = optionalInt(candidate, "transfers", "transferCount");
+        Integer selectedTransfers = optionalInt(selected, "transfers", "transferCount");
+        int transfers = Integer.compare(
+            candidateTransfers == null ? Integer.MAX_VALUE : candidateTransfers,
+            selectedTransfers == null ? Integer.MAX_VALUE : selectedTransfers
+        );
+        if (transfers != 0) return transfers;
+        return Integer.compare(candidate.path("totalDistance").asInt(), selected.path("totalDistance").asInt());
+    }
+
+    private List<MapApiDtos.RouteStepDto> extractTransitSteps(JsonNode route) {
+        List<MapApiDtos.RouteStepDto> steps = new ArrayList<>();
+        if (route == null || route.isMissingNode()) return steps;
+        JsonNode legs = route.path("legs");
+        if (legs.isArray()) {
+            for (JsonNode leg : legs) appendTransitSteps(leg.path("steps"), steps);
+        } else {
+            appendTransitSteps(route.path("steps"), steps);
+        }
+        return List.copyOf(steps);
+    }
+
+    private void appendTransitSteps(JsonNode sourceSteps, List<MapApiDtos.RouteStepDto> target) {
+        if (!sourceSteps.isArray()) return;
+        for (JsonNode step : sourceSteps) {
+            String type = transitStepType(step);
+            if (type == null) continue;
+            target.add(new MapApiDtos.RouteStepDto(
+                type,
+                text(step, "guidance", "description"),
+                optionalInt(step, "distanceMeters", "distance"),
+                optionalInt(step, "durationSeconds", "duration", "time"),
+                extractStops(step.path("stops")),
+                extractVehicles(step.path("vehicles")),
+                extractPathPoints(step)
+            ));
+        }
+    }
+
+    private String transitStepType(JsonNode step) {
+        String raw = text(step, "type", "travelMode", "mode");
+        if (raw == null) return null;
+        return switch (raw.toUpperCase(java.util.Locale.ROOT)) {
+            case "WALK", "WALKING" -> "WALKING";
+            case "BUS" -> "BUS";
+            case "SUBWAY" -> "SUBWAY";
+            default -> null;
+        };
+    }
+
+    private List<MapApiDtos.RouteStopDto> extractStops(JsonNode sourceStops) {
+        if (!sourceStops.isArray()) return List.of();
+        List<MapApiDtos.RouteStopDto> stops = new ArrayList<>();
+        for (JsonNode stop : sourceStops) {
+            BigDecimal longitude = decimal(stop, "longitude", "x");
+            BigDecimal latitude = decimal(stop, "latitude", "y");
+            stops.add(new MapApiDtos.RouteStopDto(text(stop, "name", "stopName"), latitude, longitude));
+        }
+        return List.copyOf(stops);
+    }
+
+    private List<MapApiDtos.RouteVehicleDto> extractVehicles(JsonNode sourceVehicles) {
+        if (!sourceVehicles.isArray()) return List.of();
+        List<MapApiDtos.RouteVehicleDto> vehicles = new ArrayList<>();
+        for (JsonNode vehicle : sourceVehicles) {
+            vehicles.add(new MapApiDtos.RouteVehicleDto(
+                text(vehicle, "name", "routeName"),
+                text(vehicle, "type", "vehicleType")
+            ));
+        }
+        return List.copyOf(vehicles);
+    }
+
+    private Integer optionalInt(JsonNode node, String... names) {
+        for (String name : names) {
+            JsonNode value = node.get(name);
+            if (value != null && !value.isNull() && value.canConvertToInt()) return value.intValue();
+        }
+        return null;
+    }
+
+    private String text(JsonNode node, String... names) {
+        for (String name : names) {
+            JsonNode value = node.get(name);
+            if (value != null && !value.isNull() && !value.asText().isBlank()) return value.asText();
+        }
+        return null;
+    }
+
+    private BigDecimal decimal(JsonNode node, String... names) {
+        for (String name : names) {
+            JsonNode value = node.get(name);
+            if (value != null && !value.isNull() && value.isNumber()) return value.decimalValue();
+        }
+        return null;
+    }
+
     private List<MapApiDtos.RoutePointDto> extractPathPoints(JsonNode route) {
         List<MapApiDtos.RoutePointDto> points = new ArrayList<>();
         if (route == null || route.isMissingNode()) return points;
+        if (route.path("path").path("points").isArray()) {
+            appendPoints(route.path("path").path("points"), points);
+            return points;
+        }
         // Prefer legs[].steps (walk/drive shape, and how real public-transit responses
         // are known to nest theirs too); fall back to a flat steps array for shapes
         // that place steps directly on the route.
@@ -261,17 +377,21 @@ public class KakaoMapClient {
         if (!steps.isArray()) return;
         for (JsonNode step : steps) {
             JsonNode coordinates = step.path("path").path("points");
-            if (!coordinates.isArray()) continue;
-            for (JsonNode coordinate : coordinates) {
-                if (!coordinate.isArray() || coordinate.size() < 2 || !coordinate.get(0).isNumber() || !coordinate.get(1).isNumber()) continue;
-                BigDecimal longitude = coordinate.get(0).decimalValue();
-                BigDecimal latitude = coordinate.get(1).decimalValue();
-                if (latitude.compareTo(BigDecimal.valueOf(-90)) < 0
-                    || latitude.compareTo(BigDecimal.valueOf(90)) > 0
-                    || longitude.compareTo(BigDecimal.valueOf(-180)) < 0
-                    || longitude.compareTo(BigDecimal.valueOf(180)) > 0) continue;
-                target.add(new MapApiDtos.RoutePointDto(latitude, longitude));
-            }
+            appendPoints(coordinates, target);
+        }
+    }
+
+    private void appendPoints(JsonNode coordinates, List<MapApiDtos.RoutePointDto> target) {
+        if (!coordinates.isArray()) return;
+        for (JsonNode coordinate : coordinates) {
+            if (!coordinate.isArray() || coordinate.size() < 2 || !coordinate.get(0).isNumber() || !coordinate.get(1).isNumber()) continue;
+            BigDecimal longitude = coordinate.get(0).decimalValue();
+            BigDecimal latitude = coordinate.get(1).decimalValue();
+            if (latitude.compareTo(BigDecimal.valueOf(-90)) < 0
+                || latitude.compareTo(BigDecimal.valueOf(90)) > 0
+                || longitude.compareTo(BigDecimal.valueOf(-180)) < 0
+                || longitude.compareTo(BigDecimal.valueOf(180)) > 0) continue;
+            target.add(new MapApiDtos.RoutePointDto(latitude, longitude));
         }
     }
 

@@ -1,5 +1,6 @@
 package com.ddarungflow.map;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.ddarungflow.inventory.InventoryStatus;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -44,10 +45,30 @@ public class MapApiDtos {
         int distanceMeters,
         int durationSeconds,
         String travelMode,
-        List<RoutePointDto> pathPoints
+        List<RoutePointDto> pathPoints,
+        @JsonInclude(JsonInclude.Include.NON_EMPTY)
+        Integer transfers,
+        @JsonInclude(JsonInclude.Include.NON_EMPTY)
+        Integer fare,
+        @JsonInclude(JsonInclude.Include.NON_EMPTY)
+        List<RouteStepDto> steps
     ) {}
 
     public record RoutePointDto(BigDecimal latitude, BigDecimal longitude) {}
+
+    public record RouteStepDto(
+        String type,
+        String guidance,
+        Integer distanceMeters,
+        Integer durationSeconds,
+        List<RouteStopDto> stops,
+        List<RouteVehicleDto> vehicles,
+        List<RoutePointDto> pathPoints
+    ) {}
+
+    public record RouteStopDto(String name, BigDecimal latitude, BigDecimal longitude) {}
+
+    public record RouteVehicleDto(String name, String type) {}
 
     public record RouteEstimateRequestDto(
         BigDecimal originLatitude,
