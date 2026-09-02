@@ -36,7 +36,8 @@ public class RouteController {
                 request.originLongitude(),
                 request.destinationLatitude(),
                 request.destinationLongitude(),
-                request.travelMode()
+                request.travelMode(),
+                request.routeMode()
             ).orElseThrow(() -> new KakaoMapClient.ProviderException("ROUTE_PROVIDER_ERROR")));
         } catch (KakaoMapClient.ProviderException e) {
             return ResponseEntity.status(502).body(
@@ -77,7 +78,21 @@ public class RouteController {
             && validLongitude(request.originLongitude())
             && validLongitude(request.destinationLongitude());
         String mode = request.travelMode().toUpperCase(java.util.Locale.ROOT);
-        return coordinatesValid && ("WALK".equals(mode) || "PUBLIC_TRANSIT".equals(mode));
+        if (!coordinatesValid || !("WALK".equals(mode) || "PUBLIC_TRANSIT".equals(mode) || "BICYCLE".equals(mode))) {
+            return false;
+        }
+
+        String routeMode = request.routeMode();
+        if (!"BICYCLE".equals(mode)) {
+            return routeMode == null || routeMode.isBlank();
+        }
+        if (routeMode == null || routeMode.isBlank()) {
+            return false;
+        }
+        return switch (routeMode.toUpperCase(java.util.Locale.ROOT)) {
+            case "BIKE_ONLY", "ACCESSIBLE", "SHORTEST" -> true;
+            default -> false;
+        };
     }
 
     private boolean validLatitude(java.math.BigDecimal value) {
