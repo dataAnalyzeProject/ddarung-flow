@@ -8,11 +8,13 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class RouteCandidateService {
 
     private static final double EARTH_RADIUS_METERS = 6371000;
+    private static final int MAX_CANDIDATES = 5;
 
     private final StationRepository stationRepository;
     private final KakaoMapClient kakaoMapClient;
@@ -27,24 +29,35 @@ public class RouteCandidateService {
         this.kakaoMapClient = kakaoMapClient != null ? kakaoMapClient : new KakaoMapClient("https://dapi.kakao.com", "");
     }
 
+    /**
+     * Legacy discovery-only overload. There is no origin route evidence here, so it keeps
+     * the historical straight-line values without presenting them as provider route evidence.
+     */
     public List<StationDistance> findCandidates(BigDecimal destLat, BigDecimal destLng) {
-        return findCandidates(null, null, destLat, destLng, "WALK");
+        return selectDiscoveredCandidates(stationRepository.findByActiveTrue(), destLat, destLng).stream()
+            .map(candidate -> {
+                int distanceMeters = (int) Math.round(candidate.discoveryDistanceMeters());
+                int durationSeconds = kakaoMapClient.calculateWalkDurationSeconds(candidate.discoveryDistanceMeters());
+                return new StationDistance(candidate.station(), distanceMeters, durationSeconds, null, null);
+            })
+            .toList();
     }
 
-    public List<StationDistance> findCandidates(BigDecimal originLat, BigDecimal originLng, BigDecimal destLat, BigDecimal destLng, String travelMode) {
-        List<Station> activeStations = stationRepository.findByActiveTrue();
+    public List<StationDistance> findCandidates(
+        BigDecimal originLat,
+        BigDecimal originLng,
+        BigDecimal destLat,
+        BigDecimal destLng,
+        String travelMode
+    ) {
+        List<DiscoveredStation> selected = selectDiscoveredCandidates(
+            stationRepository.findByActiveTrue(), destLat, destLng
+        );
 
-        // 1. Search candidates within 500m radius of destination
-        List<StationDistance> candidates = getStationsWithinRadius(activeStations, originLat, originLng, destLat, destLng, travelMode, 500.0);
-
-        // 2. If 0 candidates, expand radius to 1km (1000m)
-        if (candidates.isEmpty()) {
-            candidates = getStationsWithinRadius(activeStations, originLat, originLng, destLat, destLng, travelMode, 1000.0);
-        }
-
-        // 3. Sort by distance ascending and select up to top 5
-        candidates.sort(Comparator.comparingDouble(StationDistance::distanceMeters));
-        return candidates.stream().limit(5).toList();
+        // R2.2: provider calls happen only after discovery has deterministically selected <= 5 candidates.
+        return selected.stream()
+            .map(candidate -> computeCandidateRoute(candidate.station(), originLat, originLng, travelMode))
+            .toList();
     }
 
     public List<StationDistance> findCandidatesForDirect(String primaryStationId, BigDecimal originLat, BigDecimal originLng) {
@@ -62,7 +75,8 @@ public class RouteCandidateService {
         List<Station> activeStations = stationRepository.findByActiveTrue();
         List<StationDistance> result = new ArrayList<>();
 
-        // 1. Primary specified station MUST be #1 if exists
+        // DIRECT prediction semantics are user-supplied minutesAhead. Keep its legacy distance
+        // metadata isolated from the strict ROUTE/Journey provider-evidence contract.
         Station primaryStation = activeStations.stream()
             .filter(s -> s.getStationId().equals(primaryStationId))
             .findFirst()
@@ -71,79 +85,116 @@ public class RouteCandidateService {
         if (primaryStation != null) {
             double primaryDist = calculateStationDistance(originLat, originLng, primaryStation);
             int primaryDuration = kakaoMapClient.calculateWalkDurationSeconds(primaryDist);
-            result.add(new StationDistance(primaryStation, primaryDist, primaryDuration));
+            result.add(new StationDistance(
+                primaryStation,
+                (int) Math.round(primaryDist),
+                primaryDuration,
+                null,
+                null
+            ));
         }
 
-        // 2. Search alternative candidates around destination or primary station
         BigDecimal targetLat = destLat != null ? destLat : (primaryStation != null ? primaryStation.getLatitude() : null);
         BigDecimal targetLng = destLng != null ? destLng : (primaryStation != null ? primaryStation.getLongitude() : null);
 
         if (targetLat != null && targetLng != null) {
-            List<StationDistance> alternatives = findCandidates(originLat, originLng, targetLat, targetLng, travelMode);
-            for (StationDistance alt : alternatives) {
-                if (result.size() >= 5) break;
-                if (primaryStation != null && alt.station().getStationId().equals(primaryStationId)) {
-                    continue; // Remove duplicate of primary station
+            List<DiscoveredStation> alternatives = selectDiscoveredCandidates(activeStations, targetLat, targetLng);
+            for (DiscoveredStation candidate : alternatives) {
+                if (result.size() >= MAX_CANDIDATES) break;
+                Station station = candidate.station();
+                if (primaryStation != null && station.getStationId().equals(primaryStationId)) {
+                    continue;
                 }
-                result.add(alt);
+                double distanceMeters = calculateStationDistance(
+                    originLat, originLng, station, candidate.discoveryDistanceMeters()
+                );
+                int durationSeconds = kakaoMapClient.calculateWalkDurationSeconds(distanceMeters);
+                result.add(new StationDistance(
+                    station,
+                    (int) Math.round(distanceMeters),
+                    durationSeconds,
+                    null,
+                    null
+                ));
             }
         }
 
         return result;
     }
 
-    private List<StationDistance> getStationsWithinRadius(
+    private List<DiscoveredStation> selectDiscoveredCandidates(
         List<Station> stations,
-        BigDecimal originLat,
-        BigDecimal originLng,
+        BigDecimal destLat,
+        BigDecimal destLng
+    ) {
+        List<DiscoveredStation> discovered = discoverStationsWithinRadius(stations, destLat, destLng, 500.0);
+        if (discovered.isEmpty()) {
+            discovered = discoverStationsWithinRadius(stations, destLat, destLng, 1000.0);
+        }
+
+        return discovered.stream()
+            .sorted(Comparator
+                .comparingDouble(DiscoveredStation::discoveryDistanceMeters)
+                .thenComparing(candidate -> candidate.station().getStationId()))
+            .limit(MAX_CANDIDATES)
+            .toList();
+    }
+
+    private List<DiscoveredStation> discoverStationsWithinRadius(
+        List<Station> stations,
         BigDecimal destLat,
         BigDecimal destLng,
-        String travelMode,
         double radiusMeters
     ) {
-        List<StationDistance> list = new ArrayList<>();
+        if (destLat == null || destLng == null) {
+            return List.of();
+        }
+
+        List<DiscoveredStation> discovered = new ArrayList<>();
         double targetLat = destLat.doubleValue();
         double targetLng = destLng.doubleValue();
 
-        for (Station s : stations) {
-            double distToDest = calculateDistanceMeters(
-                targetLat, targetLng,
-                s.getLatitude().doubleValue(), s.getLongitude().doubleValue()
+        for (Station station : stations) {
+            double distanceToDestination = calculateDistanceMeters(
+                targetLat,
+                targetLng,
+                station.getLatitude().doubleValue(),
+                station.getLongitude().doubleValue()
             );
-            if (distToDest <= radiusMeters) {
-                StationDistance sd = computeCandidateRoute(s, originLat, originLng, travelMode, distToDest);
-                list.add(sd);
+            if (distanceToDestination <= radiusMeters) {
+                discovered.add(new DiscoveredStation(station, distanceToDestination));
             }
         }
-        return list;
+        return discovered;
     }
 
     private StationDistance computeCandidateRoute(
         Station station,
         BigDecimal originLat,
         BigDecimal originLng,
-        String travelMode,
-        double fallbackDist
+        String travelMode
     ) {
-        if (originLat != null && originLng != null) {
-            try {
-                java.util.Optional<MapApiDtos.RouteResultDto> routeOpt = kakaoMapClient.fetchRoute(
-                    originLat, originLng,
-                    station.getLatitude(), station.getLongitude(),
-                    travelMode
-                );
-                if (routeOpt.isPresent()) {
-                    MapApiDtos.RouteResultDto r = routeOpt.get();
-                    return new StationDistance(station, r.distanceMeters(), r.durationSeconds());
-                }
-            } catch (Exception e) {
-                // Provider failure for one candidate falls back without failing other candidates
-            }
+        if (originLat == null || originLng == null) {
+            return StationDistance.routeUnavailable(station);
         }
 
-        double totalDist = calculateStationDistance(originLat, originLng, station, fallbackDist);
-        int durationSeconds = kakaoMapClient.calculateWalkDurationSeconds(totalDist);
-        return new StationDistance(station, totalDist, durationSeconds);
+        try {
+            Optional<MapApiDtos.RouteResultDto> route = kakaoMapClient.fetchRoute(
+                originLat,
+                originLng,
+                station.getLatitude(),
+                station.getLongitude(),
+                travelMode
+            );
+            if (route.isPresent()) {
+                return StationDistance.routeNormal(station, route.get());
+            }
+        } catch (Exception ignored) {
+            // Per-candidate provider failure is isolated below as explicit UNAVAILABLE evidence.
+        }
+
+        // R2.2 forbids straight-line / WALK synthetic duration fallback for ROUTE/Journey prediction.
+        return StationDistance.routeUnavailable(station);
     }
 
     private double calculateStationDistance(BigDecimal originLat, BigDecimal originLng, Station station) {
@@ -156,7 +207,12 @@ public class RouteCandidateService {
         return 0.0;
     }
 
-    private double calculateStationDistance(BigDecimal originLat, BigDecimal originLng, Station station, double fallbackDist) {
+    private double calculateStationDistance(
+        BigDecimal originLat,
+        BigDecimal originLng,
+        Station station,
+        double fallbackDist
+    ) {
         if (originLat != null && originLng != null) {
             return calculateDistanceMeters(
                 originLat.doubleValue(), originLng.doubleValue(),
@@ -176,9 +232,47 @@ public class RouteCandidateService {
         return EARTH_RADIUS_METERS * c;
     }
 
-    public record StationDistance(Station station, double distanceMeters, int durationSeconds) {
+    private record DiscoveredStation(Station station, double discoveryDistanceMeters) {}
+
+    public record StationDistance(
+        Station station,
+        Integer distanceMeters,
+        Integer durationSeconds,
+        PredictionApiDtos.RouteStatus routeStatus,
+        MapApiDtos.RouteResultDto routeDetail
+    ) {
+        public StationDistance(Station station, double distanceMeters, int durationSeconds) {
+            this(station, (int) Math.round(distanceMeters), durationSeconds, null, null);
+        }
+
         public StationDistance(Station station, double distanceMeters) {
-            this(station, distanceMeters, (int) Math.round((distanceMeters / 80.0) * 60.0));
+            this(
+                station,
+                (int) Math.round(distanceMeters),
+                (int) Math.round((distanceMeters / 80.0) * 60.0),
+                null,
+                null
+            );
+        }
+
+        static StationDistance routeNormal(Station station, MapApiDtos.RouteResultDto routeDetail) {
+            return new StationDistance(
+                station,
+                routeDetail.distanceMeters(),
+                routeDetail.durationSeconds(),
+                PredictionApiDtos.RouteStatus.NORMAL,
+                routeDetail
+            );
+        }
+
+        static StationDistance routeUnavailable(Station station) {
+            return new StationDistance(
+                station,
+                null,
+                null,
+                PredictionApiDtos.RouteStatus.UNAVAILABLE,
+                null
+            );
         }
     }
 }
