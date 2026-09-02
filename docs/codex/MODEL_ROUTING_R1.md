@@ -14,11 +14,14 @@ If a requested route is unavailable, use the closest supported GPT-5.6-family ro
 | Implementer | Current task difficulty tier | one tier only after the same structural BLOCKER/MAJOR recurs twice after repair |
 | Independent Reviewer | Same as, or one tier above, the implementer | a higher tier for security, evidence, exactly-once, or cross-layer findings |
 | QA/log triage | GPT-5.6 Terra / medium | GPT-5.6 Sol / medium or high for an unexplained cross-layer failure |
+| Asset Producer | GPT-5.6 Sol / medium for gap resolution, provenance, and handoff; use the runtime image tool for actual image output | GPT-5.6 Sol / high for complex separation, transparency, or multi-reference edits; never exceed the current FE task ceiling |
 | Visual Reviewer | GPT-5.6 Terra / high or GPT-5.6 Sol / medium | GPT-5.6 Sol / high or xhigh only for Main, Ride, Guide, Journey, Foundation, or cutover |
 | Release/Closer | GPT-5.6 Terra / medium | return conflicts or CI root-cause decisions to Sol orchestrator |
 | Bulk evidence formatting | GPT-5.6 Luna / medium | return semantic decisions to Terra/Sol |
 
 `max` is never the global default.
+
+Asset Producer routing does not manufacture media capability. Before dispatch, record whether the active runtime exposes image generation or editing. If it does not, return `ASSET_GENERATION_REQUIRED` without claiming `PRODUCED`. Independent Asset Review uses the Visual Reviewer route and the current FE task ceiling.
 
 ## Consumer R2.2 task routes and ceilings
 
