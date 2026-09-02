@@ -127,13 +127,13 @@ class JourneyControllerTest {
     }
 
     @Test
-    void naturalLanguageReplanAlsoRequiresPremiumBeforeCallingTheProvider() throws Exception {
+    void replanRejectsNaturalLanguageBeforePremiumOrProviderChecks() throws Exception {
         String decisionId = plan();
         String replan = AI_PLAN.trim().replaceFirst("\\}$", ",\"expectedRevision\":1}");
 
         mvc.perform(post("/api/v1/journeys/{id}/replan", decisionId).with(authentication(userA)).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON).content(replan))
-                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("PREMIUM_REQUIRED"));
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("JOURNEY_INTENT_INVALID"));
 
         verifyNoInteractions(aiGateway);
     }
