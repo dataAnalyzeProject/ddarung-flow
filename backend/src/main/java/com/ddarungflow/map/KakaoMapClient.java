@@ -10,6 +10,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.function.Function;
 import org.springframework.beans.factory.annotation.Value;
@@ -118,6 +119,98 @@ public class KakaoMapClient {
             }
             boolean hasNext = !root.path("meta").path("is_end").asBoolean(true);
             return new MapApiDtos.PlaceSearchPageResponseDto(List.copyOf(list), page, hasNext);
+        } catch (ProviderException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ProviderException("PLACE_PROVIDER_ERROR");
+        }
+    }
+
+    public List<MapApiDtos.NearbyPlaceResponseDto> searchNearbyByCategory(
+        String categoryCode,
+        BigDecimal latitude,
+        BigDecimal longitude,
+        int limit
+    ) {
+        return searchNearby("category", "category_group_code", categoryCode, latitude, longitude, limit);
+    }
+
+    public List<MapApiDtos.NearbyPlaceResponseDto> searchNearbyByKeyword(
+        String keyword,
+        BigDecimal latitude,
+        BigDecimal longitude,
+        int limit
+    ) {
+        return searchNearby("keyword", "query", keyword, latitude, longitude, limit);
+    }
+
+    private List<MapApiDtos.NearbyPlaceResponseDto> searchNearby(
+        String searchType,
+        String queryParameter,
+        String queryValue,
+        BigDecimal latitude,
+        BigDecimal longitude,
+        int limit
+    ) {
+        try {
+            String encodedValue = java.net.URLEncoder.encode(queryValue, java.nio.charset.StandardCharsets.UTF_8);
+            String url = baseUrl + "/v2/local/search/" + searchType + ".json?" + queryParameter + "=" + encodedValue
+                + "&x=" + longitude + "&y=" + latitude
+                + "&radius=5000&sort=distance&size=" + limit;
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .header("Authorization", "KakaoAK " + apiKey)
+                .GET()
+                .build();
+
+            HttpResponse<String> response = httpTransport.apply(request);
+            if (response == null || response.statusCode() != 200) {
+                throw new ProviderException("PLACE_PROVIDER_ERROR");
+            }
+            return parseNearbyPlacesResponse(response.body(), limit);
+        } catch (ProviderException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ProviderException("PLACE_PROVIDER_ERROR");
+        }
+    }
+
+    List<MapApiDtos.NearbyPlaceResponseDto> parseNearbyPlacesResponse(String jsonResponse, int limit) {
+        if (jsonResponse == null || jsonResponse.isBlank()) {
+            throw new ProviderException("PLACE_PROVIDER_ERROR");
+        }
+        try {
+            JsonNode documents = objectMapper.readTree(jsonResponse).path("documents");
+            if (!documents.isArray()) {
+                throw new ProviderException("PLACE_PROVIDER_ERROR");
+            }
+            List<MapApiDtos.NearbyPlaceResponseDto> places = new ArrayList<>();
+            for (JsonNode doc : documents) {
+                String placeId = text(doc, "id");
+                String name = text(doc, "place_name");
+                BigDecimal longitude = decimalText(doc, "x");
+                BigDecimal latitude = decimalText(doc, "y");
+                Integer distance = integerText(doc, "distance");
+                if (placeId == null || name == null || longitude == null || latitude == null
+                    || distance == null || distance < 0) {
+                    continue;
+                }
+                String address = text(doc, "road_address_name", "address_name");
+                places.add(new MapApiDtos.NearbyPlaceResponseDto(
+                    placeId,
+                    name,
+                    address,
+                    text(doc, "category_name"),
+                    latitude,
+                    longitude,
+                    distance
+                ));
+            }
+            return places.stream()
+                .sorted(Comparator.comparingInt(MapApiDtos.NearbyPlaceResponseDto::distanceMeters)
+                    .thenComparing(MapApiDtos.NearbyPlaceResponseDto::placeId))
+                .limit(limit)
+                .toList();
         } catch (ProviderException e) {
             throw e;
         } catch (Exception e) {
@@ -352,6 +445,26 @@ public class KakaoMapClient {
             if (value != null && !value.isNull() && value.isNumber()) return value.decimalValue();
         }
         return null;
+    }
+
+    private BigDecimal decimalText(JsonNode node, String name) {
+        JsonNode value = node.get(name);
+        if (value == null || value.isNull() || value.asText().isBlank()) return null;
+        try {
+            return new BigDecimal(value.asText());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private Integer integerText(JsonNode node, String name) {
+        JsonNode value = node.get(name);
+        if (value == null || value.isNull() || value.asText().isBlank()) return null;
+        try {
+            return Integer.valueOf(value.asText());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     private List<MapApiDtos.RoutePointDto> extractPathPoints(JsonNode route) {

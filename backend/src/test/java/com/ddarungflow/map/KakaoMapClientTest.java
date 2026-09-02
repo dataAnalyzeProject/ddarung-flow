@@ -17,6 +17,68 @@ import static org.mockito.Mockito.when;
 class KakaoMapClientTest {
 
     @Test
+    void nearbyCategoryUsesAuthoritativeCoordinatesRadiusDistanceSortAndLimit() {
+        AtomicReference<HttpRequest> requestReference = new AtomicReference<>();
+        KakaoMapClient client = new KakaoMapClient("https://dapi.kakao.com", "test-key", request -> {
+            requestReference.set(request);
+            return response(200, "{\"documents\":[]}");
+        });
+
+        assertThat(client.searchNearbyByCategory(
+            "CE7", new BigDecimal("37.5556488"), new BigDecimal("126.91062927"), 5
+        )).isEmpty();
+        assertThat(requestReference.get().uri().toString()).isEqualTo(
+            "https://dapi.kakao.com/v2/local/search/category.json?category_group_code=CE7"
+                + "&x=126.91062927&y=37.5556488&radius=5000&sort=distance&size=5"
+        );
+        assertThat(requestReference.get().headers().firstValue("Authorization"))
+            .contains("KakaoAK test-key");
+    }
+
+    @Test
+    void nearbyKeywordPreservesProviderFieldsSortsByNumericDistanceAndCapsResults() {
+        AtomicReference<HttpRequest> requestReference = new AtomicReference<>();
+        KakaoMapClient client = new KakaoMapClient("https://dapi.kakao.com", "test-key", request -> {
+            requestReference.set(request);
+            return response(200, """
+                {"documents":[
+                  {"id":"far","place_name":"먼 공원","road_address_name":"서울 먼길","category_name":"여행 > 공원","x":"126.92","y":"37.56","distance":"310"},
+                  {"id":"near","place_name":"가까운 공원","address_name":"서울 가까운길","category_name":"여행 > 공원","x":"126.91","y":"37.55","distance":"25"},
+                  {"id":"middle","place_name":"중간 공원","address_name":"서울 중간길","category_name":"여행 > 공원","x":"126.915","y":"37.555","distance":"140"}
+                ]}
+                """);
+        });
+
+        List<MapApiDtos.NearbyPlaceResponseDto> result = client.searchNearbyByKeyword(
+            "한강공원", new BigDecimal("37.55"), new BigDecimal("126.91"), 2);
+
+        assertThat(requestReference.get().uri().toString())
+            .contains("/v2/local/search/keyword.json?query=%ED%95%9C%EA%B0%95%EA%B3%B5%EC%9B%90")
+            .contains("radius=5000&sort=distance&size=2");
+        assertThat(result).extracting(MapApiDtos.NearbyPlaceResponseDto::placeId)
+            .containsExactly("near", "middle");
+        assertThat(result.get(0)).isEqualTo(new MapApiDtos.NearbyPlaceResponseDto(
+            "near", "가까운 공원", "서울 가까운길", "여행 > 공원",
+            new BigDecimal("37.55"), new BigDecimal("126.91"), 25
+        ));
+    }
+
+    @Test
+    void nearbyDistinguishesEmptyDocumentsFromProviderFailure() {
+        KakaoMapClient emptyClient = new KakaoMapClient("https://dapi.kakao.com", "test-key",
+            request -> response(200, "{\"documents\":[]}"));
+        KakaoMapClient failedClient = new KakaoMapClient("https://dapi.kakao.com", "test-key",
+            request -> response(503, "unavailable"));
+
+        assertThat(emptyClient.searchNearbyByKeyword(
+            "공원", new BigDecimal("37.55"), new BigDecimal("126.91"), 5)).isEmpty();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> failedClient.searchNearbyByKeyword(
+                "공원", new BigDecimal("37.55"), new BigDecimal("126.91"), 5))
+            .isInstanceOf(KakaoMapClient.ProviderException.class)
+            .hasMessage("PLACE_PROVIDER_ERROR");
+    }
+
+    @Test
     @DisplayName("HTTP 성공 및 정상 장소가 존재할 때 searchPlaces()가 결과를 DTO 목록으로 올바르게 변환한다")
     void searchPlacesHttpSuccessWithPlaces() {
         String jsonBody = """

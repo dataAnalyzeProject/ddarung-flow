@@ -65,6 +65,18 @@ public class StationQueryService {
         return stationRepository.findById(stationId).map(this::toStationMapResponseDto);
     }
 
+    public Optional<MapApiDtos.StationLocationResponseDto> findActiveLocation(String stationId) {
+        return stationRepository.findById(stationId)
+            .filter(Station::isActive)
+            .map(station -> new MapApiDtos.StationLocationResponseDto(
+                station.getStationId(),
+                station.getStationNumber(),
+                station.getName(),
+                station.getLatitude(),
+                station.getLongitude()
+            ));
+    }
+
     public MapApiDtos.StationMapResponseDto toStationMapResponseDto(Station station) {
         Optional<StationInventoryCurrent> inv = inventoryRepository.findById(station.getStationId());
         return new MapApiDtos.StationMapResponseDto(

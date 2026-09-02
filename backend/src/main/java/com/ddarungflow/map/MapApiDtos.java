@@ -41,6 +41,16 @@ public class MapApiDtos {
         boolean hasNext
     ) {}
 
+    public record NearbyPlaceResponseDto(
+        String placeId,
+        String name,
+        String address,
+        String category,
+        BigDecimal latitude,
+        BigDecimal longitude,
+        int distanceMeters
+    ) {}
+
     public record RouteResultDto(
         int distanceMeters,
         int durationSeconds,
