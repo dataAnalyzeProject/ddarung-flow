@@ -820,14 +820,14 @@ button[aria-pressed="true"] .cr22-journey__radio {
   white-space: nowrap;
 }
 
-@media (min-width: 64rem) {
+@media (min-width: 64.01rem) {
   .cr22-journey__confirm-layout { grid-template-columns: minmax(0, 1.15fr) minmax(19rem, 0.65fr); }
   .cr22-journey__clarify-layout { grid-template-columns: minmax(0, 1.5fr) minmax(20rem, 0.8fr); }
   .cr22-journey__result-layout { grid-template-columns: minmax(34rem, 0.92fr) minmax(34rem, 1.08fr); }
   .cr22-journey__result-layout .cr22-map-shell__canvas { min-height: 26rem; }
 }
 
-@media (min-width: 40rem) and (max-width: 63.99rem) {
+@media (min-width: 40rem) and (max-width: 64rem) {
   .cr22-journey__stepper { grid-template-columns: repeat(2, 1fr); gap: 0.9rem 0; }
   .cr22-journey__stepper li:nth-child(2)::after { display: none; }
   .cr22-journey__confirm-layout,
