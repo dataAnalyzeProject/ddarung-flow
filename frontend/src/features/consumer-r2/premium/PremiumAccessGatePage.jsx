@@ -30,7 +30,18 @@ const STATE_NOTICE = {
 };
 
 function FeatureIcon({ name }) {
-  const iconName = name === "calendar" ? "plan" : name === "route" ? "ride" : name === "chart" ? "transit" : "mapPin";
+  const iconNames = {
+    bike: "bike",
+    calendar: "plan",
+    chart: "transit",
+    mapPin: "mapPin",
+    recommend: "qna",
+    route: "ride",
+    shield: "check",
+    summary: "info",
+    weather: "info",
+  };
+  const iconName = iconNames[name];
   return <span className="cr22-premium__feature-icon" aria-hidden="true"><ConsumerIcon name={iconName} /></span>;
 }
 
@@ -87,7 +98,7 @@ export default function PremiumAccessGatePage({
         </section>
 
         <section className="cr22-premium__benefit-strip" aria-label="Premium AI 기능 안내">
-          <img src={bikeCutout} width="768" height="512" alt="" loading="lazy" />
+          <img src={bikeCutout} width="768" height="512" alt="" />
           <div><strong>AI가 라이딩을 더 안전하고, 더 즐겁게.</strong><span>데이터와 AI로 당신의 라이딩 경험을 한 단계 업그레이드하세요.</span></div>
           {[["shield", "안전한 라이딩 지원"], ["weather", "실시간 환경 반영"], ["mapPin", "나에게 맞는 추천"], ["plan", "스마트한 일정 관리"]].map(([icon, label]) => <span className="cr22-premium__benefit" key={label}><FeatureIcon name={icon} /><small>{label}</small></span>)}
         </section>

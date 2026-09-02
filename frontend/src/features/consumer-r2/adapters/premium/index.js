@@ -2,4 +2,4 @@ export {
   PREMIUM_ACCESS_STATES,
   consumerPremiumAdapter,
   normalizePremiumAccessState,
-} from "./consumerPremiumAdapter";
+} from "./consumerPremiumAdapter.js";

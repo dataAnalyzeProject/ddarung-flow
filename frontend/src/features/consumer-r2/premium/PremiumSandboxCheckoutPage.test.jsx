@@ -85,6 +85,12 @@ describe("PremiumSandboxCheckoutPage", () => {
     expect(screen.queryByText(/접근 상태가 활성화/)).not.toBeInTheDocument();
   });
 
+  it("announces an externally supplied processing state", () => {
+    render(<PremiumSandboxCheckoutPage accessState="PROCESSING" adapter={createAdapter()} />);
+    expect(screen.getByRole("status")).toHaveTextContent("처리 중");
+    expect(screen.getByRole("status")).toHaveTextContent("접근 상태를 확인하고 있습니다");
+  });
+
   it("renders anonymous and subscription lookup failures as separate states", () => {
     const { rerender } = render(<PremiumSandboxCheckoutPage authState="anonymous" adapter={createAdapter()} />);
     expect(screen.getByRole("status")).toHaveTextContent("먼저 로그인");

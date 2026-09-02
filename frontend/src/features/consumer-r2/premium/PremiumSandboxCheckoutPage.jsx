@@ -45,6 +45,7 @@ export default function PremiumSandboxCheckoutPage({
     const nextState = normalizePremiumAccessState(accessState, authState);
     setState(nextState);
     if (nextState === "ANONYMOUS") setMessage("Sandbox 테스트 플랜을 선택하려면 먼저 로그인해 주세요.");
+    else if (nextState === "PROCESSING") setMessage("Sandbox 결제 결과와 Premium 접근 상태를 확인하고 있습니다.");
     else if (nextState === "ACTIVE") setMessage("Premium 접근 상태가 활성화되어 AI 기능을 사용할 수 있습니다.");
     else if (nextState === "EXPIRED") setMessage("이전 Sandbox Premium 접근 기간이 끝났습니다. 새 테스트 플랜을 선택할 수 있습니다.");
     else if (nextState === "ERROR") setMessage("Premium 접근 상태를 불러오지 못했습니다. 잠시 후 다시 확인해 주세요.");
@@ -115,7 +116,7 @@ export default function PremiumSandboxCheckoutPage({
         <section className="cr22-checkout__warning" aria-label="Sandbox 결제 안내"><ConsumerIcon name="info" /><div><strong>SANDBOX TEST <i /> 실제 따릉이 이용권 구매가 아닙니다.</strong><span>이 화면은 테스트용 Premium 플랜 결제(SANDBOX)입니다. 실제 서비스에서는 제공하지 않는 결제입니다.</span></div></section>
         <header className="cr22-checkout__heading"><h1>Premium 테스트 플랜 결제</h1><p>테스트를 위한 Premium 플랜입니다. 선택하신 플랜으로 Toss 샌드박스 결제를 진행합니다.</p></header>
 
-        {message ? <section className={`cr22-checkout__message is-${state.toLowerCase()}`} role={state === "ERROR" ? "alert" : "status"} aria-live="polite"><strong>{state === "ACTIVE" ? "Premium 활성" : state === "EXPIRED" ? "접근 기간 만료" : state === "ERROR" ? "확인 필요" : "Sandbox 안내"}</strong><span>{message}</span></section> : state === "EXPIRED" ? <section className="cr22-checkout__message is-expired" role="status"><strong>접근 기간 만료</strong><span>이전 Sandbox Premium 접근 기간이 끝났습니다. 새 테스트 플랜을 선택할 수 있습니다.</span></section> : null}
+        {message ? <section className={`cr22-checkout__message is-${state.toLowerCase()}`} role={state === "ERROR" ? "alert" : "status"} aria-live="polite"><strong>{state === "ACTIVE" ? "Premium 활성" : state === "EXPIRED" ? "접근 기간 만료" : state === "ERROR" ? "확인 필요" : state === "PROCESSING" ? "처리 중" : "Sandbox 안내"}</strong><span>{message}</span></section> : state === "EXPIRED" ? <section className="cr22-checkout__message is-expired" role="status"><strong>접근 기간 만료</strong><span>이전 Sandbox Premium 접근 기간이 끝났습니다. 새 테스트 플랜을 선택할 수 있습니다.</span></section> : null}
 
         <section className="cr22-checkout__plans" aria-label="Premium 테스트 플랜 선택">
           {plans.map((plan) => <article className={`cr22-checkout__plan${plan.featured ? " is-featured" : ""}${selectedPlan === plan.id ? " is-selected" : ""}`} key={plan.id}>

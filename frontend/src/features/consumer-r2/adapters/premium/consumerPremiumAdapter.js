@@ -1,10 +1,10 @@
-import { premiumPlansFixture } from "../../../premium/data/premiumGuideAccessFixture";
+import { premiumPlansFixture } from "../../../premium/data/premiumGuideAccessFixture.js";
 import {
   confirmPayment,
   fetchSubscription,
   startCheckout,
-} from "../../../premium/subscriptionApi";
-import { requestTossCheckout } from "../../../premium/tossCheckout";
+} from "../../../premium/subscriptionApi.js";
+import { requestTossCheckout } from "../../../premium/tossCheckout.js";
 
 export const PREMIUM_ACCESS_STATES = [
   "ANONYMOUS",
