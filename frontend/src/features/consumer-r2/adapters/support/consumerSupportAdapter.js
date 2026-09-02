@@ -4,7 +4,7 @@ import {
   getQuestion,
   listQuestions,
   updateQuestion,
-} from "../../../qna/api/qnaApi";
+} from "../../../qna/api/qnaApi.js";
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:8080";
 

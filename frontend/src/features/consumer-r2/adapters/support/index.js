@@ -3,4 +3,4 @@ export {
   createConsumerSupportAdapter,
   mapNotification,
   SUPPORTED_NOTIFICATION_TYPES,
-} from "./consumerSupportAdapter";
+} from "./consumerSupportAdapter.js";
