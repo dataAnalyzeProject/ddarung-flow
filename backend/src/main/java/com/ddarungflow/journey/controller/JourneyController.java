@@ -2,6 +2,8 @@ package com.ddarungflow.journey.controller;
 
 import com.ddarungflow.dto.PrincipalDetails;
 import com.ddarungflow.journey.application.JourneyPlanService;
+import com.ddarungflow.payment.PremiumEntitlementService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -22,15 +24,22 @@ import java.util.Map;
 public class JourneyController {
     private static final Logger log = LoggerFactory.getLogger(JourneyController.class);
     private final JourneyPlanService service;
+    private final PremiumEntitlementService premiumEntitlement;
 
-    public JourneyController(JourneyPlanService service) {
+    @Autowired
+    public JourneyController(JourneyPlanService service, PremiumEntitlementService premiumEntitlement) {
         this.service = service;
+        this.premiumEntitlement = premiumEntitlement;
+    }
+
+    JourneyController(JourneyPlanService service) {
+        this(service, null);
     }
 
     @PostMapping("/plan")
     public JourneyPlanService.Decision plan(@AuthenticationPrincipal PrincipalDetails principal,
                                             @RequestBody JourneyPlanService.PlanInput input) {
-        return service.plan(userId(principal), input);
+        return service.plan(userId(principal), input, () -> premiumEntitlement.requireActive(principal.getUsers()));
     }
 
     @GetMapping("/{decisionId}")
@@ -41,7 +50,8 @@ public class JourneyController {
     @PostMapping("/{decisionId}/replan")
     public JourneyPlanService.Decision replan(@AuthenticationPrincipal PrincipalDetails principal, @PathVariable String decisionId,
                                               @RequestBody JourneyPlanService.PlanInput input) {
-        return service.replan(userId(principal), decisionId, input);
+        return service.replan(userId(principal), decisionId, input,
+                () -> premiumEntitlement.requireActive(principal.getUsers()));
     }
 
     @PostMapping("/{decisionId}/counterfactuals")
@@ -73,6 +83,12 @@ public class JourneyController {
 
     @ExceptionHandler(JourneyPlanService.NoValidCandidate.class)
     ResponseEntity<Map<String, String>> noValidCandidate() { return error(422, "JOURNEY_NO_VALID_CANDIDATE"); }
+
+    @ExceptionHandler(PremiumEntitlementService.PremiumRequired.class)
+    ResponseEntity<Map<String, String>> premiumRequired() { return error(403, "PREMIUM_REQUIRED"); }
+
+    @ExceptionHandler(PremiumEntitlementService.EntitlementUnavailable.class)
+    ResponseEntity<Map<String, String>> entitlementUnavailable() { return error(503, "PREMIUM_ENTITLEMENT_UNAVAILABLE"); }
 
     private long userId(PrincipalDetails principal) {
         if (principal == null || principal.getUsers() == null || principal.getUsers().getId() == null) {

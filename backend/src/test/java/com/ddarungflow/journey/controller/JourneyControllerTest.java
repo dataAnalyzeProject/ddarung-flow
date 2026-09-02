@@ -5,8 +5,14 @@ import com.ddarungflow.entity.Users;
 import com.ddarungflow.journey.application.JourneyPlanService;
 import com.ddarungflow.journey.ai.JourneyAiProperties;
 import com.ddarungflow.journey.ai.JourneyAiFailureStage;
+import com.ddarungflow.journey.ai.JourneyAiErrorCode;
+import com.ddarungflow.journey.ai.JourneyAiGateway;
+import com.ddarungflow.journey.ai.JourneyCompileRequest;
 import com.ddarungflow.journey.persistence.JourneyCandidateRepository;
 import com.ddarungflow.journey.persistence.JourneyDecisionRepository;
+import com.ddarungflow.payment.Subscription;
+import com.ddarungflow.payment.SubscriptionPlan;
+import com.ddarungflow.payment.SubscriptionRepository;
 import com.ddarungflow.repository.UsersRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -18,9 +24,15 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -44,6 +56,13 @@ class JourneyControllerTest {
              "destination":null,"departureAt":"2030-08-28T18:00:00+09:00","maxJourneyMinutes":60,"requiredBikeCount":2,
              "preferences":{"lowSlope":"HIGH"},"avoid":["RAIN"]}
             """;
+    private static final String AI_PLAN = """
+            {"requestMode":"NATURAL_LANGUAGE","naturalLanguageText":"성수역에서 서울숲으로 가는 여정을 계획해 줘",
+             "origin":{"placeId":"origin-1","displayName":"성수역","latitude":37.544,"longitude":127.056},
+             "destination":{"placeId":"destination-1","displayName":"서울숲","latitude":37.545,"longitude":127.039},
+             "departureAt":"2030-08-28T18:00:00+09:00","maxJourneyMinutes":60,"requiredBikeCount":2,
+             "preferences":{"lowSlope":"HIGH"},"avoid":["RAIN"]}
+            """;
 
     @Autowired private MockMvc mvc;
     @Autowired private ObjectMapper objectMapper;
@@ -51,6 +70,8 @@ class JourneyControllerTest {
     @Autowired private JourneyDecisionRepository decisions;
     @Autowired private JourneyCandidateRepository candidates;
     @Autowired private JourneyAiProperties aiProperties;
+    @Autowired private SubscriptionRepository subscriptions;
+    @MockitoBean private JourneyAiGateway aiGateway;
 
     private UsernamePasswordAuthenticationToken userA;
     private UsernamePasswordAuthenticationToken userB;
@@ -59,9 +80,84 @@ class JourneyControllerTest {
     void setUp() {
         candidates.deleteAll();
         decisions.deleteAll();
+        subscriptions.deleteAll();
         users.deleteAll();
+        reset(aiGateway);
+        when(aiGateway.compileIntent(any(JourneyCompileRequest.class)))
+                .thenReturn(JourneyAiGateway.IntentResult.unavailable(JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE));
         userA = login("journey-a");
         userB = login("journey-b");
+    }
+
+    @Test
+    void distinguishesAnonymousFromFreePremiumAiRequestsBeforeCallingTheProvider() throws Exception {
+        mvc.perform(post("/api/v1/journeys/plan").with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON).content(AI_PLAN))
+                .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("AUTH_REQUIRED"));
+
+        mvc.perform(post("/api/v1/journeys/plan").with(authentication(userA)).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON).content(AI_PLAN))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("PREMIUM_REQUIRED"));
+
+        verifyNoInteractions(aiGateway);
+    }
+
+    @Test
+    void expiredPremiumAiRequestDoesNotCallTheProvider() throws Exception {
+        subscriptions.save(new Subscription(authenticatedUser(userA), SubscriptionPlan.PREMIUM_MONTHLY_30D,
+                java.time.OffsetDateTime.now().minusDays(31)));
+
+        mvc.perform(post("/api/v1/journeys/plan").with(authentication(userA)).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON).content(AI_PLAN))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("PREMIUM_REQUIRED"));
+
+        verifyNoInteractions(aiGateway);
+    }
+
+    @Test
+    void activePremiumAiRequestCallsTheProvider() throws Exception {
+        subscriptions.save(new Subscription(authenticatedUser(userA), SubscriptionPlan.PREMIUM_MONTHLY_30D,
+                java.time.OffsetDateTime.now()));
+
+        mvc.perform(post("/api/v1/journeys/plan").with(authentication(userA)).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON).content(AI_PLAN))
+                .andExpect(status().isOk());
+
+        verify(aiGateway).compileIntent(any(JourneyCompileRequest.class));
+    }
+
+    @Test
+    void naturalLanguageReplanAlsoRequiresPremiumBeforeCallingTheProvider() throws Exception {
+        String decisionId = plan();
+        String replan = AI_PLAN.trim().replaceFirst("\\}$", ",\"expectedRevision\":1}");
+
+        mvc.perform(post("/api/v1/journeys/{id}/replan", decisionId).with(authentication(userA)).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON).content(replan))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("PREMIUM_REQUIRED"));
+
+        verifyNoInteractions(aiGateway);
+    }
+
+    @Test
+    void formRequestRemainsAvailableWithoutPremium() throws Exception {
+        mvc.perform(post("/api/v1/journeys/plan").with(authentication(userA)).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON).content(PLAN))
+                .andExpect(status().isOk());
+
+        verifyNoInteractions(aiGateway);
+    }
+
+    @Test
+    void naturalLanguageClarificationWithoutAnAiCallRemainsAvailableWithoutPremium() throws Exception {
+        String clarification = PLAN.replace("\"requestMode\":\"FORM\",",
+                "\"requestMode\":\"NATURAL_LANGUAGE\",\"naturalLanguageText\":\"목적지를 정하지 못했어\",");
+
+        mvc.perform(post("/api/v1/journeys/plan").with(authentication(userA)).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON).content(clarification))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CLARIFICATION_REQUIRED"));
+
+        verifyNoInteractions(aiGateway);
     }
 
     @Test
@@ -130,6 +226,10 @@ class JourneyControllerTest {
                 .doesNotContainKey("stage").doesNotContainValue("provider raw output");
         assertThat(controller.aiToolValueMismatch().getStatusCode().value()).isEqualTo(500);
         assertThat(controller.aiToolValueMismatch().getBody()).containsEntry("code", "AI_TOOL_VALUE_MISMATCH").doesNotContainValue("provider raw output");
+        assertThat(controller.premiumRequired().getStatusCode().value()).isEqualTo(403);
+        assertThat(controller.premiumRequired().getBody()).containsEntry("code", "PREMIUM_REQUIRED");
+        assertThat(controller.entitlementUnavailable().getStatusCode().value()).isEqualTo(503);
+        assertThat(controller.entitlementUnavailable().getBody()).containsEntry("code", "PREMIUM_ENTITLEMENT_UNAVAILABLE");
     }
 
     @Test
@@ -162,6 +262,10 @@ class JourneyControllerTest {
     }
 
     private Long userId(UsernamePasswordAuthenticationToken authentication) {
-        return ((PrincipalDetails) authentication.getPrincipal()).getUsers().getId();
+        return authenticatedUser(authentication).getId();
+    }
+
+    private Users authenticatedUser(UsernamePasswordAuthenticationToken authentication) {
+        return ((PrincipalDetails) authentication.getPrincipal()).getUsers();
     }
 }
