@@ -9,8 +9,8 @@ import {
   MapShell,
   StatusBadge,
   SurfaceCard,
-} from "../shared";
-import { consumerJourneyAdapter, hasValue } from "../adapters/journey";
+} from "../shared/index.js";
+import { consumerJourneyAdapter, hasValue } from "../adapters/journey/index.js";
 import "./journey.css";
 
 const SEGMENT_COPY = {

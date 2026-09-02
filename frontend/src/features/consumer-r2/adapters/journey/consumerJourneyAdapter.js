@@ -4,7 +4,7 @@ import {
   replanJourney,
   saveJourney,
   searchJourneyPlaces,
-} from "../../../journey/api/journeyApi";
+} from "../../../journey/api/journeyApi.js";
 
 const DEFAULT_API = { getJourney, planJourney, replanJourney, saveJourney, searchJourneyPlaces };
 
