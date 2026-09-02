@@ -66,9 +66,11 @@ public class MapPredictionService {
         Integer minutesAhead,
         Integer requiredBikeCount
     ) {
-        List<RouteCandidateService.StationDistance> candidates = routeCandidateService.findCandidates(originLat, originLng, destLat, destLng, travelMode);
-        // ROUTE 모드는 후보별 실제 경로 소요시간으로 도착시각을 계산한다. minutesAhead는 사용하지 않는다.
-        return assembleCandidates(candidates, null, requiredBikeCount);
+        List<RouteCandidateService.StationDistance> candidates = routeCandidateService.findCandidates(
+            originLat, originLng, destLat, destLng, travelMode
+        );
+        // ROUTE mode must derive arrivalAt and prediction from the exact provider route evidence.
+        return assembleCandidates(candidates, null, requiredBikeCount, null, true);
     }
 
     /**
@@ -83,8 +85,10 @@ public class MapPredictionService {
         OffsetDateTime departureAt,
         Integer requiredBikeCount
     ) {
-        List<RouteCandidateService.StationDistance> candidates = routeCandidateService.findCandidates(originLat, originLng, destLat, destLng, "WALK");
-        return assembleCandidates(candidates, null, requiredBikeCount, departureAt);
+        List<RouteCandidateService.StationDistance> candidates = routeCandidateService.findCandidates(
+            originLat, originLng, destLat, destLng, "WALK"
+        );
+        return assembleCandidates(candidates, null, requiredBikeCount, departureAt, true);
     }
 
     public List<PredictionApiDtos.CandidatePredictionResponseDto> buildDirectRoute(
@@ -95,45 +99,66 @@ public class MapPredictionService {
         Integer minutesAhead,
         Integer requiredBikeCount
     ) {
-        List<RouteCandidateService.StationDistance> candidates = routeCandidateService.findCandidatesForDirect(stationId, originLat, originLng, null, null, travelMode);
-        // DIRECT 모드는 사용자가 직접 입력한 도착 예정 분(minutesAhead)을 모든 후보의 도착시각으로 사용한다.
-        return assembleCandidates(candidates, minutesAhead, requiredBikeCount);
-    }
-
-    private List<PredictionApiDtos.CandidatePredictionResponseDto> assembleCandidates(
-        List<RouteCandidateService.StationDistance> candidates,
-        Integer minutesAheadOverride,
-        Integer requiredBikeCount
-    ) {
-        return assembleCandidates(candidates, minutesAheadOverride, requiredBikeCount, null);
+        List<RouteCandidateService.StationDistance> candidates = routeCandidateService.findCandidatesForDirect(
+            stationId, originLat, originLng, null, null, travelMode
+        );
+        // DIRECT keeps the existing user-supplied minutesAhead semantics and does not require route evidence.
+        return assembleCandidates(candidates, minutesAhead, requiredBikeCount, null, false);
     }
 
     private List<PredictionApiDtos.CandidatePredictionResponseDto> assembleCandidates(
         List<RouteCandidateService.StationDistance> candidates,
         Integer minutesAheadOverride,
         Integer requiredBikeCount,
-        OffsetDateTime journeyDepartureAt
+        OffsetDateTime journeyDepartureAt,
+        boolean routeEvidenceRequired
     ) {
-        int bikeCount = (requiredBikeCount != null && requiredBikeCount >= 1 && requiredBikeCount <= 5) ? requiredBikeCount : 1;
+        int bikeCount = (requiredBikeCount != null && requiredBikeCount >= 1 && requiredBikeCount <= 5)
+            ? requiredBikeCount
+            : 1;
         OffsetDateTime requestedAt = OffsetDateTime.now(clock);
+        OffsetDateTime featureAsOfApprox = requestedAt.truncatedTo(ChronoUnit.HOURS);
 
         List<PredictionApiDtos.CandidatePredictionResponseDto> resultList = new ArrayList<>();
 
         for (RouteCandidateService.StationDistance cand : candidates) {
             Station station = cand.station();
 
-            // 1. 후보별 실제 도착시각 계산: DIRECT 모드는 사용자 입력, ROUTE 모드는 실제 경로 소요시간
-            OffsetDateTime arrivalBase = journeyDepartureAt == null ? requestedAt : journeyDepartureAt;
-            OffsetDateTime arrivalAt = (minutesAheadOverride != null && minutesAheadOverride > 0)
-                ? requestedAt.plusMinutes(minutesAheadOverride)
-                : arrivalBase.plusSeconds(cand.durationSeconds());
+            PredictionApiDtos.RouteStatus routeStatus = null;
+            MapApiDtos.RouteResultDto routeDetail = null;
+            boolean routeAvailable = true;
 
-            // 저장된 배치의 featureAsOf는 정시 단위이므로, 현재 정시로 내림한 값을 근사값으로 사용해야
-            // horizonMinutes가 60/120/180/240 중 하나로 맞아떨어진다. requestedAt을 그대로 쓰면
-            // 분 단위 오차 때문에 거의 항상 UNAVAILABLE로 오판정된다.
-            OffsetDateTime featureAsOfApprox = requestedAt.truncatedTo(ChronoUnit.HOURS);
-            PredictionTimeResult timeResult = predictionTimeCalculator.calculate(requestedAt, arrivalAt, featureAsOfApprox);
-            OffsetDateTime predictionTargetAt = timeResult.predictionTargetAt();
+            if (routeEvidenceRequired) {
+                if (cand.routeStatus() == PredictionApiDtos.RouteStatus.NORMAL && cand.routeDetail() != null) {
+                    routeStatus = PredictionApiDtos.RouteStatus.NORMAL;
+                    routeDetail = cand.routeDetail();
+                } else {
+                    routeStatus = PredictionApiDtos.RouteStatus.UNAVAILABLE;
+                    routeAvailable = false;
+                }
+            }
+
+            // 1. Calculate arrival only when the required route evidence is available.
+            OffsetDateTime arrivalAt = null;
+            PredictionTimeResult timeResult = null;
+            if (routeAvailable) {
+                OffsetDateTime arrivalBase = journeyDepartureAt == null ? requestedAt : journeyDepartureAt;
+                if (minutesAheadOverride != null && minutesAheadOverride > 0) {
+                    arrivalAt = requestedAt.plusMinutes(minutesAheadOverride);
+                } else {
+                    Integer durationSeconds = routeEvidenceRequired
+                        ? routeDetail.durationSeconds()
+                        : cand.durationSeconds();
+                    if (durationSeconds != null) {
+                        arrivalAt = arrivalBase.plusSeconds(durationSeconds);
+                    }
+                }
+                if (arrivalAt != null) {
+                    timeResult = predictionTimeCalculator.calculate(requestedAt, arrivalAt, featureAsOfApprox);
+                }
+            }
+
+            OffsetDateTime predictionTargetAt = timeResult != null ? timeResult.predictionTargetAt() : null;
 
             Integer bikeAvailable = null;
             InventoryStatus invStatus = InventoryStatus.MISSING;
@@ -148,7 +173,7 @@ public class MapPredictionService {
             OffsetDateTime featureAsOf = null;
             OffsetDateTime expiresAt = null;
 
-            // 2. Candidate isolated inventory lookup
+            // 2. Candidate-isolated inventory lookup remains factual even when route evidence is unavailable.
             try {
                 Optional<StationInventoryCurrent> invOpt = inventoryRepository.findById(station.getStationId());
                 bikeAvailable = invOpt.map(StationInventoryCurrent::getAvailableBikeCount).orElse(null);
@@ -159,15 +184,17 @@ public class MapPredictionService {
                 invStatus = InventoryStatus.UNAVAILABLE;
             }
 
-            if (timeResult.status() == PredictionTimeStatus.TOO_SOON) {
-                // TOO_SOON이면 예측 조회를 건너뛰고 정상 확률 응답을 만들지 않는다.
+            if (!routeAvailable || timeResult == null) {
+                // No actual route duration -> no future arrival horizon -> no inference.
+                predictionStatus = PredictionApiDtos.PredictionStatus.UNAVAILABLE;
+            } else if (timeResult.status() == PredictionTimeStatus.TOO_SOON) {
                 predictionStatus = PredictionApiDtos.PredictionStatus.TOO_SOON;
             } else if (timeResult.status() == PredictionTimeStatus.UNAVAILABLE) {
                 predictionStatus = PredictionApiDtos.PredictionStatus.UNAVAILABLE;
             } else if (invStatus != InventoryStatus.NORMAL || bikeAvailable == null) {
                 predictionStatus = PredictionApiDtos.PredictionStatus.MISSING;
             } else {
-                // 3. Candidate isolated on-demand model inference
+                // 3. Candidate-isolated on-demand model inference.
                 predictionStatus = PredictionApiDtos.PredictionStatus.UNAVAILABLE;
                 try {
                     InferenceDtos.PredictResponse response = inferenceClient.predict(List.of(
@@ -208,8 +235,10 @@ public class MapPredictionService {
                             .filter(row -> row.requiredBikeCount() == bikeCount)
                             .sorted(Comparator.comparingInt(InferenceDtos.ProbabilityRow::horizonMinutes))
                             .map(row -> new PredictionApiDtos.HorizonOutlook(
-                                row.horizonMinutes(), featureAsOfApprox.plusMinutes(row.horizonMinutes()),
-                                row.probability(), toAvailabilityLevel(row.probability()),
+                                row.horizonMinutes(),
+                                featureAsOfApprox.plusMinutes(row.horizonMinutes()),
+                                row.probability(),
+                                toAvailabilityLevel(row.probability()),
                                 row.horizonMinutes() == timeResult.horizonMinutes()
                             ))
                             .toList();
@@ -217,19 +246,36 @@ public class MapPredictionService {
                     }
                 } catch (Exception e) {
                     probability = null;
+                    probabilities = null;
+                    horizonOutlook = null;
+                    availabilityLevel = null;
+                    modelVersion = null;
+                    generatedAt = null;
+                    featureAsOf = null;
                     predictionStatus = PredictionApiDtos.PredictionStatus.UNAVAILABLE;
                 }
             }
 
-            int distMeters = (int) Math.round(cand.distanceMeters());
-            int durationSeconds = cand.durationSeconds();
+            Integer distanceMeters;
+            Integer durationSeconds;
+            if (routeEvidenceRequired) {
+                // Legacy flat fields, when present, are derived from the same provider evidence only.
+                distanceMeters = routeDetail != null ? routeDetail.distanceMeters() : null;
+                durationSeconds = routeDetail != null ? routeDetail.durationSeconds() : null;
+            } else {
+                distanceMeters = cand.distanceMeters();
+                durationSeconds = cand.durationSeconds();
+            }
+
+            long targetOffsetMinutes = timeResult != null ? timeResult.targetOffsetMinutes() : 0L;
+            long horizonMinutes = timeResult != null ? timeResult.horizonMinutes() : 0L;
 
             resultList.add(new PredictionApiDtos.CandidatePredictionResponseDto(
                 station.getStationId(),
                 station.getName(),
                 station.getLatitude(),
                 station.getLongitude(),
-                distMeters,
+                distanceMeters,
                 durationSeconds,
                 bikeAvailable,
                 invStatus,
@@ -239,15 +285,17 @@ public class MapPredictionService {
                 bikeCount,
                 arrivalAt,
                 predictionTargetAt,
-                timeResult.targetOffsetMinutes(),
-                timeResult.horizonMinutes(),
+                targetOffsetMinutes,
+                horizonMinutes,
                 featureAsOf,
                 expiresAt,
                 availabilityLevel,
                 predictionStatus,
                 modelVersion,
                 generatedAt,
-                horizonOutlook
+                horizonOutlook,
+                routeStatus,
+                routeDetail
             ));
         }
 
