@@ -19,6 +19,13 @@ function station(riskBand, dataState = 'NORMAL') {
   return { station: { stationNumber: '1001', name: '테스트', coordinates: { latitude: 37.5, longitude: 127 } }, dataState, riskBand };
 }
 
+test('reports the initial viewport after registering the idle listener', () => {
+  const { maps, viewport } = setup();
+  expect(maps.event.addListener).toHaveBeenCalledWith(expect.anything(), 'idle', expect.any(Function));
+  expect(viewport).toHaveBeenCalledTimes(1);
+  expect(viewport).toHaveBeenCalledWith('126,37,127,38');
+});
+
 test.each([
   ['CRITICAL', 'riskband-marker--critical', 'C'],
   ['HIGH', 'riskband-marker--high', 'H'],

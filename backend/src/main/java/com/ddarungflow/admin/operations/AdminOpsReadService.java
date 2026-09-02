@@ -67,11 +67,11 @@ public class AdminOpsReadService {
                     ? pageSnapshot(snapshot, horizon, required, minLng, minLat, maxLng, maxLat, dataState, limit)
                     : pageSnapshot(snapshot, horizon, required, limit);
         }
+        List<RowState> scoped = repository.findRows(minLng, minLat, maxLng, maxLat).stream().map(row -> state(row, referenceTime, horizon, required)).toList();
+        List<RowState> filtered = dataState == null ? scoped : scoped.stream().filter(row -> dataState.equals(row.dataState())).toList();
+        if (filtered.size() > SCOPE_CAP) throw new ScopeTooLargeException();
         if (!evaluating.compareAndSet(false, true)) throw new InferenceOverloadedException();
         try {
-            List<RowState> scoped = repository.findRows(minLng, minLat, maxLng, maxLat).stream().map(row -> state(row, referenceTime, horizon, required)).toList();
-            List<RowState> filtered = dataState == null ? scoped : scoped.stream().filter(row -> dataState.equals(row.dataState())).toList();
-            if (filtered.size() > SCOPE_CAP) throw new ScopeTooLargeException();
             List<RowState> evaluated = infer(filtered, referenceTime, horizon, required);
             evaluated = evaluated.stream().sorted(order()).toList();
             String modelVersion = evaluated.stream().map(RowState::modelVersion).filter(java.util.Objects::nonNull).findFirst().orElse("no_runtime_inference");

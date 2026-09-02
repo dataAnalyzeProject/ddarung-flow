@@ -109,6 +109,22 @@ test('calls loadList only after bbox is available and uses the provided bbox', a
   expect(loadList).toHaveBeenCalledWith(expect.objectContaining({ bbox: '126,37,127,38', cursor: null }));
 });
 
+test('deduplicates the initial bounds report when Kakao later emits the same idle bounds', async () => {
+  const loadList = jest.fn().mockResolvedValue(riskMapFixture());
+  render(<RiskMapPage
+    createDataAdapter={() => ({ loadList, loadDetail: (number) => Promise.resolve(detailFixture(number)) })}
+    loadMapSdk={() => Promise.resolve({})}
+    createMapAdapter={(node, maps, callbacks) => {
+      callbacks.onViewportChange('126,37,127,38');
+      callbacks.onViewportChange('126,37,127,38');
+      return { setStations: jest.fn(), focusStation: jest.fn(), destroy: jest.fn() };
+    }}
+  />);
+
+  await waitFor(() => expect(loadList).toHaveBeenCalledTimes(1));
+  expect(loadList).toHaveBeenCalledWith(expect.objectContaining({ bbox: '126,37,127,38' }));
+});
+
 test('keeps first-page data and retry cursor when load-more fails', async () => {
   const loadList = jest.fn(({ cursor }) => cursor ? Promise.reject(Object.assign(new Error('failed'), { code: 'LOAD_MORE_FAILED' })) : Promise.resolve(riskMapFixture('PAGINATED')));
   render(<RiskMapPage createDataAdapter={() => ({ loadList, loadDetail: (number) => Promise.resolve(detailFixture(number)) })} loadMapSdk={() => Promise.resolve({})} createMapAdapter={readyMap} />);
