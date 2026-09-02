@@ -2,6 +2,7 @@ package com.ddarungflow.journey.ai;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -41,7 +42,7 @@ public record ConsumerAiEvidenceBundle(
             }
             copy.put(id, value);
         });
-        return Map.copyOf(copy);
+        return Collections.unmodifiableMap(copy);
     }
 
     public enum EvidenceType {

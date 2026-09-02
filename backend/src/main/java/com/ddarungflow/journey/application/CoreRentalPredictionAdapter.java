@@ -34,7 +34,17 @@ public class CoreRentalPredictionAdapter implements JourneyRentalPredictionPort 
                 candidate.predictionProbability(), candidate.requiredBikeCount(), name(candidate.availabilityLevel()), candidate.distanceMeters(),
                 candidate.durationSeconds(), candidate.arrivalAt(), candidate.predictionTargetAt(),
                 candidate.horizonMinutes(), candidate.featureAsOf(), candidate.modelVersion(), candidate.generatedAt(),
-                name(candidate.predictionStatus()));
+                name(candidate.predictionStatus()), name(candidate.routeStatus()), route(candidate.routeDetail()));
+    }
+
+    private JourneyRentalPredictionPort.RouteEvidence route(com.ddarungflow.map.MapApiDtos.RouteResultDto route) {
+        if (route == null) return null;
+        return new JourneyRentalPredictionPort.RouteEvidence(
+                route.distanceMeters(), route.durationSeconds(), route.travelMode(),
+                (route.pathPoints() == null ? java.util.List.<com.ddarungflow.map.MapApiDtos.RoutePointDto>of()
+                        : route.pathPoints()).stream()
+                        .map(point -> new JourneyRentalPredictionPort.RoutePoint(point.latitude(), point.longitude()))
+                        .toList());
     }
 
     private String name(Enum<?> value) {

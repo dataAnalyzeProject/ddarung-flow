@@ -2,6 +2,7 @@ package com.ddarungflow.journey.application;
 
 import com.ddarungflow.inventory.InventoryStatus;
 import com.ddarungflow.map.MapPredictionService;
+import com.ddarungflow.map.MapApiDtos;
 import com.ddarungflow.map.PredictionApiDtos;
 import org.junit.jupiter.api.Test;
 
@@ -27,7 +28,11 @@ class CoreRentalPredictionAdapterTest {
                         new BigDecimal("127.05"), 840, 420, 9, InventoryStatus.NORMAL, coreNow.minusMinutes(1),
                         new BigDecimal("0.82"), null, 4, journeyArrivalAt, coreNow.plusHours(1), 60, 60,
                         coreNow, null, PredictionApiDtos.AvailabilityLevel.HIGH, PredictionApiDtos.PredictionStatus.NORMAL,
-                        "model@1", coreNow, null)));
+                        "model@1", coreNow, null, PredictionApiDtos.RouteStatus.NORMAL,
+                        new MapApiDtos.RouteResultDto(840, 420, "WALK", List.of(
+                                new MapApiDtos.RoutePointDto(new BigDecimal("37.54"), new BigDecimal("127.04")),
+                                new MapApiDtos.RoutePointDto(new BigDecimal("37.55"), new BigDecimal("127.05"))),
+                                null, null, List.of()))));
         CoreRentalPredictionAdapter adapter = new CoreRentalPredictionAdapter(core);
         java.time.OffsetDateTime departureAt = java.time.OffsetDateTime.parse("2026-08-30T10:23:00+09:00");
 
@@ -42,6 +47,9 @@ class CoreRentalPredictionAdapterTest {
             assertThat(candidate.featureAsOf()).isEqualTo(coreNow);
             assertThat(candidate.durationSeconds()).isEqualTo(420);
             assertThat(candidate.predictionStatus()).isEqualTo("NORMAL");
+            assertThat(candidate.routeStatus()).isEqualTo("NORMAL");
+            assertThat(candidate.accessRoute().travelMode()).isEqualTo("WALK");
+            assertThat(candidate.accessRoute().pathPoints()).hasSize(2);
         });
         verify(core).buildJourneyRouteCandidates(new BigDecimal("37.54"), new BigDecimal("127.04"),
                 new BigDecimal("37.55"), new BigDecimal("127.05"), departureAt, 4);

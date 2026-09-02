@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -49,6 +50,26 @@ class DefaultJourneyAiGatewayTest {
                 .isEqualTo(JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID);
     }
 
+    @Test
+    void parsesOnlyTheStrictScheduleSelectionShape() throws Exception {
+        JourneyAiProperties properties = new JourneyAiProperties(true, null, "test-key", "test-model", Duration.ofSeconds(1));
+        ResponsesApiClient client = new ResponsesApiClient(properties, mapper,
+                request -> new ResponsesApiClient.TransportResponse(200, completedResponse("""
+                        {"rentalCandidateId":"rental:station-1","stops":[],"routeEvidenceIds":[],
+                         "weatherEvidenceIds":[],"airQualityEvidenceIds":[],"factRefs":[],"factValues":[],
+                         "rationale":"근거 ID 선택","rationaleTags":["EVIDENCE_ONLY"]}
+                        """)));
+        DefaultJourneyAiGateway gateway = new DefaultJourneyAiGateway(
+                properties, mapper, JourneyAiSchemas.intent(mapper), client);
+
+        JourneyAiGateway.ScheduleResult result = gateway.selectSchedule(
+                new ConsumerAiEvidenceBundle(Map.of(), Map.of(), Map.of(), Map.of(), Map.of()),
+                new JourneyAiGateway.ScheduleConstraints(1, 10, 120, 60));
+
+        assertThat(result.selection().rentalCandidateId()).isEqualTo("rental:station-1");
+        assertThat(result.selection().rationaleTags()).containsExactly("EVIDENCE_ONLY");
+    }
+
     private String completedResponseWithoutProviderMarker() throws Exception {
         String intent = """
                 {"origin":{"displayName":"성수역","placeId":"ORIGIN_A"},"destination":null,"startAt":"2026-08-28T18:30:00+09:00","totalMinutes":60,"requiredBikeCount":2,"preferences":{"stability":3,"lowSlope":3,"bikeLane":3,"scenery":3,"culture":3,"cafe":3,"avoidCrowds":3},"hardConstraints":{"maxWalkMinutes":null,"avoidRain":null,"returnBy":null},"missingFields":[],"needsClarification":false}
@@ -56,5 +77,11 @@ class DefaultJourneyAiGatewayTest {
         return """
                 {"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":%s}]}]}
                 """.formatted(mapper.writeValueAsString(intent));
+    }
+
+    private String completedResponse(String output) throws Exception {
+        return """
+                {"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":%s}]}]}
+                """.formatted(mapper.writeValueAsString(output));
     }
 }

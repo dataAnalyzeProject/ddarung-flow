@@ -1,11 +1,15 @@
 package com.ddarungflow.journey.application;
 
+import com.ddarungflow.journey.ai.ConsumerAiEvidenceBundle;
+import com.ddarungflow.journey.ai.EvidenceSelectionValidator;
 import com.ddarungflow.journey.ai.JourneyAiErrorCode;
 import com.ddarungflow.journey.ai.JourneyAiException;
 import com.ddarungflow.journey.ai.JourneyAiFailureStage;
 import com.ddarungflow.journey.ai.JourneyAiGateway;
 import com.ddarungflow.journey.ai.JourneyIntent;
 import com.ddarungflow.journey.ai.PlaceReference;
+import com.ddarungflow.journey.domain.JourneyStatus;
+import com.ddarungflow.journey.domain.UnifiedJourneyPlan;
 import com.ddarungflow.journey.persistence.JourneyDecisionPersistencePort;
 import com.ddarungflow.journey.returnprediction.HealthRequest;
 import com.ddarungflow.journey.returnprediction.HealthResponse;
@@ -15,11 +19,14 @@ import com.ddarungflow.journey.returnprediction.ReturnPredictionResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -107,9 +114,11 @@ class JourneyPlanServiceTest {
     @Test
     void mockAiClarificationIsPersistedWithoutProviderOutputLeakage() {
         JourneyAiGateway clarificationAi = new JourneyAiGateway() {
-            @Override public IntentResult compileIntent(String input) {
-                return new IntentResult(new JourneyIntent(new PlaceReference("ORIGIN_A", ""), null, OffsetDateTime.now(), 60, 1,
-                        java.util.Map.of(), java.util.Map.of(), List.of("destination"), true), null);
+            @Override public IntentResult compileIntent(String input) { throw new AssertionError("context compile required"); }
+            @Override public IntentResult compileIntent(com.ddarungflow.journey.ai.JourneyCompileRequest request) {
+                return new IntentResult(new JourneyIntent(new PlaceReference("성수역", "place-origin"),
+                        new PlaceReference("서울숲", "place-destination"), request.departureAt(), 60, 2,
+                        java.util.Map.of(), java.util.Map.of(), List.of("theme"), true), null);
             }
             @Override public List<com.ddarungflow.journey.ai.ToolCallRequest> validateToolPlan(List<com.ddarungflow.journey.ai.ToolCallRequest> requests) { return requests; }
         };
@@ -120,8 +129,8 @@ class JourneyPlanServiceTest {
         assertThat(decision.status()).isEqualTo(com.ddarungflow.journey.domain.JourneyStatus.CLARIFICATION_REQUIRED);
         assertThat(decision.warnings()).containsExactly("CLARIFICATION_REQUIRED");
         assertThat(decision.clarification().question()).isEqualTo("추가 여정 조건을 확인해 주세요.");
-        assertThat(decision.clarification().missingFields()).containsExactly("destination");
-        assertThat(service.find(10L, decision.decisionId()).clarification().missingFields()).containsExactly("destination");
+        assertThat(decision.clarification().missingFields()).containsExactly("theme");
+        assertThat(service.find(10L, decision.decisionId()).clarification().missingFields()).containsExactly("theme");
         assertThat(decision.normalizedIntent().toString()).doesNotContain("성수에서 카페 포함");
     }
 
@@ -259,6 +268,21 @@ class JourneyPlanServiceTest {
     }
 
     @Test
+    void distinguishesRentalProviderEmptyErrorAndUnavailableEvidence() {
+        JourneyPlanService empty = service(new InMemoryPersistence(), disabledAi(), new CountingReturnPort(), request -> List.of());
+        JourneyPlanService error = service(new InMemoryPersistence(), disabledAi(), new CountingReturnPort(), request -> {
+            throw new IllegalStateException("provider down");
+        });
+        JourneyPlanService unavailable = service(new InMemoryPersistence(), disabledAi(), new CountingReturnPort(),
+                request -> List.of(rental("missing", "M", null, 0, 0, "MISSING")));
+
+        assertThat(empty.plan(10L, formInputWithDestination(1)).warnings()).containsExactly("JOURNEY_RENTAL_EMPTY");
+        assertThat(error.plan(10L, formInputWithDestination(1)).warnings()).containsExactly("JOURNEY_RENTAL_PROVIDER_ERROR");
+        assertThat(unavailable.plan(10L, formInputWithDestination(1)).warnings())
+                .containsExactly("JOURNEY_RENTAL_UNAVAILABLE");
+    }
+
+    @Test
     void forwardsEverySupportedRequiredBikeCountToCoreWithoutCoercion() {
         List<Integer> receivedCounts = new ArrayList<>();
         JourneyRentalPredictionPort rentalPort = request -> {
@@ -324,6 +348,267 @@ class JourneyPlanServiceTest {
         });
     }
 
+    @Test
+    void buildsAndPersistsTheUnifiedTimelineOnlyFromAuthoritativeEvidence() {
+        InMemoryPersistence persistence = new InMemoryPersistence();
+        CountingReturnPort returnPort = new CountingReturnPort();
+        JourneyPlanService service = unifiedService(persistence, disabledAi(), returnPort, completeEvidence());
+
+        JourneyPlanService.Decision decision = service.plan(10L, unifiedInput(JourneyPlanService.RequestMode.FORM, null));
+
+        assertThat(decision.status()).isEqualTo(JourneyStatus.READY);
+        assertThat(decision.unifiedPlan().status()).isEqualTo(UnifiedJourneyPlan.Status.READY);
+        assertThat(decision.unifiedPlan().segments()).extracting(UnifiedJourneyPlan.Segment::type)
+                .containsExactly(UnifiedJourneyPlan.SegmentType.ACCESS, UnifiedJourneyPlan.SegmentType.RENT,
+                        UnifiedJourneyPlan.SegmentType.RIDE, UnifiedJourneyPlan.SegmentType.VISIT);
+        assertThat(decision.unifiedPlan().segments().get(0)).satisfies(segment -> {
+            assertThat(segment.durationSeconds()).isEqualTo(300);
+            assertThat(segment.distanceMeters()).isEqualTo(500);
+            assertThat(segment.pathPoints()).hasSize(2);
+        });
+        assertThat(decision.unifiedPlan().segments().get(1).rentalFacts()).satisfies(facts -> {
+            assertThat(facts.stationId()).isEqualTo("station-1");
+            assertThat(facts.rentalProbability()).isEqualByComparingTo("0.81");
+            assertThat(facts.availableBikeCount()).isEqualTo(8);
+        });
+        assertThat(decision.unifiedPlan().segments().get(2)).satisfies(segment -> {
+            assertThat(segment.durationSeconds()).isEqualTo(300);
+            assertThat(segment.distanceMeters()).isEqualTo(900);
+            assertThat(segment.travelMode()).isEqualTo("BICYCLE");
+        });
+        assertThat(decision.unifiedPlan().segments().get(3).stayMinutes()).isEqualTo(30);
+        assertThat(decision.unifiedPlan().evidence().rentalCandidates().get("rental:station-1")
+                .numericFacts().get("rentalProbability")).isEqualByComparingTo("0.81");
+        assertThat(service.find(10L, decision.decisionId()).unifiedPlan()).isEqualTo(decision.unifiedPlan());
+        assertThat(returnPort.predictCalls).isZero();
+    }
+
+    @Test
+    void failsClosedWhenTheAiSelectsAnUnknownEvidenceId() {
+        JourneyAiGateway ai = new JourneyAiGateway() {
+            @Override public IntentResult compileIntent(String input) { return new IntentResult(validIntent(), null); }
+            @Override public List<com.ddarungflow.journey.ai.ToolCallRequest> validateToolPlan(
+                    List<com.ddarungflow.journey.ai.ToolCallRequest> requests) { return requests; }
+            @Override public ScheduleResult selectSchedule(ConsumerAiEvidenceBundle evidence, ScheduleConstraints constraints) {
+                return new ScheduleResult(new EvidenceSelectionValidator.Selection(
+                        "rental:unknown", List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
+                        "근거 ID 선택", List.of("EVIDENCE_ONLY")), null);
+            }
+        };
+
+        assertThatThrownBy(() -> unifiedService(new InMemoryPersistence(), ai, new CountingReturnPort(), completeEvidence())
+                .plan(10L, unifiedInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE, "서울숲 카페 여정")))
+                .isInstanceOf(JourneyPlanService.AiToolValueMismatch.class);
+    }
+
+    @Test
+    void failsClosedWhenCompiledIntentChangesAnAuthoritativePlaceId() {
+        JourneyAiGateway ai = new JourneyAiGateway() {
+            @Override public IntentResult compileIntent(String input) {
+                JourneyIntent intent = validIntent();
+                return new IntentResult(new JourneyIntent(intent.origin(), new PlaceReference("서울숲", "unknown-place"),
+                        intent.startAt(), intent.totalMinutes(), intent.requiredBikeCount(), intent.preferences(),
+                        intent.hardConstraints(), intent.missingFields(), false), null);
+            }
+            @Override public List<com.ddarungflow.journey.ai.ToolCallRequest> validateToolPlan(
+                    List<com.ddarungflow.journey.ai.ToolCallRequest> requests) { return requests; }
+        };
+
+        assertThatThrownBy(() -> unifiedService(new InMemoryPersistence(), ai, new CountingReturnPort(), completeEvidence())
+                .plan(10L, unifiedInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE, "서울숲 카페 여정")))
+                .isInstanceOf(JourneyPlanService.AiToolValueMismatch.class);
+    }
+
+    @Test
+    void failsClosedWhenCompiledIntentContainsAnUnsupportedRouteMode() {
+        JourneyAiGateway ai = new JourneyAiGateway() {
+            @Override public IntentResult compileIntent(String input) {
+                JourneyIntent intent = validIntent();
+                return new IntentResult(new JourneyIntent(intent.origin(), intent.destination(), intent.startAt(),
+                        intent.totalMinutes(), intent.requiredBikeCount(), intent.preferences(),
+                        Map.of("theme", "CAFE", "stopCount", 1, "routeMode", "FLYING"), List.of(), false), null);
+            }
+            @Override public List<com.ddarungflow.journey.ai.ToolCallRequest> validateToolPlan(
+                    List<com.ddarungflow.journey.ai.ToolCallRequest> requests) { return requests; }
+        };
+
+        JourneyPlanService.PlanInput input = unifiedInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE, "서울숲 카페 여정");
+        input = new JourneyPlanService.PlanInput(input.requestMode(), input.naturalLanguageText(), input.origin(), input.destination(),
+                input.departureAt(), input.maxJourneyMinutes(), input.requiredBikeCount(), input.preferences(), input.avoid(), null,
+                new JourneyPlanService.PlanConstraints(120, List.of("CAFE"), 1, null));
+        JourneyPlanService.PlanInput invalidRouteInput = input;
+
+        assertThatThrownBy(() -> unifiedService(new InMemoryPersistence(), ai, new CountingReturnPort(), completeEvidence())
+                .plan(10L, invalidRouteInput))
+                .isInstanceOf(JourneyPlanService.AiToolValueMismatch.class);
+    }
+
+    @Test
+    void retainsFactualAccessAndRentSegmentsWhenTheAiProviderIsUnavailable() {
+        JourneyPlanService.Decision decision = unifiedService(new InMemoryPersistence(), disabledAi(),
+                new CountingReturnPort(), completeEvidence()).plan(10L,
+                unifiedInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE, "서울숲 카페 여정"));
+
+        assertThat(decision.status()).isEqualTo(JourneyStatus.UNAVAILABLE);
+        assertThat(decision.warnings()).contains("AI_PROVIDER_UNAVAILABLE", "AI_SCHEDULE_UNAVAILABLE");
+        assertThat(decision.unifiedPlan().segments()).extracting(UnifiedJourneyPlan.Segment::type)
+                .containsExactly(UnifiedJourneyPlan.SegmentType.ACCESS, UnifiedJourneyPlan.SegmentType.RENT);
+    }
+
+    @Test
+    void deterministicScheduleUsesTheAvailableWindowInsteadOfExceedingIt() {
+        JourneyPlanService.PlanInput input = unifiedInput(JourneyPlanService.RequestMode.FORM, null);
+        input = new JourneyPlanService.PlanInput(input.requestMode(), null, input.origin(), input.destination(),
+                input.departureAt(), input.maxJourneyMinutes(), input.requiredBikeCount(), input.preferences(), input.avoid(),
+                null, new JourneyPlanService.PlanConstraints(20, List.of("CAFE"), 1, "BIKE_ONLY"));
+
+        JourneyPlanService.Decision decision = unifiedService(new InMemoryPersistence(), disabledAi(),
+                new CountingReturnPort(), completeEvidence()).plan(10L, input);
+
+        assertThat(decision.status()).isEqualTo(JourneyStatus.READY);
+        assertThat(decision.unifiedPlan().segments().getLast().stayMinutes()).isEqualTo(10);
+        assertThat(decision.unifiedPlan().segments().getLast().endAt()).isEqualTo(input.departureAt().plusMinutes(20));
+    }
+
+    @Test
+    void structuredReplanReusesIntentWithoutASecondNaturalLanguageCompile() {
+        AtomicInteger compileCalls = new AtomicInteger();
+        AtomicInteger scheduleCalls = new AtomicInteger();
+        JourneyAiGateway ai = new JourneyAiGateway() {
+            @Override public IntentResult compileIntent(String input) {
+                compileCalls.incrementAndGet();
+                return new IntentResult(validIntent(), null);
+            }
+            @Override public List<com.ddarungflow.journey.ai.ToolCallRequest> validateToolPlan(
+                    List<com.ddarungflow.journey.ai.ToolCallRequest> requests) { return requests; }
+            @Override public ScheduleResult selectSchedule(ConsumerAiEvidenceBundle evidence, ScheduleConstraints constraints) {
+                scheduleCalls.incrementAndGet();
+                return new ScheduleResult(validSelection(), null);
+            }
+        };
+        JourneyPlanService service = unifiedService(new InMemoryPersistence(), ai, new CountingReturnPort(), completeEvidence());
+        JourneyPlanService.Decision first = service.plan(10L,
+                unifiedInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE, "서울숲 카페 여정"));
+        JourneyPlanService.PlanInput structured = unifiedInput(JourneyPlanService.RequestMode.FORM, null);
+        structured = new JourneyPlanService.PlanInput(structured.requestMode(), null, structured.origin(), structured.destination(),
+                structured.departureAt(), structured.maxJourneyMinutes(), structured.requiredBikeCount(),
+                structured.preferences(), structured.avoid(), first.revision(), structured.constraints());
+
+        JourneyPlanService.Decision second = service.replan(10L, first.decisionId(), structured);
+
+        assertThat(second.revision()).isEqualTo(2);
+        assertThat(second.unifiedPlan().segments()).extracting(UnifiedJourneyPlan.Segment::type)
+                .containsExactly(UnifiedJourneyPlan.SegmentType.ACCESS, UnifiedJourneyPlan.SegmentType.RENT,
+                        UnifiedJourneyPlan.SegmentType.RIDE, UnifiedJourneyPlan.SegmentType.VISIT);
+        assertThat(compileCalls).hasValue(1);
+        assertThat(scheduleCalls).hasValue(2);
+    }
+
+    @Test
+    void structuredClarificationAnswerCanContinueWithoutAnotherFreeTextTurn() {
+        JourneyPlanService service = unifiedService(new InMemoryPersistence(), disabledAi(),
+                new CountingReturnPort(), completeEvidence());
+        JourneyPlanService.PlanInput initial = unifiedInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE,
+                "서울숲 주변 카페 여정");
+        initial = new JourneyPlanService.PlanInput(initial.requestMode(), initial.naturalLanguageText(), initial.origin(), null,
+                initial.departureAt(), initial.maxJourneyMinutes(), initial.requiredBikeCount(), initial.preferences(),
+                initial.avoid(), null, initial.constraints());
+        JourneyPlanService.Decision clarification = service.plan(10L, initial);
+        JourneyPlanService.PlanInput answer = unifiedInput(JourneyPlanService.RequestMode.FORM, null);
+        answer = new JourneyPlanService.PlanInput(answer.requestMode(), null, answer.origin(), answer.destination(),
+                answer.departureAt(), answer.maxJourneyMinutes(), answer.requiredBikeCount(), answer.preferences(), answer.avoid(),
+                clarification.revision(), answer.constraints());
+
+        JourneyPlanService.Decision decision = service.replan(10L, clarification.decisionId(), answer);
+
+        assertThat(clarification.status()).isEqualTo(JourneyStatus.CLARIFICATION_REQUIRED);
+        assertThat(decision.status()).isEqualTo(JourneyStatus.READY);
+        assertThat(decision.revision()).isEqualTo(2);
+    }
+
+    @Test
+    void aiCanSelectAnyExistingRentalCandidateInTheTrustedBundle() {
+        JourneyAiGateway ai = new JourneyAiGateway() {
+            @Override public IntentResult compileIntent(String input) { return new IntentResult(validIntent(), null); }
+            @Override public List<com.ddarungflow.journey.ai.ToolCallRequest> validateToolPlan(
+                    List<com.ddarungflow.journey.ai.ToolCallRequest> requests) { return requests; }
+            @Override public ScheduleResult selectSchedule(ConsumerAiEvidenceBundle evidence, ScheduleConstraints constraints) {
+                return new ScheduleResult(new EvidenceSelectionValidator.Selection(
+                        "rental:station-2", List.of(new EvidenceSelectionValidator.StopSelection("poi:station-2:poi-1", 20)),
+                        List.of("route:rental:station-2->poi:station-2:poi-1"), List.of("weather:station-2"),
+                        List.of("air-quality:station-2"), List.of(), List.of(), "두 번째 대여 후보 선택",
+                        List.of("EVIDENCE_ONLY")), null);
+            }
+        };
+        JourneyRentalPredictionPort rentalPort = request -> List.of(
+                rentalWithAccess(request, "station-1", "37.550", "127.050", "0.90"),
+                rentalWithAccess(request, "station-2", "37.552", "127.052", "0.70"));
+        JourneyPlanService service = new JourneyPlanService(new InMemoryPersistence(), ai, new CountingReturnPort(),
+                rentalPort, completeEvidence(), new ObjectMapper().findAndRegisterModules());
+
+        JourneyPlanService.Decision decision = service.plan(10L,
+                unifiedInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE, "서울숲 카페 여정"));
+
+        assertThat(decision.unifiedPlan().selectedRentalCandidateId()).isEqualTo("rental:station-2");
+        assertThat(decision.unifiedPlan().evidence().rentalCandidates().keySet())
+                .containsExactly("rental:station-1", "rental:station-2");
+        assertThat(decision.unifiedPlan().segments().get(1).rentalFacts()).satisfies(facts -> {
+            assertThat(facts.stationId()).isEqualTo("station-2");
+            assertThat(facts.rentalProbability()).isEqualByComparingTo("0.70");
+        });
+    }
+
+    @Test
+    void failsClosedWhenAiMixesEnvironmentEvidenceFromAnotherRentalCandidate() {
+        JourneyAiGateway ai = new JourneyAiGateway() {
+            @Override public IntentResult compileIntent(String input) { return new IntentResult(validIntent(), null); }
+            @Override public List<com.ddarungflow.journey.ai.ToolCallRequest> validateToolPlan(
+                    List<com.ddarungflow.journey.ai.ToolCallRequest> requests) { return requests; }
+            @Override public ScheduleResult selectSchedule(ConsumerAiEvidenceBundle evidence, ScheduleConstraints constraints) {
+                return new ScheduleResult(new EvidenceSelectionValidator.Selection(
+                        "rental:station-2", List.of(), List.of(), List.of("weather:station-1"),
+                        List.of("air-quality:station-2"), List.of(), List.of(), "대여 후보 근거 선택",
+                        List.of("EVIDENCE_ONLY")), null);
+            }
+        };
+        JourneyRentalPredictionPort rentalPort = request -> List.of(
+                rentalWithAccess(request, "station-1", "37.550", "127.050", "0.90"),
+                rentalWithAccess(request, "station-2", "37.552", "127.052", "0.70"));
+        JourneyPlanService service = new JourneyPlanService(new InMemoryPersistence(), ai, new CountingReturnPort(),
+                rentalPort, completeEvidence(), new ObjectMapper().findAndRegisterModules());
+
+        assertThatThrownBy(() -> service.plan(10L,
+                unifiedInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE, "서울숲 카페 여정")))
+                .isInstanceOf(JourneyPlanService.AiToolValueMismatch.class);
+    }
+
+    @Test
+    void exposesProviderEmptyErrorAndRouteUnavailabilityWithoutSyntheticStops() {
+        JourneyPlanService.Decision empty = unifiedService(new InMemoryPersistence(), disabledAi(),
+                new CountingReturnPort(), evidence(false, true, true)).plan(10L,
+                unifiedInput(JourneyPlanService.RequestMode.FORM, null));
+        JourneyPlanService.Decision error = unifiedService(new InMemoryPersistence(), disabledAi(),
+                new CountingReturnPort(), evidence(true, true, true)).plan(10L,
+                unifiedInput(JourneyPlanService.RequestMode.FORM, null));
+        JourneyPlanService.Decision routeUnavailable = unifiedService(new InMemoryPersistence(), disabledAi(),
+                new CountingReturnPort(), evidence(false, false, false)).plan(10L,
+                unifiedInput(JourneyPlanService.RequestMode.FORM, null));
+        JourneyPlanService.Decision routeError = unifiedService(new InMemoryPersistence(), disabledAi(),
+                new CountingReturnPort(), evidence(false, false, false, true)).plan(10L,
+                unifiedInput(JourneyPlanService.RequestMode.FORM, null));
+
+        assertThat(empty.status()).isEqualTo(JourneyStatus.PARTIAL);
+        assertThat(empty.warnings()).contains("POI_EMPTY:CAFE", "VISIT_PARTIAL");
+        assertThat(error.status()).isEqualTo(JourneyStatus.PARTIAL);
+        assertThat(error.warnings()).contains("POI_PROVIDER_UNAVAILABLE:CAFE", "VISIT_PARTIAL");
+        assertThat(routeUnavailable.status()).isEqualTo(JourneyStatus.PARTIAL);
+        assertThat(routeUnavailable.warnings()).anyMatch(value -> value.startsWith("BICYCLE_ROUTE_UNAVAILABLE:"));
+        assertThat(routeUnavailable.warnings()).anyMatch(value -> value.startsWith("BICYCLE_ROUTE_EMPTY:"));
+        assertThat(routeError.warnings()).anyMatch(value -> value.startsWith("BICYCLE_ROUTE_PROVIDER_ERROR:"));
+        assertThat(routeUnavailable.unifiedPlan().segments()).extracting(UnifiedJourneyPlan.Segment::type)
+                .containsExactly(UnifiedJourneyPlan.SegmentType.ACCESS, UnifiedJourneyPlan.SegmentType.RENT);
+    }
+
     private JourneyAiGateway failingAi(JourneyAiErrorCode code, String message) {
         return failingAi(code, message, null);
     }
@@ -346,6 +631,97 @@ class JourneyPlanServiceTest {
     private JourneyPlanService service(InMemoryPersistence persistence, JourneyAiGateway ai, ReturnPredictionPort returnPort,
                                        JourneyRentalPredictionPort rentalPort) {
         return new JourneyPlanService(persistence, ai, returnPort, rentalPort, new ObjectMapper().findAndRegisterModules());
+    }
+
+    private JourneyPlanService unifiedService(InMemoryPersistence persistence, JourneyAiGateway ai,
+                                               ReturnPredictionPort returnPort, JourneyEvidencePort evidencePort) {
+        JourneyRentalPredictionPort rentalPort = request -> List.of(rentalWithAccess(request));
+        return new JourneyPlanService(persistence, ai, returnPort, rentalPort, evidencePort,
+                new ObjectMapper().findAndRegisterModules());
+    }
+
+    private JourneyPlanService.PlanInput unifiedInput(JourneyPlanService.RequestMode mode, String text) {
+        OffsetDateTime departureAt = OffsetDateTime.parse("2030-09-02T10:00:00+09:00");
+        return new JourneyPlanService.PlanInput(mode, text,
+                new JourneyPlanService.Place("origin-1", "성수역", 37.544, 127.056),
+                new JourneyPlanService.Place("destination-1", "서울숲", 37.545, 127.039),
+                departureAt, 120, 2, Map.of(), List.of(), null,
+                new JourneyPlanService.PlanConstraints(120, List.of("CAFE"), 1, "BIKE_ONLY"));
+    }
+
+    private JourneyRentalPredictionPort.RentalCandidate rentalWithAccess(
+            JourneyRentalPredictionPort.RentalPredictionRequest request) {
+        return rentalWithAccess(request, "station-1", "37.550", "127.050", "0.81");
+    }
+
+    private JourneyRentalPredictionPort.RentalCandidate rentalWithAccess(
+            JourneyRentalPredictionPort.RentalPredictionRequest request,
+            String stationId,
+            String latitude,
+            String longitude,
+            String probability
+    ) {
+        OffsetDateTime featureAsOf = request.departureAt().minusHours(1);
+        return new JourneyRentalPredictionPort.RentalCandidate(
+                stationId, "서울숲 대여소", new BigDecimal(latitude), new BigDecimal(longitude),
+                8, "NORMAL", featureAsOf, new BigDecimal(probability), request.requiredBikeCount(), "HIGH",
+                500, 300, request.departureAt().plusSeconds(300), request.departureAt().plusMinutes(30),
+                90L, featureAsOf, "model@1", featureAsOf.plusMinutes(5), "NORMAL", "NORMAL",
+                new JourneyRentalPredictionPort.RouteEvidence(500, 300, "WALK", List.of(
+                        new JourneyRentalPredictionPort.RoutePoint(request.originLatitude(), request.originLongitude()),
+                        new JourneyRentalPredictionPort.RoutePoint(new BigDecimal(latitude), new BigDecimal(longitude)))));
+    }
+
+    private JourneyEvidencePort completeEvidence() {
+        return evidence(false, true, false);
+    }
+
+    private JourneyEvidencePort evidence(boolean poiError, boolean routeAvailable, boolean poiEmpty) {
+        return evidence(poiError, routeAvailable, poiEmpty, false);
+    }
+
+    private JourneyEvidencePort evidence(boolean poiError, boolean routeAvailable, boolean poiEmpty, boolean routeError) {
+        return new JourneyEvidencePort() {
+            @Override public List<PoiEvidence> findNearby(String stationId, String theme, int limit) {
+                if (poiError) throw new IllegalStateException("provider down");
+                if (poiEmpty) return List.of();
+                return List.of(new PoiEvidence("poi-1", "서울숲 카페", "서울 성동구", "카페",
+                        new BigDecimal("37.551"), new BigDecimal("127.041"), 700));
+            }
+
+            @Override public Optional<RouteEvidence> bicycleRoute(BigDecimal originLatitude, BigDecimal originLongitude,
+                    BigDecimal destinationLatitude, BigDecimal destinationLongitude, String routeMode) {
+                if (routeError) throw new IllegalStateException("route provider down");
+                if (!routeAvailable) return Optional.empty();
+                return Optional.of(new RouteEvidence(900, 300, "BICYCLE", routeMode, List.of(
+                        new RoutePoint(originLatitude, originLongitude),
+                        new RoutePoint(destinationLatitude, destinationLongitude))));
+            }
+
+            @Override public EnvironmentEvidence weather(BigDecimal latitude, BigDecimal longitude, OffsetDateTime arrivalAt) {
+                return new EnvironmentEvidence("kma-short-forecast", "NORMAL", arrivalAt.minusMinutes(10),
+                        Map.of("condition", "CLEAR"), Map.of("temperatureCelsius", new BigDecimal("22.5")));
+            }
+
+            @Override public EnvironmentEvidence airQuality(String stationId) {
+                return new EnvironmentEvidence("air-korea", "NORMAL", OffsetDateTime.parse("2030-09-02T09:30:00+09:00"),
+                        Map.of("grade", "GOOD"), Map.of("pm10", new BigDecimal("18")));
+            }
+        };
+    }
+
+    private JourneyIntent validIntent() {
+        return new JourneyIntent(new PlaceReference("성수역", "origin-1"), new PlaceReference("서울숲", "destination-1"),
+                OffsetDateTime.parse("2030-09-02T10:00:00+09:00"), 120, 2,
+                Map.of("cafe", 3), Map.of("theme", "CAFE", "stopCount", 1), List.of(), false);
+    }
+
+    private EvidenceSelectionValidator.Selection validSelection() {
+        return new EvidenceSelectionValidator.Selection(
+                "rental:station-1", List.of(new EvidenceSelectionValidator.StopSelection("poi:station-1:poi-1", 20)),
+                List.of("route:rental:station-1->poi:station-1:poi-1"), List.of("weather:station-1"),
+                List.of("air-quality:station-1"), List.of(), List.of(), "근거 기반 카페 경유",
+                List.of("EVIDENCE_ONLY"));
     }
 
     private JourneyAiGateway disabledAi() {
