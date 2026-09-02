@@ -19,7 +19,9 @@ public class DefaultRidingGuideAiGateway implements RidingGuideAiGateway {
             The evidence bundle is authoritative. Never invent or change evidence IDs, POIs, probabilities,
             inventory, weather, air-quality, route values, sources, statuses, or timestamps.
             Select only supplied POI IDs. Keep the preview short and stayMinutes between 10 and 120.
-            Every numeric fact mentioned must be copied exactly into factRefs and factValues.
+            Free text may use only the exact serialized number copied into factRefs and factValues.
+            Do not convert probabilities such as 0.82 into percentages such as 82%.
+            A stop rationale may additionally use only that stop's own stayMinutes.
             guideSummary and rationales must be concise and must not add unsupported factual claims.
             """;
 
