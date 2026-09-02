@@ -49,6 +49,14 @@ public class ResponsesApiClient {
     }
 
     public JsonNode requestStructuredOutput(JourneyCompileRequest input, String schemaName, JsonNode schema) {
+        return requestStructuredOutput(() -> requestBody(input, schemaName, schema));
+    }
+
+    public JsonNode requestStructuredOutput(JsonNode input, String instructions, String schemaName, JsonNode schema) {
+        return requestStructuredOutput(() -> requestBody(input, instructions, schemaName, schema));
+    }
+
+    private JsonNode requestStructuredOutput(RequestBodySupplier requestBodySupplier) {
         if (!properties.enabled()) throw new JourneyAiException(JourneyAiErrorCode.AI_DISABLED, "Journey AI is disabled");
         if (!properties.providerConfigured()) throw new JourneyAiException(JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE, "Journey AI provider is not configured");
         boolean requestAttempted = false;
@@ -57,7 +65,7 @@ public class ResponsesApiClient {
                     .timeout(properties.timeout())
                     .header("Authorization", "Bearer " + properties.apiKey())
                     .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(requestBody(input, schemaName, schema)))
+                    .POST(HttpRequest.BodyPublishers.ofString(requestBodySupplier.get()))
                     .build();
             requestAttempted = true;
             log.info("event=journey_ai_provider_request attempted=true");
@@ -117,10 +125,21 @@ public class ResponsesApiClient {
     }
 
     String requestBody(JourneyCompileRequest input, String schemaName, JsonNode schema) throws Exception {
+        return requestBody(compileInput(input), JOURNEY_INTENT_INSTRUCTIONS, schemaName, schema);
+    }
+
+    String requestBody(JsonNode input, String instructions, String schemaName, JsonNode schema) throws Exception {
+        if (input == null || instructions == null || instructions.isBlank()) {
+            throw new IllegalArgumentException("structured output input and instructions are required");
+        }
+        return requestBody(objectMapper.writeValueAsString(input), instructions, schemaName, schema);
+    }
+
+    private String requestBody(String input, String instructions, String schemaName, JsonNode schema) throws Exception {
         ObjectNode root = objectMapper.createObjectNode();
         root.put("model", properties.model());
-        root.put("instructions", JOURNEY_INTENT_INSTRUCTIONS);
-        root.put("input", compileInput(input));
+        root.put("instructions", instructions);
+        root.put("input", input);
         root.putObject("reasoning").put("effort", "none");
         ObjectNode format = root.putObject("text").putObject("format");
         format.put("type", "json_schema");
@@ -179,6 +198,11 @@ public class ResponsesApiClient {
     @FunctionalInterface
     interface ResponseTransport {
         TransportResponse send(HttpRequest request) throws Exception;
+    }
+
+    @FunctionalInterface
+    private interface RequestBodySupplier {
+        String get() throws Exception;
     }
 
     record TransportResponse(int statusCode, String body) { }

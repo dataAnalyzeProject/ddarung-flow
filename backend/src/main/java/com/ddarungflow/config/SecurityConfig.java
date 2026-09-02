@@ -72,6 +72,7 @@ public class SecurityConfig {
     private static final Pattern RETENTION_API_PATH = Pattern.compile("^/api/v1/(?:favorites|saved-routes|prediction-histories|notification-rules|notifications)(?:/.*)?$");
     private static final Pattern JOURNEY_API_PATH = Pattern.compile("^/api/v1/(?:journeys|saved-journeys)(?:/.*)?$");
     private static final Pattern PREDICTION_RELIABILITY_PATH = Pattern.compile("^/api/v1/prediction-reliability/?$");
+    private static final Pattern RIDING_GUIDE_AI_PATH = Pattern.compile("^/api/v1/riding-guide/ai/?$");
 
     private void writeApiError(HttpServletResponse response, int status, String code, String message) throws IOException {
         response.setStatus(status);
@@ -92,7 +93,8 @@ public class SecurityConfig {
                     || QNA_API_PATH.matcher(request.getRequestURI()).matches()
                     || RETENTION_API_PATH.matcher(request.getRequestURI()).matches()
                     || JOURNEY_API_PATH.matcher(request.getRequestURI()).matches()
-                    || PREDICTION_RELIABILITY_PATH.matcher(request.getRequestURI()).matches()) {
+                    || PREDICTION_RELIABILITY_PATH.matcher(request.getRequestURI()).matches()
+                    || RIDING_GUIDE_AI_PATH.matcher(request.getRequestURI()).matches()) {
                 writeApiError(response, HttpServletResponse.SC_UNAUTHORIZED, "AUTH_REQUIRED", "로그인이 필요합니다.");
                 return;
             }
