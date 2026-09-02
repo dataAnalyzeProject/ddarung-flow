@@ -45,9 +45,13 @@ public class JourneyPlanService {
         this.objectMapper = objectMapper;
     }
 
-    public Decision plan(long userId, PlanInput input) {
+    Decision plan(long userId, PlanInput input) {
+        return plan(userId, input, () -> { });
+    }
+
+    public Decision plan(long userId, PlanInput input, Runnable requireAiEntitlement) {
         validate(input, false);
-        return persist(userId, UUID.randomUUID().toString(), 1, input);
+        return persist(userId, UUID.randomUUID().toString(), 1, input, requireAiEntitlement);
     }
 
     public Decision find(long userId, String decisionId) {
@@ -60,11 +64,15 @@ public class JourneyPlanService {
                 });
     }
 
-    public Decision replan(long userId, String decisionId, PlanInput input) {
+    Decision replan(long userId, String decisionId, PlanInput input) {
+        return replan(userId, decisionId, input, () -> { });
+    }
+
+    public Decision replan(long userId, String decisionId, PlanInput input, Runnable requireAiEntitlement) {
         validate(input, true);
         Decision current = find(userId, decisionId);
         if (!current.revision().equals(input.expectedRevision())) throw new RevisionConflict();
-        return persist(userId, decisionId, current.revision() + 1, input);
+        return persist(userId, decisionId, current.revision() + 1, input, requireAiEntitlement);
     }
 
     public Counterfactual counterfactual(long userId, String decisionId) {
@@ -72,7 +80,7 @@ public class JourneyPlanService {
         throw new NoValidCandidate();
     }
 
-    private Decision persist(long userId, String decisionId, int revision, PlanInput input) {
+    private Decision persist(long userId, String decisionId, int revision, PlanInput input, Runnable requireAiEntitlement) {
         JourneyIntent aiIntent = null;
         List<String> warnings = new ArrayList<>();
 
@@ -84,6 +92,7 @@ public class JourneyPlanService {
         boolean aiRequestedClarification = false;
 
         if (input.requestMode() == RequestMode.NATURAL_LANGUAGE) {
+            requireAiEntitlement.run();
             try {
                 JourneyAiGateway.IntentResult result = aiGateway.compileIntent(compileRequest(input));
                 if (result.available()) {
