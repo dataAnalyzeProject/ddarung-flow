@@ -62,10 +62,15 @@ public class NotificationService {
 
     @Transactional
     public InAppNotification createInAppNotification(Long userId, String dedupKey, String title, String message) {
-        return createInAppNotification(userId, dedupKey, title, message, "QNA_ANSWERED");
+        return createInAppNotification(userId, dedupKey, title, message, "QNA_ANSWERED", null, null);
     }
     @Transactional
     public InAppNotification createInAppNotification(Long userId, String dedupKey, String title, String message, String notificationType) {
+        return createInAppNotification(userId, dedupKey, title, message, notificationType, null, null);
+    }
+    @Transactional
+    public InAppNotification createInAppNotification(Long userId, String dedupKey, String title, String message,
+                                                      String notificationType, String actionType, String actionRef) {
         if (userId == null || dedupKey == null || dedupKey.isBlank() || title == null || message == null) {
             throw new IllegalArgumentException("필수 알림 정보가 누락되었습니다.");
         }
@@ -82,6 +87,8 @@ public class NotificationService {
                 .title(title)
                 .message(message)
                 .notificationType(notificationType)
+                .actionType(actionType)
+                .actionRef(actionRef)
                 .build();
 
         return inAppNotificationRepository.save(notification);

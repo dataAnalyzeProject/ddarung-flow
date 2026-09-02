@@ -139,7 +139,8 @@ public class QnaService {
         QnaAnswer savedAnswer = answerRepository.save(answer);
         question.changeStatus(QnaStatus.ANSWERED);
         notificationService.createInAppNotification(question.getAuthorId(), "qna-answered:" + questionId,
-                "문의에 답변이 등록되었습니다", question.getTitle(), "QNA_ANSWERED");
+                "문의에 답변이 등록되었습니다", question.getTitle(), "QNA_ANSWERED",
+                "QNA_QUESTION", questionId.toString());
         return savedAnswer;
     }
 

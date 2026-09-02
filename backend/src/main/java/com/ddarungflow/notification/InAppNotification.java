@@ -41,6 +41,12 @@ public class InAppNotification {
     @Column(name = "notification_type", nullable = false, length = 50)
     private String notificationType;
 
+    @Column(name = "action_type", length = 50)
+    private String actionType;
+
+    @Column(name = "action_ref", length = 100)
+    private String actionRef;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 
@@ -55,12 +61,15 @@ public class InAppNotification {
     }
 
     @Builder
-    public InAppNotification(Long userId, String dedupKey, String title, String message, String notificationType, OffsetDateTime readAt) {
+    public InAppNotification(Long userId, String dedupKey, String title, String message, String notificationType,
+                             String actionType, String actionRef, OffsetDateTime readAt) {
         this.userId = userId;
         this.dedupKey = dedupKey;
         this.title = title;
         this.message = message;
         this.notificationType = notificationType;
+        this.actionType = actionType;
+        this.actionRef = actionRef;
         this.readAt = readAt;
     }
 

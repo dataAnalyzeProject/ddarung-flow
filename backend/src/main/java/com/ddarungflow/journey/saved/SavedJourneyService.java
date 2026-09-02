@@ -60,10 +60,18 @@ public class SavedJourneyService {
         return repository.findByUserIdOrderByCreatedAtDesc(userId);
     }
 
+    public SavedJourneyEntity findOwned(Long userId, String savedJourneyId) {
+        if (userId == null || savedJourneyId == null || savedJourneyId.isBlank()) {
+            throw new IllegalArgumentException("저장 여정 ID가 필요합니다.");
+        }
+        return repository.findByUserIdAndPublicId(userId, savedJourneyId)
+                .orElseThrow(SavedJourneyNotFoundException::new);
+    }
+
     @Transactional
     public void delete(Long userId, String savedJourneyId) {
         if (userId == null || savedJourneyId == null || savedJourneyId.isBlank()) throw new IllegalArgumentException("저장 여정 ID가 필요합니다.");
-        SavedJourneyEntity saved = repository.findByUserIdAndPublicId(userId, savedJourneyId).orElseThrow(SavedJourneyNotFoundException::new);
+        SavedJourneyEntity saved = findOwned(userId, savedJourneyId);
         idempotencyKeys.deleteBySavedJourneyId(saved.getId());
         repository.delete(saved);
     }
@@ -74,8 +82,7 @@ public class SavedJourneyService {
         if (userId == null || savedJourneyId == null || savedJourneyId.isBlank()) {
             throw new IllegalArgumentException("저장 여정 ID가 필요합니다.");
         }
-        SavedJourneyEntity saved = repository.findByUserIdAndPublicId(userId, savedJourneyId)
-                .orElseThrow(SavedJourneyNotFoundException::new);
+        SavedJourneyEntity saved = findOwned(userId, savedJourneyId);
         SavedJourneyDtos.ReplayInput stored = replayInput(saved);
         if (request == null || request.departureAt() == null) {
             throw new IllegalArgumentException("새 출발시각이 필요합니다.");
