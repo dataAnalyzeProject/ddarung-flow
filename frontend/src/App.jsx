@@ -46,6 +46,7 @@ function App() {
   const [introComplete, setIntroComplete] = useState(() => hasSeenIntro());
   const [subscription, setSubscription] = useState({ status: 'PROCESSING' });
   const [subscriptionReload, setSubscriptionReload] = useState(0);
+  const [rideGuidance, setRideGuidance] = useState(false);
   const mainResults = useRef(new Map());
   const decisions = useRef(new Map());
   const isLoginPath = location.pathname === '/login';
@@ -58,11 +59,12 @@ function App() {
 
   const syncLocation = useCallback(() => setLocation(readLocation()), []);
   useEffect(() => {
-    window.addEventListener('hashchange', syncLocation);
-    window.addEventListener('popstate', syncLocation);
+    const onHistoryNav = () => { setRideGuidance(false); syncLocation(); };
+    window.addEventListener('hashchange', onHistoryNav);
+    window.addEventListener('popstate', onHistoryNav);
     return () => {
-      window.removeEventListener('hashchange', syncLocation);
-      window.removeEventListener('popstate', syncLocation);
+      window.removeEventListener('hashchange', onHistoryNav);
+      window.removeEventListener('popstate', onHistoryNav);
     };
   }, [syncLocation]);
 
@@ -129,6 +131,7 @@ function App() {
     }
     const source = readLocation();
     const candidateId = ['ride', 'guide', 'station'].includes(nextRoute) && !id ? source.state.selectedStationId || (['station', 'ride', 'guide'].includes(source.route) ? source.stationId : null) : id;
+    setRideGuidance(nextRoute === 'ride' && !candidateId);
     const target = navigationTarget(nextRoute, candidateId);
     const mainEntryId = source.route === 'main' ? source.state.entryId : source.state.mainEntryId;
     let state = { ...source.state, entryId: newConsumerEntryId(), mainEntryId };
@@ -247,7 +250,7 @@ function App() {
   if (route === 'mypage') return <PersonalMyPage adapter={personalAdapter} onNavigate={navigate} />;
   if (route === 'qna') return <ConsumerQnaPage key={location.state.questionId || 'list'} {...common} initialQuestionId={location.state.questionId} />;
   if (route === 'alerts') return <ConsumerAlertsPage {...common} searchInput={location.state.restoreSearch} onCurrentData={handleCurrentData} />;
-  return <ConsumerMainPage key={entryId} onNavigate={navigate} onLogin={login} onInputChange={handleInputChange} onSearchComplete={handleSearchComplete} restoreSearch={restoreSearch} currentResult={restoredMainResult} onOpenStation={(candidate, input) => openCandidate('station', candidate, input)} onOpenRide={(candidate, input) => openCandidate('ride', candidate, input)} />;
+  return <ConsumerMainPage key={entryId} onNavigate={navigate} onLogin={login} onInputChange={handleInputChange} onSearchComplete={handleSearchComplete} restoreSearch={restoreSearch} currentResult={restoredMainResult} onOpenStation={(candidate, input) => openCandidate('station', candidate, input)} onOpenRide={(candidate, input) => openCandidate('ride', candidate, input)} rideGuidance={rideGuidance} />;
 }
 
 export default App;

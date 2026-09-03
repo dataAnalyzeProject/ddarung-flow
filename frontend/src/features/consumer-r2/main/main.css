@@ -10,6 +10,37 @@
   margin: 0;
 }
 
+.cr293-ride-guidance {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: clamp(1rem, 2vw, 1.5rem);
+  padding: 0.9rem 1.2rem;
+  border: 1px solid #cfe2fb;
+  border-radius: 0.85rem;
+  background: var(--cr22-color-blue-soft);
+  color: #174b89;
+  font-size: 0.9rem;
+  font-weight: 750;
+}
+
+.cr293-ride-guidance p {
+  margin: 0;
+}
+
+.cr293-ride-guidance button {
+  flex-shrink: 0;
+  padding: 0.35rem 0.85rem;
+  border: 1px solid #174b89;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .cr293-hero {
   position: relative;
   height: clamp(18rem, 32vw, 26.25rem);

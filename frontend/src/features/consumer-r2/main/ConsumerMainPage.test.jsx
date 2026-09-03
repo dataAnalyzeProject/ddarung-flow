@@ -67,6 +67,28 @@ test("shows only the input workspace before a result and restores completed plac
   expect(screen.queryByText("추천 대여소")).not.toBeInTheDocument();
 });
 
+test("renders no ride guidance banner by default", async () => {
+  render(<ConsumerMainPage services={createServices()} mapRenderer={PreviewMap} />);
+  await screen.findByRole("heading", { name: /도착할 때 빌릴 수 있는/ });
+  expect(screen.queryByText("라이딩을 보려면 먼저 대여소를 선택해 주세요.")).not.toBeInTheDocument();
+});
+
+test("shows a one-time ride guidance banner and focuses the search step when no station is selected", async () => {
+  const services = createServices({ loadPendingPrediction: jest.fn(() => null) });
+  render(<ConsumerMainPage services={services} mapRenderer={PreviewMap} rideGuidance />);
+  expect(await screen.findByText("라이딩을 보려면 먼저 대여소를 선택해 주세요.")).toBeInTheDocument();
+  expect(screen.getByRole("textbox", { name: "출발 위치" })).toHaveFocus();
+  fireEvent.click(screen.getByRole("button", { name: "닫기" }));
+  expect(screen.queryByText("라이딩을 보려면 먼저 대여소를 선택해 주세요.")).not.toBeInTheDocument();
+});
+
+test("focuses the results heading instead when a restored result is already on screen", async () => {
+  render(<ConsumerMainPage restoreSearch={searchInput} currentResult={{ candidates }} services={createServices()} mapRenderer={PreviewMap} rideGuidance />);
+  expect(await screen.findByRole("heading", { name: "추천 대여소" })).toBeInTheDocument();
+  expect(screen.getByText("라이딩을 보려면 먼저 대여소를 선택해 주세요.")).toBeInTheDocument();
+  expect(screen.getByRole("heading", { level: 1, name: /근처 추천 결과/ })).toHaveFocus();
+});
+
 test("uses the route response once and changes candidate/detail views without refetching", async () => {
   const services = createServices();
   render(<ConsumerMainPage services={services} mapRenderer={PreviewMap} />);

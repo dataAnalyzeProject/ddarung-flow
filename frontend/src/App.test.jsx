@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App, { navigationTarget } from './App';
 import { getCurrentUser, logout } from './features/login/authApi';
 import { fetchSubscription } from './features/premium/subscriptionApi';
@@ -15,12 +15,13 @@ jest.mock('./features/consumer-r2/entry', () => ({
   LoginPage: () => <h1>Login</h1>,
   OpeningPage: ({ onComplete }) => <button onClick={onComplete}>Opening complete</button>,
 }));
-jest.mock('./features/consumer-r2/main/ConsumerMainPage', () => function MockMain({ onNavigate, onOpenStation, onOpenRide, onInputChange, onSearchComplete, restoreSearch, currentResult }) {
+jest.mock('./features/consumer-r2/main/ConsumerMainPage', () => function MockMain({ onNavigate, onOpenStation, onOpenRide, onInputChange, onSearchComplete, restoreSearch, currentResult, rideGuidance }) {
   const [liveCandidate, setLiveCandidate] = require('react').useState(null);
   require('react').useEffect(() => { mockMainRestoreChange(); }, [restoreSearch, currentResult]);
   return <section>
   <h1>Main</h1><output>{restoreSearch?.origin?.displayName || (typeof restoreSearch?.origin === 'string' ? restoreSearch.origin : '')}</output>
   <output data-testid="main-input">{JSON.stringify(restoreSearch || null)}</output><output data-testid="main-result">{JSON.stringify(currentResult || null)}</output>
+  {rideGuidance ? <p role="status">라이딩을 보려면 먼저 대여소를 선택해 주세요.</p> : null}
   <button onClick={() => onOpenStation(liveCandidate || currentResult?.candidates?.[0] || { stationId: 'ST-1' }, restoreSearch)}>Station</button>
   <button onClick={() => onOpenRide(liveCandidate || currentResult?.candidates?.[0] || { stationId: 'ST-1' }, restoreSearch)}>Ride</button>
   <button onClick={() => { onInputChange(mockInputA); onSearchComplete(mockInputA, mockResultA); setLiveCandidate(mockResultA.candidates[0]); }}>Search A</button>
@@ -30,11 +31,12 @@ jest.mock('./features/consumer-r2/main/ConsumerMainPage', () => function MockMai
   <button onClick={() => onNavigate('planner')}>Planner</button>
   <button onClick={() => onNavigate('archive')}>Archive</button>
   <button onClick={() => onNavigate('mypage')}>Account</button>
+  <button onClick={() => onNavigate('ride')}>Header ride</button>
 </section>;
 });
-jest.mock('./features/consumer-r2/station/StationDetailPage', () => ({ stationId, onNavigate }) => <section><h1>Station {stationId}</h1><button onClick={() => onNavigate('ride', stationId)}>Ride</button><button onClick={() => onNavigate('home')}>Home</button></section>);
+jest.mock('./features/consumer-r2/station/StationDetailPage', () => ({ stationId, onNavigate }) => <section><h1>Station {stationId}</h1><button onClick={() => onNavigate('ride', stationId)}>Ride</button><button onClick={() => onNavigate('ride')}>Header ride</button><button onClick={() => onNavigate('home')}>Home</button></section>);
 jest.mock('./features/consumer-r2/ride/RideExplorePage', () => ({ stationId, onNavigate }) => <section><h1>Ride {stationId}</h1><button onClick={() => onNavigate('guide', stationId)}>Guide</button><button onClick={() => onNavigate('home')}>Home</button></section>);
-jest.mock('./features/consumer-r2/guide/ConsumerRidingGuidePage', () => ({ stationId, guideContext, onNavigate }) => <section><h1>Guide {stationId}</h1><output data-testid="guide-context">{JSON.stringify(guideContext)}</output><button onClick={() => onNavigate('home')}>Home</button></section>);
+jest.mock('./features/consumer-r2/guide/ConsumerRidingGuidePage', () => ({ stationId, guideContext, onNavigate }) => <section><h1>Guide {stationId}</h1><output data-testid="guide-context">{JSON.stringify(guideContext)}</output><button onClick={() => onNavigate('ride')}>Header ride</button><button onClick={() => onNavigate('home')}>Home</button></section>);
 jest.mock('./features/consumer-r2/journey', () => {
   const { useEffect } = require('react');
   return {
@@ -354,4 +356,39 @@ test('Journey result always requests the server even after a completed planner s
   await screen.findByRole('heading', { name: 'Result decision-1' });
   expect(output('result-initial')).toBeNull();
   expect(mockLoadDecision.mock.calls.length).toBeGreaterThan(initialLoads);
+});
+
+test('Header Ride reuses the station or guide context already on screen without a fixture id', async () => {
+  visit('/#station/ST-9');
+  await screen.findByRole('heading', { name: 'Station ST-9' });
+  fireEvent.click(screen.getByText('Header ride'));
+  expect(await screen.findByRole('heading', { name: 'Ride ST-9' })).toBeInTheDocument();
+  expect(window.location.hash).toBe('#ride/ST-9');
+
+  fireEvent.click(screen.getByText('Guide'));
+  await screen.findByRole('heading', { name: 'Guide ST-9' });
+  fireEvent.click(screen.getByText('Header ride'));
+  expect(await screen.findByRole('heading', { name: 'Ride ST-9' })).toBeInTheDocument();
+  expect(window.location.hash).toBe('#ride/ST-9');
+});
+
+test('Header Ride with no station context lands on Main with a one-time guidance instead of a silent no-op', async () => {
+  visit('/');
+  fireEvent.click(await screen.findByText('Header ride'));
+  expect(window.location.hash).toBe('');
+  expect(await screen.findByText('라이딩을 보려면 먼저 대여소를 선택해 주세요.')).toBeInTheDocument();
+
+  fireEvent.click(screen.getByText('Alerts'));
+  await screen.findByRole('heading', { name: 'Alerts' });
+  fireEvent.click(screen.getByText('Home'));
+  await screen.findByRole('heading', { name: 'Main' });
+  expect(screen.queryByText('라이딩을 보려면 먼저 대여소를 선택해 주세요.')).not.toBeInTheDocument();
+});
+
+test('a ride guidance shown after Header Ride does not leak into an unrelated Main visit reached via browser back', async () => {
+  visit('/');
+  fireEvent.click(await screen.findByText('Header ride'));
+  expect(await screen.findByText('라이딩을 보려면 먼저 대여소를 선택해 주세요.')).toBeInTheDocument();
+  await act(async () => { window.history.back(); });
+  await waitFor(() => expect(screen.queryByText('라이딩을 보려면 먼저 대여소를 선택해 주세요.')).not.toBeInTheDocument());
 });
