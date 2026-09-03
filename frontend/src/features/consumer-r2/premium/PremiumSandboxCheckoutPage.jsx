@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ConsumerAppHeader,
   ConsumerButton,
@@ -39,7 +39,29 @@ export default function PremiumSandboxCheckoutPage({
   const [state, setState] = useState(initialState);
   const [message, setMessage] = useState("");
   const [selectedPlan, setSelectedPlan] = useState("");
-  const plans = useMemo(() => adapter.plans || [], [adapter]);
+  const [catalog, setCatalog] = useState({ status: "LOADING", plans: [] });
+  const onSuccessRef = useRef(onSuccess);
+  const confirmationRef = useRef(null);
+
+  useEffect(() => { onSuccessRef.current = onSuccess; }, [onSuccess]);
+
+  useEffect(() => {
+    if (authState !== "authenticated") {
+      setCatalog({ status: "IDLE", plans: [] });
+      return undefined;
+    }
+    let active = true;
+    setCatalog({ status: "LOADING", plans: [] });
+    adapter.loadPlans()
+      .then((plans) => {
+        if (!Array.isArray(plans) || plans.length === 0) throw new Error("PAYMENT_PLANS_UNAVAILABLE");
+        if (active) setCatalog({ status: "READY", plans });
+      })
+      .catch(() => {
+        if (active) setCatalog({ status: "ERROR", plans: [] });
+      });
+    return () => { active = false; };
+  }, [adapter, authState]);
 
   useEffect(() => {
     const nextState = normalizePremiumAccessState(accessState, authState);
@@ -53,8 +75,12 @@ export default function PremiumSandboxCheckoutPage({
   }, [accessState, authState]);
 
   useEffect(() => {
-    if (authState !== "authenticated") return undefined;
-    const params = new URLSearchParams(window.location.search);
+    if (authState !== "authenticated") {
+      confirmationRef.current = null;
+      return undefined;
+    }
+    if (!confirmationRef.current) confirmationRef.current = { query: window.location.search };
+    const params = new URLSearchParams(confirmationRef.current.query);
     const paymentState = params.get("payment");
     if (paymentState === "failed") {
       setState("ERROR");
@@ -66,8 +92,10 @@ export default function PremiumSandboxCheckoutPage({
     const payment = { paymentKey: params.get("paymentKey"), orderId: params.get("orderId"), amount: params.get("amount") };
     let active = true;
     setState("PROCESSING");
-    adapter.confirm(payment)
-      .then(() => adapter.load())
+    if (!confirmationRef.current.request) {
+      confirmationRef.current.request = adapter.confirm(payment).then(() => adapter.load());
+    }
+    confirmationRef.current.request
       .then((subscription) => {
         if (!active) return;
         const confirmedState = normalizePremiumAccessState(subscription?.status);
@@ -75,7 +103,7 @@ export default function PremiumSandboxCheckoutPage({
         clearPaymentCallbackQuery();
         if (confirmedState === "ACTIVE") {
           setMessage("Sandbox 결제가 승인되어 Premium 접근 상태가 활성화되었습니다.");
-          onSuccess?.(subscription);
+          onSuccessRef.current?.(subscription);
         } else {
           setMessage("Sandbox 결제 승인 후 Premium 접근 상태가 아직 활성화되지 않았습니다. 상태를 다시 확인해 주세요.");
         }
@@ -87,7 +115,7 @@ export default function PremiumSandboxCheckoutPage({
         clearPaymentCallbackQuery();
       });
     return () => { active = false; };
-  }, [adapter, authState, onSuccess]);
+  }, [adapter, authState]);
 
   async function selectPlan(plan) {
     if (state === "ANONYMOUS") { onLogin?.(); return; }
@@ -118,8 +146,12 @@ export default function PremiumSandboxCheckoutPage({
 
         {message ? <section className={`cr22-checkout__message is-${state.toLowerCase()}`} role={state === "ERROR" ? "alert" : "status"} aria-live="polite"><strong>{state === "ACTIVE" ? "Premium 활성" : state === "EXPIRED" ? "접근 기간 만료" : state === "ERROR" ? "확인 필요" : state === "PROCESSING" ? "처리 중" : "Sandbox 안내"}</strong><span>{message}</span></section> : state === "EXPIRED" ? <section className="cr22-checkout__message is-expired" role="status"><strong>접근 기간 만료</strong><span>이전 Sandbox Premium 접근 기간이 끝났습니다. 새 테스트 플랜을 선택할 수 있습니다.</span></section> : null}
 
-        <section className="cr22-checkout__plans" aria-label="Premium 테스트 플랜 선택">
-          {plans.map((plan) => <article className={`cr22-checkout__plan${plan.featured ? " is-featured" : ""}${selectedPlan === plan.id ? " is-selected" : ""}`} key={plan.id}>
+        {authState === "authenticated" && catalog.status === "LOADING" ? <section className="cr22-checkout__message" role="status"><strong>플랜 정보 확인 중</strong><span>Sandbox 테스트 플랜의 가격과 이용 기간을 불러오고 있습니다.</span></section> : null}
+        {authState === "authenticated" && catalog.status === "ERROR" ? <section className="cr22-checkout__message is-error" role="alert"><strong>플랜 정보 확인 필요</strong><span>Sandbox 테스트 플랜 정보를 불러오지 못했습니다. 잠시 후 다시 방문해 주세요.</span></section> : null}
+
+        <section className="cr22-checkout__plans" aria-label="Premium 테스트 플랜 선택" aria-busy={authState === "authenticated" && catalog.status === "LOADING"}>
+          {authState !== "authenticated" ? <ConsumerButton onClick={onLogin}>로그인하고 플랜 확인</ConsumerButton> : null}
+          {(authState === "authenticated" ? catalog.plans : []).map((plan) => <article className={`cr22-checkout__plan${plan.featured ? " is-featured" : ""}${selectedPlan === plan.id ? " is-selected" : ""}`} key={plan.id}>
             {plan.featured ? <><span className="cr22-checkout__recommended">추천 플랜</span><span className="cr22-checkout__ribbon">BEST<br />VALUE</span></> : null}
             <span className="cr22-checkout__test-label">테스트 플랜</span>
             <h2>{plan.name}</h2>

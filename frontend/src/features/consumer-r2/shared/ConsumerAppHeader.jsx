@@ -34,7 +34,14 @@ export default function ConsumerAppHeader({
 
   return (
     <header className="cr22-header">
-      <a className="cr22-header__skip-link" href={skipTarget}>본문 바로가기</a>
+      <a className="cr22-header__skip-link" href={skipTarget} onClick={(event) => {
+        const target = document.getElementById(skipTarget.slice(1));
+        if (!target) return;
+        event.preventDefault();
+        target.tabIndex = -1;
+        target.focus();
+        target.scrollIntoView?.({ block: "start" });
+      }}>본문 바로가기</a>
       <a className="cr22-header__brand" href="/" aria-label="따라가요 홈" onClick={(event) => navigate(event, CONSUMER_NAV_ITEMS[0], onNavigate)}>
         <img src={brandLogo} alt="따라가요" width="895" height="220" fetchpriority="high" translate="no" />
       </a>
@@ -56,7 +63,7 @@ export default function ConsumerAppHeader({
       </nav>
 
       <div className="cr22-header__actions">
-        <button className="cr22-header__icon-button" type="button" aria-label={hasUnreadNotifications ? "새 알림 보기" : "알림 보기"} onClick={onNotifications}>
+        <button className="cr22-header__icon-button" type="button" aria-label={hasUnreadNotifications ? "새 알림 보기" : "알림 보기"} onClick={onNotifications || (() => onNavigate ? onNavigate('alerts') : window.location.assign('/#alerts'))}>
           <ConsumerIcon name="bell" />
           {hasUnreadNotifications ? <span className="cr22-header__notification-dot" aria-hidden="true" /> : null}
         </button>
@@ -64,9 +71,9 @@ export default function ConsumerAppHeader({
           <span className="cr22-header__account" role="status">확인 중</span>
         ) : authenticated ? (
           <a className="cr22-header__account" href="#mypage" onClick={(event) => {
-            if (!onAccount) return;
+            if (!onAccount && !onNavigate) return;
             event.preventDefault();
-            onAccount();
+            if (onAccount) onAccount(); else onNavigate("mypage");
           }}>
             <ConsumerIcon name="user" />
             <span className="cr22-header__user-name">{userName || "내 계정"}</span>

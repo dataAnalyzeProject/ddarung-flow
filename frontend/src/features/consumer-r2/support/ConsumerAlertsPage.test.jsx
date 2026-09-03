@@ -75,13 +75,13 @@ test("creates search and plan recheck opt-ins with only the selected departure t
 });
 
 test("executes recheck by publicId and forwards only the current-data response", async () => {
-  const api = adapter();
+  const api = adapter({ loadAlerts: jest.fn().mockResolvedValue({ notifications, subscriptions: [{ publicId: "search-1", kind: "SEARCH_RECHECK", status: "FIRED", searchInput }] }) });
   const onCurrentData = jest.fn();
   render(<ConsumerAlertsPage adapter={api} onCurrentData={onCurrentData} />);
   await screen.findByText("출발 전 재확인 시간이 되었습니다");
   fireEvent.click(screen.getByRole("button", { name: "현재 정보 다시 확인" }));
   await waitFor(() => expect(api.executeRecheck).toHaveBeenCalledWith("search-1"));
-  expect(onCurrentData).toHaveBeenCalledWith({ kind: "SEARCH_RECHECK", result: { candidates: [] } });
+  expect(onCurrentData).toHaveBeenCalledWith({ kind: "SEARCH_RECHECK", result: { candidates: [] } }, searchInput);
   expect(screen.queryByText(/저장 당시|과거 확률|과거 재고|과거 경로|과거 날씨/)).not.toBeInTheDocument();
 });
 

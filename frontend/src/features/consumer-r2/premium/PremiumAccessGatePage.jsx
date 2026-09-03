@@ -62,7 +62,7 @@ export default function PremiumAccessGatePage({
 
   return (
     <ConsumerR2Theme className="cr22-premium">
-      <ConsumerAppHeader activeItem="planner" authState={authState} hasUnreadNotifications onNavigate={onNavigate} onLogin={onLogin} userName={user?.name} userTier={state === "ACTIVE" ? "premium" : user?.tier} />
+      <ConsumerAppHeader activeItem="planner" authState={authState} onNavigate={onNavigate} onLogin={onLogin} userName={user?.displayName || user?.name} userTier={state === "ACTIVE" ? "premium" : undefined} />
       <ConsumerContainer as="main" id="main-content" className="cr22-premium__content">
         <p className="cr22-premium__context"><ConsumerIcon name="info" size={15} /> Premium Access Gate</p>
         <div className="cr22-premium__headings">
