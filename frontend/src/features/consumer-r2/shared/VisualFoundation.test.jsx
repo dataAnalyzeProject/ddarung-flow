@@ -57,11 +57,20 @@ test("account link uses shared navigation when no account callback is supplied",
 test("unwired future navigation stays inert while current hash routes remain truthful", () => {
   render(<ConsumerR2Theme><ConsumerAppHeader /></ConsumerR2Theme>);
 
-  expect(screen.getByRole("button", { name: "내 주변" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "라이딩" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "AI 플래너 PREMIUM" })).toBeDisabled();
   expect(screen.getByRole("link", { name: "보관함" })).toHaveAttribute("href", "#archive");
   expect(screen.getByRole("link", { name: "Q&A" })).toHaveAttribute("href", "#qna");
+});
+
+test("Nearby is fully removed from the header while Ride routes through onNavigate", () => {
+  const onNavigate = jest.fn();
+  render(<ConsumerR2Theme><ConsumerAppHeader onNavigate={onNavigate} /></ConsumerR2Theme>);
+
+  expect(screen.queryByRole("button", { name: "내 주변" })).not.toBeInTheDocument();
+  expect(screen.queryByText("내 주변")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "라이딩" }));
+  expect(onNavigate).toHaveBeenCalledWith("ride");
 });
 
 test("authenticated header exposes account and premium state without changing navigation semantics", () => {

@@ -4,7 +4,6 @@ import "../styles/index.css";
 
 export const CONSUMER_NAV_ITEMS = [
   { id: "home", label: "홈", href: "/" },
-  { id: "nearby", label: "내 주변" },
   { id: "ride", label: "라이딩" },
   { id: "planner", label: "AI 플래너", premium: true },
   { id: "archive", label: "보관함", href: "#archive" },
