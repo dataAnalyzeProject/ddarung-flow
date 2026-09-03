@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AsyncState,
   ConsumerAppHeader,
@@ -6,11 +6,14 @@ import {
   ConsumerContainer,
   ConsumerIcon,
   ConsumerR2Theme,
-  MapShell,
   StatusBadge,
   SurfaceCard,
 } from "../shared/index.js";
 import { consumerJourneyAdapter, hasValue } from "../adapters/journey/index.js";
+import { consumerSupportAdapter } from "../adapters/support";
+import RecheckOptInDialog from "../support/RecheckOptInDialog";
+import ConsumerJourneyMap from "./ConsumerJourneyMap";
+import "../support/support.css";
 import "./journey.css";
 
 const SEGMENT_COPY = {
@@ -115,22 +118,6 @@ function Timeline({ intent, plan }) {
   </section>;
 }
 
-function EvidenceMap({ plan }) {
-  const points = (plan.segments || []).flatMap((segment) => segment.pathPoints || []).filter((point) => hasValue(point.latitude) && hasValue(point.longitude));
-  const chart = useMemo(() => {
-    if (points.length < 2) return null;
-    const latitudes = points.map((point) => Number(point.latitude));
-    const longitudes = points.map((point) => Number(point.longitude));
-    const minLat = Math.min(...latitudes); const maxLat = Math.max(...latitudes); const minLng = Math.min(...longitudes); const maxLng = Math.max(...longitudes);
-    const latRange = maxLat - minLat || 1; const lngRange = maxLng - minLng || 1;
-    return points.map((point) => ({ x: 8 + ((Number(point.longitude) - minLng) / lngRange) * 84, y: 92 - ((Number(point.latitude) - minLat) / latRange) * 84 }));
-  }, [points]);
-  const legend = <div className="cr22-journey__map-legend">{Object.entries(SEGMENT_COPY).map(([type, [, label]]) => <span key={type}><i className={`is-${type.toLowerCase()}`} />{label}</span>)}</div>;
-  return <MapShell ariaLabel="실제 pathPoints 기반 여정 경로" legend={chart ? legend : null} footer={<p className="cr22-journey__map-note"><ConsumerIcon name="info" size={16} /> 실제 응답의 pathPoints만 단순 도식화했습니다.</p>}>
-    {chart ? <svg className="cr22-journey__route-plot" viewBox="0 0 100 100" role="img" aria-label={`${chart.length}개 실제 좌표로 구성된 여정 경로`} preserveAspectRatio="none"><defs><pattern id="journey-grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M10 0H0V10" fill="none" stroke="#d8e5e4" strokeWidth="0.25" /></pattern></defs><rect width="100" height="100" fill="url(#journey-grid)" /><polyline points={chart.map((point) => `${point.x},${point.y}`).join(" ")} fill="none" stroke="#008a76" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />{chart.map((point, index) => <circle key={`${point.x}-${point.y}-${index}`} cx={point.x} cy={point.y} r={index === 0 || index === chart.length - 1 ? 2.2 : 1.2} fill={index === 0 ? "#0969e8" : index === chart.length - 1 ? "#7137d6" : "#008a76"} stroke="#fff" strokeWidth="0.7" vectorEffect="non-scaling-stroke" />)}</svg> : <AsyncState state={plan.status === "PARTIAL" ? "partial" : "empty"} title="확인된 경로 좌표가 없습니다" description="실제 pathPoints가 없어 지도 경로나 거리를 추정해서 표시하지 않습니다." />}
-  </MapShell>;
-}
-
 function Rationale({ plan }) {
   const items = evidenceEntries(plan.evidence);
   const usedRefs = new Set((plan.segments || []).flatMap((segment) => [segment.fromEvidenceId, segment.toEvidenceId]).filter(Boolean));
@@ -143,7 +130,7 @@ function Rationale({ plan }) {
   </SurfaceCard>;
 }
 
-function ResultContent({ adapter, decision, onNavigate, onUpdated }) {
+function ResultContent({ adapter, decision, now, onNavigate, onSaved, onUpdated, recheckAdapter }) {
   const plan = decision.unifiedPlan;
   const intent = decision.normalizedIntent || {};
   const constraints = intent.constraints || {};
@@ -155,6 +142,8 @@ function ResultContent({ adapter, decision, onNavigate, onUpdated }) {
   });
   const [action, setAction] = useState("");
   const [notice, setNotice] = useState("");
+  const [savedJourneyId, setSavedJourneyId] = useState(null);
+  const [recheckOpen, setRecheckOpen] = useState(false);
 
   async function replan() {
     const availableMinutes = Number(editor.availableMinutes);
@@ -170,8 +159,23 @@ function ResultContent({ adapter, decision, onNavigate, onUpdated }) {
   }
   async function save() {
     setAction("save"); setNotice("");
-    try { await adapter.saveCurrentConditions(decision); setNotice("현재 계획의 재실행 입력을 저장했습니다. 다시 열 때는 최신 근거로 새 계획을 만듭니다."); }
+    try {
+      const saved = await adapter.saveCurrentConditions(decision);
+      setSavedJourneyId(saved.savedJourneyId);
+      onSaved?.(saved);
+      setNotice("현재 계획의 재실행 입력을 저장했습니다. 다시 열 때는 최신 근거로 새 계획을 만듭니다.");
+    }
     catch (error) { setNotice(ERROR_COPY[error.code] || "현재 조건을 저장하지 못했습니다."); }
+    finally { setAction(""); }
+  }
+  async function createRecheck(departureAt) {
+    if (!savedJourneyId) return;
+    setAction("recheck"); setNotice("");
+    try {
+      await recheckAdapter.createPlanRecheck(savedJourneyId, departureAt);
+      setRecheckOpen(false);
+      setNotice("선택한 출발 시각의 15분 전 재확인 알림을 신청했습니다.");
+    } catch (error) { setNotice(ERROR_COPY[error.code] || "재확인 알림을 신청하지 못했습니다. 다시 시도해 주세요."); }
     finally { setAction(""); }
   }
   const origin = intent.origin?.displayName;
@@ -179,33 +183,50 @@ function ResultContent({ adapter, decision, onNavigate, onUpdated }) {
   const title = [origin, destination].filter(Boolean).join(" → ") || "AI 라이딩 계획";
   if (!plan) return <AsyncState state="partial" title="통합 일정을 표시할 수 없습니다" description="백엔드가 통합 일정이나 근거를 제공하지 않았습니다." onAction={() => onNavigate?.("planner")} actionLabel="조건 다시 입력" />;
   return <>
-    <div className="cr22-journey__result-title"><div><p className="cr22-journey__breadcrumb"><ConsumerIcon name="home" size={15} /> <span aria-hidden="true">›</span> AI 플래너 <span aria-hidden="true">›</span> 결과</p><h1>{title} <StatusBadge tone="premium">PREMIUM</StatusBadge></h1><p>실제 대여·장소·경로 근거로 구성된 현재 계획입니다.</p></div><div><ConsumerButton variant="secondary" icon={<ConsumerIcon name="retry" />} onClick={() => document.getElementById("structured-replan")?.scrollIntoView()}>조건 변경 후 재추천</ConsumerButton><ConsumerButton icon={<ConsumerIcon name="plan" />} loading={action === "save"} loadingLabel="저장 중…" onClick={save}>이 계획 저장</ConsumerButton></div></div>
+    <div className="cr22-journey__result-title"><div><p className="cr22-journey__breadcrumb"><ConsumerIcon name="home" size={15} /> <span aria-hidden="true">›</span> AI 플래너 <span aria-hidden="true">›</span> 결과</p><h1>{title} <StatusBadge tone="premium">PREMIUM</StatusBadge></h1><p>실제 대여·장소·경로 근거로 구성된 현재 계획입니다.</p></div><div><ConsumerButton variant="secondary" icon={<ConsumerIcon name="retry" />} onClick={() => document.getElementById("structured-replan")?.scrollIntoView()}>조건 변경 후 재추천</ConsumerButton><ConsumerButton icon={<ConsumerIcon name="plan" />} disabled={Boolean(action)} loading={action === "save"} loadingLabel="저장 중…" onClick={save}>이 계획 저장</ConsumerButton></div></div>
+    {savedJourneyId ? <ConsumerButton variant="secondary" disabled={Boolean(action)} onClick={() => setRecheckOpen(true)}>출발 전에 다시 알려주세요</ConsumerButton> : null}
     {plan.status === "PARTIAL" || decision.status === "PARTIAL" ? <p className="cr22-journey__partial" role="status"><StatusBadge tone="caution">PARTIAL</StatusBadge> 일부 근거만 확인되었습니다. 확인되지 않은 값은 따로 표시합니다.</p> : null}
     {plan.status === "UNAVAILABLE" || decision.status === "UNAVAILABLE" ? <p className="cr22-journey__partial" role="status"><StatusBadge tone="danger">UNAVAILABLE</StatusBadge> 전체 일정은 만들지 못했습니다. 아래에는 백엔드가 제공한 사실 구간과 근거만 표시합니다.</p> : null}
-    <div className="cr22-journey__result-layout"><div><Summary plan={plan} /><Timeline intent={intent} plan={plan} /></div><aside><EvidenceMap plan={plan} /><Rationale plan={plan} /></aside></div>
+    <div className="cr22-journey__result-layout"><div><Summary plan={plan} /><Timeline intent={intent} plan={plan} /></div><aside><ConsumerJourneyMap segments={plan.segments} /><Rationale plan={plan} /></aside></div>
     <SurfaceCard title="구조화 조건으로 다시 계획">
       <div className="cr22-journey__replan" id="structured-replan">
         <label>이용 시간<input name="availableMinutes" autoComplete="off" type="number" min="1" max="480" value={editor.availableMinutes} onChange={(event) => setEditor((current) => ({ ...current, availableMinutes: event.target.value }))} /></label>
         <fieldset className="cr22-journey__theme-field"><legend>테마</legend><div>{THEME_OPTIONS.map(([value, label]) => <label key={value}><input name="themes" type="checkbox" value={value} checked={editor.themes.includes(value)} onChange={(event) => setEditor((current) => ({ ...current, themes: event.target.checked ? [...current.themes, value] : current.themes.filter((item) => item !== value) }))} />{label}</label>)}</div></fieldset>
         <label>방문 장소 수<select name="stopCount" autoComplete="off" value={editor.stopCount} onChange={(event) => setEditor((current) => ({ ...current, stopCount: event.target.value }))}>{[1, 2, 3].map((value) => <option key={value} value={value}>{value}곳</option>)}</select></label>
         <label>경로 방식<select name="routeMode" autoComplete="off" value={editor.routeMode} onChange={(event) => setEditor((current) => ({ ...current, routeMode: event.target.value }))}>{ROUTE_MODE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-        <ConsumerButton loading={action === "replan"} loadingLabel="현재 근거 확인 중…" onClick={replan}>현재 근거로 다시 계획</ConsumerButton>
+        <ConsumerButton disabled={Boolean(action)} loading={action === "replan"} loadingLabel="현재 근거 확인 중…" onClick={replan}>현재 근거로 다시 계획</ConsumerButton>
       </div>
       <p className="cr22-journey__muted">재계획은 자연어를 다시 보내지 않고 이용 시간·테마·방문 장소 수·경로 방식만 구조화해서 전송합니다.</p>{notice ? <p className="cr22-journey__notice" role="status">{notice}</p> : null}
     </SurfaceCard>
+    <RecheckOptInDialog busy={action === "recheck"} kind="PLAN_RECHECK" now={now} onClose={() => setRecheckOpen(false)} onConfirm={createRecheck} open={recheckOpen} />
   </>;
 }
 
-export default function ConsumerJourneyPlanResultPage({ adapter = consumerJourneyAdapter, authState = "authenticated", decisionId, initialDecision, onLogin, onNavigate, user }) {
+export default function ConsumerJourneyPlanResultPage({ adapter = consumerJourneyAdapter, authState = "authenticated", decisionId, initialDecision, now, onLogin, onNavigate, onResult, onSaved, recheckAdapter = consumerSupportAdapter, user }) {
   const [state, setState] = useState(initialDecision ? { type: "ready", decision: initialDecision } : { type: "loading" });
-  async function load() { setState({ type: "loading" }); try { setState({ type: "ready", decision: await adapter.loadDecision(decisionId) }); } catch (error) { setState({ type: "error", error }); } }
-  useEffect(() => { if (!initialDecision) load(); }, [decisionId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [reloadKey, setReloadKey] = useState(0);
+  const readyDecision = state.type === "ready" && (!decisionId || state.decision.decisionId === decisionId) ? state.decision : null;
+  useEffect(() => {
+    if (!reloadKey && initialDecision && (!decisionId || initialDecision.decisionId === decisionId)) {
+      setState({ type: "ready", decision: initialDecision });
+      return undefined;
+    }
+    let active = true;
+    setState({ type: "loading" });
+    adapter.loadDecision(decisionId).then((decision) => {
+      if (active) setState({ type: "ready", decision });
+    }).catch((error) => { if (active) setState({ type: "error", error }); });
+    return () => { active = false; };
+  }, [adapter, decisionId, initialDecision, reloadKey]);
+  useEffect(() => {
+    if (readyDecision) onResult?.(readyDecision);
+  }, [onResult, readyDecision]);
   return <ConsumerR2Theme className="cr22-journey">
-    <ConsumerAppHeader activeItem="planner" authState={authState} hasUnreadNotifications onLogin={onLogin} onNavigate={onNavigate} userName={user?.name || user?.displayName} userTier={user?.tier} />
+    <ConsumerAppHeader activeItem="planner" authState={authState} onLogin={onLogin} onNavigate={onNavigate} userName={user?.name || user?.displayName} userTier={user?.tier} />
     <ConsumerContainer as="main" id="main-content" className="cr22-journey__content">
       {state.type === "loading" ? <AsyncState state="loading" title="AI 계획을 불러오는 중입니다" description="저장된 decision과 현재 근거 상태를 확인하고 있습니다." /> : null}
-      {state.type === "error" ? <AsyncState state="error" title={state.error?.status === 410 ? "AI 계획이 만료되었습니다" : state.error?.status === 404 ? "AI 계획을 찾을 수 없습니다" : "AI 계획을 불러오지 못했습니다"} description={ERROR_COPY[state.error?.code] || "조건을 다시 입력하거나 잠시 후 다시 시도해 주세요."} onAction={load} /> : null}
-      {state.type === "ready" ? <ResultContent adapter={adapter} decision={state.decision} onNavigate={onNavigate} onUpdated={(decision) => setState({ type: "ready", decision })} /> : null}
+      {state.type === "error" ? <AsyncState state="error" title={state.error?.status === 410 ? "AI 계획이 만료되었습니다" : state.error?.status === 404 ? "AI 계획을 찾을 수 없습니다" : "AI 계획을 불러오지 못했습니다"} description={ERROR_COPY[state.error?.code] || "조건을 다시 입력하거나 잠시 후 다시 시도해 주세요."} onAction={() => setReloadKey((current) => current + 1)} /> : null}
+      {state.type === "ready" ? <ResultContent key={`${state.decision.decisionId}:${state.decision.revision}`} adapter={adapter} decision={state.decision} now={now} onNavigate={onNavigate} onSaved={onSaved} onUpdated={(decision) => setState({ type: "ready", decision })} recheckAdapter={recheckAdapter} /> : null}
     </ConsumerContainer>
   </ConsumerR2Theme>;
 }

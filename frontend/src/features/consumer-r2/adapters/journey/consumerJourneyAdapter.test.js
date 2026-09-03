@@ -45,3 +45,12 @@ test("request builders preserve zero instead of treating it as missing", () => {
     maxJourneyMinutes: 0, requiredBikeCount: 0,
   }));
 });
+
+test("restored provider references use the plan endpoint placeId contract", () => {
+  const restored = { providerId: "destination-provider", displayName: "여의도한강공원", latitude: 37.5264, longitude: 126.9351 };
+  const expected = { placeId: restored.providerId, displayName: restored.displayName, latitude: restored.latitude, longitude: restored.longitude };
+  const context = { origin: restored, destination: restored };
+  expect(toNaturalLanguageRequest("한강을 달리고 싶어요", context)).toEqual(expect.objectContaining({ origin: expected, destination: expected }));
+  expect(toStructuredReplanRequest({ revision: 2, normalizedIntent: context })).toEqual(expect.objectContaining({ origin: expected, destination: expected }));
+  expect(toStructuredReplanRequest({ revision: 2 }, context).destination).not.toHaveProperty("providerId");
+});

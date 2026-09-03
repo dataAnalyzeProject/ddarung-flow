@@ -163,7 +163,7 @@ export default function ConsumerAlertsPage({
     try {
       const currentResult = await adapter.executeRecheck(publicId);
       if (sessionId !== sessionRequestIdRef.current) return;
-      onCurrentData?.(currentResult);
+      onCurrentData?.(currentResult, subscriptions.find((item) => item.publicId === publicId)?.searchInput);
       setNotice("현재 데이터로 재확인했습니다.");
     } catch (error) {
       if (sessionId !== sessionRequestIdRef.current) return;

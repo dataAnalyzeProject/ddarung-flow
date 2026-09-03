@@ -1,5 +1,5 @@
-import { loadArchive, removeFavorite, saveFavorite } from "../../../archive/archiveApi";
-import { fetchNearbyStations, fetchStationDetail, fetchStationRhythm } from "../../../station-detail/stationRhythmApi";
+import { loadArchive, removeFavorite, saveFavorite } from "../../../archive/archiveApi.js";
+import { fetchNearbyStations, fetchStationDetail, fetchStationRhythm } from "../../../station-detail/stationRhythmApi.js";
 
 function stateFrom(result, missingCode) {
   if (result.status === "fulfilled") return "ready";

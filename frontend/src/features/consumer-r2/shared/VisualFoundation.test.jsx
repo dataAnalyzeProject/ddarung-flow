@@ -14,6 +14,14 @@ import {
   SurfaceCard,
 } from "./index";
 
+test("header opens Alerts without inventing an unread notification", () => {
+  const onNavigate = jest.fn();
+  render(<ConsumerAppHeader onNavigate={onNavigate} />);
+  fireEvent.click(screen.getByRole("button", { name: "알림 보기" }));
+  expect(onNavigate).toHaveBeenCalledWith("alerts");
+  expect(screen.queryByRole("button", { name: "새 알림 보기" })).not.toBeInTheDocument();
+});
+
 test("header uses semantic navigation and preserves callback-based SPA routing", () => {
   const onNavigate = jest.fn();
   const onLogin = jest.fn();
@@ -29,10 +37,21 @@ test("header uses semantic navigation and preserves callback-based SPA routing",
   expect(screen.getByRole("img", { name: "따라가요" })).toHaveAttribute("fetchpriority", "high");
   expect(screen.getByRole("link", { name: "본문 바로가기" })).toHaveAttribute("href", "#main-content");
   expect(document.querySelector("#main-content")).toBeInTheDocument();
+  const originalHash = window.location.hash;
+  fireEvent.click(screen.getByRole("link", { name: "본문 바로가기" }));
+  expect(document.querySelector("#main-content")).toHaveFocus();
+  expect(window.location.hash).toBe(originalHash);
   fireEvent.click(screen.getByRole("button", { name: "AI 플래너 PREMIUM" }));
   fireEvent.click(screen.getByRole("link", { name: "로그인" }));
   expect(onNavigate).toHaveBeenCalledWith("planner");
   expect(onLogin).toHaveBeenCalledTimes(1);
+});
+
+test("account link uses shared navigation when no account callback is supplied", () => {
+  const onNavigate = jest.fn();
+  render(<ConsumerAppHeader authState="authenticated" onNavigate={onNavigate} />);
+  fireEvent.click(screen.getByRole("link", { name: "내 계정" }));
+  expect(onNavigate).toHaveBeenCalledWith("mypage");
 });
 
 test("unwired future navigation stays inert while current hash routes remain truthful", () => {

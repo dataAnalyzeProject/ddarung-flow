@@ -3,26 +3,47 @@ import heroImage from "../../../assets/consumer-r2/main/cr22-main-initial-hero-v
 import { fetchRouteCandidates } from "../../map/candidatesApi.js";
 import { searchPlaces } from "../../map/kakaoMapApi.js";
 import { getCurrentUser } from "../../login/authApi.js";
-import { clearPendingPrediction, loadPendingPrediction, savePendingPrediction } from "../../login/loginStorage.js";
+import { clearPendingPrediction, loadPendingPrediction } from "../../login/loginStorage.js";
 import { adaptConsumerMainResponse, buildConsumerMainRequest } from "../adapters/main/index.js";
+import { restoreConsumerMainInput, saveConsumerMainPendingPrediction, toConsumerMainSearchInput } from "../adapters/main/consumerMainState.js";
+import { consumerPersonalAdapter } from "../adapters/personal/consumerPersonalAdapter.js";
+import { consumerSupportAdapter } from "../adapters/support/consumerSupportAdapter.js";
 import ConsumerAppHeader from "../shared/ConsumerAppHeader.jsx";
 import ConsumerIcon from "../shared/ConsumerIcon.jsx";
 import { ConsumerButton, OptionCard, SelectedPlaceCard, StatusBadge } from "../shared/ConsumerControls.jsx";
 import { AsyncState } from "../shared/ConsumerSurfaces.jsx";
 import { ConsumerContainer, ConsumerR2Theme } from "../shared/ConsumerR2Layout.jsx";
 import ConsumerRouteMap from "./ConsumerRouteMap.jsx";
+import RecheckOptInDialog from "../support/RecheckOptInDialog.jsx";
 import "./main.css";
+import "../support/support.css";
 
 const DEFAULT_SERVICES = {
   clearPendingPrediction,
   fetchRouteCandidates,
   getCurrentUser,
   loadPendingPrediction,
-  savePendingPrediction,
+  savePendingPrediction: saveConsumerMainPendingPrediction,
+  saveRecentSearch: consumerPersonalAdapter.saveRecentSearch,
+  createSearchRecheck: consumerSupportAdapter.createSearchRecheck,
   searchPlaces,
 };
 
 const DEFAULT_INPUT = { origin: "", destination: "", travelMode: "PUBLIC_TRANSIT", requiredBikeCount: 1 };
+
+function inputSnapshot(input, places) {
+  const restored = restoreConsumerMainInput({ ...input, routePlaces: places });
+  const placeOrQuery = (kind) => {
+    const place = restored.places[kind];
+    return place ? {
+      providerId: place.providerId,
+      displayName: place.name,
+      latitude: place.latitude,
+      longitude: place.longitude,
+    } : restored.input[kind];
+  };
+  return { ...restored.input, origin: placeOrQuery("origin"), destination: placeOrQuery("destination") };
+}
 
 function formatProbability(value) {
   return value === null ? "확인 불가" : `${Math.round(value * 100)}%`;
@@ -124,7 +145,7 @@ function PlacePicker({ kind, label, onSelect, place, query, search, setQuery }) 
   );
 }
 
-function SearchWorkspace({ input, onChange, onOpenPlanner, onSearch, places, searchPlaces, state }) {
+function SearchWorkspace({ authState, input, onChange, onOpenPlanner, onSearch, places, searchPlaces, state }) {
   const ready = Boolean(places.origin && places.destination);
   return (
     <section className="cr293-search" aria-labelledby="cr293-search-title">
@@ -156,7 +177,7 @@ function SearchWorkspace({ input, onChange, onOpenPlanner, onSearch, places, sea
         </fieldset>
       </div>
       <div className="cr293-search__actions">
-        <ConsumerButton block size="lg" icon={<ConsumerIcon name="arrowRight" />} iconPosition="end" disabled={!ready || state === "LOADING"} loading={state === "LOADING"} loadingLabel="도착 시점 후보를 찾는 중…" onClick={onSearch}>대여 가능성 비교</ConsumerButton>
+        <ConsumerButton block size="lg" icon={<ConsumerIcon name="arrowRight" />} iconPosition="end" disabled={!ready || state === "LOADING" || authState === "loading" || authState === "error"} loading={state === "LOADING"} loadingLabel="도착 시점 후보를 찾는 중…" onClick={onSearch}>대여 가능성 비교</ConsumerButton>
         <ConsumerButton block size="lg" variant="premium" disabled={state === "LOADING"} onClick={onOpenPlanner}>AI로 전체 일정 짜기 · PREMIUM</ConsumerButton>
       </div>
       {state === "LOADING" ? <div className="cr293-search__loading"><AsyncState state="loading" title="도착 시점 후보를 비교하고 있습니다" description="예측과 실제 이동 경로를 같은 근거로 확인합니다." /></div> : null}
@@ -190,14 +211,14 @@ function RouteDetail({ candidate }) {
         <div><h2 id="cr293-transit-title">{candidate.stationName}까지 가는 길</h2></div>
         <div><strong>{formatMinutes(detail.durationSeconds)}</strong><span>{formatDistance(detail.distanceMeters)} · 환승 {detail.transfers ?? "확인 불가"}회 · {formatFare(detail.fare)}</span></div>
       </div>
-      <ol className="cr293-transit__steps">
-        {detail.steps.length ? detail.steps.map((step, index) => (
+      {detail.steps.length ? <ol className="cr293-transit__steps">
+        {detail.steps.map((step, index) => (
           <li key={`${step.type}-${index}`}>
             <span className="cr293-transit__dot" aria-hidden="true"><ConsumerIcon name={step.type === "SUBWAY" || step.type === "BUS" ? "transit" : "ride"} size={18} /></span>
             <div><strong>{step.guidance || "이동 안내"}</strong><span>{formatMinutes(step.durationSeconds)} · {formatDistance(step.distanceMeters)}</span>{step.vehicles.length ? <small>{step.vehicles.map((vehicle) => vehicle.name).filter(Boolean).join(" · ")}</small> : null}</div>
           </li>
-        )) : <li><div><strong>상세 이동 단계가 제공되지 않았습니다.</strong><span>경로 요약을 확인해 주세요.</span></div></li>}
-      </ol>
+        ))}
+      </ol> : <p role="status">상세 이동 단계가 제공되지 않았습니다. 경로 요약을 확인해 주세요.</p>}
     </section>
   );
 }
@@ -214,14 +235,14 @@ function TransitWorkspace({ candidate, destination, mapRenderer, onClose, onOpen
           <h2 ref={transitHeadingRef} tabIndex="-1">{candidate.stationName}</h2>
         </div>
         <div className="cr293-transit-summary__primary">
-          <span><small>도착 시점 대여 가능성</small><b>{formatProbability(candidate.probability)}</b></span>
+          <span><small>도착 시점 대여 가능성</small>{candidate.probability === null ? <strong>확인 불가</strong> : <b>{formatProbability(candidate.probability)}</b>}</span>
           <span aria-label={inventory.inline}><small>현재 자전거</small><b>{inventory.value}</b><small className="cr293-transit-summary__meta">{inventory.detail}</small></span>
         </div>
         <div className="cr293-transit-summary__route">
           <span><small>예상 도착</small><b>{formatArrival(candidate.arrivalAt)}</b></span>
           <span><small>대중교통</small><b>{formatMinutes(candidate.durationSeconds)}</b></span>
         </div>
-        <p>도착 시각과 대여 가능성은 오른쪽에 표시한 동일 대중교통 경로를 기준으로 계산했습니다.</p>
+        <p>{candidate.probability === null ? "도착 시각은 표시된 대중교통 경로 기준이며, 대여 가능성은 현재 확인하지 못했습니다." : "도착 시각과 대여 가능성은 표시된 동일 대중교통 경로를 기준으로 계산했습니다."}</p>
       </aside>
       <div className="cr293-transit-view__route">
         <ConsumerRouteMap candidate={candidate} destination={destination} mapRenderer={mapRenderer} origin={origin} />
@@ -290,8 +311,9 @@ function ResultsWorkspace({ input, mapRenderer, onOpenRide, onOpenStation, onRes
   );
 }
 
-export default function ConsumerMainPage({ mapRenderer, onLogin, onNavigate, onOpenRide, onOpenStation, services = DEFAULT_SERVICES }) {
+export default function ConsumerMainPage({ currentResult, mapRenderer, onInputChange, onLogin, onNavigate, onOpenRide, onOpenStation, onSearchComplete, restoreSearch, services = DEFAULT_SERVICES }) {
   const [authState, setAuthState] = useState("loading");
+  const [authAttempt, setAuthAttempt] = useState(0);
   const [user, setUser] = useState(null);
   const [input, setInput] = useState(DEFAULT_INPUT);
   const [places, setPlaces] = useState({ origin: null, destination: null });
@@ -299,47 +321,112 @@ export default function ConsumerMainPage({ mapRenderer, onLogin, onNavigate, onO
   const [result, setResult] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
   const [showTransit, setShowTransit] = useState(false);
+  const [recheckOpen, setRecheckOpen] = useState(false);
+  const [recheckStatus, setRecheckStatus] = useState("idle");
+  const [recentSearchError, setRecentSearchError] = useState(false);
+  const requestRef = useRef(0);
+  const inputRef = useRef({ input: DEFAULT_INPUT, places: { origin: null, destination: null } });
+  const callbacksRef = useRef({ onInputChange, onSearchComplete });
+  callbacksRef.current = { onInputChange, onSearchComplete };
 
   useEffect(() => {
-    const pending = services.loadPendingPrediction?.();
-    if (pending) {
-      setInput((current) => ({ ...current, ...pending, origin: pending.routePlaces?.origin?.name ?? pending.origin ?? "", destination: pending.routePlaces?.destination?.name ?? pending.destination ?? "" }));
-      setPlaces({ origin: pending.routePlaces?.origin ?? null, destination: pending.routePlaces?.destination ?? null });
-    }
+    const restored = restoreConsumerMainInput(restoreSearch || services.loadPendingPrediction?.());
+    const suppliedResult = restoreSearch && toConsumerMainSearchInput(restoreSearch, restoreSearch) && currentResult
+      ? adaptConsumerMainResponse(currentResult.candidates, { requiredBikeCount: restored.input.requiredBikeCount })
+      : null;
+    requestRef.current += 1;
+    inputRef.current = restored;
+    setInput(restored.input);
+    setPlaces(restored.places);
+    setResult(suppliedResult);
+    setSelectedId(suppliedResult?.selectedStationId ?? null);
+    setState(suppliedResult?.viewState ?? "INITIAL");
+    setShowTransit(false);
+    setRecheckOpen(false);
+    setRecheckStatus("idle");
+    setRecentSearchError(false);
+    callbacksRef.current.onInputChange?.(inputSnapshot(restored.input, restored.places));
+  }, [currentResult, restoreSearch, services]);
+
+  useEffect(() => {
+    let active = true;
+    setAuthState("loading");
     services.getCurrentUser()
-      .then((currentUser) => { setUser(currentUser); setAuthState("authenticated"); })
-      .catch((error) => setAuthState(error?.status === 401 || error?.status === 403 ? "anonymous" : "anonymous"));
-  }, [services]);
+      .then((auth) => {
+        if (!active) return;
+        const authenticated = auth?.authenticated === true && Boolean(auth.user);
+        setUser(authenticated ? auth.user : null);
+        setAuthState(authenticated ? "authenticated" : "anonymous");
+      })
+      .catch((error) => {
+        if (!active) return;
+        setUser(null);
+        setAuthState(error?.status === 401 || error?.status === 403 ? "anonymous" : "error");
+      });
+    return () => { active = false; };
+  }, [authAttempt, services]);
 
   const updateInput = (patch) => {
-    if (Object.prototype.hasOwnProperty.call(patch, "originPlace")) setPlaces((current) => ({ ...current, origin: patch.originPlace }));
-    if (Object.prototype.hasOwnProperty.call(patch, "destinationPlace")) setPlaces((current) => ({ ...current, destination: patch.destinationPlace }));
+    requestRef.current += 1;
+    if (state === "LOADING") setState("INITIAL");
+    const nextPlaces = { ...inputRef.current.places };
+    if (Object.prototype.hasOwnProperty.call(patch, "originPlace")) nextPlaces.origin = patch.originPlace;
+    if (Object.prototype.hasOwnProperty.call(patch, "destinationPlace")) nextPlaces.destination = patch.destinationPlace;
     const { originPlace, destinationPlace, ...inputPatch } = patch;
-    setInput((current) => ({ ...current, ...inputPatch }));
+    const nextInput = { ...inputRef.current.input, ...inputPatch };
+    inputRef.current = { input: nextInput, places: nextPlaces };
+    setInput(nextInput);
+    setPlaces(nextPlaces);
+    const snapshot = inputSnapshot(nextInput, nextPlaces);
+    callbacksRef.current.onInputChange?.(snapshot);
+    callbacksRef.current.onSearchComplete?.(snapshot, null);
   };
 
-  const reset = () => { setState("INITIAL"); setResult(null); setSelectedId(null); setShowTransit(false); };
-  const login = () => { if (onLogin) onLogin(); else window.location.assign("/login"); };
+  const reset = () => {
+    requestRef.current += 1;
+    setState("INITIAL");
+    setResult(null);
+    setSelectedId(null);
+    setShowTransit(false);
+    setRecheckStatus("idle");
+    callbacksRef.current.onSearchComplete?.(inputSnapshot(input, places), null);
+  };
+  const login = () => {
+    services.savePendingPrediction(input, places);
+    if (onLogin) onLogin(); else window.location.assign("/login");
+  };
+  const searchInput = toConsumerMainSearchInput(input, places);
   const submit = async () => {
-    if (!places.origin || !places.destination) return;
-    if (authState !== "authenticated") {
-      services.savePendingPrediction(input, places);
+    if (!searchInput || authState === "loading" || authState === "error") return;
+    if (authState === "anonymous") {
       login();
       return;
     }
+    const requestId = ++requestRef.current;
     setState("LOADING");
     setShowTransit(false);
+    setRecheckStatus("idle");
+    setRecentSearchError(false);
     try {
       const response = await services.fetchRouteCandidates(buildConsumerMainRequest({ ...input, ...places }));
+      if (requestId !== requestRef.current) return;
       const adapted = adaptConsumerMainResponse(response?.candidates ?? response, { requiredBikeCount: input.requiredBikeCount });
       setResult(adapted);
       setSelectedId(adapted.selectedStationId);
       setState(adapted.viewState);
+      callbacksRef.current.onSearchComplete?.(searchInput, response);
       services.clearPendingPrediction?.();
+      try {
+        services.saveRecentSearch?.(user, searchInput);
+      } catch {
+        setRecentSearchError(true);
+      }
     } catch (error) {
-      if (error?.message === "AUTH_REQUIRED") {
-        services.savePendingPrediction(input, places);
+      if (requestId !== requestRef.current) return;
+      if (error?.message === "AUTH_REQUIRED" || error?.status === 401 || error?.status === 403) {
+        setUser(null);
         setAuthState("anonymous");
+        setState("INITIAL");
         login();
         return;
       }
@@ -347,18 +434,39 @@ export default function ConsumerMainPage({ mapRenderer, onLogin, onNavigate, onO
     }
   };
 
+  const createRecheck = async (departureAt) => {
+    if (!searchInput || recheckStatus === "saving") return;
+    setRecheckStatus("saving");
+    try {
+      await services.createSearchRecheck(searchInput, departureAt);
+      setRecheckStatus("success");
+    } catch (error) {
+      setRecheckStatus("error");
+      if (error?.status === 401 || error?.status === 403) login();
+    }
+    setRecheckOpen(false);
+  };
+
   let content;
-  if (state === "INITIAL" || state === "LOADING") content = <SearchWorkspace input={input} onChange={updateInput} onOpenPlanner={() => onNavigate?.("planner")} onSearch={submit} places={places} searchPlaces={services.searchPlaces} state={state} />;
+  if (state === "INITIAL" || state === "LOADING") content = <SearchWorkspace authState={authState} input={input} onChange={updateInput} onOpenPlanner={() => onNavigate?.("planner")} onSearch={submit} places={places} searchPlaces={services.searchPlaces} state={state} />;
   else if (state === "ERROR") content = <AsyncState state="error" title="추천 결과를 불러오지 못했습니다" description="입력은 그대로 보존했습니다. 잠시 후 다시 시도해 주세요." onAction={submit} />;
   else if (state === "EMPTY") content = <AsyncState state="empty" title="조건에 맞는 대여소를 찾지 못했습니다" description="확인 불가 값을 0으로 바꾸지 않았습니다. 조건을 바꿔 다시 찾아보세요." actionLabel="조건 다시 선택" onAction={reset} />;
-  else content = <ResultsWorkspace input={input} mapRenderer={mapRenderer} onOpenRide={onOpenRide} onOpenStation={onOpenStation} onReset={reset} places={places} result={result} selectedId={selectedId} setSelectedId={setSelectedId} showTransit={showTransit} setShowTransit={setShowTransit} />;
+  else content = <ResultsWorkspace input={input} mapRenderer={mapRenderer} onOpenRide={(candidate) => onOpenRide?.(candidate, searchInput)} onOpenStation={(candidate) => onOpenStation?.(candidate, searchInput)} onReset={reset} places={places} result={result} selectedId={selectedId} setSelectedId={setSelectedId} showTransit={showTransit} setShowTransit={setShowTransit} />;
 
   return (
     <ConsumerR2Theme className="cr293-page">
       <ConsumerAppHeader activeItem="home" authState={authState} onLogin={login} onNavigate={onNavigate} userName={user?.displayName ?? user?.name} userTier={user?.tier?.toLowerCase()} />
       <main id="main-content">
         {state === "INITIAL" || state === "LOADING" ? <section className="cr293-hero"><img src={heroImage} alt="서울 도심에서 따릉이를 타고 이동하는 모습" width="1600" height="420" fetchpriority="high" /><div><h1>도착할 때 빌릴 수 있는<br />대여소를 비교해요</h1><p>지금 재고가 아니라, 내가 도착할 시점의 가능성을 알려드려요.</p></div></section> : null}
-        <ConsumerContainer className={state === "INITIAL" || state === "LOADING" ? "cr293-container--initial" : "cr293-container--result"}>{content}</ConsumerContainer>
+        <ConsumerContainer className={state === "INITIAL" || state === "LOADING" ? "cr293-container--initial" : "cr293-container--result"}>
+          {authState === "error" ? <AsyncState state="error" title="로그인 상태를 확인하지 못했습니다" description="입력한 조건은 유지됩니다. 연결을 확인한 뒤 다시 시도해 주세요." actionLabel="로그인 상태 다시 확인" onAction={() => setAuthAttempt((value) => value + 1)} /> : null}
+          {content}
+          {(state === "RESULT" || state === "PARTIAL") && searchInput ? <ConsumerButton variant="secondary" disabled={authState !== "authenticated" || recheckStatus === "saving"} onClick={() => { setRecheckStatus("idle"); setRecheckOpen(true); }}>출발 전에 다시 알려주세요</ConsumerButton> : null}
+          {recentSearchError ? <p role="status">비교 결과는 확인했지만 최근 검색을 저장하지 못했습니다.</p> : null}
+          {recheckStatus === "success" ? <p role="status">출발 15분 전 재확인 알림을 신청했습니다.</p> : null}
+          {recheckStatus === "error" ? <p role="alert">재확인 알림을 신청하지 못했습니다. 다시 시도해 주세요.</p> : null}
+        </ConsumerContainer>
+        <RecheckOptInDialog open={recheckOpen} busy={recheckStatus === "saving"} onClose={() => setRecheckOpen(false)} onConfirm={createRecheck} />
       </main>
     </ConsumerR2Theme>
   );
