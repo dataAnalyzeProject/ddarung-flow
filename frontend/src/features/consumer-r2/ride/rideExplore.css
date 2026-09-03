@@ -5,8 +5,8 @@
 }
 
 .cr22-ride__content {
-  padding-top: 24px;
-  padding-bottom: 56px;
+  padding-top: 16px;
+  padding-bottom: 48px;
 }
 
 .cr22-ride__back {
@@ -25,11 +25,11 @@
 .cr22-ride__back:hover { color: #173a58; }
 .cr22-ride__back svg { transform: rotate(180deg); }
 
-.cr22-ride__heading { margin: 18px 0 18px; }
+.cr22-ride__heading { margin: 10px 0 12px; }
 .cr22-ride__heading h1 {
   margin: 0;
   color: #102342;
-  font-size: clamp(30px, 3vw, 42px);
+  font-size: clamp(26px, 2.3vw, 34px);
   line-height: 1.15;
   letter-spacing: -.04em;
   text-wrap: balance;
@@ -54,7 +54,7 @@
 .cr22-ride__theme-scroll {
   display: flex;
   gap: 10px;
-  margin: 22px 0 18px;
+  margin: 14px 0 12px;
   overflow-x: auto;
   scrollbar-color: #aebdcc transparent;
   scrollbar-width: thin;
@@ -89,19 +89,19 @@
 .cr22-ride__poi {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 14px;
+  gap: 13px;
   align-items: center;
   border: 1px solid #dce4ed;
   border-radius: 14px;
-  padding: 16px;
+  padding: 12px 14px;
   background: #fff;
   box-shadow: 0 7px 20px rgba(24, 49, 79, .04);
 }
 .cr22-ride__poi.is-selected { border-color: #009d98; box-shadow: 0 9px 24px rgba(0, 138, 118, .11); }
 .cr22-ride__poi-icon {
   display: grid;
-  width: 50px;
-  height: 50px;
+  width: 44px;
+  height: 44px;
   place-items: center;
   border-radius: 12px;
   background: #e9f8f5;

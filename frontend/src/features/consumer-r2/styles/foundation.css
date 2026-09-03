@@ -195,7 +195,7 @@
 }
 
 .cr22-header {
-  min-height: 5rem;
+  min-height: var(--cr22-header-height);
   display: grid;
   grid-template-columns: minmax(10rem, 13rem) minmax(0, 1fr) auto;
   align-items: stretch;
@@ -245,7 +245,7 @@
 
 .cr22-header__nav-link {
   position: relative;
-  min-height: 5rem;
+  min-height: var(--cr22-header-height);
   padding: 0 var(--cr22-space-2);
   display: inline-flex;
   align-items: center;
