@@ -277,7 +277,16 @@ public class JourneyPlanService {
         ConsumerAiEvidenceBundle bundle = new ConsumerAiEvidenceBundle(rental, pois, routes, weather, airQuality);
 
         EvidenceSelectionValidator.Selection selection;
-        if (useAiSchedule) {
+        if (pois.isEmpty()) {
+            // Nothing to select: no POI evidence was collected (no themes requested, or every
+            // theme came back empty/unavailable), so there is no meaningful schedule decision
+            // left to make. Skip the AI round-trip entirely rather than asking it to choose among
+            // zero POIs, which only produced timeouts or AI_TOOL_VALUE_MISMATCH.
+            if (useAiSchedule) requireAiEntitlement.run();
+            JourneyCandidate fallback = candidates.getFirst();
+            selection = deterministicSelection(rentalId(fallback.stationId()), constraints, fallback,
+                    pois, routeData, weather, airQuality);
+        } else if (useAiSchedule) {
             requireAiEntitlement.run();
             JourneyAiGateway.ScheduleResult result;
             try {

@@ -682,6 +682,7 @@ class JourneyPlanServiceTest {
 
     @Test
     void confirmedEmptyThemesDoNotReintroduceAiPreferencesOrThemeConstraints() {
+        AtomicInteger scheduleCalls = new AtomicInteger();
         JourneyAiGateway ai = new JourneyAiGateway() {
             @Override public IntentResult compileIntent(String input) {
                 JourneyIntent intent = validIntent();
@@ -692,10 +693,11 @@ class JourneyPlanServiceTest {
             @Override public List<com.ddarungflow.journey.ai.ToolCallRequest> validateToolPlan(
                     List<com.ddarungflow.journey.ai.ToolCallRequest> requests) { return requests; }
             @Override public ScheduleResult selectSchedule(ConsumerAiEvidenceBundle evidence, ScheduleConstraints constraints) {
-                assertThat(evidence.pois()).isEmpty();
-                return new ScheduleResult(new EvidenceSelectionValidator.Selection("rental:station-1", List.of(), List.of(),
-                        List.of("weather:station-1"), List.of("air-quality:station-1"), List.of(), List.of(),
-                        "선택한 대여 근거", List.of("EVIDENCE_ONLY")), null);
+                // With zero stops to choose from, the service must not spend an AI call on it:
+                // a real provider has nothing meaningful to select and either times out or
+                // rejects the response validation, so this stays unreachable.
+                scheduleCalls.incrementAndGet();
+                throw new AssertionError("selectSchedule must not be called when there are zero stops to select");
             }
         };
         JourneyPlanService service = unifiedService(new InMemoryPersistence(), ai, new CountingReturnPort(), completeEvidence());
@@ -706,6 +708,9 @@ class JourneyPlanServiceTest {
                 form.requiredBikeCount(), form.preferences(), form.avoid(), initial.revision(),
                 new JourneyPlanService.PlanConstraints(120, List.of(), null, "BIKE_ONLY")));
 
+        assertThat(scheduleCalls).hasValue(0);
+        assertThat(decision.status()).isEqualTo(JourneyStatus.PARTIAL);
+        assertThat(decision.warnings()).contains("POI_THEME_MISSING").doesNotContain("AI_TOOL_VALUE_MISMATCH");
         assertThat(decision.unifiedPlan().evidence().pois()).isEmpty();
         assertThat(decision.unifiedPlan().segments()).extracting(UnifiedJourneyPlan.Segment::type)
                 .containsExactly(UnifiedJourneyPlan.SegmentType.ACCESS, UnifiedJourneyPlan.SegmentType.RENT);
