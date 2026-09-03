@@ -18,12 +18,21 @@ export function toIsoDate(value) {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
+function toPlanPlace(place) {
+  return place ? {
+    placeId: place.placeId ?? place.providerId,
+    displayName: place.displayName,
+    latitude: place.latitude,
+    longitude: place.longitude,
+  } : null;
+}
+
 export function toNaturalLanguageRequest(text, context = {}) {
   return {
     requestMode: "NATURAL_LANGUAGE",
     naturalLanguageText: text.trim(),
-    origin: context.origin ?? null,
-    destination: context.destination ?? null,
+    origin: toPlanPlace(context.origin),
+    destination: toPlanPlace(context.destination),
     departureAt: toIsoDate(context.departureAt),
     maxJourneyMinutes: hasValue(context.maxJourneyMinutes) ? Number(context.maxJourneyMinutes) : null,
     requiredBikeCount: hasValue(context.requiredBikeCount) ? Number(context.requiredBikeCount) : null,
@@ -40,8 +49,8 @@ export function toStructuredReplanRequest(decision, changes = {}) {
   const requiredBikeCount = changes.requiredBikeCount ?? intent.requiredBikeCount;
   return {
     requestMode: "FORM",
-    origin: changes.origin ?? intent.origin ?? null,
-    destination: changes.destination ?? intent.destination ?? null,
+    origin: toPlanPlace(changes.origin ?? intent.origin),
+    destination: toPlanPlace(changes.destination ?? intent.destination),
     departureAt,
     maxJourneyMinutes: hasValue(maxJourneyMinutes) ? Number(maxJourneyMinutes) : null,
     requiredBikeCount: hasValue(requiredBikeCount) ? Number(requiredBikeCount) : null,
