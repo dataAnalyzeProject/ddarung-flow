@@ -5,14 +5,19 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
+import java.util.function.Function;
 
 /**
  * Thin Responses API transport. It does not log prompts or responses.
@@ -20,8 +25,14 @@ import java.util.List;
 public class ResponsesApiClient {
     private static final Logger log = LoggerFactory.getLogger(ResponsesApiClient.class);
     private static final String JOURNEY_INTENT_INSTRUCTIONS = "Return only a JourneyIntent JSON object matching the supplied schema. "
-            + "Use selected place references, departureAt, and requiredBikeCount from the input as authoritative. "
-            + "Do not invent or change placeId values. Use maxJourneyMinutes when no explicit duration is given.";
+            + "Extract only intentions explicitly stated in naturalLanguageText; do not invent omitted places, times, duration, or bike count. "
+            + "Place displayName values are search queries only. Always set placeId to an empty string; never return coordinates or provider facts. "
+            + "Selected context is authoritative for later user confirmation, but keep explicit conflicting text intentions visible in this draft. "
+            + "When text omits a value, selected origin/destination displayName, departureAt, maxJourneyMinutes, or requiredBikeCount may fill it. "
+            + "Use currentDateTime and timeZone to resolve relative Korean dates and times. A time without a date means the next future occurrence in Asia/Seoul. "
+            + "If both text and context omit a required origin, startAt, totalMinutes, or requiredBikeCount, return null, list it in missingFields, and set needsClarification=true. "
+            + "A missing destination is null and can be confirmed later. Never choose a random year or default bike count or duration. "
+            + "Use neutral preference weights of 3 and null hard constraints when none are expressed.";
     private final JourneyAiProperties properties;
     private final ObjectMapper objectMapper;
     private final ResponseTransport transport;
@@ -49,17 +60,33 @@ public class ResponsesApiClient {
     }
 
     public JsonNode requestStructuredOutput(JourneyCompileRequest input, String schemaName, JsonNode schema) {
-        return requestStructuredOutput(() -> requestBody(input, schemaName, schema));
+        return requestStructuredOutput(() -> requestBody(input, schemaName, schema), schemaName, Function.identity(), false);
     }
 
     public JsonNode requestStructuredOutput(JsonNode input, String instructions, String schemaName, JsonNode schema) {
-        return requestStructuredOutput(() -> requestBody(input, instructions, schemaName, schema));
+        return requestStructuredOutput(() -> requestBody(input, instructions, schemaName, schema), schemaName, Function.identity(), false);
     }
 
-    private JsonNode requestStructuredOutput(RequestBodySupplier requestBodySupplier) {
+    <T> T requestStructuredOutput(JourneyCompileRequest input, String schemaName, JsonNode schema, Function<JsonNode, T> validator) {
+        return requestStructuredOutput(() -> requestBody(input, schemaName, schema), schemaName, validator, true);
+    }
+
+    <T> T requestStructuredOutput(JsonNode input, String instructions, String schemaName, JsonNode schema, Function<JsonNode, T> validator) {
+        return requestStructuredOutput(() -> requestBody(input, instructions, schemaName, schema), schemaName, validator, true);
+    }
+
+    private <T> T requestStructuredOutput(RequestBodySupplier requestBodySupplier, String schemaName, Function<JsonNode, T> validator, boolean validated) {
         if (!properties.enabled()) throw new JourneyAiException(JourneyAiErrorCode.AI_DISABLED, "Journey AI is disabled");
         if (!properties.providerConfigured()) throw new JourneyAiException(JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE, "Journey AI provider is not configured");
         boolean requestAttempted = false;
+        String kind = switch (schemaName) {
+            case "journey_intent" -> "INTENT_COMPILE";
+            case "journey_schedule" -> "SCHEDULE_SELECTION";
+            default -> "OTHER";
+        };
+        String correlationId = MDC.get("journeyAiCorrelationId");
+        if (correlationId == null || correlationId.isBlank()) correlationId = UUID.randomUUID().toString();
+        long started = System.nanoTime();
         try {
             HttpRequest request = HttpRequest.newBuilder(properties.responsesUri())
                     .timeout(properties.timeout())
@@ -68,22 +95,37 @@ public class ResponsesApiClient {
                     .POST(HttpRequest.BodyPublishers.ofString(requestBodySupplier.get()))
                     .build();
             requestAttempted = true;
-            log.info("event=journey_ai_provider_request attempted=true");
+            log.info("event=journey_ai_provider_request attempted=true kind={} outcome=REQUEST correlation_id={}", kind, correlationId);
             TransportResponse response = transport.send(request);
-            log.info("event=journey_ai_provider_response status={}", response.statusCode());
+            log.info("event=journey_ai_provider_response status={} kind={} correlation_id={} latency_ms={}", response.statusCode(), kind, correlationId, elapsedMillis(started));
             if (response.statusCode() != 200) throw statusError(response.statusCode());
-            return extractStructuredOutput(response.body());
+            T result = validator.apply(extractStructuredOutput(response.body()));
+            if (validated) log.info("event=journey_ai_provider_result kind={} outcome={} correlation_id={} latency_ms={} stage=VALIDATED_OUTPUT",
+                    kind, "SCHEDULE_SELECTION".equals(kind) ? "OUTPUT_VALIDATED" : "SUCCESS", correlationId, elapsedMillis(started));
+            return result;
         } catch (JourneyAiException exception) {
+            if (requestAttempted) logFailure(kind, correlationId, started, exception.code(),
+                    exception.failureStage() == null ? "PROVIDER_RESPONSE" : exception.failureStage().name());
             throw exception;
+        } catch (HttpTimeoutException exception) {
+            if (requestAttempted) logFailure(kind, correlationId, started, JourneyAiErrorCode.AI_PROVIDER_TIMEOUT, "TIMEOUT");
+            throw new JourneyAiException(JourneyAiErrorCode.AI_PROVIDER_TIMEOUT, "provider request timed out");
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            if (requestAttempted) log.warn("event=journey_ai_provider_transport_failure category=INTERRUPTED");
-            throw new JourneyAiException(JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE, "provider request interrupted", exception);
+            if (requestAttempted) logFailure(kind, correlationId, started, JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE, "INTERRUPTED");
+            throw new JourneyAiException(JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE, "provider request interrupted");
         } catch (Exception exception) {
-            if (requestAttempted) log.warn("event=journey_ai_provider_transport_failure category=REQUEST_FAILURE");
-            throw new JourneyAiException(JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE, "provider request failed", exception);
+            if (requestAttempted) logFailure(kind, correlationId, started, JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE, "TRANSPORT");
+            throw new JourneyAiException(JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE, "provider request failed");
         }
     }
+
+    private void logFailure(String kind, String correlationId, long started, JourneyAiErrorCode code, String stage) {
+        log.warn("event=journey_ai_provider_result kind={} outcome=FAILURE correlation_id={} latency_ms={} code={} stage={}",
+                kind, correlationId, elapsedMillis(started), code, stage);
+    }
+
+    private long elapsedMillis(long started) { return (System.nanoTime() - started) / 1_000_000; }
 
     JsonNode extractStructuredOutput(String body) {
         JsonNode response;
@@ -163,6 +205,8 @@ public class ResponsesApiClient {
     private String compileInput(JourneyCompileRequest request) throws Exception {
         ObjectNode input = objectMapper.createObjectNode();
         input.put("naturalLanguageText", request.naturalLanguageText());
+        input.put("currentDateTime", OffsetDateTime.now(ZoneId.of("Asia/Seoul")).toString());
+        input.put("timeZone", "Asia/Seoul");
         putPlace(input, "origin", request.origin());
         putPlace(input, "destination", request.destination());
         putTime(input, request.departureAt());

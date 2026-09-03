@@ -54,3 +54,29 @@ test("restored provider references use the plan endpoint placeId contract", () =
   expect(toStructuredReplanRequest({ revision: 2, normalizedIntent: context })).toEqual(expect.objectContaining({ origin: expected, destination: expected }));
   expect(toStructuredReplanRequest({ revision: 2 }, context).destination).not.toHaveProperty("providerId");
 });
+
+test("free text alone keeps every optional structured field absent without defaults", () => {
+  expect(toNaturalLanguageRequest("공원을 달리고 싶어요")).toEqual({ requestMode: "NATURAL_LANGUAGE", naturalLanguageText: "공원을 달리고 싶어요", origin: null, destination: null, departureAt: null, maxJourneyMinutes: null, requiredBikeCount: null, preferences: {}, avoid: [] });
+});
+
+test("FORM confirmation submits provider selections and never promotes AI place references", async () => {
+  const api = { replanJourney: jest.fn().mockResolvedValue({ status: "READY" }) };
+  const draft = { decisionId: "draft", revision: 3, normalizedIntent: { aiIntent: {
+    origin: { ...place("ai-injected-origin", "AI 출발지"), query: "AI 출발지" }, destination: place("ai-injected-destination", "AI 목적지"),
+    totalMinutes: 90, requiredBikeCount: 2, startAt: "2030-09-03T01:00:00Z",
+  } } };
+  const unconfirmed = toStructuredReplanRequest(draft);
+  expect(unconfirmed).toEqual(expect.objectContaining({ origin: null, destination: null, maxJourneyMinutes: null, requiredBikeCount: null, departureAt: null }));
+  const adapter = createConsumerJourneyAdapter(api);
+  const origin = place("provider-origin", "성수");
+  const destination = place("provider-destination", "서울숲");
+  await adapter.answerClarification(draft, { origin, destination, departureAt: "2030-09-03T10:00:00+09:00", maxJourneyMinutes: "90", requiredBikeCount: "2", constraints: { themes: ["PARK"] } });
+  expect(api.replanJourney).toHaveBeenCalledWith("draft", expect.objectContaining({ requestMode: "FORM", expectedRevision: 3, origin, destination, departureAt: "2030-09-03T01:00:00.000Z", maxJourneyMinutes: 90, requiredBikeCount: 2, constraints: { themes: ["PARK"] } }));
+  expect(JSON.stringify(api.replanJourney.mock.calls)).not.toMatch(/ai-injected|aiIntent|naturalLanguageText/);
+});
+
+test("clearing a verified place does not silently revive the previous selection", () => {
+  const draft = { revision: 1, normalizedIntent: { origin: place("o", "성수"), destination: place("d", "서울숲") } };
+  expect(toStructuredReplanRequest(draft, { origin: null, destination: null })).toEqual(expect.objectContaining({ origin: null, destination: null }));
+  expect(toNaturalLanguageRequest("계획", { origin: { displayName: "검색 중" } }).origin).toBeNull();
+});

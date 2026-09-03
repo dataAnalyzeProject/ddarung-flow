@@ -78,14 +78,115 @@ class JourneyPlanServiceTest {
     }
 
     @Test
-    void missingNaturalLanguageDestinationDoesNotCallAiOrFabricateAPlace() {
-        JourneyPlanService service = service(new InMemoryPersistence(), disabledAi(), new CountingReturnPort());
+    void missingNaturalLanguageDestinationCallsAiAndRequiresVerifiedPlace() {
+        JourneyPlanService service = service(new InMemoryPersistence(), availableAi(), new CountingReturnPort());
 
         JourneyPlanService.Decision decision = service.plan(10L, naturalLanguageInputWithoutDestination());
 
         assertThat(decision.status()).isEqualTo(com.ddarungflow.journey.domain.JourneyStatus.CLARIFICATION_REQUIRED);
         assertThat(decision.clarification().missingFields()).containsExactly("destination");
         assertThat(decision.candidates()).isEmpty();
+    }
+
+    @Test
+    void textOnlyCompilesBeforeRequiringPlacesAndNeverRunsFactualProviders() {
+        AtomicInteger compileCalls = new AtomicInteger();
+        AtomicInteger entitlementChecks = new AtomicInteger();
+        JourneyAiGateway ai = new JourneyAiGateway() {
+            @Override public IntentResult compileIntent(String input) {
+                assertThat(entitlementChecks).hasValue(1);
+                compileCalls.incrementAndGet();
+                return new IntentResult(new JourneyIntent(null, new PlaceReference("서울숲", "invented-id"),
+                        null, 90, 1, Map.of(), Map.of(), List.of("origin", "startAt"), true), null);
+            }
+            @Override public List<com.ddarungflow.journey.ai.ToolCallRequest> validateToolPlan(
+                    List<com.ddarungflow.journey.ai.ToolCallRequest> requests) { return requests; }
+        };
+        JourneyPlanService service = service(new InMemoryPersistence(), ai, new CountingReturnPort(), request -> {
+            throw new AssertionError("factual prediction cannot run before structured confirmation");
+        });
+
+        JourneyPlanService.Decision decision = service.plan(10L, textOnlyInput("서울숲에서 자전거 타고 싶어"),
+                entitlementChecks::incrementAndGet);
+
+        assertThat(compileCalls).hasValue(1);
+        assertThat(decision.status()).isEqualTo(JourneyStatus.CLARIFICATION_REQUIRED);
+        assertThat(decision.clarification().missingFields())
+                .contains("origin", "destination", "departureAt", "maxJourneyMinutes", "requiredBikeCount");
+        assertThat(decision.normalizedIntent().path("destination").isNull()).isTrue();
+        assertThat(decision.normalizedIntent().path("aiIntent").path("destination").path("displayName").asText()).isEqualTo("서울숲");
+        assertThat(decision.normalizedIntent().path("aiIntent").path("destination").path("placeId").asText()).isEmpty();
+        assertThat(decision.candidates()).isEmpty();
+        assertThat(decision.unifiedPlan()).isNull();
+    }
+
+    @Test
+    void textOnlyUsesOneToFiveHundredCharactersAndFormStillRequiresStructuredInput() {
+        AtomicInteger compileCalls = new AtomicInteger();
+        JourneyAiGateway ai = new JourneyAiGateway() {
+            @Override public IntentResult compileIntent(String input) {
+                compileCalls.incrementAndGet();
+                return new IntentResult(validIntent(), null);
+            }
+            @Override public List<com.ddarungflow.journey.ai.ToolCallRequest> validateToolPlan(
+                    List<com.ddarungflow.journey.ai.ToolCallRequest> requests) { return requests; }
+        };
+        JourneyPlanService service = service(new InMemoryPersistence(), ai, new CountingReturnPort());
+        for (String text : List.of("가", "가".repeat(500), "🚲".repeat(500))) {
+            assertThat(service.plan(10L, textOnlyInput(text)).status()).isEqualTo(JourneyStatus.CLARIFICATION_REQUIRED);
+        }
+        for (String text : List.of("", "   ", "가".repeat(501), "🚲".repeat(501))) assertInvalid(service, textOnlyInput(text));
+        assertInvalid(service, textOnlyInput(null));
+        assertInvalid(service, new JourneyPlanService.PlanInput(JourneyPlanService.RequestMode.FORM, null,
+                null, null, null, null, null, Map.of(), List.of(), null));
+        assertThat(compileCalls).hasValue(3);
+    }
+
+    @Test
+    void malformedOptionalContextIsRejectedBeforeCompile() {
+        JourneyAiGateway ai = new JourneyAiGateway() {
+            @Override public IntentResult compileIntent(String input) { throw new AssertionError("invalid context cannot compile"); }
+            @Override public List<com.ddarungflow.journey.ai.ToolCallRequest> validateToolPlan(
+                    List<com.ddarungflow.journey.ai.ToolCallRequest> requests) { return requests; }
+        };
+        JourneyPlanService service = service(new InMemoryPersistence(), ai, new CountingReturnPort());
+        assertInvalid(service, new JourneyPlanService.PlanInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE, "서울숲 여정",
+                new JourneyPlanService.Place("origin", "성수역", null, 127.05), null, null, null, null, Map.of(), List.of(), null));
+        assertInvalid(service, new JourneyPlanService.PlanInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE, "서울숲 여정",
+                null, null, OffsetDateTime.now().minusMinutes(1), null, null, Map.of(), List.of(), null));
+        assertInvalid(service, new JourneyPlanService.PlanInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE, "서울숲 여정",
+                null, null, null, 0, 6, Map.of(), List.of(), null));
+        assertInvalid(service, new JourneyPlanService.PlanInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE, "서울숲 여정",
+                null, null, null, 481, 1, Map.of(), List.of(), null));
+    }
+
+    @Test
+    void journeyDurationAcceptsTheUpperBoundaryAndRejectsItInBothModesWhenExceeded() {
+        JourneyPlanService service = service(new InMemoryPersistence(), availableAi(), new CountingReturnPort());
+        for (JourneyPlanService.RequestMode mode : JourneyPlanService.RequestMode.values()) {
+            JourneyPlanService.PlanInput form = formInputWithDestination(1);
+            JourneyPlanService.PlanInput boundary = new JourneyPlanService.PlanInput(mode,
+                    mode == JourneyPlanService.RequestMode.NATURAL_LANGUAGE ? "서울숲 여정" : null,
+                    form.origin(), form.destination(), form.departureAt(), 480, 1, Map.of(), List.of(), null);
+            assertThat(service.plan(10L, boundary)).isNotNull();
+            assertInvalid(service, new JourneyPlanService.PlanInput(mode, boundary.naturalLanguageText(),
+                    form.origin(), form.destination(), form.departureAt(), 481, 1, Map.of(), List.of(), null));
+        }
+    }
+
+    @Test
+    void deniedEntitlementStopsTextOnlyBeforeCompileAndPersistence() {
+        InMemoryPersistence persistence = new InMemoryPersistence();
+        JourneyAiGateway ai = new JourneyAiGateway() {
+            @Override public IntentResult compileIntent(String input) { throw new AssertionError("denied entitlement cannot compile"); }
+            @Override public List<com.ddarungflow.journey.ai.ToolCallRequest> validateToolPlan(
+                    List<com.ddarungflow.journey.ai.ToolCallRequest> requests) { return requests; }
+        };
+        JourneyPlanService service = service(persistence, ai, new CountingReturnPort());
+        assertThatThrownBy(() -> service.plan(10L, textOnlyInput("서울숲 여정"), () -> {
+            throw new com.ddarungflow.payment.PremiumEntitlementService.PremiumRequired();
+        })).isInstanceOf(com.ddarungflow.payment.PremiumEntitlementService.PremiumRequired.class);
+        assertThat(persistence.decisions).isEmpty();
     }
 
     @Test
@@ -191,7 +292,7 @@ class JourneyPlanServiceTest {
     }
 
     @Test
-    void formAndNaturalLanguageUseOnlyCoreCandidatesAndPersistTheirSnapshots() {
+    void formUsesCoreCandidatesWhileUnavailableNaturalLanguageDoesNotRunFactualPlanning() {
         InMemoryPersistence persistence = new InMemoryPersistence();
         JourneyRentalPredictionPort rentalPort = request -> List.of(
                 rental("station-1", "대여소 1", "0.81", 180, 450, "NORMAL", request.requiredBikeCount()),
@@ -211,8 +312,8 @@ class JourneyPlanServiceTest {
             assertThat(candidate.elevationMeters()).isNull();
             assertThat(candidate.bikeLanePercent()).isNull();
         });
-        assertThat(naturalLanguage.status()).isEqualTo(com.ddarungflow.journey.domain.JourneyStatus.READY);
-        assertThat(naturalLanguage.candidates()).hasSize(2);
+        assertThat(naturalLanguage.status()).isEqualTo(JourneyStatus.UNAVAILABLE);
+        assertThat(naturalLanguage.candidates()).isEmpty();
         assertThat(service.find(10L, form.decisionId()).candidates()).isEqualTo(form.candidates());
     }
 
@@ -384,7 +485,7 @@ class JourneyPlanServiceTest {
     }
 
     @Test
-    void failsClosedWhenTheAiSelectsAnUnknownEvidenceId() {
+    void unknownAiEvidenceRetainsOnlyActualFactualSegments() {
         JourneyAiGateway ai = new JourneyAiGateway() {
             @Override public IntentResult compileIntent(String input) { return new IntentResult(validIntent(), null); }
             @Override public List<com.ddarungflow.journey.ai.ToolCallRequest> validateToolPlan(
@@ -396,31 +497,42 @@ class JourneyPlanServiceTest {
             }
         };
 
-        assertThatThrownBy(() -> unifiedService(new InMemoryPersistence(), ai, new CountingReturnPort(), completeEvidence())
-                .plan(10L, unifiedInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE, "서울숲 카페 여정")))
-                .isInstanceOf(JourneyPlanService.AiToolValueMismatch.class);
+        JourneyPlanService.Decision decision = planAndConfirm(unifiedService(new InMemoryPersistence(), ai, new CountingReturnPort(), completeEvidence()),
+                unifiedInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE, "서울숲 카페 여정"));
+        assertRejectedSchedule(decision);
+        assertThat(decision.unifiedPlan().evidence().rentalCandidates()).containsOnlyKeys("rental:station-1");
+        assertThat(decision.unifiedPlan().selectedRentalCandidateId()).isEqualTo("rental:station-1");
     }
 
     @Test
-    void failsClosedWhenCompiledIntentChangesAnAuthoritativePlaceId() {
+    void discardsModelPlaceIdsAndKeepsSelectedContextForConfirmation() {
         JourneyAiGateway ai = new JourneyAiGateway() {
             @Override public IntentResult compileIntent(String input) {
                 JourneyIntent intent = validIntent();
-                return new IntentResult(new JourneyIntent(intent.origin(), new PlaceReference("서울숲", "unknown-place"),
-                        intent.startAt(), intent.totalMinutes(), intent.requiredBikeCount(), intent.preferences(),
+                return new IntentResult(new JourneyIntent(intent.origin(), new PlaceReference("다른 공원", "unknown-place"),
+                        intent.startAt().plusHours(1), 240, 4, intent.preferences(),
                         intent.hardConstraints(), intent.missingFields(), false), null);
             }
             @Override public List<com.ddarungflow.journey.ai.ToolCallRequest> validateToolPlan(
                     List<com.ddarungflow.journey.ai.ToolCallRequest> requests) { return requests; }
         };
+        JourneyPlanService.PlanInput input = unifiedInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE, "서울숲 카페 여정");
+        JourneyPlanService.Decision decision = unifiedService(new InMemoryPersistence(), ai, new CountingReturnPort(), completeEvidence())
+                .plan(10L, input);
 
-        assertThatThrownBy(() -> unifiedService(new InMemoryPersistence(), ai, new CountingReturnPort(), completeEvidence())
-                .plan(10L, unifiedInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE, "서울숲 카페 여정")))
-                .isInstanceOf(JourneyPlanService.AiToolValueMismatch.class);
+        assertThat(decision.status()).isEqualTo(JourneyStatus.CLARIFICATION_REQUIRED);
+        assertThat(decision.candidates()).isEmpty();
+        assertThat(decision.unifiedPlan()).isNull();
+        assertThat(decision.normalizedIntent().path("destination").path("placeId").asText()).isEqualTo("destination-1");
+        assertThat(decision.normalizedIntent().path("aiIntent").path("destination").path("placeId").asText()).isEmpty();
+        assertThat(decision.normalizedIntent().path("requiredBikeCount").asInt()).isEqualTo(2);
+        assertThat(decision.normalizedIntent().path("maxJourneyMinutes").asInt()).isEqualTo(120);
+        assertThat(decision.normalizedIntent().path("contextConflicts")).extracting(com.fasterxml.jackson.databind.JsonNode::asText)
+                .containsExactly("destination", "departureAt", "maxJourneyMinutes", "requiredBikeCount");
     }
 
     @Test
-    void failsClosedWhenCompiledIntentContainsAnUnsupportedRouteMode() {
+    void unsupportedAiConstraintsRetainActualRentalEvidenceWithoutInventingARoute() {
         JourneyAiGateway ai = new JourneyAiGateway() {
             @Override public IntentResult compileIntent(String input) {
                 JourneyIntent intent = validIntent();
@@ -438,21 +550,58 @@ class JourneyPlanServiceTest {
                 new JourneyPlanService.PlanConstraints(120, List.of("CAFE"), 1, null));
         JourneyPlanService.PlanInput invalidRouteInput = input;
 
-        assertThatThrownBy(() -> unifiedService(new InMemoryPersistence(), ai, new CountingReturnPort(), completeEvidence())
-                .plan(10L, invalidRouteInput))
-                .isInstanceOf(JourneyPlanService.AiToolValueMismatch.class);
+        JourneyPlanService.Decision decision = planAndConfirm(unifiedService(new InMemoryPersistence(), ai, new CountingReturnPort(), completeEvidence()),
+                invalidRouteInput);
+        assertRejectedSchedule(decision);
     }
 
     @Test
     void retainsFactualAccessAndRentSegmentsWhenTheAiProviderIsUnavailable() {
-        JourneyPlanService.Decision decision = unifiedService(new InMemoryPersistence(), disabledAi(),
-                new CountingReturnPort(), completeEvidence()).plan(10L,
+        JourneyAiGateway ai = new JourneyAiGateway() {
+            @Override public IntentResult compileIntent(String input) { return new IntentResult(validIntent(), null); }
+            @Override public List<com.ddarungflow.journey.ai.ToolCallRequest> validateToolPlan(
+                    List<com.ddarungflow.journey.ai.ToolCallRequest> requests) { return requests; }
+        };
+        JourneyPlanService.Decision decision = planAndConfirm(unifiedService(new InMemoryPersistence(), ai,
+                new CountingReturnPort(), completeEvidence()),
                 unifiedInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE, "서울숲 카페 여정"));
 
         assertThat(decision.status()).isEqualTo(JourneyStatus.UNAVAILABLE);
-        assertThat(decision.warnings()).contains("AI_PROVIDER_UNAVAILABLE", "AI_SCHEDULE_UNAVAILABLE");
+        assertThat(decision.warnings()).contains("AI_PROVIDER_UNAVAILABLE");
         assertThat(decision.unifiedPlan().segments()).extracting(UnifiedJourneyPlan.Segment::type)
                 .containsExactly(UnifiedJourneyPlan.SegmentType.ACCESS, UnifiedJourneyPlan.SegmentType.RENT);
+    }
+
+    @Test
+    void invalidScheduleSchemaRetainsFactualSegmentsAndTheCompiledDraft() {
+        JourneyAiGateway ai = new JourneyAiGateway() {
+            @Override public IntentResult compileIntent(String input) { return new IntentResult(validIntent(), null); }
+            @Override public List<com.ddarungflow.journey.ai.ToolCallRequest> validateToolPlan(
+                    List<com.ddarungflow.journey.ai.ToolCallRequest> requests) { return requests; }
+            @Override public ScheduleResult selectSchedule(ConsumerAiEvidenceBundle evidence, ScheduleConstraints constraints) {
+                throw new JourneyAiException(JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID, "sensitive provider payload",
+                        JourneyAiFailureStage.CANONICAL_SCHEMA);
+            }
+        };
+        JourneyPlanService.Decision decision = planAndConfirm(unifiedService(new InMemoryPersistence(), ai,
+                new CountingReturnPort(), completeEvidence()), unifiedInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE, "서울숲 카페 여정"));
+
+        assertThat(decision.status()).isEqualTo(JourneyStatus.UNAVAILABLE);
+        assertThat(decision.warnings()).contains("AI_OUTPUT_SCHEMA_INVALID");
+        assertThat(decision.normalizedIntent().path("aiIntent").isObject()).isTrue();
+        assertThat(decision.normalizedIntent().toString()).doesNotContain("sensitive provider payload");
+        assertThat(decision.unifiedPlan().segments()).extracting(UnifiedJourneyPlan.Segment::type)
+                .containsExactly(UnifiedJourneyPlan.SegmentType.ACCESS, UnifiedJourneyPlan.SegmentType.RENT);
+    }
+
+    @Test
+    void unavailableCompileCannotSilentlySwitchStructuredContinuationToDeterministicSchedule() {
+        JourneyPlanService.Decision decision = planAndConfirm(unifiedService(new InMemoryPersistence(), disabledAi(),
+                new CountingReturnPort(), completeEvidence()), unifiedInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE, "서울숲 카페 여정"));
+
+        assertThat(decision.status()).isEqualTo(JourneyStatus.UNAVAILABLE);
+        assertThat(decision.warnings()).contains("AI_SCHEDULE_UNAVAILABLE");
+        assertThat(decision.normalizedIntent().path("plannerMode").asText()).isEqualTo("NATURAL_LANGUAGE");
     }
 
     @Test
@@ -501,12 +650,17 @@ class JourneyPlanServiceTest {
                 .containsExactly(UnifiedJourneyPlan.SegmentType.ACCESS, UnifiedJourneyPlan.SegmentType.RENT,
                         UnifiedJourneyPlan.SegmentType.RIDE, UnifiedJourneyPlan.SegmentType.VISIT);
         assertThat(compileCalls).hasValue(1);
-        assertThat(scheduleCalls).hasValue(2);
+        assertThat(first.status()).isEqualTo(JourneyStatus.CLARIFICATION_REQUIRED);
+        assertThat(first.candidates()).isEmpty();
+        assertThat(first.unifiedPlan()).isNull();
+        assertThat(second.normalizedIntent().path("plannerMode").asText()).isEqualTo("NATURAL_LANGUAGE");
+        assertThat(second.normalizedIntent().path("aiIntent")).isEqualTo(first.normalizedIntent().path("aiIntent"));
+        assertThat(scheduleCalls).hasValue(1);
     }
 
     @Test
     void structuredClarificationAnswerCanContinueWithoutAnotherFreeTextTurn() {
-        JourneyPlanService service = unifiedService(new InMemoryPersistence(), disabledAi(),
+        JourneyPlanService service = unifiedService(new InMemoryPersistence(), availableAi(),
                 new CountingReturnPort(), completeEvidence());
         JourneyPlanService.PlanInput initial = unifiedInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE,
                 "서울숲 주변 카페 여정");
@@ -524,6 +678,84 @@ class JourneyPlanServiceTest {
         assertThat(clarification.status()).isEqualTo(JourneyStatus.CLARIFICATION_REQUIRED);
         assertThat(decision.status()).isEqualTo(JourneyStatus.READY);
         assertThat(decision.revision()).isEqualTo(2);
+    }
+
+    @Test
+    void confirmedEmptyThemesDoNotReintroduceAiPreferencesOrThemeConstraints() {
+        JourneyAiGateway ai = new JourneyAiGateway() {
+            @Override public IntentResult compileIntent(String input) {
+                JourneyIntent intent = validIntent();
+                return new IntentResult(new JourneyIntent(intent.origin(), intent.destination(), intent.startAt(),
+                        intent.totalMinutes(), intent.requiredBikeCount(), Map.of("cafe", 5, "culture", 3),
+                        intent.hardConstraints(), List.of(), false), null);
+            }
+            @Override public List<com.ddarungflow.journey.ai.ToolCallRequest> validateToolPlan(
+                    List<com.ddarungflow.journey.ai.ToolCallRequest> requests) { return requests; }
+            @Override public ScheduleResult selectSchedule(ConsumerAiEvidenceBundle evidence, ScheduleConstraints constraints) {
+                assertThat(evidence.pois()).isEmpty();
+                return new ScheduleResult(new EvidenceSelectionValidator.Selection("rental:station-1", List.of(), List.of(),
+                        List.of("weather:station-1"), List.of("air-quality:station-1"), List.of(), List.of(),
+                        "선택한 대여 근거", List.of("EVIDENCE_ONLY")), null);
+            }
+        };
+        JourneyPlanService service = unifiedService(new InMemoryPersistence(), ai, new CountingReturnPort(), completeEvidence());
+        JourneyPlanService.Decision initial = service.plan(10L, textOnlyInput("서울숲 카페 여정"));
+        JourneyPlanService.PlanInput form = unifiedInput(JourneyPlanService.RequestMode.FORM, null);
+        JourneyPlanService.Decision decision = service.replan(10L, initial.decisionId(), new JourneyPlanService.PlanInput(
+                form.requestMode(), null, form.origin(), form.destination(), form.departureAt(), form.maxJourneyMinutes(),
+                form.requiredBikeCount(), form.preferences(), form.avoid(), initial.revision(),
+                new JourneyPlanService.PlanConstraints(120, List.of(), null, "BIKE_ONLY")));
+
+        assertThat(decision.unifiedPlan().evidence().pois()).isEmpty();
+        assertThat(decision.unifiedPlan().segments()).extracting(UnifiedJourneyPlan.Segment::type)
+                .containsExactly(UnifiedJourneyPlan.SegmentType.ACCESS, UnifiedJourneyPlan.SegmentType.RENT);
+    }
+
+    @Test
+    void textOnlyDraftContinuesWithConfirmedCoordinatesAndRechecksEntitlementBeforeSchedule() {
+        AtomicInteger compileCalls = new AtomicInteger();
+        AtomicInteger scheduleCalls = new AtomicInteger();
+        AtomicInteger entitlementChecks = new AtomicInteger();
+        JourneyAiGateway ai = new JourneyAiGateway() {
+            @Override public IntentResult compileIntent(String input) {
+                compileCalls.incrementAndGet();
+                return new IntentResult(new JourneyIntent(null, null, null, null, null,
+                        Map.of("cafe", 3), Map.of(), List.of("origin", "destination", "startAt"), true), null);
+            }
+            @Override public List<com.ddarungflow.journey.ai.ToolCallRequest> validateToolPlan(
+                    List<com.ddarungflow.journey.ai.ToolCallRequest> requests) { return requests; }
+            @Override public ScheduleResult selectSchedule(ConsumerAiEvidenceBundle evidence, ScheduleConstraints constraints) {
+                assertThat(entitlementChecks).hasValue(3);
+                scheduleCalls.incrementAndGet();
+                return new ScheduleResult(validSelection(), null);
+            }
+        };
+        JourneyRentalPredictionPort rentalPort = request -> {
+            assertThat(request.originLatitude()).isEqualByComparingTo("37.544");
+            assertThat(request.destinationLongitude()).isEqualByComparingTo("127.039");
+            assertThat(request.requiredBikeCount()).isEqualTo(2);
+            return List.of(rentalWithAccess(request));
+        };
+        JourneyPlanService service = new JourneyPlanService(new InMemoryPersistence(), ai, new CountingReturnPort(),
+                rentalPort, completeEvidence(), new ObjectMapper().findAndRegisterModules());
+        JourneyPlanService.Decision draft = service.plan(10L, textOnlyInput("한 시간 카페 여정"), entitlementChecks::incrementAndGet);
+        JourneyPlanService.PlanInput form = unifiedInput(JourneyPlanService.RequestMode.FORM, null);
+        JourneyPlanService.PlanInput confirmed = new JourneyPlanService.PlanInput(form.requestMode(), null, form.origin(), form.destination(),
+                form.departureAt(), form.maxJourneyMinutes(), form.requiredBikeCount(), form.preferences(), form.avoid(), draft.revision(), form.constraints());
+
+        assertThatThrownBy(() -> service.replan(10L, draft.decisionId(), confirmed, () -> {
+            entitlementChecks.incrementAndGet();
+            throw new com.ddarungflow.payment.PremiumEntitlementService.PremiumRequired();
+        })).isInstanceOf(com.ddarungflow.payment.PremiumEntitlementService.PremiumRequired.class);
+        assertThat(scheduleCalls).hasValue(0);
+        assertThat(service.find(10L, draft.decisionId()).revision()).isEqualTo(1);
+
+        JourneyPlanService.Decision completed = service.replan(10L, draft.decisionId(), confirmed, entitlementChecks::incrementAndGet);
+        assertThat(completed.status()).isEqualTo(JourneyStatus.READY);
+        assertThat(completed.normalizedIntent().path("plannerMode").asText()).isEqualTo("NATURAL_LANGUAGE");
+        assertThat(completed.normalizedIntent().path("aiIntent")).isEqualTo(draft.normalizedIntent().path("aiIntent"));
+        assertThat(compileCalls).hasValue(1);
+        assertThat(scheduleCalls).hasValue(1);
     }
 
     @Test
@@ -546,7 +778,7 @@ class JourneyPlanServiceTest {
         JourneyPlanService service = new JourneyPlanService(new InMemoryPersistence(), ai, new CountingReturnPort(),
                 rentalPort, completeEvidence(), new ObjectMapper().findAndRegisterModules());
 
-        JourneyPlanService.Decision decision = service.plan(10L,
+        JourneyPlanService.Decision decision = planAndConfirm(service,
                 unifiedInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE, "서울숲 카페 여정"));
 
         assertThat(decision.unifiedPlan().selectedRentalCandidateId()).isEqualTo("rental:station-2");
@@ -559,7 +791,7 @@ class JourneyPlanServiceTest {
     }
 
     @Test
-    void failsClosedWhenAiMixesEnvironmentEvidenceFromAnotherRentalCandidate() {
+    void mixedEnvironmentEvidenceRetainsTheBundleWithoutAdoptingTheInvalidSelection() {
         JourneyAiGateway ai = new JourneyAiGateway() {
             @Override public IntentResult compileIntent(String input) { return new IntentResult(validIntent(), null); }
             @Override public List<com.ddarungflow.journey.ai.ToolCallRequest> validateToolPlan(
@@ -577,9 +809,59 @@ class JourneyPlanServiceTest {
         JourneyPlanService service = new JourneyPlanService(new InMemoryPersistence(), ai, new CountingReturnPort(),
                 rentalPort, completeEvidence(), new ObjectMapper().findAndRegisterModules());
 
-        assertThatThrownBy(() -> service.plan(10L,
-                unifiedInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE, "서울숲 카페 여정")))
-                .isInstanceOf(JourneyPlanService.AiToolValueMismatch.class);
+        JourneyPlanService.Decision decision = planAndConfirm(service,
+                unifiedInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE, "서울숲 카페 여정"));
+        assertRejectedSchedule(decision);
+        assertThat(decision.unifiedPlan().evidence().rentalCandidates()).containsOnlyKeys("rental:station-1", "rental:station-2");
+        assertThat(decision.unifiedPlan().selectedRentalCandidateId()).isEqualTo("rental:station-1");
+    }
+
+    @Test
+    void finalScheduleOutcomeSharesTheCallCorrelationAndRestoresMdcForSuccessAndFailure() {
+        ch.qos.logback.classic.Logger logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(JourneyPlanService.class);
+        ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> appender = new ch.qos.logback.core.read.ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        String previous = org.slf4j.MDC.get("journeyAiCorrelationId");
+        try {
+            for (boolean invalidEvidence : List.of(false, true)) {
+                appender.list.clear();
+                org.slf4j.MDC.put("journeyAiCorrelationId", "outer-correlation");
+                java.util.concurrent.atomic.AtomicReference<String> callCorrelation = new java.util.concurrent.atomic.AtomicReference<>();
+                JourneyAiGateway ai = new JourneyAiGateway() {
+                    @Override public IntentResult compileIntent(String input) { return new IntentResult(validIntent(), null); }
+                    @Override public List<com.ddarungflow.journey.ai.ToolCallRequest> validateToolPlan(
+                            List<com.ddarungflow.journey.ai.ToolCallRequest> requests) { return requests; }
+                    @Override public ScheduleResult selectSchedule(ConsumerAiEvidenceBundle evidence, ScheduleConstraints constraints) {
+                        callCorrelation.set(org.slf4j.MDC.get("journeyAiCorrelationId"));
+                        return new ScheduleResult(invalidEvidence ? new EvidenceSelectionValidator.Selection(
+                                "invented-rental", List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
+                                "invalid provider rationale", List.of()) : validSelection(), null);
+                    }
+                };
+                JourneyPlanService.Decision decision = planAndConfirm(unifiedService(new InMemoryPersistence(), ai,
+                        new CountingReturnPort(), completeEvidence()), unifiedInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE, "서울숲 카페 여정"));
+
+                assertThat(callCorrelation.get()).isNotBlank().isNotEqualTo("outer-correlation");
+                assertThat(org.slf4j.MDC.get("journeyAiCorrelationId")).isEqualTo("outer-correlation");
+                List<String> messages = appender.list.stream().map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage).toList();
+                assertThat(messages).hasSize(1);
+                assertThat(messages.getFirst()).contains("kind=SCHEDULE_SELECTION", "correlation_id=" + callCorrelation.get(),
+                        invalidEvidence ? "outcome=FAILURE" : "outcome=SUCCESS")
+                        .doesNotContain("invalid provider rationale", "서울숲", "37.544", "127.056");
+                if (invalidEvidence) {
+                    assertThat(messages.getFirst()).contains("stage=EVIDENCE_VALIDATION", "code=AI_TOOL_VALUE_MISMATCH").doesNotContain("outcome=SUCCESS");
+                    assertRejectedSchedule(decision);
+                } else {
+                    assertThat(decision.status()).isEqualTo(JourneyStatus.READY);
+                }
+            }
+        } finally {
+            logger.detachAppender(appender);
+            appender.stop();
+            if (previous == null) org.slf4j.MDC.remove("journeyAiCorrelationId");
+            else org.slf4j.MDC.put("journeyAiCorrelationId", previous);
+        }
     }
 
     @Test
@@ -724,6 +1006,34 @@ class JourneyPlanServiceTest {
                 List.of("EVIDENCE_ONLY"));
     }
 
+    private void assertRejectedSchedule(JourneyPlanService.Decision decision) {
+        assertThat(decision.status()).isEqualTo(JourneyStatus.UNAVAILABLE);
+        assertThat(decision.warnings()).contains("AI_TOOL_VALUE_MISMATCH");
+        assertThat(decision.normalizedIntent().path("aiIntent").isObject()).isTrue();
+        assertThat(decision.unifiedPlan().segments()).extracting(UnifiedJourneyPlan.Segment::type)
+                .containsExactly(UnifiedJourneyPlan.SegmentType.ACCESS, UnifiedJourneyPlan.SegmentType.RENT);
+        assertThat(decision.unifiedPlan().rationale()).isNull();
+    }
+
+    private JourneyPlanService.Decision planAndConfirm(JourneyPlanService service, JourneyPlanService.PlanInput initial) {
+        JourneyPlanService.Decision first = service.plan(10L, initial);
+        JourneyPlanService.PlanInput confirmed = new JourneyPlanService.PlanInput(JourneyPlanService.RequestMode.FORM, null,
+                initial.origin(), initial.destination(), initial.departureAt(), initial.maxJourneyMinutes(), initial.requiredBikeCount(),
+                initial.preferences(), initial.avoid(), first.revision(), initial.constraints());
+        return service.replan(10L, first.decisionId(), confirmed);
+    }
+
+    private JourneyAiGateway availableAi() {
+        return new JourneyAiGateway() {
+            @Override public IntentResult compileIntent(String input) { return new IntentResult(validIntent(), null); }
+            @Override public List<com.ddarungflow.journey.ai.ToolCallRequest> validateToolPlan(
+                    List<com.ddarungflow.journey.ai.ToolCallRequest> requests) { return requests; }
+            @Override public ScheduleResult selectSchedule(ConsumerAiEvidenceBundle evidence, ScheduleConstraints constraints) {
+                return new ScheduleResult(validSelection(), null);
+            }
+        };
+    }
+
     private JourneyAiGateway disabledAi() {
         return new JourneyAiGateway() {
             @Override public IntentResult compileIntent(String input) { return IntentResult.unavailable(JourneyAiErrorCode.AI_DISABLED); }
@@ -742,6 +1052,11 @@ class JourneyPlanServiceTest {
         return new JourneyPlanService.PlanInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE, "성수에서 카페 포함", form.origin(),
                 new JourneyPlanService.Place("place-destination", "서울숲", 37.544, 127.037),
                 form.departureAt(), form.maxJourneyMinutes(), form.requiredBikeCount(), form.preferences(), form.avoid(), null);
+    }
+
+    private JourneyPlanService.PlanInput textOnlyInput(String text) {
+        return new JourneyPlanService.PlanInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE, text,
+                null, null, null, null, null, Map.of(), List.of(), null);
     }
 
     private JourneyPlanService.PlanInput formInputWithDestination(int requiredBikeCount) {

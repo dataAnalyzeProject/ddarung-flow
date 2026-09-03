@@ -18,6 +18,9 @@ import com.ddarungflow.journey.returnprediction.ReturnPredictionPort;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -38,6 +41,7 @@ import java.util.stream.IntStream;
 
 @Service
 public class JourneyPlanService {
+    private static final Logger log = LoggerFactory.getLogger(JourneyPlanService.class);
     private static final String CONTRACT_VERSIONS = "{\"api\":\"journey-api-r2.2\",\"ai\":\"consumer-ai-r2.2\",\"return\":\"disabled-user-facing\"}";
     private static final Set<String> THEMES = Set.of("PARK", "RIVER", "CAFE", "ATTRACTION", "CULTURE", "FOOD");
     private static final Set<String> ROUTE_MODES = Set.of("BIKE_ONLY", "ACCESSIBLE", "SHORTEST");
@@ -115,7 +119,7 @@ public class JourneyPlanService {
         Decision current = find(userId, decisionId);
         if (!current.revision().equals(input.expectedRevision())) throw new RevisionConflict();
         JourneyIntent previousIntent = readAiIntent(current.normalizedIntent().path("aiIntent"));
-        boolean aiSchedule = previousIntent != null && RequestMode.NATURAL_LANGUAGE.name().equals(
+        boolean aiSchedule = RequestMode.NATURAL_LANGUAGE.name().equals(
                 current.normalizedIntent().path("plannerMode").asText(current.normalizedIntent().path("requestMode").asText()));
         return persist(userId, decisionId, current.revision() + 1, input,
                 new PlannerContext(aiSchedule, previousIntent), requireAiEntitlement);
@@ -137,29 +141,28 @@ public class JourneyPlanService {
         JourneyIntent aiIntent = planner.aiIntent();
         List<String> warnings = new ArrayList<>();
 
-        if (input.destination() == null) {
-            return save(userId, decisionId, revision, input, planner.useAiSchedule(), aiIntent,
-                    JourneyStatus.CLARIFICATION_REQUIRED, List.of(), null, List.of("CLARIFICATION_REQUIRED"));
-        }
-
         if (input.requestMode() == RequestMode.NATURAL_LANGUAGE) {
             requireAiEntitlement.run();
             try {
                 JourneyAiGateway.IntentResult result = aiGateway.compileIntent(compileRequest(input));
-                if (result.available()) {
-                    aiIntent = result.intent();
-                    validateCompiledIntent(input, aiIntent);
-                    if (aiIntent.needsClarification()) {
-                        return save(userId, decisionId, revision, input, true, aiIntent,
-                                JourneyStatus.CLARIFICATION_REQUIRED, List.of(), null,
-                                List.of("CLARIFICATION_REQUIRED"));
-                    }
+                if (result != null && result.available()) {
+                    aiIntent = suggestionIntent(result.intent());
+                    return save(userId, decisionId, revision, input, true, aiIntent,
+                            JourneyStatus.CLARIFICATION_REQUIRED, List.of(), null,
+                            List.of("CLARIFICATION_REQUIRED"));
                 } else {
-                    warnings.add(safeAiCode(result.unavailableCode()));
+                    warnings.add(safeAiCode(result == null ? JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE : result.unavailableCode()));
                 }
             } catch (JourneyAiException exception) {
                 handleAiFailure(exception, warnings);
             }
+            return save(userId, decisionId, revision, input, true, aiIntent,
+                    JourneyStatus.UNAVAILABLE, List.of(), null, warnings);
+        }
+
+        if (input.destination() == null) {
+            return save(userId, decisionId, revision, input, planner.useAiSchedule(), aiIntent,
+                    JourneyStatus.CLARIFICATION_REQUIRED, List.of(), null, List.of("CLARIFICATION_REQUIRED"));
         }
 
         List<JourneyRentalPredictionPort.RentalCandidate> coreCandidates;
@@ -215,6 +218,33 @@ public class JourneyPlanService {
             List<String> warnings,
             Runnable requireAiEntitlement
     ) {
+        if (!useAiSchedule) {
+            return buildUnifiedPlanWithEvidence(input, aiIntent, false, candidates, coreCandidates, warnings, requireAiEntitlement);
+        }
+        String previousCorrelationId = MDC.get("journeyAiCorrelationId");
+        MDC.put("journeyAiCorrelationId", UUID.randomUUID().toString());
+        try {
+            return buildUnifiedPlanWithEvidence(input, aiIntent, true, candidates, coreCandidates, warnings, requireAiEntitlement);
+        } catch (AiToolValueMismatch exception) {
+            logEvidenceFailure();
+            addWarning(warnings, "AI_TOOL_VALUE_MISMATCH");
+            JourneyCandidate fallback = candidates.getFirst();
+            return unavailableAiPlan(input, fallback, findCoreCandidate(coreCandidates, fallback), warnings);
+        } finally {
+            if (previousCorrelationId == null) MDC.remove("journeyAiCorrelationId");
+            else MDC.put("journeyAiCorrelationId", previousCorrelationId);
+        }
+    }
+
+    private UnifiedJourneyPlan buildUnifiedPlanWithEvidence(
+            PlanInput input,
+            JourneyIntent aiIntent,
+            boolean useAiSchedule,
+            List<JourneyCandidate> candidates,
+            List<JourneyRentalPredictionPort.RentalCandidate> coreCandidates,
+            List<String> warnings,
+            Runnable requireAiEntitlement
+    ) {
         ResolvedConstraints constraints = resolveConstraints(input, aiIntent);
         Map<String, ConsumerAiEvidenceBundle.Evidence> rental = new LinkedHashMap<>();
         Map<String, ConsumerAiEvidenceBundle.Evidence> pois = new LinkedHashMap<>();
@@ -254,7 +284,10 @@ public class JourneyPlanService {
                 result = aiGateway.selectSchedule(bundle, new JourneyAiGateway.ScheduleConstraints(
                         constraints.stopCount(), STAY_BOUNDS.minimum(), STAY_BOUNDS.maximum(), constraints.availableMinutes()));
             } catch (JourneyAiException exception) {
-                handleAiFailure(exception, warnings);
+                if (exception.code() == JourneyAiErrorCode.AI_TOOL_VALUE_MISMATCH) {
+                    return invalidAiSchedule(input, candidates, coreCandidates, bundle, warnings);
+                }
+                addWarning(warnings, safeAiCode(exception.code()));
                 JourneyCandidate fallback = candidates.getFirst();
                 appendWarnings(warnings, candidateWarnings.get(rentalId(fallback.stationId())));
                 return unavailableWithFactualSegments(input, fallback, findCoreCandidate(coreCandidates, fallback), bundle, warnings,
@@ -280,7 +313,7 @@ public class JourneyPlanService {
         JourneyRentalPredictionPort.RentalCandidate selectedCore = findCoreCandidate(coreCandidates, selected);
         if (selected == null || selectedCore == null || selectedCore.accessRoute() == null
                 || !"NORMAL".equals(selectedCore.routeStatus())) {
-            if (useAiSchedule) throw new AiToolValueMismatch();
+            if (useAiSchedule) return invalidAiSchedule(input, candidates, coreCandidates, bundle, warnings);
             addWarning(warnings, "ACCESS_ROUTE_UNAVAILABLE");
             return new UnifiedJourneyPlan(UnifiedJourneyPlan.Status.UNAVAILABLE, selection.rentalCandidateId(),
                     bundle, List.of(), null, List.of(), List.copyOf(warnings));
@@ -292,22 +325,31 @@ public class JourneyPlanService {
             validated = selectionValidator.validate(bundle, selection, STAY_BOUNDS);
             validateSelection(selection, validated, constraints, selected, poiData, routeData);
         } catch (JourneyAiException exception) {
+            if (useAiSchedule) return invalidAiSchedule(input, candidates, coreCandidates, bundle, warnings);
             throw new AiToolValueMismatch();
         } catch (RuntimeException exception) {
-            if (useAiSchedule) throw new AiToolValueMismatch();
+            if (useAiSchedule) return invalidAiSchedule(input, candidates, coreCandidates, bundle, warnings);
             addWarning(warnings, "JOURNEY_ROUTE_CHAIN_UNAVAILABLE");
             return unavailableWithFactualSegments(input, selected, selectedCore, bundle, warnings,
                     "JOURNEY_ROUTE_CHAIN_UNAVAILABLE");
         }
 
-        List<UnifiedJourneyPlan.Segment> segments = buildTimeline(input, selected, selectedCore, selection, routeData);
+        List<UnifiedJourneyPlan.Segment> segments;
+        try {
+            segments = buildTimeline(input, selected, selectedCore, selection, routeData);
+        } catch (RuntimeException exception) {
+            if (useAiSchedule) return invalidAiSchedule(input, candidates, coreCandidates, bundle, warnings);
+            throw exception;
+        }
         long elapsedSeconds = Duration.between(input.departureAt(), segments.getLast().endAt()).getSeconds();
         if (elapsedSeconds > constraints.availableMinutes() * 60L) {
-            if (useAiSchedule) throw new AiToolValueMismatch();
+            if (useAiSchedule) return invalidAiSchedule(input, candidates, coreCandidates, bundle, warnings);
             addWarning(warnings, "JOURNEY_DURATION_EXCEEDED");
             return unavailableWithFactualSegments(input, selected, selectedCore, bundle, warnings,
                     "JOURNEY_DURATION_EXCEEDED");
         }
+        if (useAiSchedule) log.info("event=journey_ai_provider_result kind=SCHEDULE_SELECTION outcome=SUCCESS correlation_id={}",
+                MDC.get("journeyAiCorrelationId"));
         if (selection.stops().size() < constraints.stopCount()) addWarning(warnings, "VISIT_PARTIAL");
         UnifiedJourneyPlan.Status status = warnings.isEmpty() && selection.stops().size() == constraints.stopCount()
                 ? UnifiedJourneyPlan.Status.READY : UnifiedJourneyPlan.Status.PARTIAL;
@@ -348,9 +390,26 @@ public class JourneyPlanService {
     ) {
         addWarning(warnings, code);
         List<UnifiedJourneyPlan.Segment> segments = selectedCore == null || selectedCore.accessRoute() == null
+                || !"NORMAL".equals(selectedCore.routeStatus())
                 ? List.of() : accessAndRentSegments(input, selected, selectedCore);
         return new UnifiedJourneyPlan(UnifiedJourneyPlan.Status.UNAVAILABLE, rentalId(selected.stationId()),
                 bundle, segments, null, List.of(), List.copyOf(warnings));
+    }
+
+    private UnifiedJourneyPlan invalidAiSchedule(
+            PlanInput input,
+            List<JourneyCandidate> candidates,
+            List<JourneyRentalPredictionPort.RentalCandidate> coreCandidates,
+            ConsumerAiEvidenceBundle bundle,
+            List<String> warnings
+    ) {
+        logEvidenceFailure();
+        JourneyCandidate fallback = candidates.stream().filter(candidate -> {
+            JourneyRentalPredictionPort.RentalCandidate core = findCoreCandidate(coreCandidates, candidate);
+            return core != null && core.accessRoute() != null && "NORMAL".equals(core.routeStatus());
+        }).findFirst().orElse(candidates.getFirst());
+        return unavailableWithFactualSegments(input, fallback, findCoreCandidate(coreCandidates, fallback), bundle,
+                warnings, "AI_TOOL_VALUE_MISMATCH");
     }
 
     private void collectPois(
@@ -662,10 +721,10 @@ public class JourneyPlanService {
     private ResolvedConstraints resolveConstraints(PlanInput input, JourneyIntent intent) {
         LinkedHashSet<String> themes = new LinkedHashSet<>();
         if (input.constraints() != null) addThemes(themes, input.constraints().themes());
-        if (themes.isEmpty() && intent != null) {
+        if (input.constraints() == null && intent != null) {
             intent.preferences().forEach((key, value) -> {
                 String normalized = normalize(key);
-                if (value != null && value > 0 && THEMES.contains(normalized)) themes.add(normalized);
+                if (value != null && value > 3 && THEMES.contains(normalized)) themes.add(normalized);
             });
             Object values = intent.hardConstraints().get("themes");
             if (values instanceof List<?> list) addThemes(themes, list.stream().map(String::valueOf).toList());
@@ -782,7 +841,10 @@ public class JourneyPlanService {
             normalized.put("preferences", input.preferences());
             normalized.put("avoid", input.avoid());
             normalized.put("constraints", input.constraints());
-            if (aiIntent != null) normalized.put("aiIntent", aiIntent);
+            if (aiIntent != null) {
+                normalized.put("aiIntent", aiIntent);
+                normalized.put("contextConflicts", contextConflicts(input, aiIntent));
+            }
             if (unifiedPlan != null) normalized.put("unifiedPlanSnapshot", unifiedPlan);
             normalized.put("internalWarnings", warnings);
             return objectMapper.writeValueAsString(normalized);
@@ -796,19 +858,33 @@ public class JourneyPlanService {
                 toPlaceReference(input.destination()), input.departureAt(), input.maxJourneyMinutes(), input.requiredBikeCount());
     }
 
-    private void validateCompiledIntent(PlanInput input, JourneyIntent intent) {
-        if (intent == null || !samePlace(input.origin(), intent.origin())
-                || !samePlace(input.destination(), intent.destination())
-                || intent.startAt() == null || !intent.startAt().isEqual(input.departureAt())
-                || !input.maxJourneyMinutes().equals(intent.totalMinutes())
-                || !input.requiredBikeCount().equals(intent.requiredBikeCount())) {
-            throw new AiToolValueMismatch();
-        }
+    private JourneyIntent suggestionIntent(JourneyIntent intent) {
+        if (intent == null) throw new AiOutputSchemaInvalid(JourneyAiFailureStage.SEMANTIC_INTENT);
+        return new JourneyIntent(suggestionPlace(intent.origin()), suggestionPlace(intent.destination()),
+                intent.startAt(), intent.totalMinutes(), intent.requiredBikeCount(), intent.preferences(),
+                intent.hardConstraints(), intent.missingFields(), intent.needsClarification());
     }
 
-    private boolean samePlace(Place expected, PlaceReference actual) {
-        if (expected == null || actual == null) return expected == null && actual == null;
-        return expected.placeId().equals(actual.placeId()) && expected.displayName().equals(actual.displayName());
+    private PlaceReference suggestionPlace(PlaceReference place) {
+        return place == null ? null : new PlaceReference(place.displayName(), null);
+    }
+
+    private List<String> contextConflicts(PlanInput input, JourneyIntent intent) {
+        List<String> conflicts = new ArrayList<>();
+        if (placeConflict(input.origin(), intent.origin())) conflicts.add("origin");
+        if (placeConflict(input.destination(), intent.destination())) conflicts.add("destination");
+        if (input.departureAt() != null && intent.startAt() != null
+                && !input.departureAt().isEqual(intent.startAt())) conflicts.add("departureAt");
+        if (input.maxJourneyMinutes() != null && intent.totalMinutes() != null
+                && !input.maxJourneyMinutes().equals(intent.totalMinutes())) conflicts.add("maxJourneyMinutes");
+        if (input.requiredBikeCount() != null && intent.requiredBikeCount() != null
+                && !input.requiredBikeCount().equals(intent.requiredBikeCount())) conflicts.add("requiredBikeCount");
+        return List.copyOf(conflicts);
+    }
+
+    private boolean placeConflict(Place selected, PlaceReference suggestion) {
+        return selected != null && suggestion != null && !blank(suggestion.displayName())
+                && !selected.displayName().equals(suggestion.displayName());
     }
 
     private PlaceReference toPlaceReference(Place place) {
@@ -885,14 +961,27 @@ public class JourneyPlanService {
         return code.name();
     }
 
+    private void logEvidenceFailure() {
+        log.warn("event=journey_ai_provider_result kind=SCHEDULE_SELECTION outcome=FAILURE correlation_id={} stage=EVIDENCE_VALIDATION code=AI_TOOL_VALUE_MISMATCH",
+                MDC.get("journeyAiCorrelationId"));
+    }
+
     private void validate(PlanInput input, boolean replan) {
-        if (input == null || input.requestMode() == null || !validPlace(input.origin()) || !validOptionalPlace(input.destination())
-                || input.departureAt() == null || !input.departureAt().isAfter(OffsetDateTime.now())
-                || input.maxJourneyMinutes() == null || input.maxJourneyMinutes() < 1
-                || input.requiredBikeCount() == null || input.requiredBikeCount() < 1 || input.requiredBikeCount() > 5
-                || (input.requestMode() == RequestMode.NATURAL_LANGUAGE && blank(input.naturalLanguageText()))
-                || (replan && (input.expectedRevision() == null || input.requestMode() == RequestMode.NATURAL_LANGUAGE
+        if (input == null || input.requestMode() == null
+                || (replan && (input.expectedRevision() == null || input.requestMode() != RequestMode.FORM
                 || !blank(input.naturalLanguageText()))) || !validConstraints(input.constraints())) {
+            throw new InvalidJourneyInput();
+        }
+        boolean naturalLanguage = input.requestMode() == RequestMode.NATURAL_LANGUAGE;
+        if ((naturalLanguage && (blank(input.naturalLanguageText())
+                || input.naturalLanguageText().codePointCount(0, input.naturalLanguageText().length()) > 500))
+                || !(naturalLanguage ? validOptionalPlace(input.origin()) : validPlace(input.origin()))
+                || !validOptionalPlace(input.destination())
+                || (input.departureAt() == null ? !naturalLanguage : !input.departureAt().isAfter(OffsetDateTime.now()))
+                || (input.maxJourneyMinutes() == null ? !naturalLanguage
+                : input.maxJourneyMinutes() < 1 || input.maxJourneyMinutes() > 480)
+                || (input.requiredBikeCount() == null ? !naturalLanguage
+                : input.requiredBikeCount() < 1 || input.requiredBikeCount() > 5)) {
             throw new InvalidJourneyInput();
         }
     }
@@ -919,13 +1008,20 @@ public class JourneyPlanService {
     private Clarification clarificationFor(String status, JsonNode normalizedIntent) {
         if (!JourneyStatus.CLARIFICATION_REQUIRED.name().equals(status)) return null;
         List<String> missingFields = new ArrayList<>();
-        if (normalizedIntent.path("destination").isMissingNode() || normalizedIntent.path("destination").isNull()) {
-            missingFields.add("destination");
+        for (String field : List.of("origin", "destination", "departureAt", "maxJourneyMinutes", "requiredBikeCount")) {
+            if (normalizedIntent.path(field).isMissingNode() || normalizedIntent.path(field).isNull()) {
+                missingFields.add(field);
+            }
         }
         for (JsonNode field : normalizedIntent.path("aiIntent").path("missingFields")) {
-            if (field.isTextual() && !field.asText().isBlank() && !missingFields.contains(field.asText())) {
-                missingFields.add(field.asText());
-            }
+            if (!field.isTextual() || field.asText().isBlank()) continue;
+            String name = switch (field.asText()) {
+                case "startAt" -> "departureAt";
+                case "totalMinutes" -> "maxJourneyMinutes";
+                default -> field.asText();
+            };
+            if (normalizedIntent.hasNonNull(name) || missingFields.contains(name)) continue;
+            missingFields.add(name);
         }
         return new Clarification("추가 여정 조건을 확인해 주세요.", List.copyOf(missingFields));
     }

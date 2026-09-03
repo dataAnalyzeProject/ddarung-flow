@@ -42,145 +42,219 @@ function decision(status = "READY") {
   };
 }
 
-test("planner preserves the sole AI free-text entry and confirms normalized intent with explicit context", async () => {
-  const adapter = { planNaturalLanguage: jest.fn().mockResolvedValue(decision()) };
-  render(<ConsumerJourneyPlannerPage adapter={adapter} initialInput={plannerContext} />);
-  expect(screen.getByRole("textbox", { name: "라이딩 계획 설명" })).toBeInTheDocument();
-  expect(screen.getByLabelText(/필요한 자전거 수/)).toHaveValue("1");
+beforeEach(() => window.sessionStorage.removeItem("consumer-journey-planner-draft"));
+
+function draftDecision(aiIntent = {}, verified = {}) {
+  return { decisionId: "draft-1", revision: 1, status: "CLARIFICATION_REQUIRED", normalizedIntent: { ...verified, aiIntent }, clarification: { missingFields: ["origin", "destination", "departureAt", "maxJourneyMinutes", "requiredBikeCount"] } };
+}
+
+function plannerAdapter(draft = draftDecision()) {
+  return { planNaturalLanguage: jest.fn().mockResolvedValue(draft), searchPlaces: jest.fn().mockResolvedValue([]), answerClarification: jest.fn().mockResolvedValue(decision()) };
+}
+
+async function compile(text = "서울숲에서 여유롭게 달리고 싶어요") {
+  fireEvent.change(screen.getByRole("textbox", { name: "라이딩 계획 설명" }), { target: { value: text } });
+  fireEvent.click(screen.getByRole("button", { name: "AI 조건 정리하기" }));
+  return screen.findByRole("heading", { name: "AI 조건 확인" });
+}
+
+const verifiedContext = { ...plannerContext, destination: place("destination-context", "서울숲") };
+
+function submitConfirmation() { fireEvent.click(screen.getByRole("button", { name: "확인하고 일정 만들기" })); }
+
+test("direct entry requires only a natural-language explanation and leaves unknown conditions empty", async () => {
+  const adapter = plannerAdapter();
+  render(<ConsumerJourneyPlannerPage adapter={adapter} />);
   expect(screen.getAllByRole("textbox")).toHaveLength(1);
-  expect(screen.queryByRole("button", { name: "새 알림 보기" })).not.toBeInTheDocument();
-  fireEvent.change(screen.getByRole("textbox", { name: "라이딩 계획 설명" }), { target: { value: "성수에서 서울숲까지 달리고 싶어요" } });
-  fireEvent.click(screen.getByRole("button", { name: "AI 조건 정리하기" }));
-  expect(await screen.findByRole("heading", { name: /AI 조건 확인/ })).toBeInTheDocument();
-  expect(screen.getByText("1대")).toBeInTheDocument();
-  expect(adapter.planNaturalLanguage).toHaveBeenCalledWith("성수에서 서울숲까지 달리고 싶어요", expect.any(Object));
+  expect(screen.getByRole("textbox", { name: "라이딩 계획 설명" })).toHaveValue("");
+  expect(screen.queryByLabelText(/출발 장소/)).not.toBeInTheDocument();
+  expect(screen.queryByLabelText(/라이딩 이용 시간/)).not.toBeInTheDocument();
+  await compile();
+  expect(adapter.planNaturalLanguage).toHaveBeenCalledWith("서울숲에서 여유롭게 달리고 싶어요", expect.objectContaining({ origin: null, destination: null, departureAt: "", maxJourneyMinutes: "", requiredBikeCount: "" }));
+  expect(screen.getByLabelText(/출발 희망 시각/)).toHaveValue("");
+  expect(screen.getByLabelText(/라이딩 이용 시간/)).toHaveValue(null);
+  expect(screen.getByLabelText(/필요한 자전거 수/)).toHaveValue(null);
+  expect(adapter.answerClarification).not.toHaveBeenCalled();
 });
 
-test("planner accepts at most one structured place clarification", async () => {
-  const clarification = decision("CLARIFICATION_REQUIRED");
-  clarification.normalizedIntent.destination = null;
-  clarification.unifiedPlan = null;
-  clarification.clarification = { question: "어느 목적지로 갈까요?", missingFields: ["destination"] };
-  const adapter = {
-    planNaturalLanguage: jest.fn().mockResolvedValue(clarification),
-    searchPlaces: jest.fn().mockResolvedValue([place("destination-1", "서울숲")]),
-    answerClarification: jest.fn().mockResolvedValue(decision()),
-  };
-  render(<ConsumerJourneyPlannerPage adapter={adapter} initialInput={plannerContext} />);
-  fireEvent.change(screen.getByRole("textbox", { name: "라이딩 계획 설명" }), { target: { value: "한강 쪽으로 달리고 싶어요" } });
+test.each([["   ", "자연어로 설명"], ["가".repeat(501), "500자 이내"]])("invalid prompt focuses the textarea and prevents a call", (text, message) => {
+  const adapter = plannerAdapter();
+  render(<ConsumerJourneyPlannerPage adapter={adapter} />);
+  const input = screen.getByRole("textbox", { name: "라이딩 계획 설명" });
+  fireEvent.change(input, { target: { value: text } });
   fireEvent.click(screen.getByRole("button", { name: "AI 조건 정리하기" }));
-  expect(await screen.findByRole("heading", { name: /AI 추가 확인/ })).toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText("목적 장소"), { target: { value: "서울" } });
-  fireEvent.click(await screen.findByRole("button", { name: /서울숲/ }));
-  fireEvent.click(screen.getByRole("button", { name: "선택하고 계속" }));
+  expect(screen.getByRole("alert")).toHaveTextContent(message);
+  expect(input).toHaveFocus();
+  expect(adapter.planNaturalLanguage).not.toHaveBeenCalled();
+});
+
+test("optional context is compact, removable and never a duplicate initial form", async () => {
+  const adapter = plannerAdapter();
+  render(<ConsumerJourneyPlannerPage adapter={adapter} initialInput={plannerContext} />);
+  expect(screen.getByText(/가져온 조건/)).toBeInTheDocument();
+  expect(screen.queryByLabelText(/필요한 자전거 수/)).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "조건 지우기" }));
+  await compile();
+  expect(adapter.planNaturalLanguage).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ origin: null, maxJourneyMinutes: "", requiredBikeCount: "" }));
+});
+
+test("one confirmation selects both provider places and submits every structured condition", async () => {
+  const draft = draftDecision({
+    origin: { displayName: "성수", placeId: "injected-origin", latitude: 1, longitude: 2 },
+    destination: { displayName: "서울숲", placeId: "injected-destination", latitude: 3, longitude: 4 },
+    startAt: "2030-09-03T01:00:00Z", totalMinutes: 90, requiredBikeCount: 2, preferences: { cafe: 5 },
+  });
+  const origin = place("provider-origin", "성수역");
+  const destination = place("provider-destination", "서울숲 공원");
+  const adapter = plannerAdapter(draft);
+  adapter.searchPlaces.mockImplementation((query) => Promise.resolve(query === "성수" ? [origin] : [destination]));
+  const onResult = jest.fn();
+  const onNavigate = jest.fn();
+  render(<ConsumerJourneyPlannerPage adapter={adapter} onResult={onResult} onNavigate={onNavigate} />);
+  await compile();
+  expect(screen.getByLabelText(/라이딩 이용 시간/)).toHaveValue(90);
+  expect(screen.getByLabelText(/필요한 자전거 수/)).toHaveValue(2);
+  expect(screen.getByLabelText("카페")).toBeChecked();
+  submitConfirmation();
+  expect(screen.getByText("출발 장소를 검색 결과에서 선택해 주세요.")).toBeInTheDocument();
+  expect(screen.getByLabelText(/출발 장소/)).toHaveFocus();
+  expect(adapter.answerClarification).not.toHaveBeenCalled();
+  fireEvent.click(await screen.findByRole("button", { name: /성수역 출발 장소로 선택/ }));
+  fireEvent.click(await screen.findByRole("button", { name: /서울숲 공원 목적 장소로 선택/ }));
+  fireEvent.change(screen.getByLabelText(/출발 희망 시각/), { target: { value: "2030-09-03T10:00" } });
+  fireEvent.click(screen.getByLabelText("공원"));
+  submitConfirmation();
   await waitFor(() => expect(adapter.answerClarification).toHaveBeenCalledTimes(1));
-  expect(await screen.findByRole("heading", { name: /AI 조건 확인/ })).toBeInTheDocument();
+  expect(adapter.answerClarification).toHaveBeenCalledWith(draft, expect.objectContaining({ origin, destination, departureAt: "2030-09-03T10:00", maxJourneyMinutes: 90, requiredBikeCount: 2, constraints: { themes: ["CAFE", "PARK"] } }));
+  expect(JSON.stringify(adapter.answerClarification.mock.calls[0][1])).not.toMatch(/injected|naturalLanguageText|Query/);
+  await waitFor(() => expect(onNavigate).toHaveBeenCalledWith("journey-result", "decision-1"));
+  expect(onResult).toHaveBeenCalledWith(expect.objectContaining({ status: "READY" }));
 });
 
-test("planner answers a missing start time with a structured departureAt field", async () => {
-  const clarification = decision("CLARIFICATION_REQUIRED");
-  clarification.unifiedPlan = null;
-  clarification.clarification = { question: "언제 출발할까요?", missingFields: ["startAt"] };
-  const adapter = {
-    planNaturalLanguage: jest.fn().mockResolvedValue(clarification),
-    answerClarification: jest.fn().mockResolvedValue(decision()),
-  };
-  render(<ConsumerJourneyPlannerPage adapter={adapter} initialInput={plannerContext} />);
-  fireEvent.change(screen.getByRole("textbox", { name: "라이딩 계획 설명" }), { target: { value: "서울숲을 달리고 싶어요" } });
+test("verified context wins over conflicting AI suggestions and remains editable", async () => {
+  const draft = draftDecision({ origin: { displayName: "AI 출발지" }, totalMinutes: 30, requiredBikeCount: 5 }, verifiedContext);
+  draft.normalizedIntent.contextConflicts = ["origin", "maxJourneyMinutes", "requiredBikeCount"];
+  const adapter = plannerAdapter(draft);
+  render(<ConsumerJourneyPlannerPage adapter={adapter} initialInput={verifiedContext} />);
+  await compile();
+  expect(screen.getByRole("status")).toHaveTextContent("선택해 둔 조건을 유지했습니다");
+  expect(screen.getByLabelText(/출발 장소/)).toHaveValue("성수");
+  expect(screen.getByLabelText(/라이딩 이용 시간/)).toHaveValue(120);
+  expect(screen.getByLabelText(/필요한 자전거 수/)).toHaveValue(1);
+  fireEvent.change(screen.getByLabelText(/라이딩 이용 시간/), { target: { value: "80" } });
+  submitConfirmation();
+  await waitFor(() => expect(adapter.answerClarification).toHaveBeenCalledWith(draft, expect.objectContaining({ maxJourneyMinutes: "80", origin: verifiedContext.origin })));
+});
+
+test.each([
+  ["라이딩 이용 시간", "0", "1분 이상"], ["라이딩 이용 시간", "481", "480분 이하"], ["라이딩 이용 시간", "1.5", "정수"],
+  ["필요한 자전거 수", "0", "1대 이상"], ["필요한 자전거 수", "6", "5대 이하"], ["필요한 자전거 수", "", "정수"],
+  ["출발 희망 시각", "", "올바른 출발 시각"], ["출발 희망 시각", "2000-01-01T10:00", "현재보다 미래"],
+])("confirmation rejects invalid %s=%s with a field-specific message and focus", async (label, value, message) => {
+  const adapter = plannerAdapter(draftDecision({}, verifiedContext));
+  render(<ConsumerJourneyPlannerPage adapter={adapter} />);
+  await compile();
+  const field = screen.getByLabelText(new RegExp(label));
+  fireEvent.change(field, { target: { value } });
+  submitConfirmation();
+  expect(screen.getByText(new RegExp(message))).toBeInTheDocument();
+  expect(field).toHaveFocus();
+  expect(field).toHaveAttribute("aria-invalid", "true");
+  expect(adapter.answerClarification).not.toHaveBeenCalled();
+  expect(screen.getByText("서울숲에서 여유롭게 달리고 싶어요")).toBeInTheDocument();
+});
+
+test.each(["origin", "destination"])("editing a selected %s invalidates the place and rejects stale provider results", async (field) => {
+  let resolveFirst;
+  const adapter = plannerAdapter(draftDecision({}, verifiedContext));
+  adapter.searchPlaces.mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve; })).mockResolvedValue([place("new-place", "새 검색 결과")]);
+  render(<ConsumerJourneyPlannerPage adapter={adapter} />);
+  await compile();
+  const input = screen.getByLabelText(field === "origin" ? /출발 장소/ : /목적 장소/);
+  fireEvent.change(input, { target: { value: "이전 검색" } });
+  await waitFor(() => expect(adapter.searchPlaces).toHaveBeenCalledWith("이전 검색"));
+  fireEvent.change(input, { target: { value: "새 검색" } });
+  expect(await screen.findByRole("button", { name: /새 검색 결과/ })).toBeInTheDocument();
+  await act(async () => resolveFirst([place("stale-place", "오래된 결과")]));
+  expect(screen.queryByRole("button", { name: /오래된 결과/ })).not.toBeInTheDocument();
+  submitConfirmation();
+  expect(adapter.answerClarification).not.toHaveBeenCalled();
+  expect(input).toHaveFocus();
+});
+
+test.each([
+  [{ code: "PREMIUM_REQUIRED", status: 403 }, "Premium 활성 계정"],
+  [{ code: "PREMIUM_ENTITLEMENT_UNAVAILABLE", status: 503 }, "Premium 상태"],
+  [{ code: "AI_PROVIDER_UNAVAILABLE", status: 503 }, "AI 서비스에 연결"],
+  [{ code: "AI_PROVIDER_TIMEOUT", status: 503 }, "응답 시간이 초과"],
+  [{ code: "AI_OUTPUT_SCHEMA_INVALID", status: 502 }, "AI 응답 형식"],
+  [{ status: 500 }, "서버에서 요청"],
+])("AI failure preserves the prompt and distinguishes %j", async (error, message) => {
+  const adapter = plannerAdapter();
+  adapter.planNaturalLanguage.mockRejectedValue(error);
+  render(<ConsumerJourneyPlannerPage adapter={adapter} />);
+  fireEvent.change(screen.getByRole("textbox", { name: "라이딩 계획 설명" }), { target: { value: "유지할 설명" } });
   fireEvent.click(screen.getByRole("button", { name: "AI 조건 정리하기" }));
-  fireEvent.change(await screen.findByLabelText("출발 희망 시각"), { target: { value: "2030-09-03T10:00" } });
-  fireEvent.click(screen.getByRole("button", { name: "선택하고 계속" }));
-  await waitFor(() => expect(adapter.answerClarification).toHaveBeenCalledWith(clarification, { departureAt: "2030-09-03T10:00" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(message);
+  expect(screen.getByRole("textbox", { name: "라이딩 계획 설명" })).toHaveValue("유지할 설명");
+  expect(screen.queryByRole("heading", { name: "AI 조건 확인" })).not.toBeInTheDocument();
 });
 
-test("expired session preserves the draft and offers an explicit login action", async () => {
-  const adapter = { planNaturalLanguage: jest.fn().mockRejectedValue({ status: 401, code: "AUTH_REQUIRED" }) };
+test.each([
+  [{ status: "UNAVAILABLE", warnings: ["AI_PROVIDER_TIMEOUT"] }, "응답 시간이 초과"],
+  [{ status: "UNAVAILABLE" }, "AI 서비스에 연결"],
+  [{ status: "UNKNOWN" }, "AI 응답 형식"],
+  [decision("READY"), "AI 응답 형식"],
+])("an unavailable or unknown initial response cannot look like successful AI compilation", async (response, message) => {
+  const adapter = plannerAdapter(response);
+  render(<ConsumerJourneyPlannerPage adapter={adapter} />);
+  fireEvent.change(screen.getByRole("textbox", { name: "라이딩 계획 설명" }), { target: { value: "입력을 유지해요" } });
+  fireEvent.click(screen.getByRole("button", { name: "AI 조건 정리하기" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(message);
+  expect(screen.getByRole("textbox", { name: "라이딩 계획 설명" })).toHaveValue("입력을 유지해요");
+  expect(screen.queryByRole("heading", { name: "AI 조건 확인" })).not.toBeInTheDocument();
+});
+
+test("a failed structured request preserves all values and an unavailable plan never opens results", async () => {
+  const adapter = plannerAdapter(draftDecision({}, verifiedContext));
+  adapter.answerClarification.mockResolvedValue({ status: "UNAVAILABLE", warnings: ["AI_PROVIDER_TIMEOUT"] });
+  const onResult = jest.fn();
+  render(<ConsumerJourneyPlannerPage adapter={adapter} onResult={onResult} />);
+  await compile();
+  fireEvent.change(screen.getByLabelText(/라이딩 이용 시간/), { target: { value: "85" } });
+  submitConfirmation();
+  expect(await screen.findByRole("alert")).toHaveTextContent("응답 시간이 초과");
+  expect(screen.getByLabelText(/라이딩 이용 시간/)).toHaveValue(85);
+  expect(screen.getByLabelText(/출발 장소/)).toHaveValue("성수");
+  expect(screen.getByText("서울숲에서 여유롭게 달리고 싶어요")).toBeInTheDocument();
+  expect(onResult).not.toHaveBeenCalled();
+});
+
+test("back and an explicit login preserve the draft across remount, while reset removes it", async () => {
+  const adapter = plannerAdapter(draftDecision({}, verifiedContext));
   const onLogin = jest.fn();
-  render(<ConsumerJourneyPlannerPage adapter={adapter} initialInput={plannerContext} onLogin={onLogin} />);
-  fireEvent.change(screen.getByRole("textbox", { name: "라이딩 계획 설명" }), { target: { value: "서울숲 라이딩" } });
+  const first = render(<ConsumerJourneyPlannerPage adapter={adapter} onLogin={onLogin} />);
+  await compile("로그인 후에도 유지할 설명");
+  fireEvent.change(screen.getByLabelText(/라이딩 이용 시간/), { target: { value: "75" } });
+  fireEvent.click(screen.getByRole("button", { name: "설명 다시 입력" }));
+  expect(screen.getByRole("textbox", { name: "라이딩 계획 설명" })).toHaveValue("로그인 후에도 유지할 설명");
+  adapter.planNaturalLanguage.mockRejectedValue({ status: 401, code: "AUTH_REQUIRED" });
   fireEvent.click(screen.getByRole("button", { name: "AI 조건 정리하기" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("로그인 세션이 만료");
-  expect(screen.getByRole("textbox", { name: "라이딩 계획 설명" })).toHaveValue("서울숲 라이딩");
   expect(onLogin).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "다시 로그인" }));
   expect(onLogin).toHaveBeenCalledTimes(1);
-});
-
-test("direct planner entry leaves required choices empty and blocks unselected context", async () => {
-  const adapter = { planNaturalLanguage: jest.fn() };
+  const stored = JSON.parse(window.sessionStorage.getItem("consumer-journey-planner-draft"));
+  expect(stored.context.maxJourneyMinutes).toBe("75");
+  expect(stored).not.toHaveProperty("decision");
+  first.unmount();
   render(<ConsumerJourneyPlannerPage adapter={adapter} />);
-  expect(screen.getByLabelText(/출발 희망 시각/)).toHaveValue("");
-  expect(screen.getByLabelText(/라이딩 이용 시간/)).toHaveValue(null);
-  expect(screen.getByLabelText(/필요한 자전거 수/)).toHaveValue("");
-  fireEvent.change(screen.getByRole("textbox", { name: "라이딩 계획 설명" }), { target: { value: "서울숲을 달리고 싶어요" } });
-  fireEvent.click(screen.getByRole("button", { name: "AI 조건 정리하기" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("출발 장소를 검색 결과에서 선택");
-  expect(screen.getByText("입력하기").closest("li")).toHaveAttribute("aria-current", "step");
-  expect(adapter.planNaturalLanguage).not.toHaveBeenCalled();
+  expect(screen.getByRole("textbox", { name: "라이딩 계획 설명" })).toHaveValue("로그인 후에도 유지할 설명");
+  expect(screen.queryByRole("heading", { name: "AI 조건 확인" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "초기화" }));
+  expect(screen.getByRole("textbox", { name: "라이딩 계획 설명" })).toHaveValue("");
+  expect(window.sessionStorage.getItem("consumer-journey-planner-draft")).toBeNull();
 });
-
-test("direct planner entry resolves a provider origin and submits only user-selected structured values", async () => {
-  const origin = place("provider-origin", "서울역");
-  const adapter = { searchPlaces: jest.fn().mockResolvedValue([origin]), planNaturalLanguage: jest.fn().mockResolvedValue(decision()) };
-  const onInputChange = jest.fn();
-  render(<ConsumerJourneyPlannerPage adapter={adapter} onInputChange={onInputChange} />);
-  fireEvent.change(screen.getByLabelText(/출발 장소/), { target: { value: "서울" } });
-  fireEvent.click(await screen.findByRole("button", { name: /서울역/ }));
-  fireEvent.change(screen.getByLabelText(/출발 희망 시각/), { target: { value: "2030-09-03T10:00" } });
-  fireEvent.change(screen.getByLabelText(/라이딩 이용 시간/), { target: { value: "90" } });
-  fireEvent.change(screen.getByLabelText(/필요한 자전거 수/), { target: { value: "2" } });
-  fireEvent.change(screen.getByRole("textbox", { name: "라이딩 계획 설명" }), { target: { value: "공원에서 쉬고 싶어요" } });
-  fireEvent.click(screen.getByRole("button", { name: "AI 조건 정리하기" }));
-  await waitFor(() => expect(adapter.planNaturalLanguage).toHaveBeenCalledWith("공원에서 쉬고 싶어요", {
-    origin, departureAt: "2030-09-03T10:00", maxJourneyMinutes: 90, requiredBikeCount: 2,
-  }));
-  expect(adapter.searchPlaces).toHaveBeenCalledWith("서울");
-  expect(onInputChange).toHaveBeenLastCalledWith(expect.objectContaining({ origin, requiredBikeCount: 2 }));
-});
-
-test("planner invalidates a selected origin before replacing it and rejects stale search results", async () => {
-  let resolveFirst;
-  const adapter = {
-    searchPlaces: jest.fn().mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve; })).mockResolvedValue([place("new-origin", "서울숲")]),
-    planNaturalLanguage: jest.fn(),
-  };
-  render(<ConsumerJourneyPlannerPage adapter={adapter} initialInput={plannerContext} />);
-  fireEvent.click(screen.getByRole("button", { name: "다시 선택" }));
-  await waitFor(() => expect(adapter.searchPlaces).toHaveBeenCalledWith("성수"));
-  fireEvent.change(screen.getByLabelText(/출발 장소/), { target: { value: "서울숲" } });
-  expect(await screen.findByRole("button", { name: /서울숲/ })).toBeInTheDocument();
-  await act(async () => resolveFirst([place("old-origin", "이전 검색") ]));
-  expect(screen.queryByRole("button", { name: /이전 검색/ })).not.toBeInTheDocument();
-  fireEvent.change(screen.getByRole("textbox", { name: "라이딩 계획 설명" }), { target: { value: "공원을 달려요" } });
-  fireEvent.click(screen.getByRole("button", { name: "AI 조건 정리하기" }));
-  expect(adapter.planNaturalLanguage).not.toHaveBeenCalled();
-});
-
-test("planner locks clarification after the single structured answer is exhausted", async () => {
-  const clarification = decision("CLARIFICATION_REQUIRED");
-  clarification.normalizedIntent.destination = null;
-  clarification.unifiedPlan = null;
-  clarification.clarification = { question: "어느 목적지로 갈까요?", missingFields: ["destination"] };
-  const adapter = {
-    planNaturalLanguage: jest.fn().mockResolvedValue(clarification),
-    searchPlaces: jest.fn().mockResolvedValue([place("destination-1", "서울숲")]),
-    answerClarification: jest.fn().mockResolvedValue(clarification),
-  };
-  render(<ConsumerJourneyPlannerPage adapter={adapter} initialInput={plannerContext} />);
-  fireEvent.change(screen.getByRole("textbox", { name: "라이딩 계획 설명" }), { target: { value: "한강 쪽으로 달리고 싶어요" } });
-  fireEvent.click(screen.getByRole("button", { name: "AI 조건 정리하기" }));
-  fireEvent.change(await screen.findByLabelText("목적 장소"), { target: { value: "서울" } });
-  fireEvent.click(await screen.findByRole("button", { name: /서울숲/ }));
-  fireEvent.click(screen.getByRole("button", { name: "선택하고 계속" }));
-  await waitFor(() => expect(adapter.answerClarification).toHaveBeenCalledTimes(1));
-  await screen.findByRole("button", { name: "설명 다시 입력" });
-  const continueButton = screen.getByRole("button", { name: "선택하고 계속" });
-  expect(continueButton).toBeDisabled();
-  fireEvent.click(continueButton);
-  expect(adapter.answerClarification).toHaveBeenCalledTimes(1);
-  expect(screen.getByRole("button", { name: "설명 다시 입력" })).toBeInTheDocument();
-});
-
 test("result renders backend segments, zero values, pathPoints and evidence gaps without invented fallback", () => {
   render(<ConsumerJourneyPlanResultPage initialDecision={decision("PARTIAL")} />);
   expect(screen.getByRole("heading", { name: /성수 → 서울숲/ })).toBeInTheDocument();
@@ -314,4 +388,104 @@ test.each([
   fireEvent.change(screen.getByRole("textbox", { name: "라이딩 계획 설명" }), { target: { value: "서울숲으로 달리고 싶어요" } });
   fireEvent.click(screen.getByRole("button", { name: "AI 조건 정리하기" }));
   expect(await screen.findByRole("alert")).toHaveTextContent(copy);
+});
+
+test("stale optional timing and invalid optional numbers do not block the initial AI call", async () => {
+  const adapter = plannerAdapter(draftDecision({ startAt: "2030-09-03T01:00:00Z", totalMinutes: 60, requiredBikeCount: 2 }));
+  render(<ConsumerJourneyPlannerPage adapter={adapter} initialInput={{ ...plannerContext, departureAt: "2000-01-01T10:00", maxJourneyMinutes: 481, requiredBikeCount: 6 }} />);
+  await compile();
+  expect(adapter.planNaturalLanguage).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ origin: plannerContext.origin, departureAt: "", maxJourneyMinutes: "", requiredBikeCount: "" }));
+  expect(screen.getByLabelText(/라이딩 이용 시간/)).toHaveValue(60);
+  expect(screen.getByLabelText(/필요한 자전거 수/)).toHaveValue(2);
+});
+
+test("neutral AI weights do not add themes and preference scores are a read-only summary", async () => {
+  const adapter = plannerAdapter(draftDecision({ preferences: { cafe: 3, culture: 3, scenery: 5 } }, verifiedContext));
+  render(<ConsumerJourneyPlannerPage adapter={adapter} />);
+  await compile();
+  expect(screen.getByLabelText("카페")).not.toBeChecked();
+  expect(screen.getByLabelText("문화")).not.toBeChecked();
+  expect(screen.getByLabelText("공원")).not.toBeChecked();
+  expect(screen.getByText("AI가 해석한 선호 (참고)")).toBeInTheDocument();
+  expect(screen.getByText("일정에는 선택한 관심 테마가 반영됩니다.")).toBeInTheDocument();
+  expect(screen.queryByLabelText("풍경")).not.toBeInTheDocument();
+  expect(screen.queryByText("안정성")).not.toBeInTheDocument();
+  expect(screen.getByText("풍경").parentElement).toHaveTextContent("5 / 5");
+  submitConfirmation();
+  await waitFor(() => expect(adapter.answerClarification).toHaveBeenCalledWith(expect.any(Object), expect.objectContaining({ constraints: { themes: [] }, preferences: { cafe: 3, culture: 3, scenery: 5 } })));
+});
+
+test("deselecting inferred lowercase AI interests sends an explicitly empty theme list", async () => {
+  const adapter = plannerAdapter(draftDecision({ preferences: { cafe: 5, culture: 4 } }, verifiedContext));
+  render(<ConsumerJourneyPlannerPage adapter={adapter} />);
+  await compile();
+  expect(screen.getByLabelText("카페")).toBeChecked();
+  expect(screen.getByLabelText("문화")).toBeChecked();
+  fireEvent.click(screen.getByLabelText("카페"));
+  fireEvent.click(screen.getByLabelText("문화"));
+  submitConfirmation();
+  await waitFor(() => expect(adapter.answerClarification).toHaveBeenCalledWith(expect.any(Object), expect.objectContaining({ constraints: { themes: [] } })));
+});
+
+test.each([["AI_PROVIDER_TIMEOUT", "응답 시간이 초과"], ["AI_OUTPUT_SCHEMA_INVALID", "AI 응답 형식"], ["AI_PROVIDER_UNAVAILABLE", "AI 서비스에 연결"], ["AI_TOOL_VALUE_MISMATCH", "실제 근거와 일치하지 않아"]])("AI failure %s shows distinct copy before explicitly opening retained facts", async (code, message) => {
+  const adapter = plannerAdapter(draftDecision({}, verifiedContext));
+  const unavailable = decision("UNAVAILABLE");
+  unavailable.unifiedPlan.segments = unavailable.unifiedPlan.segments.filter((segment) => ["ACCESS", "RENT"].includes(segment.type));
+  unavailable.warnings = [code];
+  adapter.answerClarification.mockResolvedValue(unavailable);
+  const onResult = jest.fn();
+  const onNavigate = jest.fn();
+  render(<ConsumerJourneyPlannerPage adapter={adapter} onResult={onResult} onNavigate={onNavigate} />);
+  await compile();
+  submitConfirmation();
+  expect(await screen.findByRole("alert")).toHaveTextContent(message);
+  expect(onResult).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "확보된 실제 근거 보기" }));
+  await waitFor(() => expect(onResult).toHaveBeenCalledWith(unavailable));
+  expect(onNavigate).toHaveBeenCalledWith("journey-result", unavailable.decisionId);
+  expect(onResult.mock.calls[0][0].status).toBe("UNAVAILABLE");
+  expect(onResult.mock.calls[0][0].unifiedPlan.segments.map((segment) => segment.type)).toEqual(["ACCESS", "RENT"]);
+});
+
+test("an unavailable response without facts retains its revision so retry uses the current decision", async () => {
+  const draft = draftDecision({}, verifiedContext);
+  const unavailable = { ...draft, revision: 2, status: "UNAVAILABLE", warnings: ["AI_PROVIDER_UNAVAILABLE"] };
+  const adapter = plannerAdapter(draft);
+  adapter.answerClarification.mockResolvedValueOnce(unavailable).mockResolvedValueOnce(decision());
+  render(<ConsumerJourneyPlannerPage adapter={adapter} />);
+  await compile();
+  submitConfirmation();
+  expect(await screen.findByRole("alert")).toHaveTextContent("AI 서비스에 연결");
+  submitConfirmation();
+  await waitFor(() => expect(adapter.answerClarification).toHaveBeenNthCalledWith(2, unavailable, expect.objectContaining({ origin: verifiedContext.origin })));
+});
+
+test("confirming unchanged AI timing preserves the accepted values through a login failure", async () => {
+  const draft = draftDecision({ startAt: "2030-09-03T01:00:00Z", totalMinutes: 95, requiredBikeCount: 3 }, { origin: verifiedContext.origin, destination: verifiedContext.destination });
+  const adapter = plannerAdapter(draft);
+  adapter.answerClarification.mockRejectedValue({ status: 401, code: "AUTH_REQUIRED" });
+  render(<ConsumerJourneyPlannerPage adapter={adapter} />);
+  await compile();
+  submitConfirmation();
+  expect(await screen.findByRole("alert")).toHaveTextContent("로그인 세션이 만료");
+  const stored = JSON.parse(window.sessionStorage.getItem("consumer-journey-planner-draft"));
+  expect(stored.context).toEqual(expect.objectContaining({ origin: verifiedContext.origin, destination: verifiedContext.destination, maxJourneyMinutes: 95, requiredBikeCount: 3 }));
+  expect(stored.context.departureAt).not.toBe("");
+  expect(stored).not.toHaveProperty("decision");
+});
+
+test("retry clears prior factual fallback and uses the returned revision without recompiling", async () => {
+  const draft = draftDecision({}, verifiedContext);
+  const unavailable = { ...decision("UNAVAILABLE"), decisionId: draft.decisionId, revision: 2, warnings: ["AI_PROVIDER_TIMEOUT"] };
+  const adapter = plannerAdapter(draft);
+  adapter.answerClarification.mockResolvedValueOnce(unavailable).mockRejectedValueOnce({ code: "AI_PROVIDER_UNAVAILABLE" });
+  render(<ConsumerJourneyPlannerPage adapter={adapter} />);
+  await compile();
+  submitConfirmation();
+  expect(await screen.findByRole("button", { name: "확보된 실제 근거 보기" })).toBeInTheDocument();
+  submitConfirmation();
+  expect(screen.queryByRole("button", { name: "확보된 실제 근거 보기" })).not.toBeInTheDocument();
+  expect(await screen.findByRole("alert")).toHaveTextContent("AI 서비스에 연결");
+  expect(adapter.answerClarification).toHaveBeenNthCalledWith(2, unavailable, expect.any(Object));
+  expect(adapter.planNaturalLanguage).toHaveBeenCalledTimes(1);
 });
