@@ -32,12 +32,14 @@ class JourneyAiSchemaTest {
         assertThat(canonical.path("$schema").asText()).contains("2020-12");
         assertThat(canonical.path("properties").path("startAt").path("format").asText()).isEqualTo("date-time");
         assertThat(canonical.path("properties").path("destination").path("type").isArray()).isTrue();
+        assertThat(canonical.path("properties").path("origin").path("type").toString()).contains("\"null\"");
         assertThat(canonical.path("additionalProperties").asBoolean()).isFalse();
         assertThat(canonical.path("required").isArray()).isTrue();
 
         assertThat(wire.has("$schema")).isFalse();
         assertThat(wire.path("properties").path("startAt").has("format")).isFalse();
         assertThat(wire.path("properties").path("destination").path("anyOf").isArray()).isTrue();
+        assertThat(wire.path("properties").path("origin").path("anyOf").toString()).contains("\"type\":\"null\"");
         assertThat(wire.path("properties").path("destination").path("anyOf").toString()).contains("\"type\":\"null\"");
         assertThat(wire.path("additionalProperties").asBoolean()).isFalse();
         assertThat(wire.path("required").isArray()).isTrue();

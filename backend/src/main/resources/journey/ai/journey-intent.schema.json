@@ -4,7 +4,7 @@
   "additionalProperties": false,
   "required": ["origin", "destination", "startAt", "totalMinutes", "requiredBikeCount", "preferences", "hardConstraints", "missingFields", "needsClarification"],
   "properties": {
-    "origin": { "type": "object", "additionalProperties": false, "required": ["displayName", "placeId"], "properties": { "displayName": { "type": "string" }, "placeId": { "type": "string" } } },
+    "origin": { "type": ["object", "null"], "additionalProperties": false, "required": ["displayName", "placeId"], "properties": { "displayName": { "type": "string" }, "placeId": { "type": "string" } } },
     "destination": { "type": ["object", "null"], "additionalProperties": false, "required": ["displayName", "placeId"], "properties": { "displayName": { "type": "string" }, "placeId": { "type": "string" } } },
     "startAt": { "type": ["string", "null"], "format": "date-time" },
     "totalMinutes": { "type": ["integer", "null"], "minimum": 1 },

@@ -16,7 +16,36 @@ class JourneyIntentCompilerTest {
                 """);
 
         assertThat(result.origin().displayName()).isEqualTo("성수역");
+        assertThat(result.origin().placeId()).isEmpty();
         assertThat(result.requiredBikeCount()).isEqualTo(2);
+    }
+
+    @Test
+    void treatsModelPlaceIdsAsUnverifiedQueriesForBothPlaces() {
+        JourneyIntent result = compiler.compile("""
+                {"origin":{"displayName":"성수역","placeId":"fabricated-origin"},"destination":{"displayName":"서울숲","placeId":"fabricated-destination"},"startAt":"2026-08-28T18:30:00+09:00","totalMinutes":60,"requiredBikeCount":2,"preferences":{"stability":3,"lowSlope":3,"bikeLane":3,"scenery":3,"culture":3,"cafe":3,"avoidCrowds":3},"hardConstraints":{"maxWalkMinutes":null,"avoidRain":null,"returnBy":null},"missingFields":[],"needsClarification":false}
+                """);
+
+        assertThat(result.origin()).isEqualTo(new PlaceReference("성수역", ""));
+        assertThat(result.destination()).isEqualTo(new PlaceReference("서울숲", ""));
+    }
+
+    @Test
+    void allowsMissingOrBlankOriginOnlyAsAnIncompleteDraft() {
+        for (String origin : java.util.List.of("null", "{\"displayName\":\" \",\"placeId\":\"fabricated-id\"}")) {
+            String draft = """
+                    {"origin":%s,"destination":null,"startAt":null,"totalMinutes":null,"requiredBikeCount":null,"preferences":{"stability":3,"lowSlope":3,"bikeLane":3,"scenery":3,"culture":3,"cafe":3,"avoidCrowds":3},"hardConstraints":{"maxWalkMinutes":null,"avoidRain":null,"returnBy":null},"missingFields":["origin","startAt","totalMinutes","requiredBikeCount"],"needsClarification":true}
+                    """.formatted(origin);
+            JourneyIntent result = compiler.compile(draft);
+
+            assertThat(result.origin()).isNull();
+            assertThat(result.startAt()).isNull();
+            assertThat(result.totalMinutes()).isNull();
+            assertThat(result.requiredBikeCount()).isNull();
+            assertThat(result.needsClarification()).isTrue();
+            assertThat(result.missingFields()).containsExactly("origin", "startAt", "totalMinutes", "requiredBikeCount");
+            assertStage(draft.replace("\"needsClarification\":true", "\"needsClarification\":false"), JourneyAiFailureStage.SEMANTIC_INTENT);
+        }
     }
 
     @Test

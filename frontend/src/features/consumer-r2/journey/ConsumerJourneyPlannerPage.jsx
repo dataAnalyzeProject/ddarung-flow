@@ -1,247 +1,166 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-  ConsumerAppHeader,
-  ConsumerButton,
-  ConsumerContainer,
-  ConsumerIcon,
-  ConsumerR2Theme,
-  FormField,
-  SelectedPlaceCard,
-  StatusBadge,
-  SurfaceCard,
+  ConsumerAppHeader, ConsumerButton, ConsumerContainer, ConsumerIcon,
+  ConsumerR2Theme, FormField, StatusBadge,
 } from "../shared/index.js";
 import { consumerJourneyAdapter, hasValue } from "../adapters/journey/index.js";
 import "./journey.css";
 
-const STEPS = [
-  ["입력하기", "원하는 라이딩을 설명해 주세요"],
-  ["조건 확인", "AI가 정리한 조건을 확인합니다"],
-  ["추가 확인", "필요한 경우 한 번만 답합니다"],
-  ["일정 생성", "실제 근거로 일정을 만듭니다"],
-];
-
+const DRAFT_KEY = "consumer-journey-planner-draft";
+const THEME_OPTIONS = [["PARK", "공원"], ["RIVER", "한강·하천"], ["CAFE", "카페"], ["ATTRACTION", "명소"], ["CULTURE", "문화"], ["FOOD", "음식"]];
+const PREFERENCE_OPTIONS = [["stability", "안정성"], ["lowSlope", "완만한 경사"], ["bikeLane", "자전거 도로"], ["scenery", "풍경"], ["culture", "문화 체험"], ["cafe", "카페 방문"], ["avoidCrowds", "한적한 곳"]];
+const FIELD_LABELS = { origin: "출발 장소", destination: "목적 장소", departureAt: "출발 시각", startAt: "출발 시각", maxJourneyMinutes: "이용 시간", totalMinutes: "이용 시간", requiredBikeCount: "자전거 수", preferences: "선호 조건", constraints: "테마" };
 const ERROR_COPY = {
   PREMIUM_REQUIRED: "AI 플래너는 Premium 활성 계정에서 사용할 수 있습니다.",
   PREMIUM_ENTITLEMENT_UNAVAILABLE: "Premium 상태를 지금 확인할 수 없습니다. 잠시 후 다시 시도해 주세요.",
-  JOURNEY_INTENT_INVALID: "라이딩 설명과 출발 조건을 확인해 주세요.",
-  AI_OUTPUT_SCHEMA_INVALID: "AI가 조건을 안전하게 정리하지 못했습니다. 표현을 바꿔 다시 시도해 주세요.",
+  JOURNEY_INTENT_INVALID: "입력한 조건을 확인해 주세요. 설명과 선택한 내용은 유지됩니다.",
+  AI_PROVIDER_UNAVAILABLE: "AI 서비스에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.",
+  AI_PROVIDER_TIMEOUT: "AI 응답 시간이 초과되었습니다. 입력은 유지되니 다시 시도해 주세요.",
+  AI_OUTPUT_SCHEMA_INVALID: "AI 응답 형식을 확인하지 못했습니다. 입력을 유지한 채 다시 시도해 주세요.",
+  AI_TOOL_VALUE_MISMATCH: "AI 일정이 실제 근거와 일치하지 않아 전체 일정을 만들지 못했습니다. 입력은 유지됩니다.",
+  AI_PROVIDER_REFUSAL: "AI가 이 설명으로 조건을 정리하지 못했습니다. 설명을 바꿔 다시 시도해 주세요.",
 };
 
-function display(value, suffix = "") {
-  return hasValue(value) ? `${value}${suffix}` : "확인 필요";
+function errorCopy(error) {
+  if (error?.status === 401 || error?.code === "AUTH_REQUIRED") return "로그인 세션이 만료되었습니다. 다시 로그인해 주세요.";
+  return ERROR_COPY[error?.code] || (error?.status >= 500
+    ? "서버에서 요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요."
+    : "요청을 완료하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요.");
 }
 
-function placeName(place) {
-  return place?.displayName || "확인 필요";
+function unavailableError(decision) {
+  const codes = (decision?.warnings || []).map((warning) => typeof warning === "string" ? warning : warning?.code);
+  return { code: codes.find((code) => ERROR_COPY[code]) || "AI_PROVIDER_UNAVAILABLE" };
 }
 
-function formatDateTime(value) {
-  if (!value) return "확인 필요";
+function verifiedPlace(place) {
+  const placeId = place?.placeId || place?.providerId;
+  return placeId && place?.displayName && Number.isFinite(place.latitude) && Number.isFinite(place.longitude)
+    ? { placeId, displayName: place.displayName, latitude: place.latitude, longitude: place.longitude } : null;
+}
+
+function localDateTime(value) {
+  if (!value) return "";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "확인 필요";
-  return new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
+  return Number.isNaN(date.getTime()) ? "" : new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 }
 
-function hasPlannerContext(input) {
-  const origin = input?.origin;
-  const departureAt = new Date(input?.departureAt);
-  return Boolean(origin?.placeId && origin?.displayName
-    && Number.isFinite(origin?.latitude) && Number.isFinite(origin?.longitude)
-    && !Number.isNaN(departureAt.getTime()) && departureAt.getTime() > Date.now()
-    && Number.isInteger(Number(input?.maxJourneyMinutes))
-    && Number(input?.maxJourneyMinutes) >= 1 && Number(input?.maxJourneyMinutes) <= 480
-    && Number.isInteger(Number(input?.requiredBikeCount))
-    && Number(input?.requiredBikeCount) >= 1 && Number(input?.requiredBikeCount) <= 5);
-}
-
-function initialContext(input) {
-  const origin = input.origin;
-  const departure = input.departureAt ? new Date(input.departureAt) : null;
+function initialContext(input = {}) {
   return {
-    ...input,
-    origin: origin ? { placeId: origin.placeId || origin.providerId, displayName: origin.displayName || origin.name, latitude: origin.latitude, longitude: origin.longitude } : null,
-    departureAt: departure && !Number.isNaN(departure.getTime())
-      ? new Date(departure.getTime() - departure.getTimezoneOffset() * 60_000).toISOString().slice(0, 16) : "",
-    maxJourneyMinutes: input.maxJourneyMinutes ?? "",
-    requiredBikeCount: input.requiredBikeCount ?? "",
+    origin: verifiedPlace(input.origin), destination: verifiedPlace(input.destination),
+    departureAt: localDateTime(input.departureAt), maxJourneyMinutes: input.maxJourneyMinutes ?? "",
+    requiredBikeCount: input.requiredBikeCount ?? "", preferences: input.preferences || {},
+    avoid: input.avoid || [], ...(input.constraints ? { constraints: input.constraints } : {}),
   };
 }
 
-function OriginPicker({ adapter, disabled, onSelect, origin }) {
-  const [query, setQuery] = useState("");
+function readDraft() {
+  try { return JSON.parse(window.sessionStorage.getItem(DRAFT_KEY)) || {}; } catch { return {}; }
+}
+
+function confirmationValues(decision, context) {
+  const intent = decision.normalizedIntent || {};
+  const ai = intent.aiIntent || {};
+  const origin = verifiedPlace(intent.origin) || context.origin;
+  const destination = verifiedPlace(intent.destination) || context.destination;
+  const preferences = { ...(ai.preferences || {}), ...(context.preferences || {}), ...(intent.preferences || {}) };
+  const proposedThemes = intent.constraints?.themes ?? context.constraints?.themes ?? ai.hardConstraints?.themes
+    ?? [["CAFE", "cafe"], ["CULTURE", "culture"]].filter(([, preference]) => Number(preferences[preference]) > 3).map(([theme]) => theme);
+  return {
+    origin, destination,
+    // AI place references are search queries, even if the response contains IDs or coordinates.
+    originQuery: origin?.displayName || ai.origin?.displayName || ai.origin?.query || "",
+    destinationQuery: destination?.displayName || ai.destination?.displayName || ai.destination?.query || "",
+    departureAt: localDateTime(intent.departureAt || context.departureAt || ai.startAt),
+    maxJourneyMinutes: intent.maxJourneyMinutes ?? (hasValue(context.maxJourneyMinutes) ? context.maxJourneyMinutes : ai.totalMinutes) ?? "",
+    requiredBikeCount: intent.requiredBikeCount ?? (hasValue(context.requiredBikeCount) ? context.requiredBikeCount : ai.requiredBikeCount) ?? "",
+    preferences, avoid: intent.avoid || context.avoid || [],
+    constraints: { ...(context.constraints || {}), ...(intent.constraints || {}), themes: Array.isArray(proposedThemes) ? proposedThemes.filter((theme) => THEME_OPTIONS.some(([value]) => value === theme)) : [] },
+  };
+}
+
+function validationErrors(values) {
+  const errors = {};
+  if (!verifiedPlace(values.origin)) errors.origin = "출발 장소를 검색 결과에서 선택해 주세요.";
+  if (!verifiedPlace(values.destination)) errors.destination = "목적 장소를 검색 결과에서 선택해 주세요.";
+  const departure = new Date(values.departureAt).getTime();
+  if (!values.departureAt || Number.isNaN(departure)) errors.departureAt = "올바른 출발 시각을 입력해 주세요.";
+  else if (departure <= Date.now()) errors.departureAt = "출발 시각은 현재보다 미래로 선택해 주세요.";
+  const minutes = Number(values.maxJourneyMinutes);
+  if (!hasValue(values.maxJourneyMinutes) || !Number.isInteger(minutes)) errors.maxJourneyMinutes = "이용 시간을 정수로 입력해 주세요.";
+  else if (minutes < 1) errors.maxJourneyMinutes = "이용 시간은 1분 이상 입력해 주세요.";
+  else if (minutes > 480) errors.maxJourneyMinutes = "이용 시간은 480분 이하로 입력해 주세요.";
+  const bikes = Number(values.requiredBikeCount);
+  if (!hasValue(values.requiredBikeCount) || !Number.isInteger(bikes)) errors.requiredBikeCount = "자전거 수를 정수로 입력해 주세요.";
+  else if (bikes < 1) errors.requiredBikeCount = "자전거 수는 1대 이상 입력해 주세요.";
+  else if (bikes > 5) errors.requiredBikeCount = "자전거 수는 5대 이하로 입력해 주세요.";
+  return errors;
+}
+
+function PlacePicker({ adapter, disabled, error, field, onChange, place, query }) {
   const [places, setPlaces] = useState([]);
   const [state, setState] = useState("idle");
   const requestId = useRef(0);
-
+  const label = FIELD_LABELS[field];
   useEffect(() => {
     const currentId = ++requestId.current;
     setPlaces([]);
-    if (origin || query.trim().length < 2) { setState("idle"); return undefined; }
+    if (place || query.trim().length < 2 || disabled) { setState("idle"); return undefined; }
     setState("loading");
     const timer = window.setTimeout(async () => {
       try {
-        const results = await adapter.searchPlaces(query.trim());
+        const results = (await adapter.searchPlaces(query.trim())).map(verifiedPlace).filter(Boolean);
         if (requestId.current !== currentId) return;
-        setPlaces(results);
-        setState(results.length ? "ready" : "empty");
-      } catch {
-        if (requestId.current === currentId) setState("error");
-      }
+        setPlaces(results); setState(results.length ? "ready" : "empty");
+      } catch { if (requestId.current === currentId) setState("error"); }
     }, 250);
     return () => { window.clearTimeout(timer); requestId.current += 1; };
-  }, [adapter, origin, query]);
-
-  if (origin) return <SelectedPlaceCard title={origin.displayName} onReselect={disabled ? undefined : () => { setQuery(origin.displayName); onSelect(null); }} />;
+  }, [adapter, disabled, place, query]);
   return <div className="cr22-journey__place-answer">
-    <FormField label="출발 장소" required hint="검색 결과에서 실제 장소를 선택해 주세요."><input name="journeyOrigin" autoComplete="off" disabled={disabled} value={query} onChange={(event) => setQuery(event.target.value)} /></FormField>
-    {state === "loading" ? <p role="status">출발 장소를 찾고 있습니다.</p> : null}
+    <FormField id={`journey-${field}`} label={label} required error={error} hint={place ? "선택한 장소입니다. 검색어를 바꾸면 다시 선택해야 합니다." : "두 글자 이상 검색한 뒤 실제 장소를 선택해 주세요."}>
+      <input name={field} autoComplete="off" disabled={disabled} value={query} onChange={(event) => onChange(null, event.target.value)} />
+    </FormField>
+    {place ? <p className="cr22-journey__selected-place"><ConsumerIcon name="check" size={17} /> {place.displayName} 선택됨 <button type="button" disabled={disabled} onClick={() => onChange(null, "")}>{label} 선택 해제</button></p> : null}
+    {state === "loading" ? <p role="status">{label}를 찾고 있습니다.</p> : null}
     {state === "empty" ? <p role="status">검색 결과가 없습니다. 다른 장소를 검색해 주세요.</p> : null}
     {state === "error" ? <p role="alert">장소를 검색하지 못했습니다. 다시 입력해 주세요.</p> : null}
-    {places.length ? <ul aria-label="출발 장소 검색 결과">{places.map((place) => <li key={place.placeId}><button type="button" disabled={disabled} onClick={() => onSelect(place)}><ConsumerIcon name="mapPin" /><span><strong>{place.displayName}</strong><small>출발 장소로 선택</small></span></button></li>)}</ul> : null}
+    {places.length ? <ul aria-label={`${label} 검색 결과`}>{places.map((candidate) => <li key={candidate.placeId}><button type="button" disabled={disabled} onClick={() => onChange(candidate, candidate.displayName)}><ConsumerIcon name="mapPin" /><span><strong>{candidate.displayName}</strong><small>{label}로 선택</small></span></button></li>)}</ul> : null}
   </div>;
 }
 
-function intentFields(decision) {
-  const intent = decision?.normalizedIntent || {};
-  const aiIntent = intent.aiIntent || {};
-  const themes = intent.constraints?.themes || aiIntent.hardConstraints?.themes || Object.keys(aiIntent.preferences || intent.preferences || {});
-  return [
-    ["mapPin", "시작 지역", placeName(intent.origin || aiIntent.origin)],
-    ["plan", "목적 지역", placeName(intent.destination || aiIntent.destination)],
-    ["transit", "출발 시각", formatDateTime(intent.departureAt || aiIntent.startAt)],
-    ["ride", "라이딩 시간", display(intent.maxJourneyMinutes ?? aiIntent.totalMinutes, "분")],
-    ["bike", "필요 자전거", display(intent.requiredBikeCount ?? aiIntent.requiredBikeCount, "대")],
-    ["qna", "관심", themes.length ? themes.join(" · ") : "확인 필요"],
-  ];
-}
-
-function PlannerStepper({ stage }) {
-  const active = stage === "INPUT" || stage === "ERROR" ? 0 : stage === "INTENT_CONFIRM" ? 1 : stage === "CLARIFICATION" ? 2 : 3;
+function PlannerStepper({ confirming, planning }) {
+  const active = planning ? 2 : confirming ? 1 : 0;
   return <ol className="cr22-journey__stepper" aria-label="AI 계획 진행 단계">
-    {STEPS.map(([title, description], index) => <li className={index < active ? "is-complete" : index === active ? "is-active" : ""} key={title} aria-current={index === active ? "step" : undefined}>
-      <span className="cr22-journey__step-number">{index < active ? <ConsumerIcon name="check" size={18} /> : index + 1}</span>
-      <span><strong>{title}</strong><small>{description}</small></span>
-    </li>)}
+    {[["입력하기", "원하는 라이딩을 설명해 주세요"], ["조건 확인", "장소와 조건을 한 번에 확인해요"], ["일정 생성", "실제 근거로 일정을 만듭니다"]].map(([title, description], index) => <li key={title} className={index === active ? "is-active" : index < active ? "is-complete" : ""} aria-current={index === active ? "step" : undefined}><span className="cr22-journey__step-number">{index + 1}</span><span><strong>{title}</strong><small>{description}</small></span></li>)}
   </ol>;
 }
 
-function IntentConfirm({ decision, onBack, onConfirm }) {
-  return <>
-    <div className="cr22-journey__page-title">
-      <div><p className="cr22-journey__breadcrumb">AI 플래너 <span aria-hidden="true">›</span> 조건 확인</p><h1>AI 조건 확인 <StatusBadge tone="premium">PREMIUM</StatusBadge></h1><p>AI가 정리한 조건입니다. 확인이 필요한 값은 일정 생성 전에 다시 입력해 주세요.</p></div>
-    </div>
-    <PlannerStepper stage="INTENT_CONFIRM" />
-    <div className="cr22-journey__confirm-layout">
-      <SurfaceCard title="AI가 정리한 라이딩 조건">
-        <p className="cr22-journey__section-note"><ConsumerIcon name="info" size={17} /> 확인된 구조화 조건만 표시합니다.</p>
-        <div className="cr22-journey__intent-grid">
-          {intentFields(decision).map(([icon, label, value]) => <article className="cr22-journey__intent-card" key={label}>
-            <span aria-hidden="true"><ConsumerIcon name={icon} /></span><small>{label}</small><strong>{value}</strong>
-          </article>)}
-        </div>
-        <p className="cr22-journey__truth-banner"><ConsumerIcon name="info" size={17} /> 실제 데이터 조회 결과와 환경 정보를 바탕으로 다음 화면의 일정을 구성합니다.</p>
-        <div className="cr22-journey__split-actions">
-          <ConsumerButton variant="secondary" onClick={onBack}>설명 다시 입력</ConsumerButton>
-          <ConsumerButton icon={<span aria-hidden="true">✦</span>} onClick={onConfirm}>이 조건으로 일정 보기</ConsumerButton>
-        </div>
-      </SurfaceCard>
-      <SurfaceCard quiet title="일정에 반영되는 범위">
-        <div className="cr22-journey__evidence-preview" aria-label="일정 구성 범위">
-          {["실제 출발·목적 장소", "현재 대여소 후보", "실제 이동 경로", "확인 가능한 환경 근거"].map((item) => <p key={item}><ConsumerIcon name="check" size={17} /> {item}</p>)}
-        </div>
-        <p className="cr22-journey__muted">확인되지 않은 확률·시간·거리·장소는 만들지 않습니다.</p>
-      </SurfaceCard>
-    </div>
-  </>;
-}
-
-function Clarification({ adapter, decision, onBack, onResolved }) {
-  const missingField = decision.clarification?.missingFields?.[0];
-  const [query, setQuery] = useState("");
-  const [places, setPlaces] = useState([]);
-  const [answer, setAnswer] = useState(null);
-  const [working, setWorking] = useState(false);
-  const [exhausted, setExhausted] = useState(false);
-  const [notice, setNotice] = useState("");
-  const options = decision.clarification?.options || [];
-
-  async function search(value) {
-    setQuery(value); setAnswer(null);
-    if (value.trim().length < 2 || !["origin", "destination"].includes(missingField)) { setPlaces([]); return; }
-    try { setPlaces(await adapter.searchPlaces(value)); } catch { setPlaces([]); setNotice("장소 후보를 불러오지 못했습니다."); }
-  }
-
-  function choose(value) {
-    if (missingField === "requiredBikeCount") setAnswer({ requiredBikeCount: value });
-    else if (["maxJourneyMinutes", "totalMinutes"].includes(missingField)) setAnswer({ maxJourneyMinutes: value });
-    else if (["departureAt", "startAt"].includes(missingField)) setAnswer({ departureAt: value });
-    else if (["origin", "destination"].includes(missingField)) setAnswer({ [missingField]: value });
-  }
-
-  async function continuePlan() {
-    if (!answer) { setNotice("질문에 한 가지 답을 선택해 주세요."); return; }
-    setWorking(true); setNotice("");
-    try {
-      const next = await adapter.answerClarification(decision, answer);
-      if (next.status === "CLARIFICATION_REQUIRED") {
-        setExhausted(true);
-        setNotice("한 번의 추가 확인으로 조건을 확정하지 못했습니다. 설명을 다시 입력해 주세요.");
-      }
-      else onResolved(next);
-    } catch (error) { setNotice(ERROR_COPY[error.code] || "추가 조건을 반영하지 못했습니다. 다시 시도해 주세요."); }
-    finally { setWorking(false); }
-  }
-
-  const numericOptions = missingField === "requiredBikeCount" ? [1, 2, 3, 4, 5] : [60, 90, 120];
-  const supportsPlace = ["origin", "destination"].includes(missingField);
-  const supportsDateTime = ["departureAt", "startAt"].includes(missingField);
-  const supportsNumeric = ["requiredBikeCount", "maxJourneyMinutes", "totalMinutes"].includes(missingField);
-  return <>
-    <div className="cr22-journey__page-title"><div><p className="cr22-journey__breadcrumb">AI 플래너 <span aria-hidden="true">›</span> 추가 확인</p><h1>AI 추가 확인 <StatusBadge tone="premium">PREMIUM</StatusBadge></h1><p>정확한 일정을 위해 아래 질문에 한 가지만 답해 주세요.</p></div></div>
-    <PlannerStepper stage="CLARIFICATION" />
-    <div className="cr22-journey__clarify-layout">
-      <SurfaceCard>
-        <div className="cr22-journey__question-head"><span aria-hidden="true">?</span><div><strong>마지막 확인이 필요해요</strong><small>최대 1회 질문</small></div></div>
-        <h2 className="cr22-journey__question">{decision.clarification?.question || "일정에 필요한 조건을 선택해 주세요."}</h2>
-        {supportsPlace ? <div className="cr22-journey__place-answer">
-          <label htmlFor="clarification-place">{missingField === "origin" ? "출발 장소" : "목적 장소"}</label>
-          <input id="clarification-place" name="clarificationPlace" autoComplete="off" value={query} onChange={(event) => search(event.target.value)} placeholder="두 글자 이상 입력해 실제 장소를 검색하세요…" />
-          {places.length ? <ul aria-label="실제 장소 검색 결과">{places.map((place) => <li key={place.placeId}><button type="button" aria-pressed={answer?.[missingField]?.placeId === place.placeId} onClick={() => { choose(place); setQuery(place.displayName); setPlaces([]); }}><ConsumerIcon name="mapPin" /><span><strong>{place.displayName}</strong><small>실제 provider 검색 결과</small></span></button></li>)}</ul> : null}
-        </div> : null}
-        {supportsDateTime ? <div className="cr22-journey__place-answer">
-          <label htmlFor="clarification-departure">출발 희망 시각</label>
-          <input id="clarification-departure" name="clarificationDeparture" autoComplete="off" type="datetime-local" onChange={(event) => choose(event.target.value)} />
-        </div> : null}
-        {supportsNumeric ? <div className="cr22-journey__answer-grid">
-          {(options.length ? options : numericOptions).map((option) => { const value = typeof option === "object" ? option.value : option; const label = typeof option === "object" ? option.label : missingField === "requiredBikeCount" ? `${option}대` : `${option}분`; return <button type="button" key={String(value)} aria-pressed={Object.values(answer || {}).includes(value)} onClick={() => choose(value)}><span className="cr22-journey__radio" aria-hidden="true" /><strong>{label}</strong>{typeof option === "object" && option.description ? <small>{option.description}</small> : null}</button>; })}
-        </div> : null}
-        {!supportsPlace && !supportsDateTime && !supportsNumeric ? <p className="cr22-journey__notice" role="alert">이 조건은 한 번의 구조화 질문으로 확인할 수 없습니다. 설명을 다시 입력해 주세요.</p> : null}
-        <p className="cr22-journey__truth-banner"><ConsumerIcon name="info" size={17} /> 이 답변은 현재 질문에만 사용되며 다른 조건은 유지됩니다.</p>
-        {notice ? <p className="cr22-journey__notice" role="alert">{notice}</p> : null}
-        <div className="cr22-journey__stack-actions"><ConsumerButton block disabled={exhausted} loading={working} loadingLabel="조건 반영 중…" onClick={continuePlan}>선택하고 계속</ConsumerButton><ConsumerButton block variant="secondary" onClick={onBack}>{exhausted ? "설명 다시 입력" : "이전 단계로 돌아가기"}</ConsumerButton></div>
-      </SurfaceCard>
-      <SurfaceCard quiet title="현재까지 정리된 조건"><div className="cr22-journey__condition-list">{intentFields(decision).map(([, label, value]) => <p key={label}><span>{label}</span><strong>{value}</strong></p>)}</div><p className="cr22-journey__truth-banner"><ConsumerIcon name="info" size={17} /> 추가 답변 이후에는 같은 계획에서 다시 질문하지 않습니다.</p></SurfaceCard>
-    </div>
-  </>;
-}
-
-export default function ConsumerJourneyPlannerPage({
-  adapter = consumerJourneyAdapter,
-  authState = "authenticated",
-  initialInput = {},
-  onInputChange,
-  onLogin,
-  onNavigate,
-  onResult,
-  user,
-}) {
+export default function ConsumerJourneyPlannerPage({ adapter = consumerJourneyAdapter, authState = "authenticated", initialInput = {}, onInputChange, onLogin, onNavigate, onResult, user }) {
+  const [savedDraft] = useState(readDraft);
+  const [text, setText] = useState(savedDraft.text || "");
+  const [context, setContext] = useState(() => initialContext({ ...savedDraft.context, ...initialInput }));
   const [stage, setStage] = useState("INPUT");
-  const [text, setText] = useState("");
   const [decision, setDecision] = useState(null);
+  const [factualDecision, setFactualDecision] = useState(null);
+  const [values, setValues] = useState(null);
   const [notice, setNotice] = useState("");
+  const [errors, setErrors] = useState({});
   const [authRequired, setAuthRequired] = useState(false);
-  const [context, setContext] = useState(() => initialContext(initialInput));
-  const count = useMemo(() => Array.from(text).length, [text]);
+  const promptRef = useRef(null);
+  const formRef = useRef(null);
+  const headingRef = useRef(null);
+  const confirming = stage === "CONFIRM" || stage === "PLANNING";
+  const working = stage === "COMPILING" || stage === "PLANNING";
+  const count = Array.from(text).length;
+
+  useEffect(() => {
+    try {
+      if (text || Object.values(context).some((value) => hasValue(value) && typeof value !== "object")) window.sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ text, context }));
+      else window.sessionStorage.removeItem(DRAFT_KEY);
+    } catch { /* The in-memory draft remains available when storage is disabled. */ }
+  }, [context, text]);
+
+  useEffect(() => { if (confirming) headingRef.current?.focus(); }, [confirming]);
 
   function updateContext(patch) {
     const next = { ...context, ...patch };
@@ -249,59 +168,106 @@ export default function ConsumerJourneyPlannerPage({
     onInputChange?.(next);
   }
 
+  function updateValues(patch) {
+    setValues((previous) => ({ ...previous, ...patch }));
+    const userFields = Object.fromEntries(Object.entries(patch).filter(([key]) => !key.endsWith("Query")));
+    updateContext(userFields);
+    setErrors((previous) => Object.fromEntries(Object.entries(previous).filter(([field]) => !(field in patch))));
+  }
+
+  function reportError(error) {
+    setAuthRequired(error?.status === 401 || error?.code === "AUTH_REQUIRED");
+    setNotice(errorCopy(error));
+  }
+
   async function submit(event) {
     event.preventDefault();
-    if (!text.trim()) { setNotice("원하는 라이딩을 자연어로 설명해 주세요."); return; }
-    if (count > 500) { setNotice("라이딩 설명은 500자 이내로 입력해 주세요."); return; }
-    if (!hasPlannerContext(context)) {
-      setNotice("출발 장소를 검색 결과에서 선택하고, 미래 출발 시각·1~480분의 이용 시간·자전거 1~5대를 입력해 주세요.");
-      setStage("ERROR");
-      return;
+    if (!text.trim() || count > 500) {
+      setErrors({ text: !text.trim() ? "원하는 라이딩을 자연어로 설명해 주세요." : "라이딩 설명은 500자 이내로 입력해 주세요." });
+      promptRef.current?.focus(); return;
     }
-    setStage("GENERATING"); setNotice(""); setAuthRequired(false);
+    setStage("COMPILING"); setNotice(""); setErrors({}); setAuthRequired(false); setDecision(null); setFactualDecision(null);
     try {
-      const next = await adapter.planNaturalLanguage(text, context);
-      setDecision(next);
-      setStage(next.status === "CLARIFICATION_REQUIRED" ? "CLARIFICATION" : "INTENT_CONFIRM");
-    } catch (error) {
-      const loginRequired = error.status === 401 || error.code === "AUTH_REQUIRED";
-      setAuthRequired(loginRequired);
-      setNotice(loginRequired ? "로그인 세션이 만료되었습니다. 다시 로그인해 주세요." : ERROR_COPY[error.code] || "AI 조건을 정리하지 못했습니다. 잠시 후 다시 시도해 주세요.");
-      setStage("ERROR");
-    }
+      const invalidContext = validationErrors(context);
+      const compileContext = { ...context };
+      ["departureAt", "maxJourneyMinutes", "requiredBikeCount"].forEach((field) => { if (invalidContext[field]) compileContext[field] = ""; });
+      const next = await adapter.planNaturalLanguage(text, compileContext);
+      if (next?.status === "UNAVAILABLE") throw unavailableError(next);
+      if (next?.status !== "CLARIFICATION_REQUIRED" || !next.decisionId || !next.normalizedIntent) throw Object.assign(new Error("Invalid AI draft"), { code: "AI_OUTPUT_SCHEMA_INVALID" });
+      setDecision(next); setValues(confirmationValues(next, compileContext)); setStage("CONFIRM");
+    } catch (error) { reportError(error); setStage("INPUT"); }
   }
 
-  function openResult(next = decision) {
-    onResult?.(next);
-    onNavigate?.("journey-result", next?.decisionId);
+  async function confirm(event) {
+    event.preventDefault();
+    const invalid = validationErrors(values);
+    setErrors(invalid); setNotice(""); setAuthRequired(false); setFactualDecision(null);
+    if (Object.keys(invalid).length) { formRef.current?.querySelector(`[name="${Object.keys(invalid)[0]}"]`)?.focus(); return; }
+    setStage("PLANNING");
+    try {
+      const { originQuery, destinationQuery, ...confirmed } = values;
+      updateContext(confirmed);
+      const next = await adapter.answerClarification(decision, confirmed);
+      if (next?.decisionId === decision.decisionId && Number.isInteger(next.revision) && next.revision > decision.revision) setDecision(next);
+      const retainedFacts = next?.unifiedPlan && Object.values(next.unifiedPlan.evidence || {}).some((group) => group && Object.keys(group).length);
+      if (next?.status === "UNAVAILABLE") {
+        if (retainedFacts) setFactualDecision(next);
+        throw unavailableError(next);
+      }
+      if (next?.status === "CLARIFICATION_REQUIRED") {
+        setDecision(next); setNotice("아직 확인이 필요한 조건이 있습니다. 아래 입력을 확인해 주세요.");
+        const missing = (next.clarification?.missingFields || []).filter((field) => FIELD_LABELS[field]);
+        const nextErrors = Object.fromEntries(missing.map((field) => [field === "startAt" ? "departureAt" : field === "totalMinutes" ? "maxJourneyMinutes" : field, `${FIELD_LABELS[field]}을 다시 확인해 주세요.`]));
+        setErrors(nextErrors);
+        window.requestAnimationFrame(() => formRef.current?.querySelector(`[name="${Object.keys(nextErrors)[0]}"]`)?.focus());
+      } else if (["READY", "PARTIAL"].includes(next?.status) && next?.unifiedPlan) {
+        onResult?.(next); onNavigate?.("journey-result", next.decisionId);
+      } else throw Object.assign(new Error("Invalid AI plan"), { code: "AI_OUTPUT_SCHEMA_INVALID" });
+    } catch (error) { reportError(error); }
+    finally { setStage("CONFIRM"); }
   }
 
-  function reset() { setText(""); setDecision(null); setNotice(""); setStage("INPUT"); }
+  function reset() {
+    setText(""); setDecision(null); setFactualDecision(null); setValues(null); setNotice(""); setErrors({}); setAuthRequired(false); setStage("INPUT");
+    updateContext(initialContext());
+    try { window.sessionStorage.removeItem(DRAFT_KEY); } catch { /* Storage can be disabled. */ }
+    promptRef.current?.focus();
+  }
 
-  return <ConsumerR2Theme className="cr22-journey">
+  const contextItems = [context.origin?.displayName, context.destination?.displayName, context.departureAt?.replace("T", " "), hasValue(context.maxJourneyMinutes) ? `${context.maxJourneyMinutes}분` : null, hasValue(context.requiredBikeCount) ? `${context.requiredBikeCount}대` : null].filter(Boolean);
+  const conflicts = [...new Set((decision?.normalizedIntent?.contextConflicts || []).map((field) => FIELD_LABELS[field]).filter(Boolean))];
+  return <ConsumerR2Theme className="cr22-journey cr22-journey--planner">
     <ConsumerAppHeader activeItem="planner" authState={authState} onLogin={onLogin} onNavigate={onNavigate} userName={user?.name || user?.displayName} userTier={user?.tier} />
     <ConsumerContainer as="main" id="main-content" className="cr22-journey__content">
-      {stage === "INTENT_CONFIRM" ? <IntentConfirm decision={decision} onBack={() => setStage("INPUT")} onConfirm={() => openResult()} /> : null}
-      {stage === "CLARIFICATION" ? <Clarification adapter={adapter} decision={decision} onBack={reset} onResolved={(next) => { setDecision(next); setStage("INTENT_CONFIRM"); }} /> : null}
-      {["INPUT", "GENERATING", "ERROR"].includes(stage) ? <>
-        <div className="cr22-journey__page-title"><div><p className="cr22-journey__breadcrumb"><ConsumerIcon name="home" size={15} /> <span aria-hidden="true">›</span> AI 플래너</p><h1>자연어로 나만의 라이딩 일정을 만들어보세요</h1><p>원하는 코스, 시간, 장소, 테마를 설명하면 AI가 조건을 정리하고 실제 근거로 일정을 구성합니다.</p></div><ConsumerButton variant="secondary" size="sm" icon={<ConsumerIcon name="qna" />} onClick={() => onNavigate?.("qna")}>이용 안내</ConsumerButton></div>
-        <PlannerStepper stage={stage} />
-        <form className="cr22-journey__input-card" noValidate onSubmit={submit}>
-          <div className="cr22-journey__input-head"><div><h2>라이딩 계획을 설명해 주세요</h2><p>자연어로 자유롭게 입력해 주세요.</p></div><span>이용 가능: <StatusBadge tone="premium">PREMIUM 전용</StatusBadge></span></div>
-          <OriginPicker adapter={adapter} disabled={stage === "GENERATING"} origin={context.origin} onSelect={(origin) => updateContext({ origin })} />
-          <div className="cr22-journey__replan">
-            <FormField label="출발 희망 시각" required><input name="journeyDepartureAt" autoComplete="off" type="datetime-local" disabled={stage === "GENERATING"} value={context.departureAt} onChange={(event) => updateContext({ departureAt: event.target.value })} /></FormField>
-            <FormField label="라이딩 이용 시간 (분)" required><input name="journeyMinutes" autoComplete="off" type="number" min="1" max="480" disabled={stage === "GENERATING"} value={context.maxJourneyMinutes} onChange={(event) => updateContext({ maxJourneyMinutes: event.target.value === "" ? "" : Number(event.target.value) })} /></FormField>
-            <FormField label="필요한 자전거 수" required><select name="journeyBikeCount" disabled={stage === "GENERATING"} value={context.requiredBikeCount} onChange={(event) => updateContext({ requiredBikeCount: Number(event.target.value) })}><option value="">선택해 주세요</option>{[1, 2, 3, 4, 5].map((count) => <option key={count} value={count}>{count}대</option>)}</select></FormField>
-          </div>
-          <label className="cr22-journey__prompt" htmlFor="journey-prompt"><span className="cr22-sr-only">라이딩 계획 설명</span><textarea id="journey-prompt" name="naturalLanguageJourney" autoComplete="off" aria-label="라이딩 계획 설명" value={text} maxLength={500} disabled={stage === "GENERATING"} onChange={(event) => setText(event.target.value)} placeholder={"예) 성수에서 따릉이를 빌려 한강 쪽으로 2시간 정도 라이딩하고,\n중간에 카페도 들르고 싶어요…"} /><small>{count} / 500</small></label>
-          <div className="cr22-journey__input-support"><div><strong><ConsumerIcon name="info" size={18} /> 입력 팁</strong><ul><li>출발지, 시간, 원하는 코스나 테마를 함께 적어 주세요.</li><li>필요한 자전거 수와 들르고 싶은 장소도 적을 수 있습니다.</li></ul></div><aside><strong><span aria-hidden="true">✦</span> 안내</strong><p>다음 단계에서 AI가 정리한 조건을 확인하고, 필요할 때 한 번만 추가 답변할 수 있습니다.</p></aside></div>
-          {notice ? <p className="cr22-journey__notice" role="alert">{notice}</p> : null}
-          {authRequired ? <ConsumerButton type="button" onClick={onLogin}>다시 로그인</ConsumerButton> : null}
-          <div className="cr22-journey__input-actions"><ConsumerButton variant="secondary" type="button" icon={<ConsumerIcon name="retry" />} onClick={reset}>초기화</ConsumerButton><ConsumerButton type="submit" loading={stage === "GENERATING"} loadingLabel="AI가 조건을 정리하는 중…" icon={<span aria-hidden="true">✦</span>} iconPosition="start">AI 조건 정리하기</ConsumerButton></div>
-          <p className="cr22-journey__premium-note"><ConsumerIcon name="info" size={15} /> AI 플래너는 Premium 활성 계정에서 이용할 수 있습니다.</p>
-        </form>
-      </> : null}
+      <div className="cr22-journey__page-title"><div><p className="cr22-journey__breadcrumb">AI 플래너 <span aria-hidden="true">›</span> {confirming ? "조건 확인" : "라이딩 계획"}</p><h1 ref={headingRef} tabIndex={-1}>{confirming ? "AI 조건 확인" : "어떤 라이딩을 하고 싶으세요?"}</h1><p>{confirming ? "AI가 정리한 초안입니다. 실제 장소를 선택하고 조건을 한 번에 확인해 주세요." : "장소, 시간, 하고 싶은 일을 적으면 AI가 라이딩 조건을 정리해 드려요."}</p></div><StatusBadge tone="premium">PREMIUM</StatusBadge></div>
+      <PlannerStepper confirming={confirming} planning={stage === "PLANNING"} />
+      {!confirming ? <form className="cr22-journey__input-card" noValidate onSubmit={submit}>
+        <div className="cr22-journey__input-head"><h2>라이딩 계획을 설명해 주세요</h2><span>1~500자</span></div>
+        {contextItems.length ? <div className="cr22-journey__context"><span><strong>가져온 조건</strong> {contextItems.join(" · ")}<small>다음 단계에서 수정할 수 있어요.</small></span><ConsumerButton variant="secondary" disabled={working} onClick={() => updateContext(initialContext())}>조건 지우기</ConsumerButton></div> : null}
+        <div className="cr22-journey__prompt"><label className="cr22-sr-only" htmlFor="journey-prompt">라이딩 계획 설명</label><textarea ref={promptRef} id="journey-prompt" name="naturalLanguageJourney" autoComplete="off" required aria-invalid={Boolean(errors.text)} aria-describedby={errors.text ? "journey-prompt-error journey-prompt-count" : "journey-prompt-count"} value={text} disabled={working} onChange={(event) => { setText(event.target.value); setErrors({}); setDecision(null); }} placeholder="예) 내일 오후 2시에 성수에서 출발해 서울숲까지 90분 정도 달리고, 중간에 카페에 들르고 싶어요. 자전거는 2대가 필요해요." /><small id="journey-prompt-count">{count} / 500</small></div>
+        {errors.text ? <p className="cr22-journey__notice" id="journey-prompt-error" role="alert">{errors.text}</p> : null}
+        <p className="cr22-journey__input-explanation"><ConsumerIcon name="info" size={18} /> 다음 화면에서 장소·시각·이용 시간·자전거 수를 확인한 뒤 일정을 만듭니다.</p>
+        {notice ? <p className="cr22-journey__notice" role="alert">{notice}</p> : null}
+        {authRequired ? <ConsumerButton onClick={onLogin}>다시 로그인</ConsumerButton> : null}
+        <div className="cr22-journey__input-actions"><ConsumerButton variant="secondary" disabled={working} icon={<ConsumerIcon name="retry" />} onClick={reset}>초기화</ConsumerButton><ConsumerButton type="submit" loading={working} loadingLabel="AI가 조건을 정리하는 중…" icon={<span aria-hidden="true">✦</span>}>AI 조건 정리하기</ConsumerButton></div>
+        <p className="cr22-journey__premium-note">Premium 활성 계정에서 이용할 수 있습니다.</p>
+      </form> : <form ref={formRef} className="cr22-journey__input-card cr22-journey__confirmation" noValidate onSubmit={confirm}>
+        <p className="cr22-journey__draft-text">{text}</p>
+        {conflicts.length ? <p className="cr22-journey__conflict" role="status">{conflicts.join(" · ")}: 설명과 가져온 조건이 달라 선택해 둔 조건을 유지했습니다. 아래에서 수정할 수 있어요.</p> : null}
+        <div className="cr22-journey__confirm-places">{["origin", "destination"].map((field) => <PlacePicker key={field} adapter={adapter} disabled={working} error={errors[field]} field={field} place={values[field]} query={values[`${field}Query`]} onChange={(place, query) => updateValues({ [field]: place, [`${field}Query`]: query })} />)}</div>
+        <div className="cr22-journey__confirm-numbers">
+          <FormField label="출발 희망 시각" required error={errors.departureAt}><input name="departureAt" type="datetime-local" disabled={working} value={values.departureAt} onChange={(event) => updateValues({ departureAt: event.target.value })} /></FormField>
+          <FormField label="라이딩 이용 시간 (분)" required error={errors.maxJourneyMinutes}><input name="maxJourneyMinutes" type="number" min="1" max="480" step="1" disabled={working} value={values.maxJourneyMinutes} onChange={(event) => updateValues({ maxJourneyMinutes: event.target.value })} /></FormField>
+          <FormField label="필요한 자전거 수" required error={errors.requiredBikeCount}><input name="requiredBikeCount" type="number" min="1" max="5" step="1" disabled={working} value={values.requiredBikeCount} onChange={(event) => updateValues({ requiredBikeCount: event.target.value })} /></FormField>
+        </div>
+        <fieldset className="cr22-journey__theme-field" disabled={working}><legend>관심 테마 (선택)</legend><div>{THEME_OPTIONS.map(([theme, label]) => <label key={theme}><input type="checkbox" name="themes" checked={values.constraints.themes.includes(theme)} onChange={(event) => updateValues({ constraints: { ...values.constraints, themes: event.target.checked ? [...values.constraints.themes, theme] : values.constraints.themes.filter((value) => value !== theme) } })} />{label}</label>)}</div></fieldset>
+        <details className="cr22-journey__preferences"><summary>AI가 해석한 선호 (참고)</summary><p>일정에는 선택한 관심 테마가 반영됩니다.</p><dl>{PREFERENCE_OPTIONS.filter(([key]) => hasValue(values.preferences[key])).map(([key, label]) => <div key={key}><dt>{label}</dt><dd>{values.preferences[key]} / 5</dd></div>)}</dl></details>
+        <p className="cr22-journey__input-explanation"><ConsumerIcon name="info" size={18} /> 확인한 장소와 실제 이동·대여소 정보를 바탕으로 일정을 만듭니다.</p>
+        {notice ? <p className="cr22-journey__notice" role="alert">{notice}</p> : null}
+        {authRequired ? <ConsumerButton onClick={onLogin}>다시 로그인</ConsumerButton> : null}
+        {factualDecision ? <ConsumerButton variant="secondary" disabled={working} onClick={() => { onResult?.(factualDecision); onNavigate?.("journey-result", factualDecision.decisionId); }}>확보된 실제 근거 보기</ConsumerButton> : null}
+        <div className="cr22-journey__input-actions"><ConsumerButton variant="secondary" disabled={working} onClick={() => { setStage("INPUT"); setNotice(""); setErrors({}); setDecision(null); setFactualDecision(null); }}>설명 다시 입력</ConsumerButton><ConsumerButton type="submit" loading={working} loadingLabel="AI가 일정을 만드는 중…">확인하고 일정 만들기</ConsumerButton></div>
+      </form>}
     </ConsumerContainer>
   </ConsumerR2Theme>;
 }

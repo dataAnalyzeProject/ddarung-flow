@@ -3,6 +3,7 @@ package com.ddarungflow.journey.ai;
 public enum JourneyAiErrorCode {
     AI_DISABLED,
     AI_PROVIDER_UNAVAILABLE,
+    AI_PROVIDER_TIMEOUT,
     AI_PROVIDER_REFUSAL,
     AI_RESPONSE_INCOMPLETE,
     AI_OUTPUT_SCHEMA_INVALID,

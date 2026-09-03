@@ -10,8 +10,10 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.URI;
+import java.net.http.HttpTimeoutException;
 import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -54,6 +56,23 @@ class ResponsesApiClientTest {
     }
 
     @Test
+    void textOnlyInputProvidesCurrentSeoulTimeWithoutInventingStructuredValues() throws Exception {
+        OffsetDateTime before = OffsetDateTime.now();
+        JsonNode payload = mapper.readTree(client.requestBody("오후 3시에 한강을 타고 싶어", "journey_intent", mapper.readTree("{}")));
+        JsonNode input = mapper.readTree(payload.path("input").asText());
+        OffsetDateTime current = OffsetDateTime.parse(input.path("currentDateTime").asText());
+
+        assertThat(current.toInstant()).isBetween(before.toInstant(), OffsetDateTime.now().toInstant());
+        assertThat(current.getOffset()).isEqualTo(ZoneOffset.ofHours(9));
+        assertThat(input.path("timeZone").asText()).isEqualTo("Asia/Seoul");
+        assertThat(input.path("origin").isNull()).isTrue();
+        assertThat(input.path("departureAt").isNull()).isTrue();
+        assertThat(input.has("maxJourneyMinutes")).isFalse();
+        assertThat(input.has("requiredBikeCount")).isFalse();
+        assertThat(payload.path("instructions").asText()).contains("next future occurrence", "return null", "placeId to an empty string");
+    }
+
+    @Test
     void genericStructuredOutputKeepsCallerInstructionsAndJsonInputWithoutChangingJourneyTransport() throws Exception {
         JsonNode input = mapper.readTree("{\"evidence\":{\"rentalCandidates\":{}}}");
         JsonNode schema = mapper.readTree("{\"type\":\"object\"}");
@@ -90,8 +109,32 @@ class ResponsesApiClientTest {
             String messages = logs.list.stream().map(ILoggingEvent::getFormattedMessage).collect(java.util.stream.Collectors.joining("\n"));
             assertThat(messages).contains("event=journey_ai_provider_request attempted=true")
                     .contains("event=journey_ai_provider_response status=429")
-                    .contains("event=journey_ai_provider_transport_failure category=REQUEST_FAILURE")
+                    .contains("outcome=FAILURE", "stage=TRANSPORT", "code=AI_PROVIDER_UNAVAILABLE", "correlation_id=", "latency_ms=")
+                    .doesNotContain("outcome=SUCCESS")
                     .doesNotContain("raw natural-language sentinel", "provider raw response", "not-a-real-key", "Authorization", "Bearer");
+            assertThat(logs.list).allSatisfy(event -> assertThat(event.getThrowableProxy()).isNull());
+        } finally {
+            detachLogs(logs);
+        }
+    }
+
+    @Test
+    void distinguishesTimeoutFromTransportFailureAndLogsNoRawException() throws Exception {
+        ListAppender<ILoggingEvent> logs = attachLogs();
+        try {
+            ResponsesApiClient timedOut = new ResponsesApiClient(properties(), mapper, request -> {
+                throw new HttpTimeoutException("raw timeout exception sentinel");
+            });
+            assertThatThrownBy(() -> timedOut.requestStructuredOutput("raw prompt sentinel", "journey_intent", mapper.readTree("{}")))
+                    .satisfies(exception -> {
+                        assertThat(((JourneyAiException) exception).code()).isEqualTo(JourneyAiErrorCode.AI_PROVIDER_TIMEOUT);
+                        assertThat(exception.getCause()).isNull();
+                    });
+
+            String messages = logs.list.stream().map(ILoggingEvent::getFormattedMessage).collect(java.util.stream.Collectors.joining("\n"));
+            assertThat(messages).contains("kind=INTENT_COMPILE", "outcome=REQUEST", "outcome=FAILURE", "code=AI_PROVIDER_TIMEOUT", "stage=TIMEOUT")
+                    .doesNotContain("outcome=SUCCESS", "raw prompt sentinel", "raw timeout exception sentinel", "not-a-real-key");
+            assertThat(logs.list).allSatisfy(event -> assertThat(event.getThrowableProxy()).isNull());
         } finally {
             detachLogs(logs);
         }

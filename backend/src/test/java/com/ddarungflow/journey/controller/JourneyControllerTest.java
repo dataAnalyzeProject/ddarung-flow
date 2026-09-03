@@ -8,6 +8,8 @@ import com.ddarungflow.journey.ai.JourneyAiFailureStage;
 import com.ddarungflow.journey.ai.JourneyAiErrorCode;
 import com.ddarungflow.journey.ai.JourneyAiGateway;
 import com.ddarungflow.journey.ai.JourneyCompileRequest;
+import com.ddarungflow.journey.ai.JourneyIntent;
+import com.ddarungflow.journey.ai.PlaceReference;
 import com.ddarungflow.journey.persistence.JourneyCandidateRepository;
 import com.ddarungflow.journey.persistence.JourneyDecisionRepository;
 import com.ddarungflow.payment.Subscription;
@@ -26,6 +28,9 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+
+import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -63,6 +68,9 @@ class JourneyControllerTest {
              "departureAt":"2030-08-28T18:00:00+09:00","maxJourneyMinutes":60,"requiredBikeCount":2,
              "preferences":{"lowSlope":"HIGH"},"avoid":["RAIN"]}
             """;
+    private static final String AI_TEXT_ONLY = """
+            {"requestMode":"NATURAL_LANGUAGE","naturalLanguageText":"서울숲에서 한 시간 자전거 타고 싶어"}
+            """;
 
     @Autowired private MockMvc mvc;
     @Autowired private ObjectMapper objectMapper;
@@ -91,13 +99,15 @@ class JourneyControllerTest {
 
     @Test
     void distinguishesAnonymousFromFreePremiumAiRequestsBeforeCallingTheProvider() throws Exception {
-        mvc.perform(post("/api/v1/journeys/plan").with(csrf())
-                        .contentType(MediaType.APPLICATION_JSON).content(AI_PLAN))
-                .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("AUTH_REQUIRED"));
+        for (String request : List.of(AI_PLAN, AI_TEXT_ONLY)) {
+            mvc.perform(post("/api/v1/journeys/plan").with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON).content(request))
+                    .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("AUTH_REQUIRED"));
 
-        mvc.perform(post("/api/v1/journeys/plan").with(authentication(userA)).with(csrf())
-                        .contentType(MediaType.APPLICATION_JSON).content(AI_PLAN))
-                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("PREMIUM_REQUIRED"));
+            mvc.perform(post("/api/v1/journeys/plan").with(authentication(userA)).with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON).content(request))
+                    .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("PREMIUM_REQUIRED"));
+        }
 
         verifyNoInteractions(aiGateway);
     }
@@ -107,9 +117,11 @@ class JourneyControllerTest {
         subscriptions.save(new Subscription(authenticatedUser(userA), SubscriptionPlan.PREMIUM_MONTHLY_30D,
                 java.time.OffsetDateTime.now().minusDays(31)));
 
-        mvc.perform(post("/api/v1/journeys/plan").with(authentication(userA)).with(csrf())
-                        .contentType(MediaType.APPLICATION_JSON).content(AI_PLAN))
-                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("PREMIUM_REQUIRED"));
+        for (String request : List.of(AI_PLAN, AI_TEXT_ONLY)) {
+            mvc.perform(post("/api/v1/journeys/plan").with(authentication(userA)).with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON).content(request))
+                    .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("PREMIUM_REQUIRED"));
+        }
 
         verifyNoInteractions(aiGateway);
     }
@@ -124,6 +136,42 @@ class JourneyControllerTest {
                 .andExpect(status().isOk());
 
         verify(aiGateway).compileIntent(any(JourneyCompileRequest.class));
+    }
+
+    @Test
+    void activePremiumTextOnlyCompilesDraftWithoutFactualPlanning() throws Exception {
+        subscriptions.save(new Subscription(authenticatedUser(userA), SubscriptionPlan.PREMIUM_MONTHLY_30D,
+                java.time.OffsetDateTime.now()));
+        when(aiGateway.compileIntent(any(JourneyCompileRequest.class)))
+                .thenReturn(new JourneyAiGateway.IntentResult(new JourneyIntent(null, new PlaceReference("서울숲", "model-id"),
+                        null, 60, 1, Map.of(), Map.of(), List.of("origin", "startAt"), true), null));
+
+        mvc.perform(post("/api/v1/journeys/plan").with(authentication(userA)).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON).content(AI_TEXT_ONLY))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CLARIFICATION_REQUIRED"))
+                .andExpect(jsonPath("$.candidates").isEmpty())
+                .andExpect(jsonPath("$.normalizedIntent.origin").isEmpty())
+                .andExpect(jsonPath("$.normalizedIntent.destination").isEmpty())
+                .andExpect(jsonPath("$.normalizedIntent.plannerMode").value("NATURAL_LANGUAGE"))
+                .andExpect(jsonPath("$.normalizedIntent.aiIntent.destination.displayName").value("서울숲"))
+                .andExpect(jsonPath("$.normalizedIntent.aiIntent.destination.placeId").value(""))
+                .andExpect(jsonPath("$.clarification.missingFields", org.hamcrest.Matchers.hasItems(
+                        "origin", "destination", "departureAt", "maxJourneyMinutes", "requiredBikeCount")));
+
+        verify(aiGateway).compileIntent(any(JourneyCompileRequest.class));
+    }
+
+    @Test
+    void invalidTextOrOptionalContextIsRejectedBeforeProviderCalls() throws Exception {
+        for (String text : List.of("", "   ", "가".repeat(501))) {
+            assertInvalid(objectMapper.writeValueAsString(Map.of("requestMode", "NATURAL_LANGUAGE", "naturalLanguageText", text)));
+        }
+        assertInvalid("{\"requestMode\":\"NATURAL_LANGUAGE\"}");
+        assertInvalid(AI_TEXT_ONLY.trim().replaceFirst("\\}$", ",\"requiredBikeCount\":6}"));
+        assertInvalid(AI_TEXT_ONLY.trim().replaceFirst("\\}$", ",\"maxJourneyMinutes\":0}"));
+        assertInvalid(AI_TEXT_ONLY.trim().replaceFirst("\\}$", ",\"origin\":{\"placeId\":\"model-place\",\"displayName\":\"서울숲\"}}"));
+        verifyNoInteractions(aiGateway);
     }
 
     @Test
@@ -148,14 +196,14 @@ class JourneyControllerTest {
     }
 
     @Test
-    void naturalLanguageClarificationWithoutAnAiCallRemainsAvailableWithoutPremium() throws Exception {
+    void naturalLanguageWithoutDestinationRequiresPremiumBeforeCompile() throws Exception {
         String clarification = PLAN.replace("\"requestMode\":\"FORM\",",
                 "\"requestMode\":\"NATURAL_LANGUAGE\",\"naturalLanguageText\":\"목적지를 정하지 못했어\",");
 
         mvc.perform(post("/api/v1/journeys/plan").with(authentication(userA)).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON).content(clarification))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("CLARIFICATION_REQUIRED"));
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PREMIUM_REQUIRED"));
 
         verifyNoInteractions(aiGateway);
     }

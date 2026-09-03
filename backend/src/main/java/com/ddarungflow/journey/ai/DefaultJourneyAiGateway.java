@@ -46,8 +46,8 @@ public class DefaultJourneyAiGateway implements JourneyAiGateway {
         if (!properties.enabled()) return IntentResult.unavailable(JourneyAiErrorCode.AI_DISABLED);
         if (!properties.providerConfigured()) return IntentResult.unavailable(JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE);
         piiBoundaryValidator.rejectSensitiveInput(request.naturalLanguageText());
-        JsonNode output = client.requestStructuredOutput(request, "journey_intent", wireIntentSchema);
-        return new IntentResult(intentCompiler.compile(output.toString()), null);
+        return client.requestStructuredOutput(request, "journey_intent", wireIntentSchema,
+                output -> new IntentResult(intentCompiler.compile(output.toString()), null));
     }
 
     @Override
@@ -62,7 +62,7 @@ public class DefaultJourneyAiGateway implements JourneyAiGateway {
         ObjectNode input = objectMapper.createObjectNode();
         input.set("evidence", objectMapper.valueToTree(evidence));
         input.set("constraints", objectMapper.valueToTree(constraints));
-        JsonNode output = client.requestStructuredOutput(input, """
+        return client.requestStructuredOutput(input, """
                 Return only a schedule selection matching the supplied schema.
                 The evidence bundle is authoritative. Select only existing rental, POI, route, weather,
                 and air-quality evidence IDs. Route IDs must form the exact ordered bicycle chain for
@@ -70,13 +70,16 @@ public class DefaultJourneyAiGateway implements JourneyAiGateway {
                 duration, timestamps, route geometry, weather, or air-quality facts. Keep stay minutes
                 and stop count within the supplied constraints. Numeric facts may only be copied exactly
                 through factRefs and factValues.
-                """, "journey_schedule", scheduleSchema);
-        schemaValidator.validate(output, scheduleSchema);
+                """, "journey_schedule", scheduleSchema, this::parseSchedule);
+    }
+
+    private ScheduleResult parseSchedule(JsonNode output) {
         try {
+            schemaValidator.validate(output, scheduleSchema);
             return new ScheduleResult(objectMapper.treeToValue(output, EvidenceSelectionValidator.Selection.class), null);
         } catch (Exception exception) {
             throw new JourneyAiException(JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID,
-                    "journey schedule output cannot be parsed", exception);
+                    "journey schedule output cannot be parsed", JourneyAiFailureStage.CANONICAL_SCHEMA);
         }
     }
 

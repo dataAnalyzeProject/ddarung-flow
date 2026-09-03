@@ -19,8 +19,9 @@ export function toIsoDate(value) {
 }
 
 function toPlanPlace(place) {
-  return place ? {
-    placeId: place.placeId ?? place.providerId,
+  const placeId = place?.placeId ?? place?.providerId;
+  return placeId && place?.displayName && Number.isFinite(place.latitude) && Number.isFinite(place.longitude) ? {
+    placeId,
     displayName: place.displayName,
     latitude: place.latitude,
     longitude: place.longitude,
@@ -49,13 +50,13 @@ export function toStructuredReplanRequest(decision, changes = {}) {
   const requiredBikeCount = changes.requiredBikeCount ?? intent.requiredBikeCount;
   return {
     requestMode: "FORM",
-    origin: toPlanPlace(changes.origin ?? intent.origin),
-    destination: toPlanPlace(changes.destination ?? intent.destination),
+    origin: toPlanPlace(changes.origin !== undefined ? changes.origin : intent.origin),
+    destination: toPlanPlace(changes.destination !== undefined ? changes.destination : intent.destination),
     departureAt,
     maxJourneyMinutes: hasValue(maxJourneyMinutes) ? Number(maxJourneyMinutes) : null,
     requiredBikeCount: hasValue(requiredBikeCount) ? Number(requiredBikeCount) : null,
     preferences: changes.preferences ?? intent.preferences ?? {},
-    avoid: changes.avoid ?? intent.avoid ?? intent.hardConstraints ?? [],
+    avoid: changes.avoid ?? intent.avoid ?? (Array.isArray(intent.hardConstraints) ? intent.hardConstraints : []),
     expectedRevision: decision?.revision,
     ...(changes.constraints ?? intent.constraints ? { constraints: changes.constraints ?? intent.constraints } : {}),
   };
