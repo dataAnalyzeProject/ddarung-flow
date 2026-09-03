@@ -4,12 +4,19 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 
 @RestController @RequiredArgsConstructor
 @RequestMapping("/api/v1")
 public class PaymentController {
   private final SubscriptionService subscriptions;
+  @GetMapping("/payments/plans") public Map<String,List<Map<String,Object>>> plans() {
+    return Map.of("plans", Arrays.stream(SubscriptionPlan.values()).map(plan -> Map.<String,Object>of(
+        "planId", plan.name(), "amount", plan.amount(), "currency", "KRW", "durationDays", plan.duration().toDays()
+    )).toList());
+  }
   @GetMapping("/me/subscription") public Map<String,Object> subscription(@AuthenticationPrincipal PrincipalDetails principal) { return subscriptions.current(principal.getUsers()); }
   @PostMapping("/payments/checkout") public ResponseEntity<?> checkout(@AuthenticationPrincipal PrincipalDetails principal, @RequestBody Map<String,String> request) {
     try {
