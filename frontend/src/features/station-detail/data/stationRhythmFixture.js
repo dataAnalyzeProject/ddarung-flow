@@ -1,1 +1,0 @@
-export const stationRhythmFixture = { sampleCount: 12840, weekdayHourly: Array.from({ length: 20 }, (_, index) => ({ dayOfWeek: index % 7 + 1, hourOfDay: 6 + index % 9 * 2, sampleCount: 13, medianBikeCount: 2, stockoutRate: .68 })), stockout: { medianDurationMinutes: 100, p90DurationMinutes: 185, medianRecoveryMinutesToThree: 130, episodeCount: 47 } };
