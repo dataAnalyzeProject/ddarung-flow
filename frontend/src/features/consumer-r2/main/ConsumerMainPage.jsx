@@ -211,14 +211,14 @@ function RouteDetail({ candidate }) {
         <div><h2 id="cr293-transit-title">{candidate.stationName}까지 가는 길</h2></div>
         <div><strong>{formatMinutes(detail.durationSeconds)}</strong><span>{formatDistance(detail.distanceMeters)} · 환승 {detail.transfers ?? "확인 불가"}회 · {formatFare(detail.fare)}</span></div>
       </div>
-      <ol className="cr293-transit__steps">
-        {detail.steps.length ? detail.steps.map((step, index) => (
+      {detail.steps.length ? <ol className="cr293-transit__steps">
+        {detail.steps.map((step, index) => (
           <li key={`${step.type}-${index}`}>
             <span className="cr293-transit__dot" aria-hidden="true"><ConsumerIcon name={step.type === "SUBWAY" || step.type === "BUS" ? "transit" : "ride"} size={18} /></span>
             <div><strong>{step.guidance || "이동 안내"}</strong><span>{formatMinutes(step.durationSeconds)} · {formatDistance(step.distanceMeters)}</span>{step.vehicles.length ? <small>{step.vehicles.map((vehicle) => vehicle.name).filter(Boolean).join(" · ")}</small> : null}</div>
           </li>
-        )) : <li><div><strong>상세 이동 단계가 제공되지 않았습니다.</strong><span>경로 요약을 확인해 주세요.</span></div></li>}
-      </ol>
+        ))}
+      </ol> : <p role="status">상세 이동 단계가 제공되지 않았습니다. 경로 요약을 확인해 주세요.</p>}
     </section>
   );
 }
@@ -235,14 +235,14 @@ function TransitWorkspace({ candidate, destination, mapRenderer, onClose, onOpen
           <h2 ref={transitHeadingRef} tabIndex="-1">{candidate.stationName}</h2>
         </div>
         <div className="cr293-transit-summary__primary">
-          <span><small>도착 시점 대여 가능성</small><b>{formatProbability(candidate.probability)}</b></span>
+          <span><small>도착 시점 대여 가능성</small>{candidate.probability === null ? <strong>확인 불가</strong> : <b>{formatProbability(candidate.probability)}</b>}</span>
           <span aria-label={inventory.inline}><small>현재 자전거</small><b>{inventory.value}</b><small className="cr293-transit-summary__meta">{inventory.detail}</small></span>
         </div>
         <div className="cr293-transit-summary__route">
           <span><small>예상 도착</small><b>{formatArrival(candidate.arrivalAt)}</b></span>
           <span><small>대중교통</small><b>{formatMinutes(candidate.durationSeconds)}</b></span>
         </div>
-        <p>도착 시각과 대여 가능성은 오른쪽에 표시한 동일 대중교통 경로를 기준으로 계산했습니다.</p>
+        <p>{candidate.probability === null ? "도착 시각은 표시된 대중교통 경로 기준이며, 대여 가능성은 현재 확인하지 못했습니다." : "도착 시각과 대여 가능성은 표시된 동일 대중교통 경로를 기준으로 계산했습니다."}</p>
       </aside>
       <div className="cr293-transit-view__route">
         <ConsumerRouteMap candidate={candidate} destination={destination} mapRenderer={mapRenderer} origin={origin} />

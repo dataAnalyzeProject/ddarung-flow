@@ -288,8 +288,8 @@ export default function ConsumerJourneyPlannerPage({
         <PlannerStepper stage={stage} />
         <form className="cr22-journey__input-card" noValidate onSubmit={submit}>
           <div className="cr22-journey__input-head"><div><h2>라이딩 계획을 설명해 주세요</h2><p>자연어로 자유롭게 입력해 주세요.</p></div><span>이용 가능: <StatusBadge tone="premium">PREMIUM 전용</StatusBadge></span></div>
+          <OriginPicker adapter={adapter} disabled={stage === "GENERATING"} origin={context.origin} onSelect={(origin) => updateContext({ origin })} />
           <div className="cr22-journey__replan">
-            <OriginPicker adapter={adapter} disabled={stage === "GENERATING"} origin={context.origin} onSelect={(origin) => updateContext({ origin })} />
             <FormField label="출발 희망 시각" required><input name="journeyDepartureAt" autoComplete="off" type="datetime-local" disabled={stage === "GENERATING"} value={context.departureAt} onChange={(event) => updateContext({ departureAt: event.target.value })} /></FormField>
             <FormField label="라이딩 이용 시간 (분)" required><input name="journeyMinutes" autoComplete="off" type="number" min="1" max="480" disabled={stage === "GENERATING"} value={context.maxJourneyMinutes} onChange={(event) => updateContext({ maxJourneyMinutes: event.target.value === "" ? "" : Number(event.target.value) })} /></FormField>
             <FormField label="필요한 자전거 수" required><select name="journeyBikeCount" disabled={stage === "GENERATING"} value={context.requiredBikeCount} onChange={(event) => updateContext({ requiredBikeCount: Number(event.target.value) })}><option value="">선택해 주세요</option>{[1, 2, 3, 4, 5].map((count) => <option key={count} value={count}>{count}대</option>)}</select></FormField>

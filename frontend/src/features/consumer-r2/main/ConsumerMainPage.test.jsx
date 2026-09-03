@@ -141,6 +141,16 @@ test("renders empty and partial states without fabricating unavailable values", 
   expect(screen.getByRole("button", { name: /경로 확인 대기/ })).not.toHaveTextContent("0m");
 });
 
+test("does not claim a computed probability when transit prediction and steps are missing", async () => {
+  const candidate = { ...candidates[0], predictionProbability: null, predictionStatus: "MISSING", availabilityLevel: null, routeDetail: { ...routeDetail, steps: [] } };
+  render(<ConsumerMainPage services={createServices({ fetchRouteCandidates: jest.fn().mockResolvedValue({ candidates: [candidate] }) })} mapRenderer={PreviewMap} />);
+  fireEvent.click(await screen.findByRole("button", { name: "대여 가능성 비교" }));
+  fireEvent.click(await screen.findByRole("button", { name: "대중교통 경로 상세" }));
+  expect(screen.getByText(/대여 가능성은 현재 확인하지 못했습니다/)).toBeInTheDocument();
+  expect(screen.queryByText(/대여 가능성은.*계산했습니다/)).not.toBeInTheDocument();
+  expect(screen.getByText(/상세 이동 단계가 제공되지 않았습니다/)).toHaveAttribute("role", "status");
+});
+
 test("shows normal zero inventory separately from missing inventory metadata", async () => {
   const normalZero = { ...candidates[0], availableBikeCount: 0, inventoryStatus: "NORMAL", inventoryCollectedAt: "2026-09-02T09:00:00+09:00", predictionTargetAt: "2026-09-02T10:00:00+09:00", horizonMinutes: 60, featureAsOf: "2026-09-02T08:55:00+09:00", expiresAt: "2026-09-02T10:05:00+09:00" };
   const missing = { ...candidates[1], availableBikeCount: null, inventoryStatus: "MISSING", inventoryCollectedAt: null };
