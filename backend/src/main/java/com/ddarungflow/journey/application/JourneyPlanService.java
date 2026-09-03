@@ -226,7 +226,7 @@ public class JourneyPlanService {
         try {
             return buildUnifiedPlanWithEvidence(input, aiIntent, true, candidates, coreCandidates, warnings, requireAiEntitlement);
         } catch (AiToolValueMismatch exception) {
-            logEvidenceFailure();
+            logEvidenceFailure(exception.getMessage());
             addWarning(warnings, "AI_TOOL_VALUE_MISMATCH");
             JourneyCandidate fallback = candidates.getFirst();
             return unavailableAiPlan(input, fallback, findCoreCandidate(coreCandidates, fallback), warnings);
@@ -294,7 +294,8 @@ public class JourneyPlanService {
                         constraints.stopCount(), STAY_BOUNDS.minimum(), STAY_BOUNDS.maximum(), constraints.availableMinutes()));
             } catch (JourneyAiException exception) {
                 if (exception.code() == JourneyAiErrorCode.AI_TOOL_VALUE_MISMATCH) {
-                    return invalidAiSchedule(input, candidates, coreCandidates, bundle, warnings);
+                    return invalidAiSchedule(input, candidates, coreCandidates, bundle, warnings,
+                            "selectSchedule: " + exception.getMessage());
                 }
                 addWarning(warnings, safeAiCode(exception.code()));
                 JourneyCandidate fallback = candidates.getFirst();
@@ -322,7 +323,8 @@ public class JourneyPlanService {
         JourneyRentalPredictionPort.RentalCandidate selectedCore = findCoreCandidate(coreCandidates, selected);
         if (selected == null || selectedCore == null || selectedCore.accessRoute() == null
                 || !"NORMAL".equals(selectedCore.routeStatus())) {
-            if (useAiSchedule) return invalidAiSchedule(input, candidates, coreCandidates, bundle, warnings);
+            if (useAiSchedule) return invalidAiSchedule(input, candidates, coreCandidates, bundle, warnings,
+                    "selected candidate '" + selection.rentalCandidateId() + "' has no NORMAL access route");
             addWarning(warnings, "ACCESS_ROUTE_UNAVAILABLE");
             return new UnifiedJourneyPlan(UnifiedJourneyPlan.Status.UNAVAILABLE, selection.rentalCandidateId(),
                     bundle, List.of(), null, List.of(), List.copyOf(warnings));
@@ -334,10 +336,12 @@ public class JourneyPlanService {
             validated = selectionValidator.validate(bundle, selection, STAY_BOUNDS);
             validateSelection(selection, validated, constraints, selected, poiData, routeData);
         } catch (JourneyAiException exception) {
-            if (useAiSchedule) return invalidAiSchedule(input, candidates, coreCandidates, bundle, warnings);
-            throw new AiToolValueMismatch();
+            if (useAiSchedule) return invalidAiSchedule(input, candidates, coreCandidates, bundle, warnings,
+                    "validateSelection: " + exception.getMessage());
+            throw new AiToolValueMismatch(exception.getMessage());
         } catch (RuntimeException exception) {
-            if (useAiSchedule) return invalidAiSchedule(input, candidates, coreCandidates, bundle, warnings);
+            if (useAiSchedule) return invalidAiSchedule(input, candidates, coreCandidates, bundle, warnings,
+                    "validateSelection threw " + exception.getClass().getSimpleName() + ": " + exception.getMessage());
             addWarning(warnings, "JOURNEY_ROUTE_CHAIN_UNAVAILABLE");
             return unavailableWithFactualSegments(input, selected, selectedCore, bundle, warnings,
                     "JOURNEY_ROUTE_CHAIN_UNAVAILABLE");
@@ -347,12 +351,14 @@ public class JourneyPlanService {
         try {
             segments = buildTimeline(input, selected, selectedCore, selection, routeData);
         } catch (RuntimeException exception) {
-            if (useAiSchedule) return invalidAiSchedule(input, candidates, coreCandidates, bundle, warnings);
+            if (useAiSchedule) return invalidAiSchedule(input, candidates, coreCandidates, bundle, warnings,
+                    "buildTimeline threw " + exception.getClass().getSimpleName() + ": " + exception.getMessage());
             throw exception;
         }
         long elapsedSeconds = Duration.between(input.departureAt(), segments.getLast().endAt()).getSeconds();
         if (elapsedSeconds > constraints.availableMinutes() * 60L) {
-            if (useAiSchedule) return invalidAiSchedule(input, candidates, coreCandidates, bundle, warnings);
+            if (useAiSchedule) return invalidAiSchedule(input, candidates, coreCandidates, bundle, warnings,
+                    "elapsed " + elapsedSeconds + "s exceeds available " + (constraints.availableMinutes() * 60L) + "s");
             addWarning(warnings, "JOURNEY_DURATION_EXCEEDED");
             return unavailableWithFactualSegments(input, selected, selectedCore, bundle, warnings,
                     "JOURNEY_DURATION_EXCEEDED");
@@ -410,9 +416,10 @@ public class JourneyPlanService {
             List<JourneyCandidate> candidates,
             List<JourneyRentalPredictionPort.RentalCandidate> coreCandidates,
             ConsumerAiEvidenceBundle bundle,
-            List<String> warnings
+            List<String> warnings,
+            String reason
     ) {
-        logEvidenceFailure();
+        logEvidenceFailure(reason);
         JourneyCandidate fallback = candidates.stream().filter(candidate -> {
             JourneyRentalPredictionPort.RentalCandidate core = findCoreCandidate(coreCandidates, candidate);
             return core != null && core.accessRoute() != null && "NORMAL".equals(core.routeStatus());
@@ -970,9 +977,9 @@ public class JourneyPlanService {
         return code.name();
     }
 
-    private void logEvidenceFailure() {
-        log.warn("event=journey_ai_provider_result kind=SCHEDULE_SELECTION outcome=FAILURE correlation_id={} stage=EVIDENCE_VALIDATION code=AI_TOOL_VALUE_MISMATCH",
-                MDC.get("journeyAiCorrelationId"));
+    private void logEvidenceFailure(String reason) {
+        log.warn("event=journey_ai_provider_result kind=SCHEDULE_SELECTION outcome=FAILURE correlation_id={} stage=EVIDENCE_VALIDATION code=AI_TOOL_VALUE_MISMATCH reason={}",
+                MDC.get("journeyAiCorrelationId"), reason);
     }
 
     private void validate(PlanInput input, boolean replan) {
@@ -1123,5 +1130,8 @@ public class JourneyPlanService {
         public AiOutputSchemaInvalid(JourneyAiFailureStage failureStage) { this.failureStage = failureStage; }
         public JourneyAiFailureStage failureStage() { return failureStage; }
     }
-    public static class AiToolValueMismatch extends RuntimeException { }
+    public static class AiToolValueMismatch extends RuntimeException {
+        public AiToolValueMismatch() { super(); }
+        public AiToolValueMismatch(String message) { super(message); }
+    }
 }
