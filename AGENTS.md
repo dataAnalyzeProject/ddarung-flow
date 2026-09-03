@@ -108,12 +108,13 @@ cd backend
 - 부모 평가 컨트롤러만 승인된 범위에서 평가 댓글과 검토 상태를 반영할 수 있습니다.
 - 담당자 피드백은 비전공자가 혼자 따라 할 수 있도록 쉬운 용어, 정확한 파일, 단계별 수정·검증·제출 방법으로 작성합니다.
 
-## 10. Codex 실행 router
+## 10. 실행 router
 
 상세 lifecycle을 이 파일에 중복하지 않습니다.
 
 1. 기본 lifecycle: [`docs/codex/EXECUTION_HARNESS_R1.md`](docs/codex/EXECUTION_HARNESS_R1.md)
 2. 역할별 모델과 escalation ceiling: [`docs/codex/MODEL_ROUTING_R1.md`](docs/codex/MODEL_ROUTING_R1.md)
 3. Consumer frontend 작업: [`docs/codex/FE_VISUAL_PROTOCOL_R1.md`](docs/codex/FE_VISUAL_PROTOCOL_R1.md) + [`docs/codex/ASSET_PROTOCOL_R1.md`](docs/codex/ASSET_PROTOCOL_R1.md)
+4. Claude Code에서 실행할 때의 provider adapter(실제 model/subagent/browser/evidence capability): [`docs/codex/CLAUDE_RUNTIME_PROFILE_R1.md`](docs/codex/CLAUDE_RUNTIME_PROFILE_R1.md)
 
 현재 Notion TASK와 그 TASK가 참조하는 frozen contract가 범위·행동의 source of truth입니다. 더 구체적이고 더 최신인 TASK 규칙은 generic harness보다 우선합니다. GitHub는 branch, commit, PR, CI, merge, deployment의 실제 사실을 소유합니다. 모델·테스트·CI·Staging·브라우저·승인 결과는 실제 관측 없이 주장하지 않습니다.
