@@ -20,6 +20,7 @@ export default function ConsumerJourneyMap({ segments = [] }) {
   useEffect(() => {
     if (!routes.length) return undefined;
     let active = true;
+    let resizeObserver;
     const container = canvasRef.current;
     const lines = [];
     const markers = [];
@@ -43,6 +44,12 @@ export default function ConsumerJourneyMap({ segments = [] }) {
         });
       });
       map.setBounds(bounds);
+      resizeObserver = new ResizeObserver(() => {
+        if (!active) return;
+        map.relayout();
+        map.setBounds(bounds);
+      });
+      resizeObserver.observe(container);
       setState("ready");
     }).catch(() => {
       if (!active) return;
@@ -53,6 +60,7 @@ export default function ConsumerJourneyMap({ segments = [] }) {
     });
     return () => {
       active = false;
+      resizeObserver?.disconnect();
       lines.forEach((line) => line.setMap(null));
       markers.forEach((marker) => marker.setMap(null));
       container.replaceChildren();

@@ -14,14 +14,36 @@ const segments = [
 function sdk() {
   return {
     LatLng: jest.fn().mockImplementation((latitude, longitude) => ({ latitude, longitude })),
-    Map: jest.fn().mockImplementation(() => ({ setBounds: jest.fn() })),
+    Map: jest.fn().mockImplementation(() => ({ setBounds: jest.fn(), relayout: jest.fn() })),
     LatLngBounds: jest.fn().mockImplementation(() => ({ extend: jest.fn() })),
     Polyline: jest.fn().mockImplementation(() => ({ setMap: jest.fn() })),
     Marker: jest.fn().mockImplementation(() => ({ setMap: jest.fn() })),
   };
 }
 
-beforeEach(() => jest.clearAllMocks());
+const originalResizeObserver = global.ResizeObserver;
+beforeEach(() => {
+  jest.clearAllMocks();
+  global.ResizeObserver = jest.fn().mockImplementation(() => ({ observe: jest.fn(), disconnect: jest.fn() }));
+});
+afterEach(() => { global.ResizeObserver = originalResizeObserver; });
+
+test("keeps both route endpoints in bounds after container resize and disconnects on exit", async () => {
+  const maps = sdk();
+  loadKakaoMapSdk.mockResolvedValue(maps);
+  const { unmount } = render(<ConsumerJourneyMap segments={segments} />);
+  await waitFor(() => expect(global.ResizeObserver).toHaveBeenCalledTimes(1));
+  const map = maps.Map.mock.results[0].value;
+  const bounds = map.setBounds.mock.calls[0][0];
+  const observer = global.ResizeObserver.mock.results[0].value;
+  global.ResizeObserver.mock.calls[0][0]();
+  expect(map.relayout).toHaveBeenCalledTimes(1);
+  expect(map.setBounds).toHaveBeenLastCalledWith(bounds);
+  expect(map.setBounds).toHaveBeenCalledTimes(2);
+  expect(maps.Polyline).toHaveBeenCalledTimes(2);
+  unmount();
+  expect(observer.disconnect).toHaveBeenCalledTimes(1);
+});
 
 test("draws each real segment separately and leaves missing route gaps unconnected", async () => {
   const maps = sdk();
