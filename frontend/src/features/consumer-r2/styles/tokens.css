@@ -26,7 +26,7 @@
   --cr22-font-size-md: 1rem;
   --cr22-font-size-lg: 1.125rem;
   --cr22-font-size-xl: 1.5rem;
-  --cr22-font-size-display: clamp(1.75rem, 2.6vw, 2.75rem);
+  --cr22-font-size-display: clamp(1.6rem, 2.3vw, 2.5rem);
   --cr22-space-1: 0.25rem;
   --cr22-space-2: 0.5rem;
   --cr22-space-3: 0.75rem;
