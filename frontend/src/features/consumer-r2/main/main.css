@@ -200,12 +200,17 @@ fieldset.cr293-search__step {
   box-shadow: 0 0 0 3px var(--cr22-color-blue-soft);
 }
 
+.cr293-place-picker {
+  position: relative;
+}
+
 .cr293-place-picker__results {
   position: absolute;
   z-index: 10;
-  top: 6.7rem;
-  right: 1rem;
-  left: 1rem;
+  top: 100%;
+  margin-top: 0.4rem;
+  right: 0;
+  left: 0;
   max-height: 16rem;
   overflow: auto;
   border: 1px solid var(--cr22-color-line);

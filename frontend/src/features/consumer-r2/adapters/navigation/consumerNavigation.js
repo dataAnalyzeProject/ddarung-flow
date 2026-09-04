@@ -93,7 +93,7 @@ export function newConsumerEntryId() {
 }
 
 export function navigationTarget(name, id) {
-  const route = ({ home: 'main', nearby: 'main', planner: 'journey', premium: 'checkout', 'premium-checkout': 'checkout' })[name] || name;
+  const route = ({ home: 'main', planner: 'journey', premium: 'checkout', 'premium-checkout': 'checkout' })[name] || name;
   if (['station', 'ride', 'guide', 'journey-result'].includes(route) && typeof id === 'string' && id) {
     const prefix = route === 'journey-result' ? 'journey/result' : route;
     return { hash: '#' + prefix + '/' + encodeURIComponent(id), route, stationId: id };
