@@ -17,10 +17,12 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Set;
 import java.util.UUID;
 
 import static org.hamcrest.Matchers.contains;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -133,7 +135,7 @@ class AdminOpsDataStatusControllerTest {
         mvc.perform(get("/api/v1/admin/ops/data-status").with(allowed()))
                 .andExpect(jsonPath("$.prediction.dataState").value("INSUFFICIENT_DATA"))
                 .andExpect(jsonPath("$.prediction.predictionRowCount").value(0))
-                .andExpect(jsonPath("$.prediction.featureAsOf").value(now.minusMinutes(2).toString()));
+                .andExpect(jsonPath("$.prediction.featureAsOf").value(apiTimestamp(now.minusMinutes(2))));
         insertPrediction(newest, "A");
         mvc.perform(get("/api/v1/admin/ops/data-status").with(allowed()))
                 .andExpect(jsonPath("$.prediction.dataState").value("PARTIAL"))
@@ -162,7 +164,7 @@ class AdminOpsDataStatusControllerTest {
         insertProfile("A", now.minusDays(2));
         mvc.perform(get("/api/v1/admin/ops/data-status").with(allowed()))
                 .andExpect(jsonPath("$.profile.dataState").value("NORMAL"))
-                .andExpect(jsonPath("$.profile.latestGeneratedAt").value(now.minusDays(2).toString()))
+                .andExpect(jsonPath("$.profile.latestGeneratedAt").value(apiTimestamp(now.minusDays(2))))
                 .andExpect(jsonPath("$.dataState").value("DELAYED"));
         jdbc.update("UPDATE stations SET station_number = '1002' WHERE station_id = 'B'");
         mvc.perform(get("/api/v1/admin/ops/data-status").with(allowed()))
@@ -192,6 +194,31 @@ class AdminOpsDataStatusControllerTest {
         mvc.perform(get("/api/v1/admin/ops/data-status").with(allowed()))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.inventory.dataState").value(state))
                 .andExpect(jsonPath("$.inventory.p95DelayMinutes").value(p95));
+    }
+
+    @Test void aTimestampWithZeroSecondsIsStillRenderedWithItsSecondsField() throws Exception {
+        // OffsetDateTime.toString() drops ":00" when the seconds are zero, but the API always writes
+        // them, so comparing the two directly failed roughly one run in sixty - whenever the test
+        // happened to start on second 00. This pins the API's format on exactly that timestamp, so a
+        // return to toString() fails every run instead of hiding until CI is unlucky.
+        OffsetDateTime zeroSecond = OffsetDateTime.now().withNano(0).withSecond(0).minusDays(2);
+        assertNotEquals(zeroSecond.toString(), apiTimestamp(zeroSecond));
+
+        OffsetDateTime now = OffsetDateTime.now().withNano(0);
+        insertStation("A", "1001", true);
+        insertInventory("A", now.minusMinutes(1), "NORMAL");
+        UUID batch = insertBatch(now.minusMinutes(1), now.minusMinutes(1), now.plusHours(1), "ACTIVE");
+        insertPrediction(batch, "A");
+        insertProfile("A", zeroSecond);
+
+        mvc.perform(get("/api/v1/admin/ops/data-status").with(allowed()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.profile.latestGeneratedAt").value(apiTimestamp(zeroSecond)));
+    }
+
+    /** How the API renders an OffsetDateTime, which always keeps the seconds field. */
+    private String apiTimestamp(OffsetDateTime value) {
+        return value.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
     }
 
     private RequestPostProcessor allowed() { return authentication(auth(UserRole.ADMIN, Set.of(AdminPermission.DATA_STATUS_READ))); }
