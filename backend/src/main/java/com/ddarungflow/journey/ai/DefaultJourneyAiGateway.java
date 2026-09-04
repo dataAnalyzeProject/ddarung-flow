@@ -70,6 +70,11 @@ public class DefaultJourneyAiGateway implements JourneyAiGateway {
                 duration, timestamps, route geometry, weather, or air-quality facts. Keep stay minutes
                 and stop count within the supplied constraints. Numeric facts may only be copied exactly
                 through factRefs and factValues.
+                The rationale must be plain qualitative prose explaining the choice in words only —
+                it must not contain any digit characters (0-9). Never state a count, distance, duration,
+                percentage, or other number in the rationale text itself; reference such facts only
+                through factRefs and factValues. For example, prefer "충분한 대여 가능성과 짧은 접근 거리"
+                over any phrasing that writes out a number.
                 """, "journey_schedule", scheduleSchema, this::parseSchedule);
     }
 
