@@ -14,6 +14,17 @@ test("rounds the displayed minimum up so the browser does not offer an invalid m
   expect(screen.getByLabelText(/출발 시각/)).toHaveAttribute("min", "2026-09-03T10:16");
 });
 
+test("starts with an empty departure time instead of a silent default, and names the 15-minute alert lead", async () => {
+  const onConfirm = jest.fn();
+  render(<RecheckOptInDialog now={() => FIXED_NOW} onClose={jest.fn()} onConfirm={onConfirm} open />);
+  const input = screen.getByLabelText(/출발 시각/);
+  expect(input).toHaveValue("");
+  expect(screen.getByText(/직접 탈 예정인 출발 시각을 입력해 주세요/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "15분 전 알림 받기" }));
+  expect(screen.getByRole("alert")).toHaveTextContent("출발 시각을 입력해 주세요.");
+  expect(onConfirm).not.toHaveBeenCalled();
+});
+
 test("requests only departureAt and returns an ISO time", async () => {
   const onConfirm = jest.fn();
   render(<RecheckOptInDialog now={() => FIXED_NOW} onClose={jest.fn()} onConfirm={onConfirm} open />);

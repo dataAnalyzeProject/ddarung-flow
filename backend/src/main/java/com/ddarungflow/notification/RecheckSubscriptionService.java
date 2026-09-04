@@ -104,6 +104,8 @@ public class RecheckSubscriptionService {
                     + "|" + normalized.travelMode() + "|" + normalized.requiredBikeCount();
         }
 
+        // departureAt is the user's own stated departure time; notifyAt is always derived here as
+        // departureAt minus the fixed lead, never a value the client sends directly.
         OffsetDateTime notifyAt = request.departureAt().minus(SEARCH_RECHECK_LEAD);
         String dedupKey = sha256(kind + "|" + target + "|" + request.departureAt().toInstant());
         lockUser(userId);

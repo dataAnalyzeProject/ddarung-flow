@@ -14,12 +14,6 @@ function earliestDeparture(now) {
   return new Date(Math.ceil(minimum / 60_000) * 60_000);
 }
 
-function defaultDeparture(now) {
-  const date = new Date(now.getTime() + 60 * 60_000);
-  date.setSeconds(0, 0);
-  return localInputValue(date);
-}
-
 export function validateDepartureAt(value, now) {
   const departure = new Date(value);
   if (!value || Number.isNaN(departure.getTime())) return "출발 시각을 입력해 주세요.";
@@ -38,11 +32,10 @@ export default function RecheckOptInDialog({ busy = false, kind = "SEARCH_RECHEC
 
   useEffect(() => {
     if (!open) return undefined;
-    const openedAt = now();
     restoreFocusRef.current = document.activeElement;
     const previousBodyOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    setDepartureAt(defaultDeparture(openedAt));
+    setDepartureAt("");
     setError("");
     window.requestAnimationFrame(() => inputRef.current?.focus());
     return () => {
@@ -106,7 +99,7 @@ export default function RecheckOptInDialog({ busy = false, kind = "SEARCH_RECHEC
           </div>
           <button aria-label="재확인 신청 닫기" className="cr22-support__dialog-close" disabled={busy} onClick={onClose} type="button">×</button>
         </header>
-        <p id="recheck-dialog-description">출발 15분 전에 알림을 보내 드려요. 알림을 열면 저장된 조건으로 현재 데이터를 새로 확인합니다.</p>
+        <p id="recheck-dialog-description">직접 탈 예정인 출발 시각을 입력해 주세요. 그 시각의 15분 전에 알림을 보내 드리고, 알림을 열면 저장된 조건으로 현재 데이터를 새로 확인합니다.</p>
         <form noValidate onSubmit={submit}>
           <div className="cr22-field">
             <label className="cr22-field__label" htmlFor="recheck-departure-at">출발 시각 <span aria-hidden="true" className="cr22-field__required">*</span></label>
@@ -123,7 +116,7 @@ export default function RecheckOptInDialog({ busy = false, kind = "SEARCH_RECHEC
               type="datetime-local"
               value={departureAt}
             />
-            <p className="cr22-field__hint" id="recheck-departure-at-hint">신청 가능한 가장 이른 시각은 지금부터 15분 뒤입니다.</p>
+            <p className="cr22-field__hint" id="recheck-departure-at-hint">이 출발 시각의 15분 전에 알림을 보내 드려요. 입력 가능한 가장 이른 시각은 지금부터 15분 뒤입니다.</p>
             {error ? <p className="cr22-field__error" id="recheck-departure-at-error" role="alert">{error}</p> : null}
           </div>
           <div className="cr22-support__dialog-actions">
