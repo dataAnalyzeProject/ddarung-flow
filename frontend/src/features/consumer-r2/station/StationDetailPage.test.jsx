@@ -85,14 +85,18 @@ describe("StationDetailPage", () => {
     expect(onNavigate).toHaveBeenCalledWith("ride", "37-2");
   });
 
-  it("returns to Main, not a removed nearby screen, and highlights 홈 as active", async () => {
+  it("returns to the search results by its own intent, never through HOME, and marks 라이딩 active", async () => {
     const onNavigate = jest.fn();
     const adapter = { load: jest.fn().mockResolvedValue(detail()), toggleFavorite: jest.fn() };
     render(<StationDetailPage adapter={adapter} stationId="37-2" onNavigate={onNavigate} />);
     await screen.findByRole("heading", { name: "서울역 2번 출구" });
-    expect(screen.getByRole("link", { name: "홈" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("button", { name: "라이딩" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "홈" })).not.toHaveAttribute("aria-current");
+
     fireEvent.click(screen.getByRole("button", { name: /검색 결과로 돌아가기/ }));
-    expect(onNavigate).toHaveBeenCalledWith("home");
+    // HOME is the opening landing now, so reusing it here would throw away the search results.
+    expect(onNavigate).toHaveBeenCalledWith("main");
+    expect(onNavigate).not.toHaveBeenCalledWith("home");
   });
 
   it("toggles a favorite without changing the station presentation", async () => {

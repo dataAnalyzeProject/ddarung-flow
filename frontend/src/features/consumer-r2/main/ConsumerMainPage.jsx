@@ -317,7 +317,7 @@ function ResultsWorkspace({ input, mapRenderer, onOpenRide, onOpenStation, onRes
   );
 }
 
-export default function ConsumerMainPage({ currentResult, mapRenderer, onInputChange, onLogin, onNavigate, onOpenRide, onOpenStation, onSearchComplete, restoreSearch, rideGuidance = false, services = DEFAULT_SERVICES }) {
+export default function ConsumerMainPage({ currentResult, mapRenderer, onInputChange, onLogin, onNavigate, onOpenRide, onOpenStation, onSearchComplete, restoreSearch, services = DEFAULT_SERVICES }) {
   const [authState, setAuthState] = useState("loading");
   const [authAttempt, setAuthAttempt] = useState(0);
   const [user, setUser] = useState(null);
@@ -330,7 +330,6 @@ export default function ConsumerMainPage({ currentResult, mapRenderer, onInputCh
   const [recheckOpen, setRecheckOpen] = useState(false);
   const [recheckStatus, setRecheckStatus] = useState("idle");
   const [recentSearchError, setRecentSearchError] = useState(false);
-  const [showRideGuidance, setShowRideGuidance] = useState(rideGuidance);
   const requestRef = useRef(0);
   const inputRef = useRef({ input: DEFAULT_INPUT, places: { origin: null, destination: null } });
   const callbacksRef = useRef({ onInputChange, onSearchComplete });
@@ -372,18 +371,6 @@ export default function ConsumerMainPage({ currentResult, mapRenderer, onInputCh
       });
     return () => { active = false; };
   }, [authAttempt, services]);
-
-  const rideGuidanceAppliedRef = useRef(false);
-  useEffect(() => {
-    if (!showRideGuidance || rideGuidanceAppliedRef.current) return;
-    const focusTarget = state === "RESULT" || state === "PARTIAL"
-      ? document.querySelector(".cr293-result-heading h1")
-      : document.getElementById("cr293-origin");
-    if (!focusTarget) return;
-    rideGuidanceAppliedRef.current = true;
-    focusTarget.scrollIntoView?.({ block: "start" });
-    focusTarget.focus?.();
-  }, [showRideGuidance, state]);
 
   const updateInput = (patch) => {
     requestRef.current += 1;
@@ -474,14 +461,8 @@ export default function ConsumerMainPage({ currentResult, mapRenderer, onInputCh
 
   return (
     <ConsumerR2Theme className="cr293-page">
-      <ConsumerAppHeader activeItem="home" authState={authState} onLogin={login} onNavigate={onNavigate} userName={user?.displayName ?? user?.name} userTier={user?.tier?.toLowerCase()} />
+      <ConsumerAppHeader activeItem="ride" authState={authState} onLogin={login} onNavigate={onNavigate} userName={user?.displayName ?? user?.name} userTier={user?.tier?.toLowerCase()} />
       <main id="main-content">
-        {showRideGuidance ? (
-          <ConsumerContainer className="cr293-ride-guidance">
-            <p role="status">라이딩을 보려면 먼저 대여소를 선택해 주세요.</p>
-            <button type="button" onClick={() => setShowRideGuidance(false)}>닫기</button>
-          </ConsumerContainer>
-        ) : null}
         {state === "INITIAL" || state === "LOADING" ? <section className="cr293-hero"><img src={heroImage} alt="서울 도심에서 따릉이를 타고 이동하는 모습" width="1600" height="420" fetchpriority="high" /><div><h1>도착할 때 빌릴 수 있는<br />대여소를 비교해요</h1><p>현재 출발 기준으로 대여 희망 지역 주변 대여소까지의 이동시간을 반영합니다.</p></div></section> : null}
         <ConsumerContainer className={state === "INITIAL" || state === "LOADING" ? "cr293-container--initial" : "cr293-container--result"}>
           {authState === "error" ? <AsyncState state="error" title="로그인 상태를 확인하지 못했습니다" description="입력한 조건은 유지됩니다. 연결을 확인한 뒤 다시 시도해 주세요." actionLabel="로그인 상태 다시 확인" onAction={() => setAuthAttempt((value) => value + 1)} /> : null}

@@ -14,7 +14,6 @@ import { candidateGuideContext, consumerHistoryState, consumeConsumerReturn, gui
 import AdminV2PreviewApp from './features/admin-v2/shell/AdminV2PreviewApp';
 import AdminV2ProductionApp from './features/admin-v2/shell/AdminV2ProductionApp';
 import { isAdminV2PreviewPath, isAdminV2ProductionPath } from './features/admin-v2/routes/routeMap';
-import { hasSeenIntro } from './features/intro/introStorage';
 import { getCurrentUser, logout } from './features/login/authApi';
 import { fetchSubscription } from './features/premium/subscriptionApi';
 import { clearAdminReturnTarget, consumeAdminReturnTarget } from './features/admin-v2/auth/adminSession';
@@ -43,10 +42,8 @@ function App() {
   const [location, setLocation] = useState(readLocation);
   const [authState, setAuthState] = useState('loading');
   const [user, setUser] = useState(null);
-  const [introComplete, setIntroComplete] = useState(() => hasSeenIntro());
   const [subscription, setSubscription] = useState({ status: 'PROCESSING' });
   const [subscriptionReload, setSubscriptionReload] = useState(0);
-  const [rideGuidance, setRideGuidance] = useState(false);
   const mainResults = useRef(new Map());
   const decisions = useRef(new Map());
   const isLoginPath = location.pathname === '/login';
@@ -59,7 +56,7 @@ function App() {
 
   const syncLocation = useCallback(() => setLocation(readLocation()), []);
   useEffect(() => {
-    const onHistoryNav = () => { setRideGuidance(false); syncLocation(); };
+    const onHistoryNav = () => syncLocation();
     window.addEventListener('hashchange', onHistoryNav);
     window.addEventListener('popstate', onHistoryNav);
     return () => {
@@ -130,16 +127,21 @@ function App() {
       return;
     }
     const source = readLocation();
-    const candidateId = ['ride', 'guide', 'station'].includes(nextRoute) && !id ? source.state.selectedStationId || (['station', 'ride', 'guide'].includes(source.route) ? source.stationId : null) : id;
-    setRideGuidance(nextRoute === 'ride' && !candidateId);
+    // Global RIDING ('ride' with no id) is a fresh prediction intent, so it never inherits the
+    // station the current screen happens to be showing. Only station/guide still resolve one.
+    const candidateId = ['guide', 'station'].includes(nextRoute) && !id ? source.state.selectedStationId || (['station', 'ride', 'guide'].includes(source.route) ? source.stationId : null) : id;
     const target = navigationTarget(nextRoute, candidateId);
     const mainEntryId = source.route === 'main' ? source.state.entryId : source.state.mainEntryId;
     let state = { ...source.state, entryId: newConsumerEntryId(), mainEntryId };
     delete state.questionId;
+    if (target.route === 'home') state = { entryId: state.entryId };
     if (target.route === 'main') {
       const restoring = Boolean(id?.restoreSearch);
-      const input = searchHistoryInput(restoring ? id.restoreSearch : source.state.restoreSearch);
-      const result = restoring ? suppliedResult : resultFor(source.state, mainEntryId);
+      // Global RIDING starts over: it drops the previous search and its cached result instead of
+      // reopening the RESULT the user was just looking at.
+      const startingNew = nextRoute === 'ride';
+      const input = startingNew ? null : searchHistoryInput(restoring ? id.restoreSearch : source.state.restoreSearch);
+      const result = startingNew ? null : (restoring ? suppliedResult : resultFor(source.state, mainEntryId));
       state = { entryId: state.entryId, restoreSearch: input };
       if (result) mainResults.current.set(state.entryId, { inputKey: JSON.stringify(input), result: Array.isArray(result) ? { candidates: result } : result });
     }
@@ -231,7 +233,8 @@ function App() {
   if (isAdminV2Preview) return <AdminV2PreviewApp />;
   if (isAdminV2Production) return <AdminV2ProductionApp />;
   if (isLoginPath) return <LoginPage />;
-  if (!introComplete && route === 'main') return <OpeningPage onComplete={() => setIntroComplete(true)} />;
+  // HOME is a landing anyone can return to, so it renders regardless of intro history or auth state.
+  if (route === 'home') return <OpeningPage authState={authState} user={user} onNavigate={navigate} onLogin={login} onStart={() => navigate('main')} />;
   if (route !== 'main' && ['loading', 'error'].includes(authState)) {
     return <ConsumerR2Theme><ConsumerContainer as="main" id="main-content"><AsyncState state={authState === 'loading' ? 'loading' : 'error'} title={authState === 'loading' ? '로그인 상태를 확인하고 있습니다' : '로그인 상태를 확인하지 못했습니다'} onAction={refreshSession} /></ConsumerContainer></ConsumerR2Theme>;
   }
@@ -250,7 +253,7 @@ function App() {
   if (route === 'mypage') return <PersonalMyPage adapter={personalAdapter} onNavigate={navigate} />;
   if (route === 'qna') return <ConsumerQnaPage key={location.state.questionId || 'list'} {...common} initialQuestionId={location.state.questionId} />;
   if (route === 'alerts') return <ConsumerAlertsPage {...common} searchInput={location.state.restoreSearch} onCurrentData={handleCurrentData} />;
-  return <ConsumerMainPage key={entryId} onNavigate={navigate} onLogin={login} onInputChange={handleInputChange} onSearchComplete={handleSearchComplete} restoreSearch={restoreSearch} currentResult={restoredMainResult} onOpenStation={(candidate, input) => openCandidate('station', candidate, input)} onOpenRide={(candidate, input) => openCandidate('ride', candidate, input)} rideGuidance={rideGuidance} />;
+  return <ConsumerMainPage key={entryId} onNavigate={navigate} onLogin={login} onInputChange={handleInputChange} onSearchComplete={handleSearchComplete} restoreSearch={restoreSearch} currentResult={restoredMainResult} onOpenStation={(candidate, input) => openCandidate('station', candidate, input)} onOpenRide={(candidate, input) => openCandidate('ride', candidate, input)} />;
 }
 
 export default App;
