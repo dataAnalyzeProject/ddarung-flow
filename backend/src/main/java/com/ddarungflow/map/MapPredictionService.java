@@ -82,8 +82,11 @@ public class MapPredictionService {
         OffsetDateTime departureAt,
         Integer requiredBikeCount
     ) {
-        List<RouteCandidateService.StationDistance> candidates = routeCandidateService.findCandidates(
-            originLat, originLng, destLat, destLng, "WALK"
+        // The rider rents where they are standing and rides towards the destination, so candidates are
+        // discovered around the origin. destLat/destLng stay on the signature because the Journey
+        // context still carries the destination, which now steers the stop search rather than this one.
+        List<RouteCandidateService.StationDistance> candidates = routeCandidateService.findCandidatesNearOrigin(
+            originLat, originLng, "WALK"
         );
         return assembleCandidates(candidates, null, requiredBikeCount, departureAt, true);
     }

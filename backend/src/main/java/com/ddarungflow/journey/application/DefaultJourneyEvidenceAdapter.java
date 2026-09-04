@@ -36,7 +36,16 @@ public class DefaultJourneyEvidenceAdapter implements JourneyEvidencePort {
 
     @Override
     public List<PoiEvidence> findNearby(String stationId, String theme, int limit) {
-        return nearbyPlaceService.findNearby(stationId, theme, limit).stream()
+        return toPoiEvidence(nearbyPlaceService.findNearby(stationId, theme, limit));
+    }
+
+    @Override
+    public List<PoiEvidence> findNearbyAt(BigDecimal latitude, BigDecimal longitude, String theme, int limit) {
+        return toPoiEvidence(nearbyPlaceService.findNearbyAt(latitude, longitude, theme, limit));
+    }
+
+    private List<PoiEvidence> toPoiEvidence(List<com.ddarungflow.map.MapApiDtos.NearbyPlaceResponseDto> places) {
+        return places.stream()
                 .map(place -> new PoiEvidence(place.placeId(), place.name(), place.address(), place.category(),
                         place.latitude(), place.longitude(), place.distanceMeters()))
                 .toList();

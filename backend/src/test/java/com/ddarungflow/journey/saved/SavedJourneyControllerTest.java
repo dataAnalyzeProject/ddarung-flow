@@ -91,7 +91,7 @@ class SavedJourneyControllerTest {
             return List.of(rentalCandidate(request.departureAt(), request.requiredBikeCount()));
         });
         when(evidence.available()).thenReturn(true);
-        when(evidence.findNearby(anyString(), anyString(), anyInt())).thenReturn(List.of(poi()));
+        when(evidence.findNearbyAt(any(), any(), anyString(), anyInt())).thenReturn(List.of(poi()));
         when(evidence.bicycleRoute(any(), any(), any(), any(), anyString())).thenReturn(Optional.of(bicycleRoute()));
         when(evidence.weather(any(), any(), any())).thenReturn(environment("weather"));
         when(evidence.airQuality(anyString())).thenReturn(environment("air-quality"));
@@ -160,7 +160,10 @@ class SavedJourneyControllerTest {
                 .andReturn().getResponse().getContentAsString();
 
         verify(rentalPrediction, times(2)).predict(any());
-        verify(evidence, times(2)).findNearby("station-1", "CAFE", 1);
+        // Stops follow the stored destination now, not the station the replay rents at.
+        verify(evidence, times(2)).findNearbyAt(new java.math.BigDecimal("37.544"), new java.math.BigDecimal("127.037"),
+                "CAFE", 1);
+        verify(evidence, never()).findNearby(anyString(), anyString(), anyInt());
         verify(evidence, times(2)).bicycleRoute(any(), any(), any(), any(), anyString());
         verify(evidence, times(2)).weather(any(), any(), any());
         verify(evidence, times(2)).airQuality("station-1");

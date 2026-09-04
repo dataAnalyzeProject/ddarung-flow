@@ -322,8 +322,9 @@ class MapPredictionServiceTest {
             OffsetDateTime departureAt = OffsetDateTime.now(TOO_SOON_CLOCK)
                 .plusMinutes(15L + (horizon - 60));
             PredictionApiDtos.CandidatePredictionResponseDto dto = service.buildJourneyRouteCandidates(
-                new BigDecimal("37.5500"), new BigDecimal("126.9000"),
-                new BigDecimal("37.5556488"), new BigDecimal("126.91062927"), departureAt, 1
+                // Journey rents at the origin, so the rider starts next to ST-4 and rides away from it.
+                new BigDecimal("37.5556488"), new BigDecimal("126.91062927"),
+                new BigDecimal("37.5500"), new BigDecimal("126.9000"), departureAt, 1
             ).getFirst();
 
             assertThat(dto.routeStatus()).isEqualTo(PredictionApiDtos.RouteStatus.NORMAL);
@@ -347,8 +348,9 @@ class MapPredictionServiceTest {
         OffsetDateTime departureAt = OffsetDateTime.now(TOO_SOON_CLOCK).plusHours(4).plusMinutes(15);
 
         PredictionApiDtos.CandidatePredictionResponseDto dto = service.buildJourneyRouteCandidates(
-            new BigDecimal("37.5500"), new BigDecimal("126.9000"),
-            new BigDecimal("37.5556488"), new BigDecimal("126.91062927"), departureAt, 1
+            // Journey rents at the origin, so the rider starts next to ST-4 and rides away from it.
+            new BigDecimal("37.5556488"), new BigDecimal("126.91062927"),
+            new BigDecimal("37.5500"), new BigDecimal("126.9000"), departureAt, 1
         ).getFirst();
 
         assertThat(dto.routeStatus()).isEqualTo(PredictionApiDtos.RouteStatus.NORMAL);

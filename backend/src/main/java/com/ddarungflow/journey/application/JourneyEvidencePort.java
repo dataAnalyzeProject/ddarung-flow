@@ -11,6 +11,9 @@ public interface JourneyEvidencePort {
 
     List<PoiEvidence> findNearby(String stationId, String theme, int limit);
 
+    /** Stops are looked for around the rider's destination, which is not where the bike is rented. */
+    List<PoiEvidence> findNearbyAt(BigDecimal latitude, BigDecimal longitude, String theme, int limit);
+
     Optional<RouteEvidence> bicycleRoute(
             BigDecimal originLatitude,
             BigDecimal originLongitude,
@@ -27,6 +30,8 @@ public interface JourneyEvidencePort {
         return new JourneyEvidencePort() {
             @Override public boolean available() { return false; }
             @Override public List<PoiEvidence> findNearby(String stationId, String theme, int limit) { return List.of(); }
+            @Override public List<PoiEvidence> findNearbyAt(BigDecimal latitude, BigDecimal longitude, String theme,
+                    int limit) { return List.of(); }
             @Override public Optional<RouteEvidence> bicycleRoute(BigDecimal originLatitude, BigDecimal originLongitude,
                     BigDecimal destinationLatitude, BigDecimal destinationLongitude, String routeMode) {
                 return Optional.empty();
