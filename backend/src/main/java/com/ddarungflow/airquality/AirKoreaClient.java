@@ -2,6 +2,8 @@ package com.ddarungflow.airquality;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -25,6 +27,7 @@ import java.util.function.Function;
 @Component
 public class AirKoreaClient {
 
+    private static final Logger log = LoggerFactory.getLogger(AirKoreaClient.class);
     private static final ZoneOffset KST = ZoneOffset.ofHours(9);
     private static final Duration CATALOG_TTL = Duration.ofHours(24);
     private static final Duration MEASUREMENT_TTL = Duration.ofMinutes(30);
@@ -98,10 +101,14 @@ public class AirKoreaClient {
             HttpRequest request = HttpRequest.newBuilder().uri(URI.create(url)).GET().build();
             HttpResponse<String> response = httpTransport.apply(request);
             if (response == null || response.statusCode() != 200) {
+                log.warn("event=air_korea_catalog_fetch_failed reason=http_status status={}",
+                        response == null ? "no_response" : response.statusCode());
                 return List.of();
             }
             return parseCatalogResponse(response.body());
         } catch (Exception e) {
+            log.warn("event=air_korea_catalog_fetch_failed reason=exception type={} message={}",
+                    e.getClass().getSimpleName(), e.getMessage());
             return List.of();
         }
     }
@@ -113,11 +120,15 @@ public class AirKoreaClient {
         try {
             JsonNode root = objectMapper.readTree(json);
             JsonNode header = root.path("response").path("header");
-            if (!"00".equals(header.path("resultCode").asText(""))) {
+            String resultCode = header.path("resultCode").asText("");
+            if (!"00".equals(resultCode)) {
+                log.warn("event=air_korea_catalog_fetch_failed reason=result_code resultCode={} resultMsg={}",
+                        resultCode, header.path("resultMsg").asText(""));
                 return List.of();
             }
             JsonNode items = root.path("response").path("body").path("items");
             if (!items.isArray()) {
+                log.warn("event=air_korea_catalog_fetch_failed reason=no_items_array");
                 return List.of();
             }
             List<AirKoreaStation> stations = new ArrayList<>();
@@ -136,6 +147,8 @@ public class AirKoreaClient {
             }
             return stations;
         } catch (Exception e) {
+            log.warn("event=air_korea_catalog_fetch_failed reason=parse_exception type={} message={}",
+                    e.getClass().getSimpleName(), e.getMessage());
             return List.of();
         }
     }
@@ -157,15 +170,22 @@ public class AirKoreaClient {
             HttpRequest request = HttpRequest.newBuilder().uri(URI.create(url)).GET().build();
             HttpResponse<String> response = httpTransport.apply(request);
             if (response == null || response.statusCode() != 200) {
+                log.warn("event=air_korea_measurement_fetch_failed reason=http_status station={} status={}",
+                        stationName, response == null ? "no_response" : response.statusCode());
                 return new MeasurementFetchResult(null, previousJson, true, toKst(now));
             }
 
             String body = response.body();
             if (isSuccessfulNonEmptyResponse(body)) {
                 measurementCache.put(stationName, new MeasurementCacheEntry(body, now));
+            } else {
+                log.warn("event=air_korea_measurement_fetch_failed reason=unsuccessful_or_empty_response station={}",
+                        stationName);
             }
             return new MeasurementFetchResult(body, previousJson, false, toKst(now));
         } catch (Exception e) {
+            log.warn("event=air_korea_measurement_fetch_failed reason=exception station={} type={} message={}",
+                    stationName, e.getClass().getSimpleName(), e.getMessage());
             return new MeasurementFetchResult(null, previousJson, true, toKst(now));
         }
     }
