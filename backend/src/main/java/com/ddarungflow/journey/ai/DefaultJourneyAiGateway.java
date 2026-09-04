@@ -70,6 +70,13 @@ public class DefaultJourneyAiGateway implements JourneyAiGateway {
                 duration, timestamps, route geometry, weather, or air-quality facts. Keep stay minutes
                 and stop count within the supplied constraints. Numeric facts may only be copied exactly
                 through factRefs and factValues.
+                Each evidence entry separates its fields into a textFacts object and a numericFacts
+                object. factRefs and factValues may ONLY reference a factName that exists in that
+                entry's numericFacts — never a factName that only exists in textFacts (for example
+                availabilityLevel, predictionStatus, inventoryStatus, and other qualitative labels are
+                text facts, not numeric facts, and must never appear in factRefs/factValues or be
+                assigned an invented numeric value). Describe text facts only in qualitative rationale
+                prose, never as a number.
                 The rationale must be plain qualitative prose explaining the choice in words only —
                 it must not contain any digit characters (0-9). Never state a count, distance, duration,
                 percentage, or other number in the rationale text itself; reference such facts only
