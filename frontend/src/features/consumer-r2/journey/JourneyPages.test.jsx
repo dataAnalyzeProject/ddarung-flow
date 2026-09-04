@@ -25,7 +25,6 @@ function decision(status = "READY") {
     unifiedPlan: {
       status,
       rationale: "실제 대여소와 이동 경로 근거를 조합했습니다.",
-      rationaleTags: ["EVIDENCE_ONLY"],
       segments: [
         { segmentId: "access-1", type: "ACCESS", fromEvidenceId: "origin-e", toEvidenceId: "rent-e", startAt: "2030-09-03T01:00:00.000Z", endAt: "2030-09-03T01:00:00.000Z", durationSeconds: 0, distanceMeters: 0, travelMode: "WALK", pathPoints: [{ latitude: 37.5, longitude: 127.0 }, { latitude: 37.51, longitude: 127.01 }] },
         { segmentId: "rent-1", type: "RENT", fromEvidenceId: "rent-e", toEvidenceId: "rent-e", startAt: "2030-09-03T01:00:00.000Z", rentalFacts: { stationName: "성수역 3번 출구", rentalProbability: 0, requiredBikeCount: 0, availableBikeCount: 0 } },
@@ -33,10 +32,11 @@ function decision(status = "READY") {
         { segmentId: "visit-1", type: "VISIT", fromEvidenceId: "poi-e", toEvidenceId: "poi-e", startAt: "2030-09-03T01:13:00.000Z", stayMinutes: 30, pathPoints: [] },
       ],
       evidence: {
-        rentalCandidates: { "rent-e": { evidenceId: "rent-e", source: "rental-core", status: "NORMAL", textFacts: { stationName: "성수역 3번 출구" }, numericFacts: {} } },
-        pois: { "poi-e": { evidenceId: "poi-e", source: "place-provider", status: "MISSING", textFacts: { displayName: "서울숲" }, numericFacts: {} } },
-        routes: { "route:access:station-1": { evidenceId: "route:access:station-1", source: "route-provider", status: "UNAVAILABLE", textFacts: { fromEvidenceId: "origin-e", toEvidenceId: "rent-e" }, numericFacts: {} } },
-        weather: {}, airQuality: {},
+        rentalCandidates: { "rent-e": { evidenceId: "rent-e", source: "core-on-demand-prediction", status: "NORMAL", textFacts: { stationName: "성수역 3번 출구", availabilityLevel: "HIGH" }, numericFacts: { rentalProbability: 0.82, availableBikeCount: 5 } } },
+        pois: { "poi-e": { evidenceId: "poi-e", source: "kakao-local", status: "MISSING", textFacts: { displayName: "서울숲", address: "서울 성동구 서울숲길 273" }, numericFacts: {} } },
+        routes: { "route:access:station-1": { evidenceId: "route:access:station-1", source: "core-route-provider", status: "UNAVAILABLE", textFacts: { fromEvidenceId: "origin-e", toEvidenceId: "rent-e" }, numericFacts: {} } },
+        weather: { "weather-e": { evidenceId: "weather-e", source: "kma-short-forecast", status: "NORMAL", textFacts: { isRainy: "false" }, numericFacts: { temperatureCelsius: 26, precipitationProbabilityPercent: 10 } } },
+        airQuality: { "air-e": { evidenceId: "air-e", source: "air-korea", status: "NORMAL", textFacts: { khaiGrade: "GOOD", measurementStation: "성동구" }, numericFacts: {} } },
       },
     },
   };
@@ -268,9 +268,21 @@ test("result renders backend segments, zero values, pathPoints and evidence gaps
   expect(screen.getByRole("region", { name: "실제 여정 경로 지도" })).toBeInTheDocument();
   expect(screen.getByText("MISSING")).toBeInTheDocument();
   expect(screen.getByText("UNAVAILABLE")).toBeInTheDocument();
-  expect(screen.getByText(/rent-e · rentalCandidates · 구간 endpoint 참조/)).toBeInTheDocument();
-  expect(screen.getByText(/route:access:station-1 · routes · 근거 번들/)).toBeInTheDocument();
-  expect(screen.getByText("stationName: 성수역 3번 출구")).toBeInTheDocument();
+  expect(screen.getByText("실시간 대여 예측")).toBeInTheDocument();
+  expect(screen.getByText(/대여 가능성 82%/)).toBeInTheDocument();
+  expect(screen.getByText(/보유 대수 5대/)).toBeInTheDocument();
+  expect(screen.getByText(/재고 상태 여유/)).toBeInTheDocument();
+  expect(screen.getByText("카카오맵 장소 정보")).toBeInTheDocument();
+  expect(screen.getByText(/주소 서울 성동구 서울숲길 273/)).toBeInTheDocument();
+  expect(screen.getByText("기상청 단기예보")).toBeInTheDocument();
+  expect(screen.getByText(/기온 26°C/)).toBeInTheDocument();
+  expect(screen.getByText(/강수 확률 10%/)).toBeInTheDocument();
+  expect(screen.getByText(/비 소식 없음/)).toBeInTheDocument();
+  expect(screen.getByText("에어코리아 대기질")).toBeInTheDocument();
+  expect(screen.getByText(/통합대기지수 좋음/)).toBeInTheDocument();
+  expect(screen.queryByText(/근거 ID/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/백엔드 제공 구간/)).not.toBeInTheDocument();
+  expect(screen.queryByText("EVIDENCE_ONLY")).not.toBeInTheDocument();
 });
 
 test("result preserves factual backend segments when the unified plan is unavailable", () => {
@@ -280,7 +292,6 @@ test("result preserves factual backend segments when the unified plan is unavail
   expect(screen.getByRole("status")).toHaveTextContent("UNAVAILABLE");
   expect(screen.getAllByText("ACCESS").length).toBeGreaterThan(0);
   expect(screen.getAllByText("RENT").length).toBeGreaterThan(0);
-  expect(screen.getByText(/근거 ID: origin-e → rent-e/)).toBeInTheDocument();
 });
 
 test("result keeps structured replan and current-condition save as separate actions", async () => {
