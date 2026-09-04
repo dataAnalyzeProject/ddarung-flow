@@ -85,6 +85,16 @@ describe("StationDetailPage", () => {
     expect(onNavigate).toHaveBeenCalledWith("ride", "37-2");
   });
 
+  it("returns to Main, not a removed nearby screen, and highlights 홈 as active", async () => {
+    const onNavigate = jest.fn();
+    const adapter = { load: jest.fn().mockResolvedValue(detail()), toggleFavorite: jest.fn() };
+    render(<StationDetailPage adapter={adapter} stationId="37-2" onNavigate={onNavigate} />);
+    await screen.findByRole("heading", { name: "서울역 2번 출구" });
+    expect(screen.getByRole("link", { name: "홈" })).toHaveAttribute("aria-current", "page");
+    fireEvent.click(screen.getByRole("button", { name: /검색 결과로 돌아가기/ }));
+    expect(onNavigate).toHaveBeenCalledWith("home");
+  });
+
   it("toggles a favorite without changing the station presentation", async () => {
     const adapter = await renderPage();
     fireEvent.click(screen.getByRole("button", { name: "관심 등록" }));
