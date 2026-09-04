@@ -2,7 +2,9 @@
 
 ## Purpose
 
-This is the default single-session lifecycle for an approved Ddarung Flow task. It coordinates native Codex subagents when the active runtime exposes them; otherwise the orchestrator performs fresh-context, independent passes in the same session. It does not grant product scope, secrets, or permissions absent from the current Notion task.
+This is the default lifecycle for an approved Ddarung Flow task. It coordinates native Codex subagents when the active runtime exposes them; otherwise the orchestrator performs fresh-context, independent passes in the same session. It does not grant product scope, secrets, or permissions absent from the current Notion task.
+
+When a task invokes this harness, independent reviewer and QA validation plus the review/fix loop are required release gates, not optional suggestions. The orchestrator must use the native role path when delegation is both exposed and permitted by the active instruction hierarchy. Same-session fallback is allowed only when native delegation is unavailable under that hierarchy or the current task explicitly prohibits delegation; record that exact reason in Notion evidence. Time pressure, a PR already being ready, or an implementer self-review are never reasons to skip a gate. A visual reviewer is additionally required whenever the task has a visual acceptance domain.
 
 ## Capability discovery
 
@@ -15,7 +17,7 @@ At `PRECHECK`, record the actual Codex build and discover rather than assume:
 - worktree isolation;
 - browser, computer-use, or Playwright availability.
 
-Do not add speculative hooks, agent APIs, configuration fields, or CLI flags. If requested routing cannot be applied, record `REQUESTED_MODEL`, `ACTUAL_MODEL`, and `FALLBACK_REASON`. The current implementation needs no repository-local Codex config: the runtime already provides instruction loading, native delegation, model/effort selection, worktrees, browser tools, and skills.
+Do not add speculative hooks, agent APIs, configuration fields, or CLI flags. If native delegation is available under the active instruction hierarchy, dispatch the independent reviewer and QA after implementation; dispatch the visual reviewer when the task requires visual acceptance. If requested routing cannot be applied, record `REQUESTED_MODEL`, `ACTUAL_MODEL`, and `FALLBACK_REASON`. The current implementation needs no repository-local Codex config: the runtime already provides instruction loading, native delegation, model/effort selection, worktrees, browser tools, and skills.
 
 ## State machine
 
@@ -27,6 +29,7 @@ PRECHECK
   -> FIX
   -> RE_REVIEW
   -> LOCAL_ACCEPTANCE
+  -> INDEPENDENT_QA
   -> COMMIT_PUSH_PR
   -> EXACT_HEAD_CI
   -> MERGE
@@ -36,7 +39,7 @@ PRECHECK
   -> CLOSE
 ```
 
-`FIX -> RE_REVIEW` repeats as needed. When review has no blocker or major finding, skip `FIX` and advance to `LOCAL_ACCEPTANCE`. An approved task does not stop merely because a PR is ready.
+`FIX -> RE_REVIEW -> LOCAL_ACCEPTANCE -> INDEPENDENT_QA` repeats as needed. When review has no blocker or major finding, skip `FIX` and advance to local acceptance. A QA finding returns to `FIX` and then repeats review and affected acceptance. An approved task does not stop merely because a PR is ready.
 
 ## PRECHECK
 
@@ -60,7 +63,7 @@ Translate the task into a closed changed-file allowlist and explicit success che
 
 The implementer makes the smallest coherent change and adds only required tests. The implementer never self-assigns PASS.
 
-The independent reviewer starts from the Notion task, frozen parents, and the diff rather than the implementer's conclusion. Findings require severity, file/line, violated contract, effect, and a concrete verification step:
+The independent reviewer is a separate native reviewer agent when delegation is available under the active instruction hierarchy; it starts from the Notion task, frozen parents, and the diff rather than the implementer's conclusion. When native delegation is unavailable or explicitly prohibited by the current task, the orchestrator performs a fresh-context fallback and records the reason. Findings require severity, file/line, violated contract, effect, and a concrete verification step:
 
 - `BLOCKER`: unsafe, out of contract, factually false, security-sensitive, or impossible to release;
 - `MAJOR`: required behavior, acceptance, test, or release correctness is missing;
@@ -74,6 +77,8 @@ finding -> FIX -> affected tests -> RE_REVIEW
 ```
 
 Release requires `BLOCKER=0` and `MAJOR=0`. Fix consequential minors. Preference-only minors may be recorded and accepted. If the same finding repeats twice, raise the responsible role by one supported effort/model step within the task ceiling. A structural finding still present on the third review receives a GPT-5.6 Sol `max` review when supported. Five total review rounds is the hard bound. At round five, an external or contract-dependent finding becomes HOLD; a still-fixable in-scope defect becomes `REVIEW_LIMIT_REACHED` and fails release acceptance without being mislabeled as an external HOLD.
+
+The loop cannot be omitted merely because no findings are expected: every task has at least one independent review round and one independent QA pass before PR/release progression. A task that requires runtime, browser, visual, data, or operational acceptance additionally receives the matching independent QA/visual validation before `NOTION_EVIDENCE`; a failure re-enters the appropriate fix and re-review path.
 
 ## LOCAL_ACCEPTANCE
 
@@ -89,6 +94,7 @@ Merge without a new confirmation only when the current approved task grants stan
 
 - contract, scope, predecessor, and allowlist PASS;
 - `BLOCKER=0`, `MAJOR=0`;
+- independent reviewer and QA PASS, with visual reviewer PASS when required;
 - required tests, build, and diff checks PASS;
 - frontend visual/browser acceptance PASS when required;
 - PR exact-head CI SUCCESS;
@@ -115,7 +121,7 @@ Do not bypass authentication or expose secrets. If a Google account chooser show
 Re-fetch the Notion page and GitHub facts immediately before writing. Record only observed evidence:
 
 - base SHA, final feature HEAD, PR URL, merge SHA, changed files;
-- actual multi-agent capability used;
+- native multi-agent capability available and actual roles/agents used, or the precise fallback/prohibition reason;
 - requested/actual/fallback model routing;
 - dry-run or task resolution, review-loop count and final severities;
 - commands and results, exact-head CI, merge-SHA CI, same-SHA Staging;
@@ -125,7 +131,7 @@ Write evidence first, re-read it, then close only when all acceptance gates are 
 
 ## Role instructions
 
-Use the role contracts in [`agents/`](agents/): orchestrator, implementer, reviewer, QA, visual reviewer, release, and closer. Subagents receive only the task facts, allowlist, forbidden scope, acceptance criteria, and necessary evidence; do not pass secrets or unrelated workspace context.
+Use the role contracts in [`agents/`](agents/): orchestrator, implementer, reviewer, QA, visual reviewer, release, and closer. Dispatch the independent reviewer and QA for every harness task when native delegation is available under the active instruction hierarchy; dispatch the visual reviewer whenever the current task requires visual acceptance. A same-session fallback is permitted only under the Purpose-section exception and must be evidenced. Subagents receive only the task facts, allowlist, forbidden scope, acceptance criteria, and necessary evidence; do not pass secrets or unrelated workspace context.
 
 ## Harness dry-run contract
 
