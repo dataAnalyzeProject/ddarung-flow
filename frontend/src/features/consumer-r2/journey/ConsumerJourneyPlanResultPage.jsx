@@ -76,6 +76,11 @@ function evidenceTitle(item) {
   return item?.textFacts?.displayName || item?.textFacts?.stationName || item?.textFacts?.name || item?.evidenceId || "근거 없음";
 }
 
+function evidenceFacts(item) {
+  return [...Object.entries(item?.textFacts || {}), ...Object.entries(item?.numericFacts || {})]
+    .filter(([, value]) => value !== null && value !== undefined && value !== "");
+}
+
 function segmentTitle(segment, evidence, intent) {
   if (segment.type === "RENT" && segment.rentalFacts?.stationName) return segment.rentalFacts.stationName;
   const from = evidenceById(evidence, segment.fromEvidenceId);
@@ -125,7 +130,7 @@ function Rationale({ plan }) {
   return <SurfaceCard title="AI 추천 이유와 근거 번들">
     <p className="cr22-journey__rationale">{plan.rationale || "AI 추천 이유가 제공되지 않았습니다."}</p>
     {plan.rationaleTags?.length ? <div className="cr22-journey__tag-row">{plan.rationaleTags.map((tag) => <StatusBadge key={tag} tone="info">{tag}</StatusBadge>)}</div> : null}
-    <div className="cr22-journey__evidence-list" aria-label="근거 번들 상태">{items.length ? items.map((item) => <p key={`${item.kind}-${item.evidenceId}`}><span><strong>{item.source}</strong><small>{item.evidenceId} · {item.kind} · {usedRefs.has(item.evidenceId) ? "구간 endpoint 참조" : "근거 번들"}</small></span><StatusBadge tone={item.status === "NORMAL" ? "positive" : item.status === "UNAVAILABLE" || item.status === "MISSING" ? "danger" : "caution"}>{item.status}</StatusBadge></p>) : <p><span><strong>근거 목록 없음</strong><small>UNAVAILABLE</small></span><StatusBadge tone="danger">UNAVAILABLE</StatusBadge></p>}</div>
+    <div className="cr22-journey__evidence-list" aria-label="근거 번들 상태">{items.length ? items.map((item) => { const facts = evidenceFacts(item); return <p key={`${item.kind}-${item.evidenceId}`}><span><strong>{item.source}</strong><small>{item.evidenceId} · {item.kind} · {usedRefs.has(item.evidenceId) ? "구간 endpoint 참조" : "근거 번들"}</small>{facts.length ? <small className="cr22-journey__evidence-facts">{facts.map(([key, value]) => `${key}: ${value}`).join(" · ")}</small> : null}</span><StatusBadge tone={item.status === "NORMAL" ? "positive" : item.status === "UNAVAILABLE" || item.status === "MISSING" ? "danger" : "caution"}>{item.status}</StatusBadge></p>; }) : <p><span><strong>근거 목록 없음</strong><small>UNAVAILABLE</small></span><StatusBadge tone="danger">UNAVAILABLE</StatusBadge></p>}</div>
     <p className="cr22-journey__muted">PARTIAL·MISSING·UNAVAILABLE은 정상 근거와 구분해 그대로 표시합니다.</p>
   </SurfaceCard>;
 }

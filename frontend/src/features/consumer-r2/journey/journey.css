@@ -771,6 +771,13 @@ button[aria-pressed="true"] .cr22-journey__radio {
   font-size: 0.68rem;
 }
 
+.cr22-journey__evidence-facts {
+  overflow: visible;
+  text-overflow: initial;
+  white-space: normal;
+  word-break: break-word;
+}
+
 .cr22-journey__replan {
   display: grid;
   grid-template-columns: repeat(4, minmax(8rem, 1fr)) auto;

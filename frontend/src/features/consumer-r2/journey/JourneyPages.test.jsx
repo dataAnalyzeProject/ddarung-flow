@@ -270,6 +270,7 @@ test("result renders backend segments, zero values, pathPoints and evidence gaps
   expect(screen.getByText("UNAVAILABLE")).toBeInTheDocument();
   expect(screen.getByText(/rent-e · rentalCandidates · 구간 endpoint 참조/)).toBeInTheDocument();
   expect(screen.getByText(/route:access:station-1 · routes · 근거 번들/)).toBeInTheDocument();
+  expect(screen.getByText("stationName: 성수역 3번 출구")).toBeInTheDocument();
 });
 
 test("result preserves factual backend segments when the unified plan is unavailable", () => {
