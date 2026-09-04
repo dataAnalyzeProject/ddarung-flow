@@ -902,6 +902,45 @@ fieldset.cr293-search__step {
   }
 }
 
+/* Real compact desktop heights (e.g. 1536x695 at 125% OS scaling) leave the
+   INITIAL hero + search card mostly below the fold. Width-based breakpoints
+   above don't apply here since the viewport is still desktop-wide. */
+@media (min-width: 64rem) and (max-height: 45rem) {
+  .cr293-hero {
+    height: 12.5rem;
+  }
+
+  .cr293-hero p {
+    margin-top: 0.5rem;
+  }
+
+  .cr293-container--initial {
+    margin-top: -1.25rem;
+    padding-bottom: 3rem;
+  }
+
+  .cr293-search {
+    padding: 1.25rem 1.5rem;
+  }
+
+  .cr293-search__heading {
+    gap: 0.2rem;
+  }
+
+  .cr293-search__heading h2 {
+    font-size: 1.4rem;
+  }
+
+  .cr293-search__steps {
+    margin: 1.1rem 0 1rem;
+  }
+
+  .cr293-search__step {
+    min-height: 9rem;
+    padding: 0.85rem;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .cr293-page * {
     scroll-behavior: auto !important;
