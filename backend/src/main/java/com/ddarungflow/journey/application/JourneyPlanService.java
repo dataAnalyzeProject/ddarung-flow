@@ -25,6 +25,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -691,7 +692,7 @@ public class JourneyPlanService {
                         "inventoryCollectedAt", string(candidate.inventoryCollectedAt()),
                         "arrivalAt", string(candidate.arrivalAt()), "predictionTargetAt", string(candidate.predictionTargetAt()),
                         "featureAsOf", string(candidate.featureAsOf()), "generatedAt", string(candidate.generatedAt())),
-                numericFacts("rentalProbability", candidate.rentalProbability(),
+                numericFacts("rentalProbability", probability(candidate.rentalProbability()),
                         "requiredBikeCount", decimal(candidate.requiredBikeCount()),
                         "availableBikeCount", decimal(candidate.availableBikeCount()),
                         "accessDistanceMeters", decimal(candidate.distanceMeters()),
@@ -1066,6 +1067,11 @@ public class JourneyPlanService {
     private String normalize(String value) { return value == null ? null : value.trim().toUpperCase(Locale.ROOT); }
     private String string(Object value) { return value == null ? null : value.toString(); }
     private BigDecimal decimal(Number value) { return value == null ? null : new BigDecimal(value.toString()); }
+    // Rounded to 4 decimal places so the AI can echo the value back exactly in its schedule
+    // selection response: the raw model probability carries ~16 significant digits, which no
+    // LLM reliably reproduces verbatim, causing every selection referencing it to fail
+    // NumericFactValidator's exact-match check with AI_TOOL_VALUE_MISMATCH.
+    private BigDecimal probability(BigDecimal value) { return value == null ? null : value.setScale(4, RoundingMode.HALF_UP); }
     private void addWarning(List<String> warnings, String warning) {
         if (warning != null && !warning.isBlank() && !warnings.contains(warning)) warnings.add(warning);
     }

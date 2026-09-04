@@ -485,6 +485,20 @@ class JourneyPlanServiceTest {
     }
 
     @Test
+    void roundsTheRawModelProbabilityToFourDecimalPlacesInEvidenceSoTheAiCanEchoItExactly() {
+        InMemoryPersistence persistence = new InMemoryPersistence();
+        JourneyRentalPredictionPort highPrecisionRentalPort =
+                request -> List.of(rentalWithAccess(request, "station-1", "37.550", "127.050", "0.95126560285920550"));
+        JourneyPlanService service = new JourneyPlanService(persistence, disabledAi(), new CountingReturnPort(),
+                highPrecisionRentalPort, completeEvidence(), new ObjectMapper().findAndRegisterModules());
+
+        JourneyPlanService.Decision decision = service.plan(10L, unifiedInput(JourneyPlanService.RequestMode.FORM, null));
+
+        assertThat(decision.unifiedPlan().evidence().rentalCandidates().get("rental:station-1")
+                .numericFacts().get("rentalProbability")).isEqualByComparingTo("0.9513");
+    }
+
+    @Test
     void unknownAiEvidenceRetainsOnlyActualFactualSegments() {
         JourneyAiGateway ai = new JourneyAiGateway() {
             @Override public IntentResult compileIntent(String input) { return new IntentResult(validIntent(), null); }
