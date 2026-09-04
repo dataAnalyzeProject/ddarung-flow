@@ -337,8 +337,11 @@ public class JourneyPlanService {
             validated = selectionValidator.validate(bundle, selection, STAY_BOUNDS);
             validateSelection(selection, validated, constraints, selected, poiData, routeData);
         } catch (JourneyAiException exception) {
-            if (useAiSchedule) return invalidAiSchedule(input, candidates, coreCandidates, bundle, warnings,
-                    "validateSelection: " + exception.getMessage());
+            if (useAiSchedule) {
+                logAiSelectionPayload(selection);
+                return invalidAiSchedule(input, candidates, coreCandidates, bundle, warnings,
+                        "validateSelection: " + exception.getMessage());
+            }
             throw new AiToolValueMismatch(exception.getMessage());
         } catch (RuntimeException exception) {
             if (useAiSchedule) return invalidAiSchedule(input, candidates, coreCandidates, bundle, warnings,
@@ -976,6 +979,19 @@ public class JourneyPlanService {
     private String safeAiCode(JourneyAiErrorCode code) {
         if (code == null || code == JourneyAiErrorCode.AI_DISABLED) return JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE.name();
         return code.name();
+    }
+
+    // Temporary diagnostic: dumps the AI's full parsed schedule selection so a
+    // validateSelection/EvidenceSelectionValidator failure is diagnosable from the payload
+    // in one shot, instead of one log-and-redeploy cycle per newly-discovered mismatch cause.
+    private void logAiSelectionPayload(EvidenceSelectionValidator.Selection selection) {
+        try {
+            log.warn("event=journey_ai_selection_payload correlation_id={} payload={}",
+                    MDC.get("journeyAiCorrelationId"), objectMapper.writeValueAsString(selection));
+        } catch (Exception exception) {
+            log.warn("event=journey_ai_selection_payload correlation_id={} payload=<unserializable>",
+                    MDC.get("journeyAiCorrelationId"));
+        }
     }
 
     private void logEvidenceFailure(String reason) {
