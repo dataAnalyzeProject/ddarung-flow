@@ -58,11 +58,16 @@ function PreviewMap({ routeDetail: detail }) {
 }
 
 test("shows only the input workspace before a result and restores completed place selections", async () => {
-  render(<ConsumerMainPage services={createServices()} mapRenderer={PreviewMap} />);
+  const { container } = render(<ConsumerMainPage services={createServices()} mapRenderer={PreviewMap} />);
 
   expect(await screen.findByRole("heading", { name: /도착할 때 빌릴 수 있는/ })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "대여 가능성 비교 조건" })).toBeInTheDocument();
+  expect(screen.getByText("어디에서 출발하나요?")).toBeInTheDocument();
+  expect(screen.getByText("어디 근처에서 빌리고 싶나요?")).toBeInTheDocument();
+  expect(screen.getByText("몇 대가 필요한가요?")).toBeInTheDocument();
   expect(screen.getByText("서울역")).toBeInTheDocument();
   expect(screen.getByText("서울숲")).toBeInTheDocument();
+  expect(container.querySelector("img.cr293-walk-illustration")).toHaveAttribute("alt", "");
   expect(screen.queryByLabelText("테스트 경로 지도")).not.toBeInTheDocument();
   expect(screen.queryByText("추천 대여소")).not.toBeInTheDocument();
 });
@@ -77,7 +82,7 @@ test("shows a one-time ride guidance banner and focuses the search step when no 
   const services = createServices({ loadPendingPrediction: jest.fn(() => null) });
   render(<ConsumerMainPage services={services} mapRenderer={PreviewMap} rideGuidance />);
   expect(await screen.findByText("라이딩을 보려면 먼저 대여소를 선택해 주세요.")).toBeInTheDocument();
-  expect(screen.getByRole("textbox", { name: "출발 위치" })).toHaveFocus();
+  expect(screen.getByRole("textbox", { name: "어디에서 출발하나요?" })).toHaveFocus();
   fireEvent.click(screen.getByRole("button", { name: "닫기" }));
   expect(screen.queryByText("라이딩을 보려면 먼저 대여소를 선택해 주세요.")).not.toBeInTheDocument();
 });
@@ -332,7 +337,7 @@ test("reports restored and edited inputs with partial query text and actual prov
 
   await waitFor(() => expect(onInputChange).toHaveBeenCalledWith(restored));
   expect(onSearchComplete).not.toHaveBeenCalled();
-  fireEvent.change(screen.getByRole("textbox", { name: "출발 위치" }), { target: { value: "새 출발" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "어디에서 출발하나요?" }), { target: { value: "새 출발" } });
   expect(onInputChange).toHaveBeenLastCalledWith({ ...restored, origin: "새 출발" });
   expect(onSearchComplete).toHaveBeenLastCalledWith({ ...restored, origin: "새 출발" }, null);
 
@@ -342,7 +347,7 @@ test("reports restored and edited inputs with partial query text and actual prov
   expect(onSearchComplete).toHaveBeenLastCalledWith(selected, null);
   expect(screen.getByRole("button", { name: "대여 가능성 비교" })).toBeEnabled();
 
-  fireEvent.click(screen.getByRole("button", { name: "도보 걷는 경로" }));
+  fireEvent.click(screen.getByRole("button", { name: "도보" }));
   fireEvent.click(screen.getByRole("button", { name: "3대" }));
   expect(onInputChange).toHaveBeenLastCalledWith({ ...selected, travelMode: "WALK", requiredBikeCount: 3 });
   expect(onSearchComplete).toHaveBeenLastCalledWith({ ...selected, travelMode: "WALK", requiredBikeCount: 3 }, null);

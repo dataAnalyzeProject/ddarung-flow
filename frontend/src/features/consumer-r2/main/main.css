@@ -10,6 +10,22 @@
   margin: 0;
 }
 
+@media (min-width: 64.01rem) {
+  .cr293-page .cr22-header {
+    min-height: 5.625rem;
+  }
+
+  .cr293-page .cr22-header__nav {
+    justify-content: flex-start;
+    gap: 3.3125rem;
+    padding-left: 8.6875rem;
+  }
+
+  .cr293-page .cr22-header__nav-link {
+    min-height: 5.625rem;
+  }
+}
+
 .cr293-ride-guidance {
   display: flex;
   flex-wrap: wrap;
@@ -43,7 +59,7 @@
 
 .cr293-hero {
   position: relative;
-  height: clamp(18rem, 32vw, 26.25rem);
+  height: 16.25rem;
   overflow: hidden;
   background: #dff1fb;
 }
@@ -52,7 +68,7 @@
   position: absolute;
   inset: 0;
   content: "";
-  background: linear-gradient(90deg, rgba(236, 249, 255, 0.98) 5%, rgba(236, 249, 255, 0.86) 38%, rgba(236, 249, 255, 0.08) 72%);
+  background: linear-gradient(90deg, rgba(247, 252, 255, 0.98) 0%, rgba(247, 252, 255, 0.88) 37%, rgba(236, 249, 255, 0.08) 72%);
 }
 
 .cr293-hero img {
@@ -64,31 +80,33 @@
 .cr293-hero > div {
   position: absolute;
   z-index: 1;
-  top: 50%;
-  left: max(2rem, calc((100% - 93rem) / 2));
+  top: 52%;
+  left: max(5.5rem, calc((100% - 84.5rem) / 2));
   width: min(39rem, 48vw);
   transform: translateY(-50%);
 }
 
 .cr293-hero h1 {
-  font-size: clamp(2.15rem, 4vw, 3.75rem);
-  line-height: 1.14;
+  color: #102345;
+  font-size: clamp(2.35rem, 3.2vw, 3.0625rem);
+  line-height: 1.27;
   letter-spacing: -0.04em;
   text-wrap: balance;
 }
 
 .cr293-hero p {
-  margin-top: 1rem;
+  margin-top: 1.05rem;
   color: var(--cr22-color-copy);
-  font-size: clamp(1rem, 1.4vw, 1.25rem);
+  font-size: clamp(0.95rem, 1.15vw, 1.08rem);
 }
 
 .cr293-container--initial {
   position: relative;
   z-index: 2;
   max-width: 94rem;
-  margin-top: -2.1rem;
-  padding-bottom: 5rem;
+  margin-top: 0;
+  padding-inline: 2.9375rem;
+  padding-bottom: 2.6rem;
 }
 
 .cr293-container--result {
@@ -98,27 +116,23 @@
 }
 
 .cr293-search {
-  padding: clamp(1.5rem, 3vw, 2.5rem);
+  padding: 1.7rem 1.9rem 1.8125rem;
   border: 1px solid var(--cr22-color-line);
-  border-radius: 1.25rem;
+  border-radius: 1rem;
   background: #fff;
-  box-shadow: 0 1.25rem 3.5rem rgba(28, 66, 104, 0.14);
+  box-shadow: 0 1rem 2.8rem rgba(28, 66, 104, 0.1);
 }
 
-.cr293-search__heading {
-  display: grid;
-  gap: 0.35rem;
-  text-align: center;
-}
-
-.cr293-search__heading h2 {
-  font-size: clamp(1.5rem, 2.3vw, 2.1rem);
-  letter-spacing: -0.04em;
-}
-
-.cr293-search__heading p,
-.cr293-search__hint {
-  color: var(--cr22-color-muted);
+.cr293-search__title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .cr293-search__loading {
@@ -133,43 +147,96 @@
 
 .cr293-search__steps {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.9rem;
-  margin: 2rem 0 1.25rem;
+  grid-template-columns: 1fr 1.08fr 1.1fr 0.96fr;
+  margin: 0 0 1.5rem;
 }
 
 .cr293-search__step {
   position: relative;
   min-width: 0;
-  min-height: 11.5rem;
-  padding: 1.15rem;
-  border: 1px solid var(--cr22-color-line);
-  border-radius: 1rem;
+  min-height: 20.5rem;
+  padding: 0 1.8rem;
   background: #fff;
 }
 
+.cr293-search__step + .cr293-search__step::before {
+  position: absolute;
+  top: 3.7rem;
+  bottom: 1.75rem;
+  left: 0;
+  width: 1px;
+  background: #e5eaf1;
+  content: "";
+}
+
+.cr293-search__step:first-child {
+  padding-left: 0;
+}
+
+.cr293-search__step:last-child {
+  padding-right: 0;
+  padding-left: 1.15rem;
+}
+
 .cr293-search__step-label,
+.cr293-place-picker__label,
 .cr293-place-picker > label {
   display: flex;
   align-items: center;
-  gap: 0.55rem;
+  gap: 0.75rem;
   margin: 0;
   padding: 0;
   color: var(--cr22-color-ink);
-  font-size: 0.9rem;
+  min-height: 2rem;
+  color: #15233d;
+  font-size: 1rem;
   font-weight: 800;
+  line-height: 1.4;
+}
+
+.cr293-search__step > .cr293-step-number {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  left: 0;
+}
+
+.cr293-search__step:nth-child(2) > .cr293-step-number {
+  left: 1.8rem;
+}
+
+.cr293-search__step:nth-child(-n + 2) .cr293-place-picker > label,
+.cr293-search__step:nth-child(-n + 2) .cr293-place-picker__label {
+  padding-left: 2.7rem;
 }
 
 .cr293-step-number {
   display: inline-grid;
-  width: 1.65rem;
-  height: 1.65rem;
+  flex: 0 0 auto;
+  width: 2rem;
+  height: 2rem;
   place-items: center;
   border-radius: 50%;
-  background: var(--cr22-color-blue-soft);
-  color: var(--cr22-color-blue);
-  font-size: 0.78rem;
+  background: linear-gradient(145deg, #458ff0, #176bd0);
+  color: #fff;
+  font-size: 0.9rem;
   font-weight: 900;
+  box-shadow: 0 0.3rem 0.7rem rgba(35, 111, 207, 0.22);
+}
+
+.cr293-search__step:nth-child(2) .cr293-step-number {
+  background: linear-gradient(145deg, #f4775d, #e64f38);
+  box-shadow: 0 0.3rem 0.7rem rgba(228, 82, 59, 0.2);
+}
+
+.cr293-search__step:nth-child(3) .cr293-step-number {
+  background: linear-gradient(145deg, #27b8b6, #109996);
+  box-shadow: 0 0.3rem 0.7rem rgba(16, 153, 150, 0.2);
+}
+
+.cr293-search__step:nth-child(4) .cr293-step-number {
+  background: linear-gradient(145deg, #ffc336, #f1a600);
+  box-shadow: 0 0.3rem 0.7rem rgba(241, 166, 0, 0.2);
 }
 
 .cr293-place-picker__input {
@@ -244,55 +311,119 @@
 }
 
 .cr293-search .cr22-place-card {
-  margin-top: 1rem;
-  padding: 0.8rem;
+  margin-top: 1.55rem;
   box-shadow: none;
 }
 
+.cr293-search .cr22-place-card__content {
+  min-height: 8.55rem;
+  padding: 1.25rem 1.15rem;
+}
+
+.cr293-search .cr22-place-card__marker,
+.cr293-search .cr22-place-card--destination .cr22-place-card__marker {
+  width: 2.35rem;
+  height: 2.35rem;
+  border-radius: 0;
+  background: transparent;
+}
+
+.cr293-search .cr22-place-card__marker .cr22-icon {
+  width: 2rem;
+  height: 2rem;
+}
+
+.cr293-search .cr22-place-card__title {
+  font-size: 1.15rem;
+}
+
 .cr293-search .cr22-place-card__meta {
-  max-width: 12rem;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  max-width: 14rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.cr293-place-provider {
+  flex: 0 0 auto;
+  padding: 0.12rem 0.38rem;
+  border: 1px solid #d8dde5;
+  border-radius: 999px;
+  background: #f3f5f8;
+  color: #556275;
+  font-size: 0.58rem;
+  letter-spacing: -0.02em;
+  text-transform: lowercase;
+}
+
+.cr293-search .cr22-place-card__action::after {
+  margin-left: 0.45rem;
+  content: "↻";
+  font-size: 1rem;
+}
+
 .cr293-options {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.55rem;
+  grid-template-columns: minmax(0, 0.86fr) minmax(0, 1fr);
+  gap: 0.8rem;
   margin-top: 1rem;
 }
 
 .cr293-options .cr22-option-card {
-  min-height: 7rem;
-  padding: 0.75rem 0.35rem;
+  min-height: 11.55rem;
+  padding: 1rem 0.45rem;
+  align-items: center;
+  gap: 0.8rem;
+  text-align: center;
 }
 
-.cr293-options .cr22-option-card__description {
-  font-size: 0.7rem;
+.cr293-options .cr22-option-card__icon .cr22-icon {
+  width: 2.8rem;
+  height: 2.8rem;
+}
+
+.cr293-walk-illustration {
+  width: 3.25rem;
+  height: 3.25rem;
+  object-fit: contain;
+}
+
+.cr293-options .cr22-option-card__title {
+  font-size: 1.05rem;
 }
 
 .cr293-bike-count {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 0.4rem;
-  margin-top: 1rem;
+  grid-template-columns: repeat(3, minmax(3.75rem, 5.25rem));
+  justify-content: center;
+  gap: 1rem 1.05rem;
+  margin-top: 1.55rem;
 }
 
 .cr293-bike-count button {
+  position: relative;
   display: grid;
   aspect-ratio: 1;
-  min-height: 3rem;
+  min-height: 4.85rem;
   place-items: center;
   padding: 0;
   border: 1.5px solid var(--cr22-color-line);
-  border-radius: 0.65rem;
-  background: var(--cr22-color-surface);
+  border-radius: 50%;
+  background: #fff;
   color: var(--cr22-color-copy);
-  font-size: 0.85rem;
+  font-size: 1.05rem;
   font-weight: 800;
   cursor: pointer;
+  box-shadow: 0 0.25rem 0.7rem rgba(30, 51, 78, 0.08);
   transition: border-color 160ms ease-out, background-color 160ms ease-out, box-shadow 160ms ease-out;
+}
+
+.cr293-bike-count button:nth-child(4),
+.cr293-bike-count button:nth-child(5) {
+  transform: translateX(calc(50% + 0.525rem));
 }
 
 .cr293-bike-count button:hover {
@@ -300,23 +431,120 @@
 }
 
 .cr293-bike-count button[aria-pressed="true"] {
-  border-color: var(--cr22-color-blue);
-  background: var(--cr22-color-blue-soft);
-  color: var(--cr22-color-blue);
-  box-shadow: inset 0 0 0 1px var(--cr22-color-blue);
+  border-color: #ffb813;
+  background: linear-gradient(145deg, #ffbe24, #ffad00);
+  color: #fff;
+  box-shadow: 0 0.45rem 0.8rem rgba(240, 167, 0, 0.22);
+}
+
+.cr293-bike-count button[aria-pressed="true"]::after {
+  position: absolute;
+  right: -0.05rem;
+  bottom: 0.15rem;
+  width: 1.35rem;
+  height: 1.35rem;
+  display: grid;
+  place-items: center;
+  border: 2px solid #ffb813;
+  border-radius: 50%;
+  background: #fff;
+  color: #f5aa00;
+  content: "✓";
+  font-size: 0.78rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.cr293-search__step-help {
+  position: absolute;
+  right: 1.8rem;
+  bottom: 1.4rem;
+  left: 1.8rem;
+  color: #77859a;
+  font-size: 0.74rem;
+  line-height: 1.55;
+}
+
+.cr293-search__step-help .cr22-icon {
+  margin-right: 0.3rem;
+  vertical-align: -0.2rem;
+}
+
+.cr293-search__step-help span {
+  padding-left: 1.35rem;
 }
 
 .cr293-search__actions {
   display: grid;
-  gap: 0.75rem;
+  gap: 1.15rem;
   width: 100%;
   margin-inline: auto;
 }
 
+.cr293-search__actions .cr22-button {
+  position: relative;
+  min-height: 5rem;
+  border-radius: 0.55rem;
+  font-size: 1.35rem;
+}
+
+.cr293-search__actions .cr22-button > .cr22-icon:last-child {
+  position: absolute;
+  right: 1.7rem;
+}
+
+.cr293-search__compare {
+  background: linear-gradient(110deg, #3c91ed, #2576dc);
+}
+
+.cr293-search__compare > span,
+.cr293-search__planner-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.cr293-search__compare > span .cr22-icon {
+  width: 2.65rem;
+  height: 2.65rem;
+}
+
+.cr293-search__sparkles {
+  font-size: 1.65rem;
+  line-height: 1;
+}
+
+.cr293-search__planner-label b {
+  padding: 0.25rem 0.7rem;
+  border: 1px solid #dec5ff;
+  border-radius: 999px;
+  background: #eee1ff;
+  color: #7b2ed0;
+  font-size: 0.78rem;
+}
+
+.cr293-search__planner {
+  border-color: #c884ff;
+  background: #fff;
+  color: #8a31e6;
+}
+
+.cr293-search__planner:hover:not(:disabled) {
+  background: #fbf8ff;
+}
+
 .cr293-search__hint {
-  margin-top: 0.75rem !important;
+  margin-top: 1.35rem !important;
   text-align: center;
-  font-size: 0.82rem;
+  color: #75849a;
+  font-size: 0.84rem;
+}
+
+.cr293-search__selection-hint {
+  margin-top: 0.45rem !important;
+  color: #a14d39;
+  font-size: 0.78rem;
+  text-align: center;
 }
 
 .cr293-result-heading {
@@ -760,6 +988,11 @@
 @media (max-width: 74rem) {
   .cr293-search__steps {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.5rem 0;
+  }
+
+  .cr293-search__step:nth-child(3)::before {
+    display: none;
   }
 
   .cr293-results {
@@ -849,6 +1082,32 @@
 
   .cr293-search__step {
     min-height: auto;
+    padding: 1rem 0 1.5rem;
+    border-left: 0 !important;
+    border-bottom: 1px solid var(--cr22-color-line);
+  }
+
+  .cr293-search__step::before {
+    display: none;
+  }
+
+  .cr293-search__step:last-child {
+    border-bottom: 0;
+  }
+
+  .cr293-search__step > .cr293-step-number,
+  .cr293-search__step:nth-child(2) > .cr293-step-number {
+    top: 1rem;
+    left: 0;
+  }
+
+  .cr293-search__step-help {
+    position: static;
+    margin-top: 0.8rem !important;
+  }
+
+  .cr293-bike-count {
+    justify-content: start;
   }
 
   .cr293-result-heading,
@@ -905,6 +1164,67 @@
 
   .cr293-transit__header > div:last-child {
     text-align: left;
+  }
+}
+
+@media (min-width: 64rem) and (max-height: 56.25rem) {
+  .cr293-hero {
+    height: 12.8rem;
+  }
+
+  .cr293-hero h1 {
+    font-size: clamp(2rem, 2.7vw, 2.65rem);
+  }
+
+  .cr293-hero p {
+    margin-top: 0.65rem;
+    font-size: 0.95rem;
+  }
+
+  .cr293-search {
+    padding-top: 1.3rem;
+    padding-bottom: 1.4rem;
+  }
+
+  .cr293-search__steps {
+    margin-bottom: 1rem;
+  }
+
+  .cr293-search__step {
+    min-height: 17rem;
+  }
+
+  .cr293-search .cr22-place-card {
+    margin-top: 1rem;
+  }
+
+  .cr293-search .cr22-place-card__content {
+    min-height: 6.5rem;
+  }
+
+  .cr293-options .cr22-option-card {
+    min-height: 9rem;
+  }
+
+  .cr293-bike-count {
+    gap: 0.7rem 0.9rem;
+    margin-top: 1rem;
+  }
+
+  .cr293-bike-count button {
+    min-height: 4.15rem;
+  }
+
+  .cr293-search__actions {
+    gap: 0.8rem;
+  }
+
+  .cr293-search__actions .cr22-button {
+    min-height: 4rem;
+  }
+
+  .cr293-search__hint {
+    margin-top: 0.8rem !important;
   }
 }
 
