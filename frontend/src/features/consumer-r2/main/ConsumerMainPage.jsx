@@ -119,7 +119,12 @@ function PlacePicker({ kind, label, onSelect, place, query, search, setQuery }) 
   }, [place, query, search]);
 
   if (place) {
-    return <SelectedPlaceCard kind={kind} title={place.name} meta={place.address || "장소 제공자에서 선택 완료"} onReselect={() => { onSelect(null); setQuery(place.name); }} />;
+    return (
+      <div className="cr293-place-picker">
+        <p className="cr293-place-picker__label">{label}</p>
+        <SelectedPlaceCard kind={kind} title={place.name} meta={<><span className="cr293-place-provider" aria-hidden="true">kakao</span><span>{place.address || "Kakao 장소 선택 완료"}</span></>} onReselect={() => { onSelect(null); setQuery(place.name); }} />
+      </div>
+    );
   }
 
   return (
@@ -149,39 +154,39 @@ function SearchWorkspace({ authState, input, onChange, onOpenPlanner, onSearch, 
   const ready = Boolean(places.origin && places.destination);
   return (
     <section className="cr293-search" aria-labelledby="cr293-search-title">
-      <div className="cr293-search__heading">
-        <h2 id="cr293-search-title">어디에서 출발해 어디로 갈까요?</h2>
-        <p>장소 제공자의 검색 결과를 선택하면 도착할 때 빌릴 가능성을 비교해 드려요.</p>
-      </div>
+      <h2 className="cr293-search__title" id="cr293-search-title">대여 가능성 비교 조건</h2>
       <div className="cr293-search__steps">
         <div className="cr293-search__step">
           <span className="cr293-step-number">1</span>
-          <PlacePicker kind="origin" label="출발 위치" place={places.origin} query={input.origin} setQuery={(origin) => onChange({ origin })} onSelect={(origin) => onChange({ origin: origin?.name ?? input.origin, originPlace: origin })} search={searchPlaces} />
+          <PlacePicker kind="origin" label="어디에서 출발하나요?" place={places.origin} query={input.origin} setQuery={(origin) => onChange({ origin })} onSelect={(origin) => onChange({ origin: origin?.name ?? input.origin, originPlace: origin })} search={searchPlaces} />
         </div>
         <div className="cr293-search__step">
           <span className="cr293-step-number">2</span>
-          <PlacePicker kind="destination" label="대여 희망 지역" place={places.destination} query={input.destination} setQuery={(destination) => onChange({ destination })} onSelect={(destination) => onChange({ destination: destination?.name ?? input.destination, destinationPlace: destination })} search={searchPlaces} />
+          <PlacePicker kind="destination" label="어디 근처에서 빌리고 싶나요?" place={places.destination} query={input.destination} setQuery={(destination) => onChange({ destination })} onSelect={(destination) => onChange({ destination: destination?.name ?? input.destination, destinationPlace: destination })} search={searchPlaces} />
+          <p className="cr293-search__step-help"><ConsumerIcon name="info" size={16} /> 라이딩의 최종 목적지가 아닙니다.<br /><span>대여 희망 지역을 선택해주세요.</span></p>
         </div>
         <div className="cr293-search__step" role="group" aria-labelledby="cr293-step-travel-label">
-          <p className="cr293-search__step-label" id="cr293-step-travel-label"><span className="cr293-step-number">3</span> 이동 방법</p>
+          <p className="cr293-search__step-label" id="cr293-step-travel-label"><span className="cr293-step-number">3</span><span>대여소까지<br />어떻게 이동하나요?</span></p>
           <div className="cr293-options cr293-options--travel">
-            <OptionCard icon={<ConsumerIcon name="walk" />} title="도보" description="걷는 경로" selected={input.travelMode === "WALK"} onSelect={() => onChange({ travelMode: "WALK" })} />
-            <OptionCard icon={<ConsumerIcon name="transit" />} title="대중교통" description="버스·지하철 경로" selected={input.travelMode === "PUBLIC_TRANSIT"} onSelect={() => onChange({ travelMode: "PUBLIC_TRANSIT" })} />
+            <OptionCard icon={<ConsumerIcon name="walk" />} title="도보" selected={input.travelMode === "WALK"} onSelect={() => onChange({ travelMode: "WALK" })} />
+            <OptionCard icon={<ConsumerIcon name="transit" />} title="대중교통" selected={input.travelMode === "PUBLIC_TRANSIT"} onSelect={() => onChange({ travelMode: "PUBLIC_TRANSIT" })} />
           </div>
+          <p className="cr293-search__step-help"><ConsumerIcon name="info" size={16} /> 이동 수단에 따라 예상 이동시간이 달라져요.</p>
         </div>
         <div className="cr293-search__step" role="group" aria-labelledby="cr293-step-bike-label">
-          <p className="cr293-search__step-label" id="cr293-step-bike-label"><span className="cr293-step-number">4</span> 필요한 자전거</p>
+          <p className="cr293-search__step-label" id="cr293-step-bike-label"><span className="cr293-step-number">4</span> 몇 대가 필요한가요?</p>
           <div className="cr293-bike-count">
             {[1, 2, 3, 4, 5].map((count) => <button key={count} type="button" aria-pressed={input.requiredBikeCount === count} onClick={() => onChange({ requiredBikeCount: count })}>{count}대</button>)}
           </div>
         </div>
       </div>
       <div className="cr293-search__actions">
-        <ConsumerButton block size="lg" icon={<ConsumerIcon name="arrowRight" />} iconPosition="end" disabled={!ready || state === "LOADING" || authState === "loading" || authState === "error"} loading={state === "LOADING"} loadingLabel="도착 시점 후보를 찾는 중…" onClick={onSearch}>대여 가능성 비교</ConsumerButton>
-        <ConsumerButton block size="lg" variant="premium" disabled={state === "LOADING"} onClick={onOpenPlanner}>AI로 전체 일정 짜기 · PREMIUM</ConsumerButton>
+        <ConsumerButton className="cr293-search__compare" block size="lg" icon={<ConsumerIcon name="arrowRight" />} iconPosition="end" disabled={!ready || state === "LOADING" || authState === "loading" || authState === "error"} loading={state === "LOADING"} loadingLabel="도착 시점 후보를 찾는 중…" onClick={onSearch}><ConsumerIcon name="bike" /> 대여 가능성 비교</ConsumerButton>
+        <ConsumerButton className="cr293-search__planner" block size="lg" variant="premium" icon={<ConsumerIcon name="arrowRight" />} iconPosition="end" disabled={state === "LOADING"} onClick={onOpenPlanner}><span className="cr293-search__planner-label"><span className="cr293-search__sparkles" aria-hidden="true">✦</span><span>AI로 전체 일정 짜기</span><b>PREMIUM</b></span></ConsumerButton>
       </div>
       {state === "LOADING" ? <div className="cr293-search__loading"><AsyncState state="loading" title="도착 시점 후보를 비교하고 있습니다" description="예측과 실제 이동 경로를 같은 근거로 확인합니다." /></div> : null}
-      {!ready ? <p className="cr293-search__hint">출발 위치와 대여 희망 지역을 검색 결과에서 각각 선택해 주세요.</p> : null}
+      <p className="cr293-search__hint"><span aria-hidden="true">✧</span> AI가 추천 코스와 대여소를 포함한 라이딩 일정을 제안해드려요.</p>
+      {!ready ? <p className="cr293-search__selection-hint">출발 위치와 대여 희망 지역을 검색 결과에서 각각 선택해 주세요.</p> : null}
     </section>
   );
 }
@@ -476,7 +481,7 @@ export default function ConsumerMainPage({ currentResult, mapRenderer, onInputCh
             <button type="button" onClick={() => setShowRideGuidance(false)}>닫기</button>
           </ConsumerContainer>
         ) : null}
-        {state === "INITIAL" || state === "LOADING" ? <section className="cr293-hero"><img src={heroImage} alt="서울 도심에서 따릉이를 타고 이동하는 모습" width="1600" height="420" fetchpriority="high" /><div><h1>도착할 때 빌릴 수 있는<br />대여소를 비교해요</h1><p>지금 재고가 아니라, 내가 도착할 시점의 가능성을 알려드려요.</p></div></section> : null}
+        {state === "INITIAL" || state === "LOADING" ? <section className="cr293-hero"><img src={heroImage} alt="서울 도심에서 따릉이를 타고 이동하는 모습" width="1600" height="420" fetchpriority="high" /><div><h1>도착할 때 빌릴 수 있는<br />대여소를 비교해요</h1><p>현재 출발 기준으로 대여 희망 지역 주변 대여소까지의 이동시간을 반영합니다.</p></div></section> : null}
         <ConsumerContainer className={state === "INITIAL" || state === "LOADING" ? "cr293-container--initial" : "cr293-container--result"}>
           {authState === "error" ? <AsyncState state="error" title="로그인 상태를 확인하지 못했습니다" description="입력한 조건은 유지됩니다. 연결을 확인한 뒤 다시 시도해 주세요." actionLabel="로그인 상태 다시 확인" onAction={() => setAuthAttempt((value) => value + 1)} /> : null}
           {content}
