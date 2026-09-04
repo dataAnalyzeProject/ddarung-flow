@@ -513,9 +513,28 @@ class JourneyPlanServiceTest {
 
         JourneyPlanService.Decision decision = planAndConfirm(unifiedService(new InMemoryPersistence(), ai, new CountingReturnPort(), completeEvidence()),
                 unifiedInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE, "서울숲 카페 여정"));
-        assertRejectedSchedule(decision);
+        assertServerBuiltSchedule(decision, "CANDIDATE_ACCESS_ROUTE");
         assertThat(decision.unifiedPlan().evidence().rentalCandidates()).containsOnlyKeys("rental:station-1");
         assertThat(decision.unifiedPlan().selectedRentalCandidateId()).isEqualTo("rental:station-1");
+    }
+
+    @Test
+    void aRejectedAiScheduleStillFailsWhenNoRouteSupportsAServerBuiltPlan() {
+        JourneyAiGateway ai = new JourneyAiGateway() {
+            @Override public IntentResult compileIntent(String input) { return new IntentResult(validIntent(), null); }
+            @Override public List<com.ddarungflow.journey.ai.ToolCallRequest> validateToolPlan(
+                    List<com.ddarungflow.journey.ai.ToolCallRequest> requests) { return requests; }
+            @Override public ScheduleResult selectSchedule(ConsumerAiEvidenceBundle evidence, ScheduleConstraints constraints) {
+                return new ScheduleResult(new EvidenceSelectionValidator.Selection(
+                        "rental:unknown", List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
+                        "근거 ID 선택", List.of("EVIDENCE_ONLY")), null);
+            }
+        };
+
+        JourneyPlanService.Decision decision = planAndConfirm(unifiedService(new InMemoryPersistence(), ai,
+                new CountingReturnPort(), evidence(false, false, false)),
+                unifiedInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE, "서울숲 카페 여정"));
+        assertRejectedSchedule(decision);
     }
 
     @Test
@@ -830,7 +849,7 @@ class JourneyPlanServiceTest {
 
         JourneyPlanService.Decision decision = planAndConfirm(service,
                 unifiedInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE, "서울숲 카페 여정"));
-        assertRejectedSchedule(decision);
+        assertServerBuiltSchedule(decision, "VALIDATE_SELECTION");
         assertThat(decision.unifiedPlan().evidence().rentalCandidates()).containsOnlyKeys("rental:station-1", "rental:station-2");
         assertThat(decision.unifiedPlan().selectedRentalCandidateId()).isEqualTo("rental:station-1");
     }
@@ -864,13 +883,16 @@ class JourneyPlanServiceTest {
                 assertThat(callCorrelation.get()).isNotBlank().isNotEqualTo("outer-correlation");
                 assertThat(org.slf4j.MDC.get("journeyAiCorrelationId")).isEqualTo("outer-correlation");
                 List<String> messages = appender.list.stream().map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage).toList();
-                assertThat(messages).hasSize(1);
-                assertThat(messages.getFirst()).contains("kind=SCHEDULE_SELECTION", "correlation_id=" + callCorrelation.get(),
-                        invalidEvidence ? "outcome=FAILURE" : "outcome=SUCCESS")
-                        .doesNotContain("invalid provider rationale", "서울숲", "37.544", "127.056");
+                assertThat(messages).hasSize(invalidEvidence ? 2 : 1);
+                assertThat(messages).allSatisfy(message -> assertThat(message)
+                        .contains("kind=SCHEDULE_SELECTION", "correlation_id=" + callCorrelation.get())
+                        .doesNotContain("invalid provider rationale", "서울숲", "37.544", "127.056"));
+                assertThat(messages.getFirst()).contains(invalidEvidence ? "outcome=FAILURE" : "outcome=SUCCESS");
                 if (invalidEvidence) {
-                    assertThat(messages.getFirst()).contains("stage=EVIDENCE_VALIDATION", "code=AI_TOOL_VALUE_MISMATCH").doesNotContain("outcome=SUCCESS");
-                    assertRejectedSchedule(decision);
+                    assertThat(messages.getFirst()).contains("stage=CANDIDATE_ACCESS_ROUTE", "code=AI_TOOL_VALUE_MISMATCH")
+                            .doesNotContain("outcome=SUCCESS");
+                    assertThat(messages.getLast()).contains("outcome=DETERMINISTIC_FALLBACK", "stage=CANDIDATE_ACCESS_ROUTE");
+                    assertServerBuiltSchedule(decision, "CANDIDATE_ACCESS_ROUTE");
                 } else {
                     assertThat(decision.status()).isEqualTo(JourneyStatus.READY);
                 }
@@ -1023,6 +1045,17 @@ class JourneyPlanServiceTest {
                 List.of("route:rental:station-1->poi:station-1:poi-1"), List.of("weather:station-1"),
                 List.of("air-quality:station-1"), List.of(), List.of(), "근거 기반 카페 경유",
                 List.of("EVIDENCE_ONLY"));
+    }
+
+    private void assertServerBuiltSchedule(JourneyPlanService.Decision decision, String stage) {
+        assertThat(decision.status()).isEqualTo(JourneyStatus.PARTIAL);
+        assertThat(decision.warnings()).contains("AI_SCHEDULE_FALLBACK", "AI_SCHEDULE_STAGE_" + stage)
+                .doesNotContain("AI_TOOL_VALUE_MISMATCH");
+        assertThat(decision.normalizedIntent().path("aiIntent").isObject()).isTrue();
+        // The rejected AI selection is discarded: the schedule is rebuilt from collected evidence only.
+        assertThat(decision.unifiedPlan().rationale()).isEqualTo("STRUCTURED_SERVER_SELECTION");
+        assertThat(decision.unifiedPlan().segments()).extracting(UnifiedJourneyPlan.Segment::type)
+                .startsWith(UnifiedJourneyPlan.SegmentType.ACCESS, UnifiedJourneyPlan.SegmentType.RENT);
     }
 
     private void assertRejectedSchedule(JourneyPlanService.Decision decision) {

@@ -182,10 +182,13 @@ function Timeline({ intent, plan }) {
   </section>;
 }
 
-function Rationale({ plan }) {
+function Rationale({ plan, serverBuilt }) {
   const items = evidenceEntries(plan.evidence);
-  return <SurfaceCard title="AI 추천 이유">
-    <p className="cr22-journey__rationale">{plan.rationale || "AI 추천 이유가 제공되지 않았습니다."}</p>
+  const rationale = plan.rationale === "STRUCTURED_SERVER_SELECTION"
+    ? "확인된 대여소·장소·경로 근거만으로 서버가 구성한 일정입니다."
+    : plan.rationale;
+  return <SurfaceCard title={serverBuilt ? "추천 이유" : "AI 추천 이유"}>
+    <p className="cr22-journey__rationale">{rationale || "추천 이유가 제공되지 않았습니다."}</p>
     <div className="cr22-journey__evidence-list" aria-label="추천 근거 상세">{items.length ? items.map((item) => { const summary = evidenceSummary(item); return <p key={`${item.kind}-${item.evidenceId}`}><span><strong>{sourceLabel(item.source)}</strong>{summary.length ? <small className="cr22-journey__evidence-facts">{summary.map(([label, value]) => `${label} ${value}`).join(" · ")}</small> : null}</span><StatusBadge tone={item.status === "NORMAL" ? "positive" : item.status === "UNAVAILABLE" || item.status === "MISSING" ? "danger" : "caution"}>{item.status}</StatusBadge></p>; }) : <p><span><strong>근거 목록 없음</strong><small>UNAVAILABLE</small></span><StatusBadge tone="danger">UNAVAILABLE</StatusBadge></p>}</div>
     <p className="cr22-journey__muted">PARTIAL·MISSING·UNAVAILABLE은 정상 근거와 구분해 그대로 표시합니다.</p>
   </SurfaceCard>;
@@ -242,13 +245,15 @@ function ResultContent({ adapter, decision, now, onNavigate, onSaved, onUpdated,
   const origin = intent.origin?.displayName;
   const destination = intent.destination?.displayName;
   const title = [origin, destination].filter(Boolean).join(" → ") || "AI 라이딩 계획";
+  const serverBuiltSchedule = (decision.warnings || []).includes("AI_SCHEDULE_FALLBACK");
   if (!plan) return <AsyncState state="partial" title="통합 일정을 표시할 수 없습니다" description="백엔드가 통합 일정이나 근거를 제공하지 않았습니다." onAction={() => onNavigate?.("planner")} actionLabel="조건 다시 입력" />;
   return <>
     <div className="cr22-journey__result-title"><div><p className="cr22-journey__breadcrumb"><ConsumerIcon name="home" size={15} /> <span aria-hidden="true">›</span> AI 플래너 <span aria-hidden="true">›</span> 결과</p><h1>{title} <StatusBadge tone="premium">PREMIUM</StatusBadge></h1><p>실제 대여·장소·경로 근거로 구성된 현재 계획입니다.</p></div><div><ConsumerButton variant="secondary" icon={<ConsumerIcon name="retry" />} onClick={() => document.getElementById("structured-replan")?.scrollIntoView()}>조건 변경 후 재추천</ConsumerButton><ConsumerButton icon={<ConsumerIcon name="plan" />} disabled={Boolean(action)} loading={action === "save"} loadingLabel="저장 중…" onClick={save}>이 계획 저장</ConsumerButton></div></div>
     {savedJourneyId ? <ConsumerButton variant="secondary" disabled={Boolean(action)} onClick={() => setRecheckOpen(true)}>출발 전에 다시 알려주세요</ConsumerButton> : null}
+    {serverBuiltSchedule ? <p className="cr22-journey__partial" role="status"><StatusBadge tone="caution">AI 미적용</StatusBadge> AI가 제안한 일정이 실제 근거와 맞지 않아, 확인된 근거만으로 일정을 구성했습니다.</p> : null}
     {plan.status === "PARTIAL" || decision.status === "PARTIAL" ? <p className="cr22-journey__partial" role="status"><StatusBadge tone="caution">PARTIAL</StatusBadge> 일부 근거만 확인되었습니다. 확인되지 않은 값은 따로 표시합니다.</p> : null}
     {plan.status === "UNAVAILABLE" || decision.status === "UNAVAILABLE" ? <p className="cr22-journey__partial" role="status"><StatusBadge tone="danger">UNAVAILABLE</StatusBadge> 전체 일정은 만들지 못했습니다. 아래에는 백엔드가 제공한 사실 구간과 근거만 표시합니다.</p> : null}
-    <div className="cr22-journey__result-layout"><div><Summary plan={plan} /><Timeline intent={intent} plan={plan} /></div><aside><ConsumerJourneyMap segments={plan.segments} /><Rationale plan={plan} /></aside></div>
+    <div className="cr22-journey__result-layout"><div><Summary plan={plan} /><Timeline intent={intent} plan={plan} /></div><aside><ConsumerJourneyMap segments={plan.segments} /><Rationale plan={plan} serverBuilt={serverBuiltSchedule} /></aside></div>
     <SurfaceCard title="구조화 조건으로 다시 계획">
       <div className="cr22-journey__replan" id="structured-replan">
         <label>이용 시간<input name="availableMinutes" autoComplete="off" type="number" min="1" max="480" value={editor.availableMinutes} onChange={(event) => setEditor((current) => ({ ...current, availableMinutes: event.target.value }))} /></label>
