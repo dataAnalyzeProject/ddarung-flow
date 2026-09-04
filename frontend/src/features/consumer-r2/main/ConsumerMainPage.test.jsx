@@ -58,7 +58,7 @@ function PreviewMap({ routeDetail: detail }) {
 }
 
 test("shows only the input workspace before a result and restores completed place selections", async () => {
-  render(<ConsumerMainPage services={createServices()} mapRenderer={PreviewMap} />);
+  const { container } = render(<ConsumerMainPage services={createServices()} mapRenderer={PreviewMap} />);
 
   expect(await screen.findByRole("heading", { name: /도착할 때 빌릴 수 있는/ })).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "대여 가능성 비교 조건" })).toBeInTheDocument();
@@ -67,6 +67,7 @@ test("shows only the input workspace before a result and restores completed plac
   expect(screen.getByText("몇 대가 필요한가요?")).toBeInTheDocument();
   expect(screen.getByText("서울역")).toBeInTheDocument();
   expect(screen.getByText("서울숲")).toBeInTheDocument();
+  expect(container.querySelector("img.cr293-walk-illustration")).toHaveAttribute("alt", "");
   expect(screen.queryByLabelText("테스트 경로 지도")).not.toBeInTheDocument();
   expect(screen.queryByText("추천 대여소")).not.toBeInTheDocument();
 });

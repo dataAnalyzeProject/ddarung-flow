@@ -15,6 +15,7 @@ import { AsyncState } from "../shared/ConsumerSurfaces.jsx";
 import { ConsumerContainer, ConsumerR2Theme } from "../shared/ConsumerR2Layout.jsx";
 import ConsumerRouteMap from "./ConsumerRouteMap.jsx";
 import RecheckOptInDialog from "../support/RecheckOptInDialog.jsx";
+import walkIllustration from "../../../assets/consumer-r2/main/cr22-main-walk-v1.webp";
 import "./main.css";
 import "../support/support.css";
 
@@ -168,7 +169,7 @@ function SearchWorkspace({ authState, input, onChange, onOpenPlanner, onSearch, 
         <div className="cr293-search__step" role="group" aria-labelledby="cr293-step-travel-label">
           <p className="cr293-search__step-label" id="cr293-step-travel-label"><span className="cr293-step-number">3</span><span>대여소까지<br />어떻게 이동하나요?</span></p>
           <div className="cr293-options cr293-options--travel">
-            <OptionCard icon={<ConsumerIcon name="walk" />} title="도보" selected={input.travelMode === "WALK"} onSelect={() => onChange({ travelMode: "WALK" })} />
+            <OptionCard icon={<img className="cr293-walk-illustration" src={walkIllustration} alt="" aria-hidden="true" width="256" height="256" />} title="도보" selected={input.travelMode === "WALK"} onSelect={() => onChange({ travelMode: "WALK" })} />
             <OptionCard icon={<ConsumerIcon name="transit" />} title="대중교통" selected={input.travelMode === "PUBLIC_TRANSIT"} onSelect={() => onChange({ travelMode: "PUBLIC_TRANSIT" })} />
           </div>
           <p className="cr293-search__step-help"><ConsumerIcon name="info" size={16} /> 이동 수단에 따라 예상 이동시간이 달라져요.</p>
