@@ -283,6 +283,10 @@ test("result renders backend segments, zero values, pathPoints and evidence gaps
   expect(screen.queryByText(/근거 ID/)).not.toBeInTheDocument();
   expect(screen.queryByText(/백엔드 제공 구간/)).not.toBeInTheDocument();
   expect(screen.queryByText("EVIDENCE_ONLY")).not.toBeInTheDocument();
+  // RENT (instant, stationary) and VISIT (dwell, no travel) never have a real distance —
+  // showing "확인되지 않음" there reads as a data failure instead of "not applicable".
+  expect(screen.queryByText(/거리 확인되지 않음/)).not.toBeInTheDocument();
+  expect(screen.getByText("시간 30분")).toBeInTheDocument();
 });
 
 test("result preserves factual backend segments when the unified plan is unavailable", () => {

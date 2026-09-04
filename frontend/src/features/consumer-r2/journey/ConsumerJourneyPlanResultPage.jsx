@@ -169,9 +169,14 @@ function Timeline({ intent, plan }) {
     <h2 id="timeline-title">시간순 일정</h2>
     {plan.segments?.length ? <ol>{plan.segments.map((segment) => {
       const [label, code, icon] = SEGMENT_COPY[segment.type] || [segment.type, segment.type, "info"];
+      // RENT is an instant, stationary action (no travel), so duration/distance never apply — its
+      // own rental-facts row already carries the meaningful data. VISIT has a real dwell time but
+      // never a distance. Only ACCESS/RIDE are actual movement, where both apply.
+      const showTime = segment.type !== "RENT";
+      const showDistance = segment.type === "ACCESS" || segment.type === "RIDE";
       return <li className={`is-${String(segment.type).toLowerCase()}`} key={segment.segmentId}>
         <div className="cr22-journey__time"><strong>{formatTime(segment.startAt)}</strong>{segment.endAt ? <span>– {formatTime(segment.endAt)}</span> : null}<StatusBadge tone={segment.type === "VISIT" ? "premium" : segment.type === "ACCESS" ? "info" : "positive"}>{code}</StatusBadge></div>
-        <article><span className="cr22-journey__segment-icon" aria-hidden="true"><ConsumerIcon name={icon} /></span><div><h3>{segmentTitle(segment, plan.evidence, intent)}</h3><p>{label}</p><div className="cr22-journey__facts"><span>시간 {formatDuration(segment.durationSeconds ?? (hasValue(segment.stayMinutes) ? Number(segment.stayMinutes) * 60 : null))}</span><span>거리 {formatDistance(segment.distanceMeters)}</span>{segment.travelMode ? <span>이동 {segment.travelMode}</span> : null}</div>{segment.type === "RENT" ? <div className="cr22-journey__rental-facts"><span>필요 {present(segment.rentalFacts?.requiredBikeCount, (value) => `${value}대`)}</span><span>현재 {present(segment.rentalFacts?.availableBikeCount, (value) => `${value}대`)}</span><span>가능성 {formatProbability(segment.rentalFacts?.rentalProbability)}</span></div> : null}</div></article>
+        <article><span className="cr22-journey__segment-icon" aria-hidden="true"><ConsumerIcon name={icon} /></span><div><h3>{segmentTitle(segment, plan.evidence, intent)}</h3><p>{label}</p>{showTime || showDistance ? <div className="cr22-journey__facts">{showTime ? <span>시간 {formatDuration(segment.durationSeconds ?? (hasValue(segment.stayMinutes) ? Number(segment.stayMinutes) * 60 : null))}</span> : null}{showDistance ? <span>거리 {formatDistance(segment.distanceMeters)}</span> : null}{segment.travelMode ? <span>이동 {segment.travelMode}</span> : null}</div> : null}{segment.type === "RENT" ? <div className="cr22-journey__rental-facts"><span>필요 {present(segment.rentalFacts?.requiredBikeCount, (value) => `${value}대`)}</span><span>현재 {present(segment.rentalFacts?.availableBikeCount, (value) => `${value}대`)}</span><span>가능성 {formatProbability(segment.rentalFacts?.rentalProbability)}</span></div> : null}</div></article>
       </li>;
     })}</ol> : <AsyncState state="empty" title="표시할 일정 구간이 없습니다" description="백엔드가 제공한 구간이 없어 시간이나 경로를 만들지 않았습니다." />}
   </section>;
