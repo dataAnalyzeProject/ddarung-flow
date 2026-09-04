@@ -1,5 +1,4 @@
 .cr22-journey {
-  min-height: 100vh;
   background: linear-gradient(180deg, #ffffff 0, #fbfdff 42rem, #f6f9fd 100%);
 }
 
@@ -977,3 +976,63 @@ button[aria-pressed="true"] .cr22-journey__radio {
 .cr22-journey__conflict { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
 .cr22-journey__conflict p { margin: 0; }
 .cr22-journey__conflict .cr22-button { flex-shrink: 0; }
+
+/* Viewport fit (CONSUMER-R2-FIT-01).
+
+   The planner's chrome - page title, stepper, card padding, bottom padding -
+   was fixed in rem, so a 1366x630 laptop got the same spacing as a tall
+   desktop and lost the submit button below the fold. Size the chrome from
+   viewport height instead; the prompt box keeps a usable minimum.
+
+   These match the specificity of the .cr22-journey--planner overrides above,
+   which is why they are scoped the same way rather than on the bare class. */
+.cr22-journey--planner .cr22-journey__content {
+  padding-block: clamp(0.6rem, 2vh, 1.25rem) clamp(0.6rem, 2vh, 2rem);
+}
+
+.cr22-journey--planner .cr22-journey__page-title {
+  margin-bottom: clamp(0.5rem, 1.6vh, 1rem);
+}
+
+.cr22-journey--planner .cr22-journey__stepper {
+  padding: clamp(0.45rem, 1.4vh, 0.8rem) 1.25rem;
+  margin-bottom: clamp(0.5rem, 1.6vh, 1rem);
+}
+
+.cr22-journey--planner .cr22-journey__input-card {
+  padding: clamp(0.75rem, 2.2vh, 1.25rem) 1.5rem;
+}
+
+.cr22-journey--planner .cr22-journey__prompt {
+  margin-top: clamp(0.4rem, 1.2vh, 0.75rem);
+}
+
+.cr22-journey--planner .cr22-journey__prompt textarea {
+  min-height: clamp(4.5rem, 14vh, 8rem);
+}
+
+.cr22-journey--planner .cr22-journey__input-actions {
+  margin-top: clamp(0.45rem, 1.4vh, 0.85rem);
+  padding-top: clamp(0.45rem, 1.4vh, 0.85rem);
+}
+
+/* The result page keeps the bare-class chrome, so it is tuned here. */
+.cr22-journey__content {
+  padding-block: clamp(0.75rem, 2.6vh, 2.75rem) clamp(0.75rem, 2.4vh, 4rem);
+}
+
+.cr22-journey__page-title,
+.cr22-journey__result-title {
+  margin-bottom: clamp(0.6rem, 1.9vh, 1.5rem);
+}
+
+.cr22-journey__page-title h1,
+.cr22-journey__result-title h1 {
+  margin: clamp(0.15rem, 0.6vh, 0.45rem) 0;
+  font-size: clamp(1.3rem, 3.6vh, 2.35rem);
+}
+
+.cr22-journey__stepper {
+  margin: 0 0 clamp(0.6rem, 1.9vh, 1.5rem);
+  padding: clamp(0.55rem, 1.7vh, 1.15rem) 1.5rem;
+}

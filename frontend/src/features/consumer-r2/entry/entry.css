@@ -1,5 +1,4 @@
 .cr22-entry {
-  min-height: 100vh;
   overflow-x: hidden;
 }
 
@@ -16,7 +15,7 @@
 }
 
 .cr22-opening__main {
-  min-height: calc(100vh - 5rem);
+  min-height: 100%;
   display: grid;
   align-items: center;
   background: linear-gradient(112deg, #ffffff 0 43%, #f2f9fb 43% 100%);
@@ -134,7 +133,7 @@
 }
 
 .cr22-login__main {
-  min-height: calc(100vh - 5rem);
+  min-height: 100%;
   padding-top: clamp(2rem, 5vh, 4.5rem);
   background: #f7fafc;
 }
@@ -625,4 +624,42 @@
   .cr22-login__spinner {
     animation: none;
   }
+}
+
+/* Viewport fit (CONSUMER-R2-FIT-01).
+
+   The entry screens were sized off viewport width, so on a wide but short
+   laptop display the headline, the panel padding and the decorative photo band
+   were all at their largest at exactly the moment there was least room. Size
+   them from the viewport height instead. The band is decoration, so it gives
+   up the most. */
+.cr22-login__main,
+.cr22-opening__main {
+  padding-top: clamp(1rem, 3.5vh, 4.5rem);
+  padding-bottom: clamp(0.75rem, 2vh, 2rem);
+}
+
+.cr22-login__intro h1 {
+  font-size: clamp(1.5rem, 4.6vh, 3.25rem);
+}
+
+.cr22-login__layout {
+  margin: clamp(0.75rem, 2.4vh, 3rem) auto clamp(1rem, 3vh, 4.5rem);
+}
+
+.cr22-login__panel {
+  padding: clamp(0.9rem, 2.6vh, 2.5rem);
+}
+
+.cr22-login__mobility-strip {
+  height: clamp(5rem, 14vh, 17rem);
+}
+
+.cr22-opening__copy h1 {
+  font-size: clamp(1.5rem, 4.6vh, 3.25rem);
+}
+
+.cr22-opening__visual > img {
+  max-height: clamp(9rem, 34vh, 26rem);
+  object-fit: cover;
 }

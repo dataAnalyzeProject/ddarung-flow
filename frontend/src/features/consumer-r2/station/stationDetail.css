@@ -1,4 +1,4 @@
-.cr22-station { min-height: 100vh; background: #f7f9fc; color: #162338; }
+.cr22-station { background: #f7f9fc; color: #162338; }
 .cr22-station__content { padding-top: 18px; padding-bottom: 56px; }
 .cr22-station__back { display: inline-flex; min-height: 44px; gap: 7px; align-items: center; border: 0; background: transparent; color: #58687d; font-size: 14px; font-weight: 700; cursor: pointer; }
 .cr22-station__back:hover { color: #183552; }
@@ -52,3 +52,80 @@
 .cr22-station__ride-cta { display: flex; justify-content: space-between; gap: 24px; align-items: center; margin-top: 20px; border-radius: 16px; padding: 20px 26px; background: #103b59; color: #fff; }.cr22-station__ride-cta strong, .cr22-station__ride-cta span { display: block; }.cr22-station__ride-cta strong { font-size: 19px; }.cr22-station__ride-cta span { margin-top: 8px; color: #c7d8e7; font-size: 14px; }
 @media (max-width: 860px) { .cr22-station__overview, .cr22-station__details-grid { grid-template-columns: 1fr; }.cr22-station__map { min-height: 220px; }.cr22-station__inventory { min-height: 210px; }.cr22-station__details-grid { gap: 16px; }.cr22-station__side-panels { gap: 16px; } }
 @media (max-width: 580px) { .cr22-station__content { padding-top: 20px; padding-bottom: 36px; }.cr22-station__hero, .cr22-station__ride-cta { align-items: flex-start; flex-direction: column; }.cr22-station__hero { padding: 24px 0 20px; }.cr22-station__inventory { flex-direction: column; padding: 28px; }.cr22-station__inventory-meta { align-self: auto; }.cr22-station__history-notice { align-items: flex-start; padding: 13px; font-size: 13px; }.cr22-station__heatmap { grid-template-columns: 24px repeat(9, minmax(0, 1fr)); gap: 3px; }.cr22-station__hour, .cr22-station__weekday { font-size: 9px; }.cr22-station__ride-cta { padding: 24px; }.cr22-station__ride-cta .cr22-button { width: 100%; justify-content: center; } }
+
+/* Viewport fit (CONSUMER-R2-FIT-01).
+
+   The station identity, the live inventory, the map and the "ride from here"
+   call to action are what this page exists to answer, so they stay on screen.
+   The supporting panels below them - history heatmap, metrics, nearby list -
+   scroll in their own region. Chrome sizes track the viewport height; the
+   inventory count and map were sized from viewport width, which kept them at
+   their largest on a wide, short laptop screen. */
+.cr22-station__content {
+  padding-top: clamp(6px, 1.4vh, 18px);
+  padding-bottom: clamp(8px, 1.6vh, 20px);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.cr22-station__back,
+.cr22-station__hero,
+.cr22-station__overview,
+.cr22-station__history-notice,
+.cr22-station__ride-cta {
+  flex: 0 0 auto;
+}
+
+.cr22-station__details-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  align-items: start;
+}
+
+.cr22-station__hero {
+  padding: clamp(6px, 1.4vh, 20px) 0 clamp(6px, 1.2vh, 18px);
+}
+
+.cr22-station__identity p {
+  margin-bottom: clamp(3px, 0.7vh, 8px);
+}
+
+.cr22-station__identity h1 {
+  font-size: clamp(20px, 3.2vh, 36px);
+}
+
+.cr22-station__identity span {
+  margin-top: clamp(4px, 0.9vh, 10px);
+}
+
+.cr22-station__inventory {
+  min-height: clamp(120px, 24vh, 196px);
+  padding: clamp(12px, 2.4vh, 26px) clamp(16px, 2vw, 30px);
+}
+
+.cr22-station__inventory strong {
+  margin-top: clamp(4px, 1vh, 10px);
+  font-size: clamp(28px, 6vh, 58px);
+}
+
+.cr22-station__map,
+.cr22-station__map-fallback {
+  min-height: clamp(120px, 24vh, 196px);
+}
+
+.cr22-station__history-notice {
+  margin: clamp(6px, 1.2vh, 16px) 0;
+  padding: clamp(7px, 1.3vh, 11px) 16px;
+}
+
+.cr22-station__ride-cta {
+  margin-top: clamp(8px, 1.6vh, 20px);
+  padding: clamp(10px, 1.9vh, 20px) 26px;
+}
+
+.cr22-station__ride-cta span {
+  margin-top: clamp(2px, 0.6vh, 8px);
+}

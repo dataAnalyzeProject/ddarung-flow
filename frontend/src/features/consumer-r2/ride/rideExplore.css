@@ -1,5 +1,4 @@
 .cr22-ride {
-  min-height: 100vh;
   background: #f8fafc;
   color: #142640;
 }
@@ -229,4 +228,80 @@
   .cr22-ride__route-summary dl { grid-template-columns: 1fr 1fr; }
   .cr22-ride__route-summary dl > div { padding: 0 10px; }
   .cr22-ride__actions { grid-template-columns: 1fr; }
+}
+
+/* Viewport fit (CONSUMER-R2-FIT-01).
+
+   Ride Explore is a two-pane workspace: a list of nearby places beside the
+   route map. Both belong on screen at once, so the workspace takes whatever
+   height is left below the theme filters and the place list scrolls inside its
+   own pane. The map is sized from the height it actually has rather than from
+   the viewport width - 42vw made the map taller than the whole screen on a
+   wide, short laptop display. */
+.cr22-ride__content {
+  padding-bottom: clamp(0.75rem, 1.6vh, 1.25rem);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.cr22-ride__back,
+.cr22-ride__heading,
+.cr22-ride__station,
+.cr22-ride__theme-scroll {
+  flex: 0 0 auto;
+}
+
+.cr22-ride__heading {
+  margin: clamp(0.25rem, 1vh, 10px) 0 clamp(0.35rem, 1.2vh, 12px);
+}
+
+.cr22-ride__heading h1 {
+  font-size: clamp(1.25rem, 3vh, 1.75rem);
+}
+
+.cr22-ride__workspace {
+  flex: 1 1 auto;
+  min-height: 0;
+  /* Was align-items: start, which sized both panes to their content. With the
+     workspace now bounded by the viewport, the panes have to fill that height
+     so the list can scroll inside itself instead of past the bottom edge. */
+  align-items: stretch;
+}
+
+.cr22-ride__places {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cr22-ride__places > ul {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.cr22-ride__truth {
+  flex: 0 0 auto;
+}
+
+.cr22-ride__route {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cr22-ride__map {
+  flex: 1 1 auto;
+  min-height: clamp(10rem, 26vh, 470px);
+}
+
+.cr22-ride__route-prompt,
+.cr22-ride__route-summary {
+  flex: 0 0 auto;
+}
+
+.cr22-ride__route-prompt {
+  padding: clamp(0.75rem, 2.2vh, 26px);
 }

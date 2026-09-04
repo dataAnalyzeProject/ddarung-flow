@@ -17,6 +17,38 @@
   text-rendering: optimizeLegibility;
 }
 
+/* App shell.
+
+   Every consumer page root is a single .cr22-scope whose direct children are
+   the shared header and exactly one <main>. Pinning the scope to the viewport
+   height makes the document itself unscrollable: the page is always exactly
+   one screen tall, and anything longer scrolls inside <main> instead of
+   pushing the header off the top.
+
+   This replaces the previous approach of shrinking min-heights at stepped
+   max-height breakpoints. That could not work: min-height is a floor, not a
+   ceiling, so a row whose content is taller than the floor ignored it. */
+.cr22-scope {
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.cr22-scope > .cr22-header {
+  flex: 0 0 auto;
+}
+
+.cr22-scope > main {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
 .cr22-scope ::selection {
   background: var(--cr22-color-blue-soft);
   color: var(--cr22-color-ink);
