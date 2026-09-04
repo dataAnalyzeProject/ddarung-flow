@@ -12,6 +12,11 @@ const DEPARTURE_LEAD_MINUTES = 10;
 const DEPARTURE_STEP_MS = 5 * 60_000;
 const QUICK_DEPARTURES = [["지금 출발", DEPARTURE_LEAD_MINUTES], ["30분 뒤", 30], ["1시간 뒤", 60]];
 const CONFLICT_FIELDS = ["origin", "destination", "departureAt", "maxJourneyMinutes", "requiredBikeCount"];
+const THEME_KEYWORDS = [
+  ["PARK", ["공원", "숲", "산책"]], ["RIVER", ["한강", "하천", "강변", "수변"]], ["CAFE", ["카페", "커피", "디저트"]],
+  ["ATTRACTION", ["명소", "관광", "구경", "전망"]], ["CULTURE", ["문화", "전시", "박물관", "미술관", "공연"]],
+  ["FOOD", ["맛집", "음식", "식사", "저녁", "점심"]],
+];
 const THEME_OPTIONS = [["PARK", "공원"], ["RIVER", "한강·하천"], ["CAFE", "카페"], ["ATTRACTION", "명소"], ["CULTURE", "문화"], ["FOOD", "음식"]];
 const PREFERENCE_OPTIONS = [["stability", "안정성"], ["lowSlope", "완만한 경사"], ["bikeLane", "자전거 도로"], ["scenery", "풍경"], ["culture", "문화 체험"], ["cafe", "카페 방문"], ["avoidCrowds", "한적한 곳"]];
 const FIELD_LABELS = { origin: "출발 장소", destination: "목적 장소", departureAt: "출발 시각", startAt: "출발 시각", maxJourneyMinutes: "이용 시간", totalMinutes: "이용 시간", requiredBikeCount: "자전거 수", preferences: "선호 조건", constraints: "테마" };
@@ -73,7 +78,7 @@ function readDraft() {
   } catch { return {}; }
 }
 
-function confirmationValues(decision, context) {
+function confirmationValues(decision, context, text) {
   const intent = decision.normalizedIntent || {};
   const ai = intent.aiIntent || {};
   const conflicts = new Set(intent.contextConflicts || []);
@@ -82,8 +87,10 @@ function confirmationValues(decision, context) {
   const origin = conflicts.has("origin") ? null : verifiedPlace(intent.origin) || context.origin;
   const destination = conflicts.has("destination") ? null : verifiedPlace(intent.destination) || context.destination;
   const preferences = { ...(ai.preferences || {}), ...(context.preferences || {}), ...(intent.preferences || {}) };
-  const proposedThemes = intent.constraints?.themes ?? context.constraints?.themes ?? ai.hardConstraints?.themes
-    ?? [["CAFE", "cafe"], ["CULTURE", "culture"]].filter(([, preference]) => Number(preferences[preference]) > 3).map(([theme]) => theme);
+  // An empty carried theme list means nothing was chosen yet, so it must not win over the description.
+  const carriedThemes = [intent.constraints?.themes, context.constraints?.themes, ai.hardConstraints?.themes]
+    .find((themes) => Array.isArray(themes) && themes.length);
+  const proposedThemes = carriedThemes ?? describedThemes(text, preferences);
   return {
     origin, destination,
     // AI place references are search queries, even if the response contains IDs or coordinates.
@@ -95,6 +102,19 @@ function confirmationValues(decision, context) {
     preferences, avoid: intent.avoid || context.avoid || [],
     constraints: { ...(context.constraints || {}), ...(intent.constraints || {}), themes: Array.isArray(proposedThemes) ? proposedThemes.filter((theme) => THEME_OPTIONS.some(([value]) => value === theme)) : [] },
   };
+}
+
+function describedThemes(text, preferences) {
+  const description = String(text || "");
+  const fromDescription = THEME_KEYWORDS
+    .filter(([, words]) => words.some((word) => description.includes(word)))
+    .map(([theme]) => theme);
+  // A flat preference sheet (every score 3) says nothing, so only a strong score counts.
+  const fromPreferences = [["CAFE", "cafe"], ["CULTURE", "culture"]]
+    .filter(([, preference]) => Number(preferences[preference]) > 3)
+    .map(([theme]) => theme);
+  // The backend plans one stop per theme and accepts at most three.
+  return [...new Set([...fromDescription, ...fromPreferences])].slice(0, 3);
 }
 
 function conflictPatch(values, fields) {
@@ -237,12 +257,12 @@ export default function ConsumerJourneyPlannerPage({ adapter = consumerJourneyAd
       const next = await adapter.planNaturalLanguage(text, compileContext);
       if (next?.status === "UNAVAILABLE") throw unavailableError(next);
       if (next?.status !== "CLARIFICATION_REQUIRED" || !next.decisionId || !next.normalizedIntent) throw Object.assign(new Error("Invalid AI draft"), { code: "AI_OUTPUT_SCHEMA_INVALID" });
-      const drafted = confirmationValues(next, compileContext);
+      const drafted = confirmationValues(next, compileContext, text);
       const { patch, picked } = await autoSelectPlaces(adapter, drafted);
       const confirmed = { ...drafted, ...patch };
       const conflicts = (next.normalizedIntent.contextConflicts || []).filter((field) => CONFLICT_FIELDS.includes(field));
       const carried = { ...next, normalizedIntent: { ...next.normalizedIntent, contextConflicts: [] } };
-      setConflictFallback(conflicts.length ? { description: conflictPatch(confirmed, conflicts), descriptionPicked: picked, context: conflictPatch(confirmationValues(carried, compileContext), conflicts) } : null);
+      setConflictFallback(conflicts.length ? { description: conflictPatch(confirmed, conflicts), descriptionPicked: picked, context: conflictPatch(confirmationValues(carried, compileContext, text), conflicts) } : null);
       setConflictChoice("DESCRIPTION"); setAutoPicked(picked);
       setDecision(next); setValues(confirmed); setStage("CONFIRM");
     } catch (error) { reportError(error); setStage("INPUT"); }

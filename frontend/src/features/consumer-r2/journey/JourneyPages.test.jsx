@@ -111,7 +111,7 @@ test("one confirmation selects both provider places and submits every structured
   const onResult = jest.fn();
   const onNavigate = jest.fn();
   render(<ConsumerJourneyPlannerPage adapter={adapter} onResult={onResult} onNavigate={onNavigate} />);
-  await compile();
+  await compile("여유롭게 달리고 싶어요");
   expect(screen.getByLabelText(/라이딩 이용 시간/)).toHaveValue(90);
   expect(screen.getByLabelText(/필요한 자전거 수/)).toHaveValue(2);
   expect(screen.getByLabelText("카페")).toBeChecked();
@@ -293,6 +293,17 @@ test("back and an explicit login preserve the draft across remount, while reset 
   expect(screen.getByRole("textbox", { name: "라이딩 계획 설명" })).toHaveValue("");
   expect(window.sessionStorage.getItem("consumer-journey-planner-draft")).toBeNull();
 });
+test("a server-rebuilt schedule is labelled and its rationale is readable", () => {
+  const fallback = decision("PARTIAL");
+  fallback.warnings = ["AI_SCHEDULE_FALLBACK", "AI_SCHEDULE_STAGE_VALIDATE_SELECTION"];
+  fallback.unifiedPlan.rationale = "STRUCTURED_SERVER_SELECTION";
+  render(<ConsumerJourneyPlanResultPage initialDecision={fallback} />);
+  expect(screen.getByText(/AI가 제안한 일정이 실제 근거와 맞지 않아/)).toBeInTheDocument();
+  expect(screen.getByText("확인된 대여소·장소·경로 근거만으로 서버가 구성한 일정입니다.")).toBeInTheDocument();
+  expect(screen.queryByText("STRUCTURED_SERVER_SELECTION")).not.toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "추천 이유" })).toBeInTheDocument();
+});
+
 test("result renders backend segments, zero values, pathPoints and evidence gaps without invented fallback", () => {
   render(<ConsumerJourneyPlanResultPage initialDecision={decision("PARTIAL")} />);
   expect(screen.getByRole("heading", { name: /성수 → 서울숲/ })).toBeInTheDocument();
@@ -456,7 +467,7 @@ test("stale optional timing and invalid optional numbers do not block the initia
 test("neutral AI weights do not add themes and preference scores are a read-only summary", async () => {
   const adapter = plannerAdapter(draftDecision({ preferences: { cafe: 3, culture: 3, scenery: 5 } }, verifiedContext));
   render(<ConsumerJourneyPlannerPage adapter={adapter} />);
-  await compile();
+  await compile("여유롭게 달리고 싶어요");
   expect(screen.getByLabelText("카페")).not.toBeChecked();
   expect(screen.getByLabelText("문화")).not.toBeChecked();
   expect(screen.getByLabelText("공원")).not.toBeChecked();
@@ -472,13 +483,32 @@ test("neutral AI weights do not add themes and preference scores are a read-only
 test("deselecting inferred lowercase AI interests sends an explicitly empty theme list", async () => {
   const adapter = plannerAdapter(draftDecision({ preferences: { cafe: 5, culture: 4 } }, verifiedContext));
   render(<ConsumerJourneyPlannerPage adapter={adapter} />);
-  await compile();
+  await compile("여유롭게 달리고 싶어요");
   expect(screen.getByLabelText("카페")).toBeChecked();
   expect(screen.getByLabelText("문화")).toBeChecked();
   fireEvent.click(screen.getByLabelText("카페"));
   fireEvent.click(screen.getByLabelText("문화"));
   submitConfirmation();
   await waitFor(() => expect(adapter.answerClarification).toHaveBeenCalledWith(expect.any(Object), expect.objectContaining({ constraints: { themes: [] } })));
+});
+
+test("themes come from what the rider described, not only from strong preference scores", async () => {
+  const adapter = plannerAdapter(draftDecision({ preferences: { cafe: 3, culture: 3, scenery: 3 } }, verifiedContext));
+  render(<ConsumerJourneyPlannerPage adapter={adapter} />);
+  await compile("성수에서 한강 쪽으로 달리다가 카페도 들르고 싶어요");
+  expect(screen.getByLabelText("카페")).toBeChecked();
+  expect(screen.getByLabelText("한강·하천")).toBeChecked();
+  expect(screen.getByLabelText("문화")).not.toBeChecked();
+  submitConfirmation();
+  await waitFor(() => expect(adapter.answerClarification).toHaveBeenCalledWith(expect.any(Object), expect.objectContaining({ constraints: { themes: ["RIVER", "CAFE"] } })));
+});
+
+test("an empty carried theme list does not outrank the description", async () => {
+  const draft = draftDecision({ preferences: { cafe: 3 } }, { ...verifiedContext, constraints: { themes: [] } });
+  const adapter = plannerAdapter(draft);
+  render(<ConsumerJourneyPlannerPage adapter={adapter} />);
+  await compile("카페 들르는 라이딩");
+  expect(screen.getByLabelText("카페")).toBeChecked();
 });
 
 test.each([["AI_PROVIDER_TIMEOUT", "응답 시간이 초과"], ["AI_OUTPUT_SCHEMA_INVALID", "AI 응답 형식"], ["AI_PROVIDER_UNAVAILABLE", "AI 서비스에 연결"], ["AI_TOOL_VALUE_MISMATCH", "실제 근거와 일치하지 않아"]])("AI failure %s shows distinct copy before explicitly opening retained facts", async (code, message) => {
