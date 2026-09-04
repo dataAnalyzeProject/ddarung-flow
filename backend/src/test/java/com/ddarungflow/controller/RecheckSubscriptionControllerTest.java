@@ -20,6 +20,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
@@ -71,7 +72,7 @@ class RecheckSubscriptionControllerTest {
                 .andExpect(jsonPath("$.kind").value("SEARCH_RECHECK"))
                 .andExpect(jsonPath("$.status").value("ACTIVE"))
                 .andExpect(jsonPath("$.notifyAt").value(
-                        departureAt.minusMinutes(15).withOffsetSameInstant(ZoneOffset.UTC).toString()))
+                        apiTimestamp(departureAt.minusMinutes(15).withOffsetSameInstant(ZoneOffset.UTC))))
                 .andReturn().getResponse().getContentAsString();
         JsonNode first = objectMapper.readTree(firstBody);
 
@@ -140,4 +141,13 @@ class RecheckSubscriptionControllerTest {
         return Users.builder().provider("google").providerUserId(providerUserId)
                 .displayName(providerUserId).role(UserRole.USER).build();
     }
+
+    /**
+     * How the API renders an OffsetDateTime. OffsetDateTime.toString() drops ":00" when the seconds
+     * are zero, so comparing it to the response directly fails whenever the test starts on second 00.
+     */
+    private String apiTimestamp(java.time.OffsetDateTime value) {
+        return value.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+    }
+
 }
