@@ -148,15 +148,12 @@
   background: #fff;
 }
 
-fieldset.cr293-search__step {
-  margin: 0;
-}
-
-.cr293-search__step > legend,
+.cr293-search__step-label,
 .cr293-place-picker > label {
   display: flex;
   align-items: center;
   gap: 0.55rem;
+  margin: 0;
   padding: 0;
   color: var(--cr22-color-ink);
   font-size: 0.9rem;
@@ -278,19 +275,28 @@ fieldset.cr293-search__step {
 .cr293-bike-count {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 0.35rem;
+  gap: 0.4rem;
   margin-top: 1rem;
 }
 
 .cr293-bike-count button {
-  min-height: 4.5rem;
-  padding: 0.3rem;
-  border: 1px solid var(--cr22-color-line-strong);
+  display: grid;
+  aspect-ratio: 1;
+  min-height: 3rem;
+  place-items: center;
+  padding: 0;
+  border: 1.5px solid var(--cr22-color-line);
   border-radius: 0.65rem;
-  background: #fff;
+  background: var(--cr22-color-surface);
   color: var(--cr22-color-copy);
+  font-size: 0.85rem;
   font-weight: 800;
   cursor: pointer;
+  transition: border-color 160ms ease-out, background-color 160ms ease-out, box-shadow 160ms ease-out;
+}
+
+.cr293-bike-count button:hover {
+  border-color: var(--cr22-color-line-strong);
 }
 
 .cr293-bike-count button[aria-pressed="true"] {
@@ -910,8 +916,18 @@ fieldset.cr293-search__step {
     height: 12.5rem;
   }
 
+  .cr293-hero > div {
+    width: min(34rem, 46vw);
+  }
+
+  .cr293-hero h1 {
+    font-size: clamp(1.5rem, 2.4vw, 2.1rem);
+    line-height: 1.2;
+  }
+
   .cr293-hero p {
-    margin-top: 0.5rem;
+    margin-top: 0.4rem;
+    font-size: 0.95rem;
   }
 
   .cr293-container--initial {
@@ -938,6 +954,32 @@ fieldset.cr293-search__step {
   .cr293-search__step {
     min-height: 9rem;
     padding: 0.85rem;
+  }
+}
+
+/* Even shorter viewports (browser chrome eating into a laptop's short
+   screen): the hero must not force a scroll that only clips its own
+   text/image via overflow: hidden. */
+@media (min-width: 64rem) and (max-height: 38rem) {
+  .cr293-hero {
+    height: 9.5rem;
+  }
+
+  .cr293-hero h1 {
+    font-size: 1.4rem;
+  }
+
+  .cr293-hero p {
+    display: none;
+  }
+
+  .cr293-container--initial {
+    margin-top: -0.75rem;
+    padding-bottom: 2rem;
+  }
+
+  .cr293-search__step {
+    min-height: 8rem;
   }
 }
 

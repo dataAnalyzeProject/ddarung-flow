@@ -162,19 +162,19 @@ function SearchWorkspace({ authState, input, onChange, onOpenPlanner, onSearch, 
           <span className="cr293-step-number">2</span>
           <PlacePicker kind="destination" label="대여 희망 지역" place={places.destination} query={input.destination} setQuery={(destination) => onChange({ destination })} onSelect={(destination) => onChange({ destination: destination?.name ?? input.destination, destinationPlace: destination })} search={searchPlaces} />
         </div>
-        <fieldset className="cr293-search__step">
-          <legend><span className="cr293-step-number">3</span> 이동 방법</legend>
+        <div className="cr293-search__step" role="group" aria-labelledby="cr293-step-travel-label">
+          <p className="cr293-search__step-label" id="cr293-step-travel-label"><span className="cr293-step-number">3</span> 이동 방법</p>
           <div className="cr293-options cr293-options--travel">
-            <OptionCard icon={<ConsumerIcon name="ride" />} title="도보" description="걷는 경로" selected={input.travelMode === "WALK"} onSelect={() => onChange({ travelMode: "WALK" })} />
+            <OptionCard icon={<ConsumerIcon name="walk" />} title="도보" description="걷는 경로" selected={input.travelMode === "WALK"} onSelect={() => onChange({ travelMode: "WALK" })} />
             <OptionCard icon={<ConsumerIcon name="transit" />} title="대중교통" description="버스·지하철 경로" selected={input.travelMode === "PUBLIC_TRANSIT"} onSelect={() => onChange({ travelMode: "PUBLIC_TRANSIT" })} />
           </div>
-        </fieldset>
-        <fieldset className="cr293-search__step">
-          <legend><span className="cr293-step-number">4</span> 필요한 자전거</legend>
+        </div>
+        <div className="cr293-search__step" role="group" aria-labelledby="cr293-step-bike-label">
+          <p className="cr293-search__step-label" id="cr293-step-bike-label"><span className="cr293-step-number">4</span> 필요한 자전거</p>
           <div className="cr293-bike-count">
             {[1, 2, 3, 4, 5].map((count) => <button key={count} type="button" aria-pressed={input.requiredBikeCount === count} onClick={() => onChange({ requiredBikeCount: count })}>{count}대</button>)}
           </div>
-        </fieldset>
+        </div>
       </div>
       <div className="cr293-search__actions">
         <ConsumerButton block size="lg" icon={<ConsumerIcon name="arrowRight" />} iconPosition="end" disabled={!ready || state === "LOADING" || authState === "loading" || authState === "error"} loading={state === "LOADING"} loadingLabel="도착 시점 후보를 찾는 중…" onClick={onSearch}>대여 가능성 비교</ConsumerButton>
