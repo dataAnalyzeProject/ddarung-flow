@@ -648,8 +648,61 @@ class JourneyPlanServiceTest {
                 new CountingReturnPort(), completeEvidence()).plan(10L, input);
 
         assertThat(decision.status()).isEqualTo(JourneyStatus.READY);
-        assertThat(decision.unifiedPlan().segments().getLast().stayMinutes()).isEqualTo(10);
-        assertThat(decision.unifiedPlan().segments().getLast().endAt()).isEqualTo(input.departureAt().plusMinutes(20));
+        // The 5-minute walk to the station is not riding time, so the whole 20-minute riding budget
+        // stays available for the ride and the stay: 5 min riding + 15 min at the cafe.
+        assertThat(decision.unifiedPlan().segments().getLast().stayMinutes()).isEqualTo(15);
+        assertThat(decision.unifiedPlan().segments().getLast().endAt()).isEqualTo(input.departureAt().plusMinutes(25));
+        assertThat(rideMinutes(decision)).isEqualTo(20);
+    }
+
+    @Test
+    void aLongWalkToTheStationDoesNotSpendTheRidingBudget() {
+        // TASK-328 staging repro: '성수 → 한강' only had rental candidates ~11 km from the origin, so the
+        // access walk (10661s) alone outran the 120-minute riding budget. Every stop was then priced
+        // out of the window, the server-built fallback found no stops, and the rider was handed an
+        // UNAVAILABLE decision even though real rental, POI and route evidence had been collected.
+        JourneyPlanService.Decision decision = longAccessService(disabledAi())
+                .plan(10L, unifiedInput(JourneyPlanService.RequestMode.FORM, null));
+
+        assertThat(decision.status()).isEqualTo(JourneyStatus.READY);
+        assertThat(decision.unifiedPlan().segments()).extracting(UnifiedJourneyPlan.Segment::type)
+                .containsExactly(UnifiedJourneyPlan.SegmentType.ACCESS, UnifiedJourneyPlan.SegmentType.RENT,
+                        UnifiedJourneyPlan.SegmentType.RIDE, UnifiedJourneyPlan.SegmentType.VISIT);
+        assertThat(rideMinutes(decision)).isEqualTo(35);
+        assertThat(decision.unifiedPlan().segments().getFirst().durationSeconds()).isEqualTo(10661);
+    }
+
+    @Test
+    void aRejectedAiScheduleStillFallsBackToARealScheduleAcrossALongAccessWalk() {
+        // The same staging case with AI scheduling on: the rejected AI selection must be rebuilt from
+        // real evidence into PARTIAL + AI_SCHEDULE_FALLBACK instead of collapsing to UNAVAILABLE.
+        JourneyPlanService.Decision decision = planAndConfirm(longAccessService(rejectedScheduleAi()),
+                unifiedInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE, "서울숲 카페 여정"));
+
+        assertServerBuiltSchedule(decision, "VALIDATE_SELECTION");
+        assertThat(decision.status()).isEqualTo(JourneyStatus.PARTIAL);
+        assertThat(decision.warnings()).doesNotContain("AI_TOOL_VALUE_MISMATCH", "JOURNEY_DURATION_EXCEEDED");
+        assertThat(decision.unifiedPlan().segments()).extracting(UnifiedJourneyPlan.Segment::type)
+                .contains(UnifiedJourneyPlan.SegmentType.VISIT);
+        assertThat(rideMinutes(decision)).isLessThanOrEqualTo(120);
+    }
+
+    @Test
+    void aRejectedAiScheduleStaysUnavailableWhenNoStopFitsTheRidingBudget() {
+        // The fallback is not allowed to invent a schedule: 4 riding minutes cannot cover the 5-minute
+        // ride to the only POI, let alone the 10-minute minimum stay, so UNAVAILABLE must survive.
+        JourneyPlanService.PlanInput initial = unifiedInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE, "서울숲 카페 여정");
+        initial = new JourneyPlanService.PlanInput(initial.requestMode(), initial.naturalLanguageText(), initial.origin(),
+                initial.destination(), initial.departureAt(), initial.maxJourneyMinutes(), initial.requiredBikeCount(),
+                initial.preferences(), initial.avoid(), null,
+                new JourneyPlanService.PlanConstraints(4, List.of("CAFE"), 1, "BIKE_ONLY"));
+
+        JourneyPlanService.Decision decision = planAndConfirm(longAccessService(rejectedScheduleAi()), initial);
+
+        assertThat(decision.status()).isEqualTo(JourneyStatus.UNAVAILABLE);
+        assertThat(decision.warnings()).contains("AI_TOOL_VALUE_MISMATCH").doesNotContain("AI_SCHEDULE_FALLBACK");
+        assertThat(decision.unifiedPlan().segments()).extracting(UnifiedJourneyPlan.Segment::type)
+                .doesNotContain(UnifiedJourneyPlan.SegmentType.VISIT);
     }
 
     @Test
@@ -961,6 +1014,48 @@ class JourneyPlanServiceTest {
         JourneyRentalPredictionPort rentalPort = request -> List.of(rentalWithAccess(request));
         return new JourneyPlanService(persistence, ai, returnPort, rentalPort, evidencePort,
                 new ObjectMapper().findAndRegisterModules());
+    }
+
+    private JourneyPlanService longAccessService(JourneyAiGateway ai) {
+        return new JourneyPlanService(new InMemoryPersistence(), ai, new CountingReturnPort(),
+                request -> List.of(rentalWithLongAccess(request)), completeEvidence(),
+                new ObjectMapper().findAndRegisterModules());
+    }
+
+    private JourneyAiGateway rejectedScheduleAi() {
+        return new JourneyAiGateway() {
+            @Override public IntentResult compileIntent(String input) { return new IntentResult(validIntent(), null); }
+            @Override public List<com.ddarungflow.journey.ai.ToolCallRequest> validateToolPlan(
+                    List<com.ddarungflow.journey.ai.ToolCallRequest> requests) { return requests; }
+            @Override public ScheduleResult selectSchedule(ConsumerAiEvidenceBundle evidence, ScheduleConstraints constraints) {
+                // Names the real rental candidate but a POI that is not in the evidence bundle, so the
+                // selection is rejected the way an unverifiable AI schedule is in production.
+                return new ScheduleResult(new EvidenceSelectionValidator.Selection(
+                        "rental:station-1", List.of(new EvidenceSelectionValidator.StopSelection("poi:station-1:unknown", 20)),
+                        List.of("route:rental:station-1->poi:station-1:unknown"), List.of("weather:station-1"),
+                        List.of("air-quality:station-1"), List.of(), List.of(), "근거 기반 카페 경유", List.of("EVIDENCE_ONLY")), null);
+            }
+        };
+    }
+
+    /** Access leg matching the staging repro: an 11.2 km, 10661-second walk to the only station. */
+    private JourneyRentalPredictionPort.RentalCandidate rentalWithLongAccess(
+            JourneyRentalPredictionPort.RentalPredictionRequest request) {
+        OffsetDateTime featureAsOf = request.departureAt().minusHours(1);
+        return new JourneyRentalPredictionPort.RentalCandidate(
+                "station-1", "이촌동 대여소", new BigDecimal("37.550"), new BigDecimal("127.050"),
+                8, "NORMAL", featureAsOf, new BigDecimal("0.81"), request.requiredBikeCount(), "HIGH",
+                11229, 10661, request.departureAt().plusSeconds(10661), request.departureAt().plusMinutes(210),
+                90L, featureAsOf, "model@1", featureAsOf.plusMinutes(5), "NORMAL", "NORMAL",
+                new JourneyRentalPredictionPort.RouteEvidence(11229, 10661, "WALK", List.of(
+                        new JourneyRentalPredictionPort.RoutePoint(request.originLatitude(), request.originLongitude()),
+                        new JourneyRentalPredictionPort.RoutePoint(new BigDecimal("37.550"), new BigDecimal("127.050")))));
+    }
+
+    /** Minutes the rider spends from the rental onward - the window the riding budget applies to. */
+    private long rideMinutes(JourneyPlanService.Decision decision) {
+        List<UnifiedJourneyPlan.Segment> segments = decision.unifiedPlan().segments();
+        return java.time.Duration.between(segments.getFirst().endAt(), segments.getLast().endAt()).toMinutes();
     }
 
     private JourneyPlanService.PlanInput unifiedInput(JourneyPlanService.RequestMode mode, String text) {

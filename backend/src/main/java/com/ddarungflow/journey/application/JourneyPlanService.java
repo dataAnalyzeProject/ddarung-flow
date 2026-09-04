@@ -363,7 +363,7 @@ public class JourneyPlanService {
                     "buildTimeline threw " + exception.getClass().getSimpleName() + ": " + exception.getMessage());
             throw exception;
         }
-        long elapsedSeconds = Duration.between(input.departureAt(), segments.getLast().endAt()).getSeconds();
+        long elapsedSeconds = rideSeconds(selected, segments);
         if (elapsedSeconds > constraints.availableMinutes() * 60L) {
             if (useAiSchedule) return invalidAiSchedule(input, candidates, coreCandidates, bundle, warnings, scheduleContext,
                     "DURATION_EXCEEDED",
@@ -466,7 +466,7 @@ public class JourneyPlanService {
                     context.routeData());
             List<UnifiedJourneyPlan.Segment> segments =
                     buildTimeline(input, selected, selectedCore, selection, context.routeData());
-            long elapsedSeconds = Duration.between(input.departureAt(), segments.getLast().endAt()).getSeconds();
+            long elapsedSeconds = rideSeconds(selected, segments);
             if (elapsedSeconds > context.constraints().availableMinutes() * 60L) return null;
             // Only record the fallback once every risky step above has succeeded, so a failed
             // attempt leaves the caller's warnings untouched for the unavailable path.
@@ -624,7 +624,9 @@ public class JourneyPlanService {
         List<EvidenceSelectionValidator.StopSelection> stops = new ArrayList<>();
         List<String> routeIds = new ArrayList<>();
         String current = rentalId;
-        int elapsedSeconds = selected.accessDurationSeconds() == null ? 0 : selected.accessDurationSeconds();
+        // The budget is the rider's requested riding time, so it is spent from the rental onward and
+        // never charged for the access leg that only brings the rider to the station.
+        int elapsedSeconds = 0;
         for (String poiId : pois.keySet()) {
             if (stops.size() >= constraints.stopCount()) break;
             String routeId = routeId(current, poiId);
@@ -708,6 +710,16 @@ public class JourneyPlanService {
             from = stop.poiId();
         }
         return List.copyOf(segments);
+    }
+
+    /**
+     * Seconds the rider actually spends on the bike leg, measured from the rental at the station to
+     * the end of the schedule. '라이딩 이용 시간' is the riding budget the rider asked for and the same
+     * budget the schedule selector is given, so the walk from the origin to the station must not be
+     * charged against it.
+     */
+    private long rideSeconds(JourneyCandidate selected, List<UnifiedJourneyPlan.Segment> segments) {
+        return Duration.between(selected.arrivalAt(), segments.getLast().endAt()).getSeconds();
     }
 
     private List<UnifiedJourneyPlan.Segment> accessAndRentSegments(
