@@ -62,7 +62,7 @@ const verifiedContext = { ...plannerContext, destination: place("destination-con
 
 function submitConfirmation() { fireEvent.click(screen.getByRole("button", { name: "확인하고 일정 만들기" })); }
 
-test("direct entry requires only a natural-language explanation and leaves unknown conditions empty", async () => {
+test("direct entry requires only a natural-language explanation and pre-fills just the departure time", async () => {
   const adapter = plannerAdapter();
   render(<ConsumerJourneyPlannerPage adapter={adapter} />);
   expect(screen.getAllByRole("textbox")).toHaveLength(1);
@@ -71,7 +71,7 @@ test("direct entry requires only a natural-language explanation and leaves unkno
   expect(screen.queryByLabelText(/라이딩 이용 시간/)).not.toBeInTheDocument();
   await compile();
   expect(adapter.planNaturalLanguage).toHaveBeenCalledWith("서울숲에서 여유롭게 달리고 싶어요", expect.objectContaining({ origin: null, destination: null, departureAt: "", maxJourneyMinutes: "", requiredBikeCount: "" }));
-  expect(screen.getByLabelText(/출발 희망 시각/)).toHaveValue("");
+  expect(new Date(screen.getByLabelText(/출발 희망 시각/).value).getTime()).toBeGreaterThan(Date.now());
   expect(screen.getByLabelText(/라이딩 이용 시간/)).toHaveValue(null);
   expect(screen.getByLabelText(/필요한 자전거 수/)).toHaveValue(null);
   expect(adapter.answerClarification).not.toHaveBeenCalled();
@@ -115,12 +115,9 @@ test("one confirmation selects both provider places and submits every structured
   expect(screen.getByLabelText(/라이딩 이용 시간/)).toHaveValue(90);
   expect(screen.getByLabelText(/필요한 자전거 수/)).toHaveValue(2);
   expect(screen.getByLabelText("카페")).toBeChecked();
-  submitConfirmation();
-  expect(screen.getByText("출발 장소를 검색 결과에서 선택해 주세요.")).toBeInTheDocument();
-  expect(screen.getByLabelText(/출발 장소/)).toHaveFocus();
-  expect(adapter.answerClarification).not.toHaveBeenCalled();
-  fireEvent.click(await screen.findByRole("button", { name: /성수역 출발 장소로 선택/ }));
-  fireEvent.click(await screen.findByRole("button", { name: /서울숲 공원 목적 장소로 선택/ }));
+  expect(screen.getByLabelText(/출발 장소/)).toHaveValue("성수역");
+  expect(screen.getByLabelText(/목적 장소/)).toHaveValue("서울숲 공원");
+  expect(screen.getByText(/설명 속 ‘성수’ → 성수역 자동 선택됨/)).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText(/출발 희망 시각/), { target: { value: "2030-09-03T10:00" } });
   fireEvent.click(screen.getByLabelText("공원"));
   submitConfirmation();
@@ -131,19 +128,60 @@ test("one confirmation selects both provider places and submits every structured
   expect(onResult).toHaveBeenCalledWith(expect.objectContaining({ status: "READY" }));
 });
 
-test("verified context wins over conflicting AI suggestions and remains editable", async () => {
+test("a conflicting description wins by default and the carried condition stays one click away", async () => {
   const draft = draftDecision({ origin: { displayName: "AI 출발지" }, totalMinutes: 30, requiredBikeCount: 5 }, verifiedContext);
   draft.normalizedIntent.contextConflicts = ["origin", "maxJourneyMinutes", "requiredBikeCount"];
+  const aiOrigin = place("ai-origin", "AI 출발지역");
   const adapter = plannerAdapter(draft);
+  adapter.searchPlaces.mockImplementation((query) => Promise.resolve(query === "AI 출발지" ? [aiOrigin] : []));
   render(<ConsumerJourneyPlannerPage adapter={adapter} initialInput={verifiedContext} />);
   await compile();
-  expect(screen.getByRole("status")).toHaveTextContent("선택해 둔 조건을 유지했습니다");
+  expect(screen.getByText(/설명에 맞춰 값을 바꿨어요/)).toBeInTheDocument();
+  expect(screen.getByLabelText(/출발 장소/)).toHaveValue("AI 출발지역");
+  expect(screen.getByLabelText(/라이딩 이용 시간/)).toHaveValue(30);
+  expect(screen.getByLabelText(/필요한 자전거 수/)).toHaveValue(5);
+  fireEvent.click(screen.getByRole("button", { name: "가져온 조건 유지" }));
+  expect(screen.getByText(/가져온 조건을 유지했어요/)).toBeInTheDocument();
   expect(screen.getByLabelText(/출발 장소/)).toHaveValue("성수");
   expect(screen.getByLabelText(/라이딩 이용 시간/)).toHaveValue(120);
   expect(screen.getByLabelText(/필요한 자전거 수/)).toHaveValue(1);
-  fireEvent.change(screen.getByLabelText(/라이딩 이용 시간/), { target: { value: "80" } });
   submitConfirmation();
-  await waitFor(() => expect(adapter.answerClarification).toHaveBeenCalledWith(draft, expect.objectContaining({ maxJourneyMinutes: "80", origin: verifiedContext.origin })));
+  await waitFor(() => expect(adapter.answerClarification).toHaveBeenCalledWith(draft, expect.objectContaining({ maxJourneyMinutes: 120, requiredBikeCount: 1, origin: verifiedContext.origin })));
+});
+
+test("an auto-selected place can be swapped back to the full provider result list", async () => {
+  const draft = draftDecision({ origin: { displayName: "성수" }, destination: { displayName: "한강" }, totalMinutes: 90, requiredBikeCount: 1 });
+  const origin = place("provider-origin", "성수역");
+  const adapter = plannerAdapter(draft);
+  adapter.searchPlaces.mockImplementation((query) => Promise.resolve(query === "성수" ? [origin, place("other-origin", "성수동")] : [place("provider-destination", "한강공원")]));
+  render(<ConsumerJourneyPlannerPage adapter={adapter} />);
+  await compile();
+  expect(screen.getByLabelText(/출발 장소/)).toHaveValue("성수역");
+  fireEvent.click(screen.getByRole("button", { name: "출발 장소 바꾸기" }));
+  expect(screen.getByLabelText(/출발 장소/)).toHaveValue("성수");
+  expect(screen.queryByText(/성수역 자동 선택됨/)).not.toBeInTheDocument();
+  fireEvent.click(await screen.findByRole("button", { name: /성수동 출발 장소로 선택/ }));
+  expect(screen.getByLabelText(/출발 장소/)).toHaveValue("성수동");
+  submitConfirmation();
+  await waitFor(() => expect(adapter.answerClarification).toHaveBeenCalledWith(draft, expect.objectContaining({ origin: place("other-origin", "성수동") })));
+});
+
+test("a quick departure preset fills a future time in one click", async () => {
+  const adapter = plannerAdapter(draftDecision({}, verifiedContext));
+  render(<ConsumerJourneyPlannerPage adapter={adapter} />);
+  await compile();
+  const field = screen.getByLabelText(/출발 희망 시각/);
+  fireEvent.change(field, { target: { value: "" } });
+  expect(field).toHaveValue("");
+  fireEvent.click(screen.getByRole("button", { name: "1시간 뒤" }));
+  expect(new Date(field.value).getTime()).toBeGreaterThan(Date.now() + 55 * 60_000);
+});
+
+test("a stale draft is discarded so it cannot outrank a new description", () => {
+  window.sessionStorage.setItem("consumer-journey-planner-draft", JSON.stringify({ text: "오래된 설명", context: { maxJourneyMinutes: "120" }, savedAt: Date.now() - 31 * 60_000 }));
+  render(<ConsumerJourneyPlannerPage adapter={plannerAdapter()} />);
+  expect(screen.getByRole("textbox", { name: "라이딩 계획 설명" })).toHaveValue("");
+  expect(screen.queryByText(/가져온 조건/)).not.toBeInTheDocument();
 });
 
 test.each([
