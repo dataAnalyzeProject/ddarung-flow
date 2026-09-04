@@ -967,3 +967,13 @@ button[aria-pressed="true"] .cr22-journey__radio {
 .cr22-journey__preferences dd { margin: 0; color: var(--cr22-color-muted); }
 .cr22-journey--planner summary:focus-visible { outline: 3px solid var(--cr22-color-teal); outline-offset: 3px; }
 @media (max-width: 39.99rem) { .cr22-journey__preferences dl { grid-template-columns: 1fr; } }
+
+/* The departure cell is taller than its neighbours, so the row must not stretch them. */
+.cr22-journey__confirm-numbers { align-items: start; }
+.cr22-journey__quick-times { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
+.cr22-journey__quick-times button { min-height: 2.25rem; padding: 0.3rem 0.75rem; border: 1px solid var(--cr22-color-line-strong); border-radius: 999px; background: #ffffff; color: var(--cr22-color-copy); font-size: var(--cr22-font-size-sm); cursor: pointer; }
+.cr22-journey__quick-times button:hover:not(:disabled) { background: var(--cr22-color-green-soft); }
+.cr22-journey__quick-times button:disabled { opacity: 0.6; cursor: not-allowed; }
+.cr22-journey__conflict { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+.cr22-journey__conflict p { margin: 0; }
+.cr22-journey__conflict .cr22-button { flex-shrink: 0; }

@@ -7,6 +7,11 @@ import { consumerJourneyAdapter, hasValue } from "../adapters/journey/index.js";
 import "./journey.css";
 
 const DRAFT_KEY = "consumer-journey-planner-draft";
+const DRAFT_TTL_MS = 30 * 60_000;
+const DEPARTURE_LEAD_MINUTES = 10;
+const DEPARTURE_STEP_MS = 5 * 60_000;
+const QUICK_DEPARTURES = [["지금 출발", DEPARTURE_LEAD_MINUTES], ["30분 뒤", 30], ["1시간 뒤", 60]];
+const CONFLICT_FIELDS = ["origin", "destination", "departureAt", "maxJourneyMinutes", "requiredBikeCount"];
 const THEME_OPTIONS = [["PARK", "공원"], ["RIVER", "한강·하천"], ["CAFE", "카페"], ["ATTRACTION", "명소"], ["CULTURE", "문화"], ["FOOD", "음식"]];
 const PREFERENCE_OPTIONS = [["stability", "안정성"], ["lowSlope", "완만한 경사"], ["bikeLane", "자전거 도로"], ["scenery", "풍경"], ["culture", "문화 체험"], ["cafe", "카페 방문"], ["avoidCrowds", "한적한 곳"]];
 const FIELD_LABELS = { origin: "출발 장소", destination: "목적 장소", departureAt: "출발 시각", startAt: "출발 시각", maxJourneyMinutes: "이용 시간", totalMinutes: "이용 시간", requiredBikeCount: "자전거 수", preferences: "선호 조건", constraints: "테마" };
@@ -45,6 +50,10 @@ function localDateTime(value) {
   return Number.isNaN(date.getTime()) ? "" : new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 }
 
+function departureFromNow(minutes) {
+  return localDateTime(new Date(Math.ceil((Date.now() + minutes * 60_000) / DEPARTURE_STEP_MS) * DEPARTURE_STEP_MS));
+}
+
 function initialContext(input = {}) {
   return {
     origin: verifiedPlace(input.origin), destination: verifiedPlace(input.destination),
@@ -55,14 +64,23 @@ function initialContext(input = {}) {
 }
 
 function readDraft() {
-  try { return JSON.parse(window.sessionStorage.getItem(DRAFT_KEY)) || {}; } catch { return {}; }
+  try {
+    const stored = JSON.parse(window.sessionStorage.getItem(DRAFT_KEY)) || {};
+    // An old draft must never outrank a freshly written description.
+    if (Number.isFinite(stored.savedAt) && Date.now() - stored.savedAt <= DRAFT_TTL_MS) return stored;
+    window.sessionStorage.removeItem(DRAFT_KEY);
+    return {};
+  } catch { return {}; }
 }
 
 function confirmationValues(decision, context) {
   const intent = decision.normalizedIntent || {};
   const ai = intent.aiIntent || {};
-  const origin = verifiedPlace(intent.origin) || context.origin;
-  const destination = verifiedPlace(intent.destination) || context.destination;
+  const conflicts = new Set(intent.contextConflicts || []);
+  // The description the user just wrote wins over a carried-in condition; the kept value stays one click away.
+  const chosen = (field, carried, described) => conflicts.has(field) && hasValue(described) ? described : carried;
+  const origin = conflicts.has("origin") ? null : verifiedPlace(intent.origin) || context.origin;
+  const destination = conflicts.has("destination") ? null : verifiedPlace(intent.destination) || context.destination;
   const preferences = { ...(ai.preferences || {}), ...(context.preferences || {}), ...(intent.preferences || {}) };
   const proposedThemes = intent.constraints?.themes ?? context.constraints?.themes ?? ai.hardConstraints?.themes
     ?? [["CAFE", "cafe"], ["CULTURE", "culture"]].filter(([, preference]) => Number(preferences[preference]) > 3).map(([theme]) => theme);
@@ -71,12 +89,34 @@ function confirmationValues(decision, context) {
     // AI place references are search queries, even if the response contains IDs or coordinates.
     originQuery: origin?.displayName || ai.origin?.displayName || ai.origin?.query || "",
     destinationQuery: destination?.displayName || ai.destination?.displayName || ai.destination?.query || "",
-    departureAt: localDateTime(intent.departureAt || context.departureAt || ai.startAt),
-    maxJourneyMinutes: intent.maxJourneyMinutes ?? (hasValue(context.maxJourneyMinutes) ? context.maxJourneyMinutes : ai.totalMinutes) ?? "",
-    requiredBikeCount: intent.requiredBikeCount ?? (hasValue(context.requiredBikeCount) ? context.requiredBikeCount : ai.requiredBikeCount) ?? "",
+    departureAt: localDateTime(chosen("departureAt", intent.departureAt || context.departureAt || ai.startAt, ai.startAt)) || departureFromNow(DEPARTURE_LEAD_MINUTES),
+    maxJourneyMinutes: chosen("maxJourneyMinutes", intent.maxJourneyMinutes ?? (hasValue(context.maxJourneyMinutes) ? context.maxJourneyMinutes : ai.totalMinutes), ai.totalMinutes) ?? "",
+    requiredBikeCount: chosen("requiredBikeCount", intent.requiredBikeCount ?? (hasValue(context.requiredBikeCount) ? context.requiredBikeCount : ai.requiredBikeCount), ai.requiredBikeCount) ?? "",
     preferences, avoid: intent.avoid || context.avoid || [],
     constraints: { ...(context.constraints || {}), ...(intent.constraints || {}), themes: Array.isArray(proposedThemes) ? proposedThemes.filter((theme) => THEME_OPTIONS.some(([value]) => value === theme)) : [] },
   };
+}
+
+function conflictPatch(values, fields) {
+  return Object.fromEntries(fields.flatMap((field) => field === "origin" || field === "destination"
+    ? [[field, values[field]], [`${field}Query`, values[`${field}Query`]]] : [[field, values[field]]]));
+}
+
+async function autoSelectPlaces(adapter, values) {
+  const patch = {};
+  const picked = {};
+  await Promise.all(["origin", "destination"]
+    .filter((field) => !values[field] && values[`${field}Query`].trim().length >= 2)
+    .map(async (field) => {
+      const query = values[`${field}Query`].trim();
+      try {
+        // Coordinates still come only from our own place provider, never from the AI response.
+        const [best] = (await adapter.searchPlaces(query)).map(verifiedPlace).filter(Boolean);
+        if (!best) return;
+        patch[field] = best; patch[`${field}Query`] = best.displayName; picked[field] = query;
+      } catch { /* The manual picker stays available when the provider search fails. */ }
+    }));
+  return { patch, picked };
 }
 
 function validationErrors(values) {
@@ -97,7 +137,7 @@ function validationErrors(values) {
   return errors;
 }
 
-function PlacePicker({ adapter, disabled, error, field, onChange, place, query }) {
+function PlacePicker({ adapter, autoQuery, disabled, error, field, onChange, place, query }) {
   const [places, setPlaces] = useState([]);
   const [state, setState] = useState("idle");
   const requestId = useRef(0);
@@ -120,7 +160,7 @@ function PlacePicker({ adapter, disabled, error, field, onChange, place, query }
     <FormField id={`journey-${field}`} label={label} required error={error} hint={place ? "선택한 장소입니다. 검색어를 바꾸면 다시 선택해야 합니다." : "두 글자 이상 검색한 뒤 실제 장소를 선택해 주세요."}>
       <input name={field} autoComplete="off" disabled={disabled} value={query} onChange={(event) => onChange(null, event.target.value)} />
     </FormField>
-    {place ? <p className="cr22-journey__selected-place"><ConsumerIcon name="check" size={17} /> {place.displayName} 선택됨 <button type="button" disabled={disabled} onClick={() => onChange(null, "")}>{label} 선택 해제</button></p> : null}
+    {place ? <p className="cr22-journey__selected-place"><ConsumerIcon name="check" size={17} /> {autoQuery ? `설명 속 ‘${autoQuery}’ → ${place.displayName} 자동 선택됨` : `${place.displayName} 선택됨`} <button type="button" disabled={disabled} onClick={() => onChange(null, autoQuery || "")}>{autoQuery ? `${label} 바꾸기` : `${label} 선택 해제`}</button></p> : null}
     {state === "loading" ? <p role="status">{label}를 찾고 있습니다.</p> : null}
     {state === "empty" ? <p role="status">검색 결과가 없습니다. 다른 장소를 검색해 주세요.</p> : null}
     {state === "error" ? <p role="alert">장소를 검색하지 못했습니다. 다시 입력해 주세요.</p> : null}
@@ -146,6 +186,9 @@ export default function ConsumerJourneyPlannerPage({ adapter = consumerJourneyAd
   const [notice, setNotice] = useState("");
   const [errors, setErrors] = useState({});
   const [authRequired, setAuthRequired] = useState(false);
+  const [autoPicked, setAutoPicked] = useState({});
+  const [conflictFallback, setConflictFallback] = useState(null);
+  const [conflictChoice, setConflictChoice] = useState("DESCRIPTION");
   const promptRef = useRef(null);
   const formRef = useRef(null);
   const headingRef = useRef(null);
@@ -155,7 +198,7 @@ export default function ConsumerJourneyPlannerPage({ adapter = consumerJourneyAd
 
   useEffect(() => {
     try {
-      if (text || Object.values(context).some((value) => hasValue(value) && typeof value !== "object")) window.sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ text, context }));
+      if (text || Object.values(context).some((value) => hasValue(value) && typeof value !== "object")) window.sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ text, context, savedAt: Date.now() }));
       else window.sessionStorage.removeItem(DRAFT_KEY);
     } catch { /* The in-memory draft remains available when storage is disabled. */ }
   }, [context, text]);
@@ -194,7 +237,14 @@ export default function ConsumerJourneyPlannerPage({ adapter = consumerJourneyAd
       const next = await adapter.planNaturalLanguage(text, compileContext);
       if (next?.status === "UNAVAILABLE") throw unavailableError(next);
       if (next?.status !== "CLARIFICATION_REQUIRED" || !next.decisionId || !next.normalizedIntent) throw Object.assign(new Error("Invalid AI draft"), { code: "AI_OUTPUT_SCHEMA_INVALID" });
-      setDecision(next); setValues(confirmationValues(next, compileContext)); setStage("CONFIRM");
+      const drafted = confirmationValues(next, compileContext);
+      const { patch, picked } = await autoSelectPlaces(adapter, drafted);
+      const confirmed = { ...drafted, ...patch };
+      const conflicts = (next.normalizedIntent.contextConflicts || []).filter((field) => CONFLICT_FIELDS.includes(field));
+      const carried = { ...next, normalizedIntent: { ...next.normalizedIntent, contextConflicts: [] } };
+      setConflictFallback(conflicts.length ? { description: conflictPatch(confirmed, conflicts), descriptionPicked: picked, context: conflictPatch(confirmationValues(carried, compileContext), conflicts) } : null);
+      setConflictChoice("DESCRIPTION"); setAutoPicked(picked);
+      setDecision(next); setValues(confirmed); setStage("CONFIRM");
     } catch (error) { reportError(error); setStage("INPUT"); }
   }
 
@@ -229,9 +279,19 @@ export default function ConsumerJourneyPlannerPage({ adapter = consumerJourneyAd
 
   function reset() {
     setText(""); setDecision(null); setFactualDecision(null); setValues(null); setNotice(""); setErrors({}); setAuthRequired(false); setStage("INPUT");
+    setAutoPicked({}); setConflictFallback(null); setConflictChoice("DESCRIPTION");
     updateContext(initialContext());
     try { window.sessionStorage.removeItem(DRAFT_KEY); } catch { /* Storage can be disabled. */ }
     promptRef.current?.focus();
+  }
+
+  function applyConflictChoice(choice) {
+    const source = choice === "CONTEXT" ? conflictFallback.context : conflictFallback.description;
+    setAutoPicked(choice === "CONTEXT"
+      ? Object.fromEntries(Object.entries(autoPicked).filter(([field]) => !(field in source)))
+      : { ...autoPicked, ...conflictFallback.descriptionPicked });
+    updateValues(source);
+    setConflictChoice(choice);
   }
 
   const contextItems = [context.origin?.displayName, context.destination?.displayName, context.departureAt?.replace("T", " "), hasValue(context.maxJourneyMinutes) ? `${context.maxJourneyMinutes}분` : null, hasValue(context.requiredBikeCount) ? `${context.requiredBikeCount}대` : null].filter(Boolean);
@@ -253,10 +313,13 @@ export default function ConsumerJourneyPlannerPage({ adapter = consumerJourneyAd
         <p className="cr22-journey__premium-note">Premium 활성 계정에서 이용할 수 있습니다.</p>
       </form> : <form ref={formRef} className="cr22-journey__input-card cr22-journey__confirmation" noValidate onSubmit={confirm}>
         <p className="cr22-journey__draft-text">{text}</p>
-        {conflicts.length ? <p className="cr22-journey__conflict" role="status">{conflicts.join(" · ")}: 설명과 가져온 조건이 달라 선택해 둔 조건을 유지했습니다. 아래에서 수정할 수 있어요.</p> : null}
-        <div className="cr22-journey__confirm-places">{["origin", "destination"].map((field) => <PlacePicker key={field} adapter={adapter} disabled={working} error={errors[field]} field={field} place={values[field]} query={values[`${field}Query`]} onChange={(place, query) => updateValues({ [field]: place, [`${field}Query`]: query })} />)}</div>
+        {conflicts.length && conflictFallback ? <div className="cr22-journey__conflict" role="status"><p><strong>{conflicts.join(" · ")}</strong>: {conflictChoice === "DESCRIPTION" ? "설명에 맞춰 값을 바꿨어요. 가져온 조건으로 되돌릴 수 있어요." : "가져온 조건을 유지했어요. 설명대로 다시 적용할 수 있어요."}</p><ConsumerButton variant="secondary" disabled={working} onClick={() => applyConflictChoice(conflictChoice === "DESCRIPTION" ? "CONTEXT" : "DESCRIPTION")}>{conflictChoice === "DESCRIPTION" ? "가져온 조건 유지" : "설명대로 적용"}</ConsumerButton></div> : null}
+        <div className="cr22-journey__confirm-places">{["origin", "destination"].map((field) => <PlacePicker key={field} adapter={adapter} autoQuery={autoPicked[field]} disabled={working} error={errors[field]} field={field} place={values[field]} query={values[`${field}Query`]} onChange={(place, query) => { setAutoPicked((current) => Object.fromEntries(Object.entries(current).filter(([picked]) => picked !== field))); updateValues({ [field]: place, [`${field}Query`]: query }); }} />)}</div>
         <div className="cr22-journey__confirm-numbers">
-          <FormField label="출발 희망 시각" required error={errors.departureAt}><input name="departureAt" type="datetime-local" disabled={working} value={values.departureAt} onChange={(event) => updateValues({ departureAt: event.target.value })} /></FormField>
+          <div className="cr22-journey__time-field">
+            <FormField label="출발 희망 시각" required error={errors.departureAt} hint="‘지금 출발’은 준비 시간을 고려해 10분 뒤로 맞춰요."><input name="departureAt" type="datetime-local" min={localDateTime(Date.now())} disabled={working} value={values.departureAt} onChange={(event) => updateValues({ departureAt: event.target.value })} /></FormField>
+            <div className="cr22-journey__quick-times">{QUICK_DEPARTURES.map(([label, minutes]) => <button key={label} type="button" disabled={working} onClick={() => updateValues({ departureAt: departureFromNow(minutes) })}>{label}</button>)}</div>
+          </div>
           <FormField label="라이딩 이용 시간 (분)" required error={errors.maxJourneyMinutes}><input name="maxJourneyMinutes" type="number" min="1" max="480" step="1" disabled={working} value={values.maxJourneyMinutes} onChange={(event) => updateValues({ maxJourneyMinutes: event.target.value })} /></FormField>
           <FormField label="필요한 자전거 수" required error={errors.requiredBikeCount}><input name="requiredBikeCount" type="number" min="1" max="5" step="1" disabled={working} value={values.requiredBikeCount} onChange={(event) => updateValues({ requiredBikeCount: event.target.value })} /></FormField>
         </div>
@@ -266,7 +329,7 @@ export default function ConsumerJourneyPlannerPage({ adapter = consumerJourneyAd
         {notice ? <p className="cr22-journey__notice" role="alert">{notice}</p> : null}
         {authRequired ? <ConsumerButton onClick={onLogin}>다시 로그인</ConsumerButton> : null}
         {factualDecision ? <ConsumerButton variant="secondary" disabled={working} onClick={() => { onResult?.(factualDecision); onNavigate?.("journey-result", factualDecision.decisionId); }}>확보된 실제 근거 보기</ConsumerButton> : null}
-        <div className="cr22-journey__input-actions"><ConsumerButton variant="secondary" disabled={working} onClick={() => { setStage("INPUT"); setNotice(""); setErrors({}); setDecision(null); setFactualDecision(null); }}>설명 다시 입력</ConsumerButton><ConsumerButton type="submit" loading={working} loadingLabel="AI가 일정을 만드는 중…">확인하고 일정 만들기</ConsumerButton></div>
+        <div className="cr22-journey__input-actions"><ConsumerButton variant="secondary" disabled={working} onClick={() => { setStage("INPUT"); setNotice(""); setErrors({}); setDecision(null); setFactualDecision(null); setAutoPicked({}); setConflictFallback(null); setConflictChoice("DESCRIPTION"); }}>설명 다시 입력</ConsumerButton><ConsumerButton type="submit" loading={working} loadingLabel="AI가 일정을 만드는 중…">확인하고 일정 만들기</ConsumerButton></div>
       </form>}
     </ConsumerContainer>
   </ConsumerR2Theme>;
