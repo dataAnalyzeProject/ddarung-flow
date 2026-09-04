@@ -270,7 +270,7 @@ public class JourneyPlanService {
             }
             routes.put(accessRouteId(candidate.stationId()), accessRouteEvidence(candidate, accessRoute));
             Map<String, JourneyEvidencePort.PoiEvidence> candidatePoiData = new LinkedHashMap<>();
-            collectPois(candidate, constraints, pois, candidatePoiData, localWarnings);
+            collectPois(input, candidate, constraints, pois, candidatePoiData, localWarnings);
             poiData.putAll(candidatePoiData);
             collectRoutes(candidate, constraints.routeMode(), candidatePoiData, routes, routeData, localWarnings);
             collectEnvironment(candidate, weather, airQuality, localWarnings);
@@ -487,6 +487,7 @@ public class JourneyPlanService {
     }
 
     private void collectPois(
+            PlanInput input,
             JourneyCandidate selected,
             ResolvedConstraints constraints,
             Map<String, ConsumerAiEvidenceBundle.Evidence> evidence,
@@ -500,7 +501,9 @@ public class JourneyPlanService {
         for (String theme : constraints.themes()) {
             List<JourneyEvidencePort.PoiEvidence> places;
             try {
-                places = evidencePort.findNearby(selected.stationId(), theme, constraints.stopCount());
+                // Stops belong around where the rider is heading, not around the station they rent at.
+                places = evidencePort.findNearbyAt(BigDecimal.valueOf(input.destination().latitude()),
+                        BigDecimal.valueOf(input.destination().longitude()), theme, constraints.stopCount());
             } catch (RuntimeException exception) {
                 addWarning(warnings, "POI_PROVIDER_UNAVAILABLE:" + theme);
                 continue;

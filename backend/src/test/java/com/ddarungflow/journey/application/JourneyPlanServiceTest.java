@@ -33,6 +33,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class JourneyPlanServiceTest {
 
+    private final List<String> poiSearchCenters = new ArrayList<>();
+
     @Test
     void missingDestinationIsDeterministicallyClarifiedWithoutCandidates() {
         InMemoryPersistence persistence = new InMemoryPersistence();
@@ -656,6 +658,22 @@ class JourneyPlanServiceTest {
     }
 
     @Test
+    void stopsAreSearchedAroundTheDestinationNotAroundTheRentalStation() {
+        // '성수에서 빌려 한강 쪽으로': the bike is rented at the origin, so the stops the rider actually
+        // wants are near the destination. Searching around the station would plan a ride that never
+        // heads anywhere the rider asked for.
+        JourneyPlanService.PlanInput input = unifiedInput(JourneyPlanService.RequestMode.FORM, null);
+        poiSearchCenters.clear();
+
+        unifiedService(new InMemoryPersistence(), disabledAi(), new CountingReturnPort(), completeEvidence())
+                .plan(10L, input);
+
+        assertThat(poiSearchCenters).isNotEmpty();
+        assertThat(poiSearchCenters).allSatisfy(center -> assertThat(center)
+                .isEqualTo(input.destination().latitude() + "," + input.destination().longitude()));
+    }
+
+    @Test
     void aLongWalkToTheStationDoesNotSpendTheRidingBudget() {
         // TASK-328 staging repro: '성수 → 한강' only had rental candidates ~11 km from the origin, so the
         // access walk (10661s) alone outran the 120-minute riding budget. Every stop was then priced
@@ -1101,6 +1119,16 @@ class JourneyPlanServiceTest {
     private JourneyEvidencePort evidence(boolean poiError, boolean routeAvailable, boolean poiEmpty, boolean routeError) {
         return new JourneyEvidencePort() {
             @Override public List<PoiEvidence> findNearby(String stationId, String theme, int limit) {
+                return places();
+            }
+
+            @Override public List<PoiEvidence> findNearbyAt(BigDecimal latitude, BigDecimal longitude, String theme,
+                    int limit) {
+                poiSearchCenters.add(latitude.stripTrailingZeros() + "," + longitude.stripTrailingZeros());
+                return places();
+            }
+
+            private List<PoiEvidence> places() {
                 if (poiError) throw new IllegalStateException("provider down");
                 if (poiEmpty) return List.of();
                 return List.of(new PoiEvidence("poi-1", "서울숲 카페", "서울 성동구", "카페",

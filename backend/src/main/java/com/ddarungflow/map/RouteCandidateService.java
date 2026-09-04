@@ -60,6 +60,25 @@ public class RouteCandidateService {
             .toList();
     }
 
+    /**
+     * Journey planning rents at the rider's origin and rides towards the destination, so its candidates
+     * are discovered around the origin. The arrival-prediction flows keep discovering around the
+     * destination, which is where those riders want a bike to be available.
+     */
+    public List<StationDistance> findCandidatesNearOrigin(
+        BigDecimal originLat,
+        BigDecimal originLng,
+        String travelMode
+    ) {
+        List<DiscoveredStation> selected = selectDiscoveredCandidates(
+            stationRepository.findByActiveTrue(), originLat, originLng
+        );
+
+        return selected.stream()
+            .map(candidate -> computeCandidateRoute(candidate.station(), originLat, originLng, travelMode))
+            .toList();
+    }
+
     public List<StationDistance> findCandidatesForDirect(String primaryStationId, BigDecimal originLat, BigDecimal originLng) {
         return findCandidatesForDirect(primaryStationId, originLat, originLng, null, null, "DIRECT");
     }
@@ -124,12 +143,12 @@ public class RouteCandidateService {
 
     private List<DiscoveredStation> selectDiscoveredCandidates(
         List<Station> stations,
-        BigDecimal destLat,
-        BigDecimal destLng
+        BigDecimal centerLat,
+        BigDecimal centerLng
     ) {
-        List<DiscoveredStation> discovered = discoverStationsWithinRadius(stations, destLat, destLng, 500.0);
+        List<DiscoveredStation> discovered = discoverStationsWithinRadius(stations, centerLat, centerLng, 500.0);
         if (discovered.isEmpty()) {
-            discovered = discoverStationsWithinRadius(stations, destLat, destLng, 1000.0);
+            discovered = discoverStationsWithinRadius(stations, centerLat, centerLng, 1000.0);
         }
 
         return discovered.stream()
@@ -142,27 +161,27 @@ public class RouteCandidateService {
 
     private List<DiscoveredStation> discoverStationsWithinRadius(
         List<Station> stations,
-        BigDecimal destLat,
-        BigDecimal destLng,
+        BigDecimal centerLat,
+        BigDecimal centerLng,
         double radiusMeters
     ) {
-        if (destLat == null || destLng == null) {
+        if (centerLat == null || centerLng == null) {
             return List.of();
         }
 
         List<DiscoveredStation> discovered = new ArrayList<>();
-        double targetLat = destLat.doubleValue();
-        double targetLng = destLng.doubleValue();
+        double targetLat = centerLat.doubleValue();
+        double targetLng = centerLng.doubleValue();
 
         for (Station station : stations) {
-            double distanceToDestination = calculateDistanceMeters(
+            double distanceToCenter = calculateDistanceMeters(
                 targetLat,
                 targetLng,
                 station.getLatitude().doubleValue(),
                 station.getLongitude().doubleValue()
             );
-            if (distanceToDestination <= radiusMeters) {
-                discovered.add(new DiscoveredStation(station, distanceToDestination));
+            if (distanceToCenter <= radiusMeters) {
+                discovered.add(new DiscoveredStation(station, distanceToCenter));
             }
         }
         return discovered;
