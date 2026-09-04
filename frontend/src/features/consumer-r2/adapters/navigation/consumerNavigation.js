@@ -105,7 +105,13 @@ export function navigationTarget(name, id) {
 
 export function routeFromHash(hash = window.location.hash) {
   const value = hash.replace(/^#/, '');
-  if (value === 'premium/checkout') return navigationTarget('checkout');
+  // A redirect-based payment provider can append its own return params (paymentKey, orderId,
+  // amount, ...) onto the full URL string without knowing it already ends in a hash fragment,
+  // landing them after premium/checkout as `&paymentKey=...` (or `?paymentKey=...`) instead of
+  // in the real query string. Match the route by prefix so that trailing tail doesn't break routing.
+  if (value === 'premium/checkout' || value.startsWith('premium/checkout&') || value.startsWith('premium/checkout?')) {
+    return navigationTarget('checkout');
+  }
   for (const prefix of ['journey/result', 'station', 'ride', 'guide']) {
     if (!value.startsWith(prefix + '/')) continue;
     try {

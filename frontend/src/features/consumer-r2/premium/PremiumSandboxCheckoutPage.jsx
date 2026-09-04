@@ -22,7 +22,21 @@ function checkoutErrorMessage(error) {
 }
 
 function clearPaymentCallbackQuery() {
-  window.history.replaceState({}, "", `${window.location.pathname}${window.location.hash}`);
+  window.history.replaceState({}, "", `${window.location.pathname}#premium/checkout`);
+}
+
+// Toss can redirect back with its own return params (paymentKey, orderId, amount, ...) appended
+// to the full successUrl string without knowing it already ends in a `#premium/checkout` hash
+// fragment, landing them after the hash as `&paymentKey=...` instead of in the real query
+// string. Read from the real search string first, then fall back to whatever follows the first
+// `&` (or `?`) inside the hash so a provider-side append after the fragment still works.
+function paymentCallbackParams(query, hash) {
+  const params = new URLSearchParams(query);
+  if (params.get("paymentKey")) return params;
+  const tailStart = Math.min(...["&", "?"].map((sep) => { const index = hash.indexOf(sep); return index === -1 ? Infinity : index; }));
+  if (!Number.isFinite(tailStart)) return params;
+  for (const [key, value] of new URLSearchParams(hash.slice(tailStart + 1))) params.set(key, value);
+  return params;
 }
 
 export default function PremiumSandboxCheckoutPage({
@@ -79,8 +93,8 @@ export default function PremiumSandboxCheckoutPage({
       confirmationRef.current = null;
       return undefined;
     }
-    if (!confirmationRef.current) confirmationRef.current = { query: window.location.search };
-    const params = new URLSearchParams(confirmationRef.current.query);
+    if (!confirmationRef.current) confirmationRef.current = { query: window.location.search, hash: window.location.hash };
+    const params = paymentCallbackParams(confirmationRef.current.query, confirmationRef.current.hash);
     const paymentState = params.get("payment");
     if (paymentState === "failed") {
       setState("ERROR");

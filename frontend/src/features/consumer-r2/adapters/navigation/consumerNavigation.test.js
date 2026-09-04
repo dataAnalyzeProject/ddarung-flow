@@ -1,4 +1,4 @@
-import { candidateGuideContext, consumerHistoryState, guideContextForStation, isFreshMainResult, journeyHistoryInput, searchHistoryInput } from './consumerNavigation';
+import { candidateGuideContext, consumerHistoryState, guideContextForStation, isFreshMainResult, journeyHistoryInput, routeFromHash, searchHistoryInput } from './consumerNavigation';
 
 const input = { origin: { providerId: 'origin', displayName: '출발지', latitude: 37.5, longitude: 127 }, destination: { providerId: 'anchor', displayName: '대여 기준점', latitude: 37.6, longitude: 127.1 }, travelMode: 'WALK', requiredBikeCount: 2 };
 const now = Date.parse('2030-09-03T00:40:00Z');
@@ -39,6 +39,12 @@ test('future actual arrival permits cache restoration when the server does not s
 
 test.each([null, 'invalid', '2030-09-03T00:40:00Z'])('missing, invalid, or elapsed arrival %s invalidates restoration', (arrivalAt) => {
   expect(isFreshMainResult({ candidates: [{ ...candidate, arrivalAt }] }, now)).toBe(false);
+});
+
+test('still routes to checkout when a payment provider appends its own return params after the hash instead of into the real query string', () => {
+  expect(routeFromHash('#premium/checkout').route).toBe('checkout');
+  expect(routeFromHash('#premium/checkout&paymentKey=pk_1&orderId=order-1&amount=2900').route).toBe('checkout');
+  expect(routeFromHash('#premium/checkout?paymentKey=pk_1&orderId=order-1&amount=2900').route).toBe('checkout');
 });
 
 test.each(['', 'invalid', '2030-09-03T00:35:00Z'])('a provided invalid or expired expiry %s invalidates restoration and Guide context', (expiresAt) => {

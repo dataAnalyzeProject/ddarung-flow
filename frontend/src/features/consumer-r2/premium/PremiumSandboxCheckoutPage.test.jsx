@@ -55,6 +55,20 @@ describe("PremiumSandboxCheckoutPage", () => {
     expect(screen.getAllByRole("button", { name: "Premium 활성" })).toHaveLength(2);
   });
 
+  it("still confirms and clears the callback when Toss appends its return params after the hash instead of into the real query string", async () => {
+    // Our own successUrl always carries `?payment=processing` correctly (set before Toss touches
+    // it), but a provider that naively string-appends its own paymentKey/orderId/amount onto a
+    // successUrl that already ends in a `#premium/checkout` fragment lands them after the hash,
+    // not in window.location.search.
+    window.history.replaceState({}, "", "/?payment=processing#premium/checkout&paymentKey=key&orderId=order&amount=2900");
+    const adapter = createAdapter();
+    render(<PremiumSandboxCheckoutPage adapter={adapter} />);
+    await waitFor(() => expect(adapter.confirm).toHaveBeenCalledWith({ paymentKey: "key", orderId: "order", amount: "2900" }));
+    expect(await screen.findByText(/Premium 접근 상태가 활성화/)).toBeInTheDocument();
+    expect(window.location.hash).toBe("#premium/checkout");
+    expect(window.location.search).toBe("");
+  });
+
   it("does not claim active access when callback refresh returns a non-active state", async () => {
     window.history.replaceState({}, "", "/?payment=processing&paymentKey=key&orderId=order&amount=2900#premium");
     const onSuccess = jest.fn();
