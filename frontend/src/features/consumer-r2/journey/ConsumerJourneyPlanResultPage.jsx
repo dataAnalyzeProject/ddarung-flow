@@ -76,9 +76,65 @@ function evidenceTitle(item) {
   return item?.textFacts?.displayName || item?.textFacts?.stationName || item?.textFacts?.name || item?.evidenceId || "근거 없음";
 }
 
-function evidenceFacts(item) {
-  return [...Object.entries(item?.textFacts || {}), ...Object.entries(item?.numericFacts || {})]
-    .filter(([, value]) => value !== null && value !== undefined && value !== "");
+const SOURCE_LABELS = {
+  "core-on-demand-prediction": "실시간 대여 예측",
+  "kakao-local": "카카오맵 장소 정보",
+  "core-route-provider": "이동 경로 정보",
+  "kakao-bicycle": "카카오맵 자전거 경로",
+  "kma-short-forecast": "기상청 단기예보",
+  "air-korea": "에어코리아 대기질",
+};
+
+const AVAILABILITY_LABELS = { HIGH: "여유", MEDIUM: "보통", LOW: "부족" };
+const TRAVEL_MODE_LABELS = { WALK: "도보", BICYCLE: "자전거" };
+const AIR_GRADE_LABELS = { GOOD: "좋음", MODERATE: "보통", UNHEALTHY: "나쁨", VERY_UNHEALTHY: "매우 나쁨" };
+
+function sourceLabel(source) {
+  return SOURCE_LABELS[source] || source;
+}
+
+function isTruthyText(value) {
+  return value === true || value === "true";
+}
+
+function evidenceSummary(item) {
+  const text = item?.textFacts || {};
+  const numeric = item?.numericFacts || {};
+  const rows = (() => {
+    switch (item?.kind) {
+      case "rentalCandidates":
+        return [
+          hasValue(numeric.rentalProbability) ? ["대여 가능성", formatProbability(numeric.rentalProbability)] : null,
+          hasValue(numeric.availableBikeCount) ? ["보유 대수", `${numeric.availableBikeCount}대`] : null,
+          text.availabilityLevel ? ["재고 상태", AVAILABILITY_LABELS[text.availabilityLevel] || text.availabilityLevel] : null,
+        ];
+      case "pois":
+        return [
+          text.address ? ["주소", text.address] : null,
+          text.category ? ["카테고리", text.category] : null,
+        ];
+      case "routes":
+        return [
+          text.travelMode ? ["이동 방식", TRAVEL_MODE_LABELS[text.travelMode] || text.travelMode] : null,
+          hasValue(numeric.distanceMeters) ? ["거리", formatDistance(numeric.distanceMeters)] : null,
+          hasValue(numeric.durationSeconds) ? ["시간", formatDuration(numeric.durationSeconds)] : null,
+        ];
+      case "weather":
+        return [
+          hasValue(numeric.temperatureCelsius) ? ["기온", `${numeric.temperatureCelsius}°C`] : null,
+          hasValue(numeric.precipitationProbabilityPercent) ? ["강수 확률", `${numeric.precipitationProbabilityPercent}%`] : null,
+          hasValue(text.isRainy) ? ["비 소식", isTruthyText(text.isRainy) ? "있음" : "없음"] : null,
+        ];
+      case "airQuality":
+        return [
+          text.khaiGrade ? ["통합대기지수", AIR_GRADE_LABELS[text.khaiGrade] || text.khaiGrade] : null,
+          text.measurementStation ? ["측정소", text.measurementStation] : null,
+        ];
+      default:
+        return [];
+    }
+  })();
+  return rows.filter(Boolean);
 }
 
 function segmentTitle(segment, evidence, intent) {
@@ -110,14 +166,12 @@ function Summary({ plan }) {
 
 function Timeline({ intent, plan }) {
   return <section className="cr22-journey__timeline" aria-labelledby="timeline-title">
-    <h2 id="timeline-title">시간순 일정 <small>백엔드 제공 구간</small></h2>
+    <h2 id="timeline-title">시간순 일정</h2>
     {plan.segments?.length ? <ol>{plan.segments.map((segment) => {
       const [label, code, icon] = SEGMENT_COPY[segment.type] || [segment.type, segment.type, "info"];
-      const fromEvidence = evidenceById(plan.evidence, segment.fromEvidenceId);
-      const toEvidence = evidenceById(plan.evidence, segment.toEvidenceId);
       return <li className={`is-${String(segment.type).toLowerCase()}`} key={segment.segmentId}>
         <div className="cr22-journey__time"><strong>{formatTime(segment.startAt)}</strong>{segment.endAt ? <span>– {formatTime(segment.endAt)}</span> : null}<StatusBadge tone={segment.type === "VISIT" ? "premium" : segment.type === "ACCESS" ? "info" : "positive"}>{code}</StatusBadge></div>
-        <article><span className="cr22-journey__segment-icon" aria-hidden="true"><ConsumerIcon name={icon} /></span><div><h3>{segmentTitle(segment, plan.evidence, intent)}</h3><p>{label}</p><div className="cr22-journey__facts"><span>시간 {formatDuration(segment.durationSeconds ?? (hasValue(segment.stayMinutes) ? Number(segment.stayMinutes) * 60 : null))}</span><span>거리 {formatDistance(segment.distanceMeters)}</span>{segment.travelMode ? <span>이동 {segment.travelMode}</span> : null}</div>{segment.type === "RENT" ? <div className="cr22-journey__rental-facts"><span>필요 {present(segment.rentalFacts?.requiredBikeCount, (value) => `${value}대`)}</span><span>현재 {present(segment.rentalFacts?.availableBikeCount, (value) => `${value}대`)}</span><span>가능성 {formatProbability(segment.rentalFacts?.rentalProbability)}</span></div> : null}<small className="cr22-journey__source">근거 ID: {[segment.fromEvidenceId, segment.toEvidenceId].filter(Boolean).join(" → ") || "확인되지 않음"}<br />출처: {[fromEvidence?.source, toEvidence?.source].filter(Boolean).join(" · ") || "확인되지 않음"}</small></div></article>
+        <article><span className="cr22-journey__segment-icon" aria-hidden="true"><ConsumerIcon name={icon} /></span><div><h3>{segmentTitle(segment, plan.evidence, intent)}</h3><p>{label}</p><div className="cr22-journey__facts"><span>시간 {formatDuration(segment.durationSeconds ?? (hasValue(segment.stayMinutes) ? Number(segment.stayMinutes) * 60 : null))}</span><span>거리 {formatDistance(segment.distanceMeters)}</span>{segment.travelMode ? <span>이동 {segment.travelMode}</span> : null}</div>{segment.type === "RENT" ? <div className="cr22-journey__rental-facts"><span>필요 {present(segment.rentalFacts?.requiredBikeCount, (value) => `${value}대`)}</span><span>현재 {present(segment.rentalFacts?.availableBikeCount, (value) => `${value}대`)}</span><span>가능성 {formatProbability(segment.rentalFacts?.rentalProbability)}</span></div> : null}</div></article>
       </li>;
     })}</ol> : <AsyncState state="empty" title="표시할 일정 구간이 없습니다" description="백엔드가 제공한 구간이 없어 시간이나 경로를 만들지 않았습니다." />}
   </section>;
@@ -125,12 +179,9 @@ function Timeline({ intent, plan }) {
 
 function Rationale({ plan }) {
   const items = evidenceEntries(plan.evidence);
-  const usedRefs = new Set((plan.segments || []).flatMap((segment) => [segment.fromEvidenceId, segment.toEvidenceId]).filter(Boolean));
-  if (plan.selectedRentalCandidateId) usedRefs.add(plan.selectedRentalCandidateId);
-  return <SurfaceCard title="AI 추천 이유와 근거 번들">
+  return <SurfaceCard title="AI 추천 이유">
     <p className="cr22-journey__rationale">{plan.rationale || "AI 추천 이유가 제공되지 않았습니다."}</p>
-    {plan.rationaleTags?.length ? <div className="cr22-journey__tag-row">{plan.rationaleTags.map((tag) => <StatusBadge key={tag} tone="info">{tag}</StatusBadge>)}</div> : null}
-    <div className="cr22-journey__evidence-list" aria-label="근거 번들 상태">{items.length ? items.map((item) => { const facts = evidenceFacts(item); return <p key={`${item.kind}-${item.evidenceId}`}><span><strong>{item.source}</strong><small>{item.evidenceId} · {item.kind} · {usedRefs.has(item.evidenceId) ? "구간 endpoint 참조" : "근거 번들"}</small>{facts.length ? <small className="cr22-journey__evidence-facts">{facts.map(([key, value]) => `${key}: ${value}`).join(" · ")}</small> : null}</span><StatusBadge tone={item.status === "NORMAL" ? "positive" : item.status === "UNAVAILABLE" || item.status === "MISSING" ? "danger" : "caution"}>{item.status}</StatusBadge></p>; }) : <p><span><strong>근거 목록 없음</strong><small>UNAVAILABLE</small></span><StatusBadge tone="danger">UNAVAILABLE</StatusBadge></p>}</div>
+    <div className="cr22-journey__evidence-list" aria-label="추천 근거 상세">{items.length ? items.map((item) => { const summary = evidenceSummary(item); return <p key={`${item.kind}-${item.evidenceId}`}><span><strong>{sourceLabel(item.source)}</strong>{summary.length ? <small className="cr22-journey__evidence-facts">{summary.map(([label, value]) => `${label} ${value}`).join(" · ")}</small> : null}</span><StatusBadge tone={item.status === "NORMAL" ? "positive" : item.status === "UNAVAILABLE" || item.status === "MISSING" ? "danger" : "caution"}>{item.status}</StatusBadge></p>; }) : <p><span><strong>근거 목록 없음</strong><small>UNAVAILABLE</small></span><StatusBadge tone="danger">UNAVAILABLE</StatusBadge></p>}</div>
     <p className="cr22-journey__muted">PARTIAL·MISSING·UNAVAILABLE은 정상 근거와 구분해 그대로 표시합니다.</p>
   </SurfaceCard>;
 }

@@ -664,8 +664,7 @@ button[aria-pressed="true"] .cr22-journey__radio {
 }
 
 .cr22-journey__facts,
-.cr22-journey__rental-facts,
-.cr22-journey__tag-row {
+.cr22-journey__rental-facts {
   margin-top: 0.45rem;
   display: flex;
   flex-wrap: wrap;
@@ -685,11 +684,6 @@ button[aria-pressed="true"] .cr22-journey__radio {
 .cr22-journey__rental-facts span {
   background: var(--cr22-color-green-soft);
   color: var(--cr22-color-green-dark);
-}
-
-.cr22-journey__source {
-  display: block;
-  margin-top: 0.45rem;
 }
 
 .cr22-journey__route-plot {
