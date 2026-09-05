@@ -880,3 +880,227 @@
 .cr22-premium__ai-features {
   gap: clamp(0.3rem, 0.9vw, 0.8rem);
 }
+
+/* Viewport fit (CONSUMER-R2-FIT-01) - the Premium sandbox CHECKOUT page.
+
+   The earlier pass only reached the Premium gate; the checkout page needs the
+   payments plans endpoint, so it was never measured. With two plans it runs
+   279px past a 695px laptop and the buy buttons fall off the bottom. The two
+   plan cards hold the page - everything around them tracks the viewport height,
+   and the pair of cards takes the height that is left. */
+.cr22-checkout__content {
+  height: 100%;
+  padding-top: clamp(0.3rem, 0.9vh, 0.75rem);
+  padding-bottom: clamp(0.4rem, 1.2vh, 2.5rem);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.3rem, 0.9vh, 1rem);
+}
+
+.cr22-checkout__warning,
+.cr22-checkout__heading,
+.cr22-checkout__message,
+.cr22-checkout__toss,
+.cr22-checkout__back {
+  flex: 0 0 auto;
+}
+
+.cr22-checkout__warning,
+.cr22-checkout__toss {
+  padding: clamp(0.4rem, 1.2vh, 1rem) clamp(0.7rem, 1.2vw, 1.15rem);
+  gap: clamp(0.5rem, 1vw, 1rem);
+}
+
+.cr22-checkout__warning strong,
+.cr22-checkout__warning span,
+.cr22-checkout__toss strong,
+.cr22-checkout__toss span {
+  line-height: 1.3;
+}
+
+.cr22-checkout__heading h1 {
+  font-size: clamp(1.15rem, 2.9vh, 1.9rem);
+}
+
+.cr22-checkout__heading p,
+.cr22-checkout__message span {
+  line-height: 1.3;
+}
+
+.cr22-checkout__message {
+  padding: clamp(0.35rem, 1.1vh, 0.85rem) clamp(0.7rem, 1.2vw, 1.1rem);
+}
+
+/* The plans are the page. They take the remaining height and scroll together
+   if a very short screen leaves less than one card. */
+.cr22-checkout__plans {
+  flex: 1 1 auto;
+  min-height: 0;
+  /* In a column flex container the row's `margin: 0 auto` stops it stretching,
+     so it had shrunk to content width and the cards were half as wide as the
+     design. Width restored; the auto margins keep it centred. */
+  width: 100%;
+  /* The cards clip their own overflow for the ribbon, so stretching them to the
+     row height hid the feature list instead of scrolling it. They keep their
+     natural height and the row is the scroller. */
+  align-items: start;
+  gap: clamp(0.6rem, 1.5vw, 1.75rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.cr22-checkout__plan {
+  min-height: 0;
+  padding: clamp(0.5rem, 1.5vh, 1.1rem) clamp(0.8rem, 1.2vw, 1.4rem) clamp(0.5rem, 1.4vh, 1rem);
+  display: flex;
+  flex-direction: column;
+}
+
+.cr22-checkout__plan h2 {
+  margin: clamp(0.15rem, 0.7vh, 0.5rem) 0 clamp(0.1rem, 0.4vh, 0.3rem);
+  font-size: clamp(1rem, 2.4vh, 1.25rem);
+}
+
+.cr22-checkout__price {
+  font-size: clamp(1.25rem, 3.2vh, 1.65rem);
+}
+
+.cr22-checkout__renewal {
+  margin-top: clamp(0.15rem, 0.5vh, 0.35rem);
+}
+
+.cr22-checkout__rule {
+  margin: clamp(0.3rem, 1vh, 0.7rem) 0 clamp(0.25rem, 0.9vh, 0.6rem);
+}
+
+/* The feature list is the reason to pick a plan, so it keeps its natural height
+   and the pair of cards scrolls as one. Made a scroller itself inside a flex
+   column it collapsed to nothing and the buy button sat on top of it. */
+.cr22-checkout__plan ul {
+  flex: 0 0 auto;
+  margin-top: clamp(0.25rem, 0.8vh, 0.55rem);
+}
+
+/* Four features stacked in a 500px-wide card were 196px on their own - the
+   single largest block on the page. Two columns halve that without dropping a
+   word, and the buy button comes back onto the screen. */
+.cr22-checkout__plan ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: clamp(0.3rem, 1vh, 0.7rem) clamp(0.6rem, 1.2vw, 1rem);
+}
+
+.cr22-checkout__plan li {
+  padding-block: clamp(0.1rem, 0.5vh, 0.4rem);
+  align-items: start;
+}
+
+.cr22-checkout__plan li strong {
+  font-size: 0.86rem;
+}
+
+.cr22-checkout__plan li small {
+  font-size: 0.74rem;
+}
+
+/* The 추천 플랜 badge hangs above the featured card's edge, so that card keeps
+   enough top padding for the 테스트 플랜 label to clear it. */
+.cr22-checkout__plan.is-featured {
+  padding-top: clamp(1.1rem, 2.6vh, 1.6rem);
+}
+
+.cr22-checkout__plan li {
+  gap: clamp(0.4rem, 0.9vw, 0.7rem);
+}
+
+.cr22-checkout__plan li strong,
+.cr22-checkout__plan li small {
+  line-height: 1.3;
+}
+
+.cr22-checkout__plan > .cr22-button {
+  flex: 0 0 auto;
+  margin-top: clamp(0.4rem, 1.2vh, 0.9rem);
+}
+
+/* Last stretch: the buy button is the point of this page, so the card's own
+   type and the four disclaimer bars around it give up their remaining slack
+   rather than letting the button fall below the fold. */
+.cr22-checkout__content {
+  gap: clamp(0.25rem, 0.7vh, 1rem);
+}
+
+.cr22-checkout__warning,
+.cr22-checkout__toss {
+  padding-block: clamp(0.3rem, 0.9vh, 1rem);
+}
+
+.cr22-checkout__message {
+  padding-block: clamp(0.25rem, 0.8vh, 0.85rem);
+}
+
+.cr22-checkout__heading h1 {
+  font-size: clamp(1.05rem, 2.6vh, 1.9rem);
+}
+
+.cr22-checkout__plan {
+  padding-block: clamp(0.4rem, 1.1vh, 1.1rem) clamp(0.4rem, 1.1vh, 1rem);
+}
+
+.cr22-checkout__plan h2 {
+  font-size: clamp(0.95rem, 2.2vh, 1.25rem);
+}
+
+.cr22-checkout__price {
+  font-size: clamp(1.05rem, 2.7vh, 1.65rem);
+}
+
+.cr22-checkout__test-label {
+  padding: clamp(0.1rem, 0.35vh, 0.25rem) 0.65rem;
+}
+
+.cr22-checkout__renewal {
+  padding-block: clamp(0.1rem, 0.35vh, 0.25rem);
+}
+
+.cr22-checkout__rule {
+  margin: clamp(0.25rem, 0.8vh, 0.7rem) 0 clamp(0.2rem, 0.7vh, 0.6rem);
+}
+
+.cr22-checkout__plan h3 {
+  font-size: clamp(0.8rem, 1.9vh, 0.9rem);
+}
+
+.cr22-checkout__plan li small {
+  line-height: 1.25;
+}
+
+/* Both notice bars stacked a bold lead over its explanation, two lines each on
+   a screen 1536px wide. Side by side they read the same and cost one line. */
+.cr22-checkout__warning > div,
+.cr22-checkout__toss > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.15rem 0.6rem;
+}
+
+.cr22-checkout__back {
+  margin-top: clamp(0.2rem, 0.6vh, 0.75rem);
+}
+
+.cr22-checkout__plan ul {
+  gap: clamp(0.2rem, 0.7vh, 0.7rem) clamp(0.6rem, 1.2vw, 1rem);
+}
+
+.cr22-checkout__plan li small {
+  line-height: 1.2;
+}
+
+.cr22-checkout__plan h3 {
+  line-height: 1.2;
+}
+
+.cr22-checkout__heading p {
+  font-size: clamp(0.78rem, 1.9vh, 0.95rem);
+}

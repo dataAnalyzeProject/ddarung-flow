@@ -643,10 +643,49 @@ button.cr22-header__nav-link:disabled {
   background: var(--cr22-color-danger-soft);
 }
 
+/* A partial-evidence notice is one sentence of context, not a hero panel. Stacked
+   and centred it cost 230px - a third of a laptop viewport - and pushed the
+   candidates and their actions off the result screen. It reads as a banner: icon
+   beside the copy, action on the end. */
 .cr22-state--partial {
   min-height: auto;
-  place-items: stretch;
+  padding: clamp(0.5rem, 1.3vh, 0.85rem) clamp(0.85rem, 1.8vw, 1.25rem);
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  place-items: center start;
+  align-content: center;
+  column-gap: clamp(0.6rem, 1.4vw, 1rem);
+  row-gap: 0.15rem;
   text-align: left;
+}
+
+.cr22-state--partial .cr22-state__icon {
+  width: clamp(1.5rem, 3.4vh, 2rem);
+  height: clamp(1.5rem, 3.4vh, 2rem);
+  grid-column: 1;
+  grid-row: 1 / span 2;
+}
+
+.cr22-state--partial .cr22-state__icon svg {
+  width: 60%;
+  height: 60%;
+}
+
+.cr22-state--partial .cr22-state__title {
+  grid-column: 2;
+  grid-row: 1;
+  font-size: var(--cr22-font-size-md);
+}
+
+.cr22-state--partial .cr22-state__description {
+  grid-column: 2;
+  grid-row: 2;
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+
+.cr22-state--partial .cr22-button {
+  grid-column: 3;
+  grid-row: 1 / span 2;
 }
 
 .cr22-state__icon {

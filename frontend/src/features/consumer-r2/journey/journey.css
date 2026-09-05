@@ -1112,6 +1112,54 @@ button[aria-pressed="true"] .cr22-journey__radio {
   padding: clamp(0.6rem, 1.7vh, 1.25rem) clamp(0.9rem, 1.2vw, 1.5rem);
 }
 
+/* The replan form is a tool for changing the plan, not part of reading it. Left
+   open it held 207px - a third of the viewport - while the plan itself was
+   squeezed into 162px, with the timeline down to 20px and 추천 이유 to 34px.
+   It collapses to its own title, and the 조건 변경 후 재추천 button in the
+   header opens it, which is what that button was already scrolling to. */
+.cr22-journey__replan-card {
+  flex: 0 0 auto;
+  margin-top: clamp(0.4rem, 1.2vh, 1rem);
+}
+
+.cr22-journey__replan-card > summary {
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.cr22-journey__replan-card > summary::-webkit-details-marker {
+  display: none;
+}
+
+.cr22-journey__replan-card > summary::after {
+  content: "▾";
+  margin-left: auto;
+  color: var(--cr22-color-muted);
+  font-size: 0.9rem;
+  transition: transform 120ms ease;
+}
+
+.cr22-journey__replan-card[open] > summary::after {
+  transform: rotate(180deg);
+}
+
+.cr22-journey__replan-card > summary:focus-visible {
+  outline: 2px solid var(--cr22-color-blue-dark);
+  outline-offset: -2px;
+}
+
+/* Two caution banners stacked full width cost 104px before the plan started. */
+.cr22-journey__partial {
+  margin: 0 0 clamp(0.3rem, 0.9vh, 1rem);
+  padding: clamp(0.3rem, 0.9vh, 0.8rem) clamp(0.6rem, 1vw, 1rem);
+  line-height: 1.35;
+}
+
+.cr22-journey__result-title h1 {
+  font-size: clamp(1.1rem, 2.6vh, 1.75rem);
+}
+
 /* The aside holds the route map and the 추천 이유 card. The map takes a bounded
    share of the column and the card takes the rest, with the evidence list
    scrolling inside the card body - otherwise the card's natural 1225px pushed
@@ -1293,4 +1341,109 @@ button[aria-pressed="true"] .cr22-journey__radio {
 .cr22-journey__result-summary h2,
 .cr22-journey__timeline h2 {
   font-size: clamp(0.95rem, 2.4vh, 1.25rem);
+}
+
+
+/* Viewport fit (CONSUMER-R2-FIT-01) - the AI planner CONFIRM step.
+
+   At 1536x695 this ran 355px past the viewport and hid 확인하고 일정 만들기,
+   the one button the step exists for. Roughly 190px of that was chrome and
+   gaps rather than fields, so the chrome tracks the viewport height and the
+   fields scroll inside the card with the actions pinned to its bottom edge -
+   the primary action is always on screen, however short the laptop. */
+.cr22-journey--planner .cr22-journey__page-title {
+  flex: 0 0 auto;
+  margin-bottom: clamp(0.3rem, 1vh, 1.5rem);
+}
+
+.cr22-journey--planner .cr22-journey__page-title h1 {
+  margin: clamp(0.1rem, 0.5vh, 0.45rem) 0;
+  font-size: clamp(1.2rem, 2.9vh, 2.35rem);
+}
+
+.cr22-journey--planner .cr22-journey__stepper {
+  flex: 0 0 auto;
+  margin-bottom: clamp(0.3rem, 1vh, 1.25rem);
+  padding: clamp(0.3rem, 0.9vh, 0.75rem) clamp(0.6rem, 1vw, 1rem);
+}
+
+.cr22-journey--planner .cr22-journey__stepper small {
+  font-size: clamp(0.68rem, 1.5vh, 0.8rem);
+}
+
+.cr22-journey--planner .cr22-journey__confirmation {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.3rem, 1.1vh, 1rem);
+  padding: clamp(0.6rem, 1.8vh, 1.25rem) clamp(0.9rem, 1.5vw, 1.5rem) 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.cr22-journey--planner .cr22-journey__confirmation > * {
+  flex: 0 0 auto;
+}
+
+.cr22-journey--planner .cr22-journey__confirmation .cr22-journey__draft-text {
+  margin: 0;
+  padding-bottom: clamp(0.3rem, 1vh, 0.9rem);
+}
+
+.cr22-journey--planner .cr22-journey__confirmation .cr22-journey__conflict {
+  margin: 0;
+  padding: clamp(0.35rem, 1vh, 0.85rem) clamp(0.6rem, 1vw, 1rem);
+}
+
+.cr22-journey--planner .cr22-journey__confirm-places,
+.cr22-journey--planner .cr22-journey__confirm-numbers {
+  gap: clamp(0.5rem, 1.4vh, 1.25rem) clamp(0.75rem, 1.5vw, 1.5rem);
+}
+
+.cr22-journey--planner .cr22-journey__confirmation .cr22-field small,
+.cr22-journey--planner .cr22-journey__confirmation .cr22-journey__field-note {
+  line-height: 1.3;
+}
+
+.cr22-journey--planner .cr22-journey__confirmation input,
+.cr22-journey--planner .cr22-journey__confirmation select {
+  padding-block: clamp(0.35rem, 1.1vh, 0.7rem);
+}
+
+.cr22-journey--planner .cr22-journey__confirmation .cr22-journey__theme-field > div {
+  gap: clamp(0.3rem, 0.9vh, 0.75rem) clamp(0.6rem, 1.2vw, 1.25rem);
+}
+
+/* Pinned to the card's own bottom edge, so it survives any amount of scrolling. */
+.cr22-journey--planner .cr22-journey__confirmation .cr22-journey__input-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  margin-top: auto;
+  padding-block: clamp(0.5rem, 1.4vh, 0.85rem);
+  background: #ffffff;
+}
+
+/* The per-field help lines and the stepper captions were 45px and 17px of
+   secondary text repeated eight times over. They stay readable, just tighter. */
+.cr22-journey--planner .cr22-journey__confirmation .cr22-field {
+  gap: clamp(0.15rem, 0.6vh, 0.4rem);
+}
+
+.cr22-journey--planner .cr22-journey__confirmation .cr22-field small,
+.cr22-journey--planner .cr22-journey__confirmation .cr22-field__hint,
+.cr22-journey--planner .cr22-journey__confirmation .cr22-field > p {
+  margin: 0;
+  font-size: clamp(0.72rem, 1.7vh, 0.85rem);
+  line-height: 1.25;
+}
+
+.cr22-journey--planner .cr22-journey__stepper .cr22-journey__step-number {
+  width: clamp(1.9rem, 4.6vh, 2.6rem);
+  height: clamp(1.9rem, 4.6vh, 2.6rem);
+}
+
+.cr22-journey--planner .cr22-journey__stepper strong {
+  font-size: clamp(0.82rem, 1.9vh, 1rem);
 }
