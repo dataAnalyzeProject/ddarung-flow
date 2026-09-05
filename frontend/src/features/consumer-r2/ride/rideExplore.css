@@ -305,3 +305,95 @@
 .cr22-ride__route-prompt {
   padding: clamp(0.75rem, 2.2vh, 26px);
 }
+
+/* Reviewer call (2026-09-05): with a place selected, the right pane carries the
+   selection header, the route-mode buttons, the distance/time summary and the
+   two actions under the map - none of which existed in the earlier unselected
+   capture. The map was holding a 26vh floor and pushing all of it out of a pane
+   that clips, so the mode buttons and the summary were cut.
+
+   Same rule as the result screen: the panel keeps its height and the map takes
+   what is left, down to a smaller floor. The pane scrolls if even that is short. */
+.cr22-ride__route {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.cr22-ride__selection,
+.cr22-ride__modes,
+.cr22-ride__route-summary,
+.cr22-ride__actions {
+  flex: 0 0 auto;
+}
+
+.cr22-ride__map {
+  min-height: clamp(4rem, 10vh, 470px);
+}
+
+.cr22-ride__route-summary {
+  padding: clamp(8px, 1.9vh, 20px);
+}
+
+.cr22-ride__route-summary dd {
+  margin-top: clamp(2px, 0.6vh, 5px);
+  font-size: clamp(14px, 2.5vh, 18px);
+}
+
+/* The selection header and mode row are chrome around the four route facts. */
+.cr22-ride__selection {
+  padding: clamp(6px, 1.5vh, 16px) clamp(12px, 1.4vw, 20px);
+}
+
+.cr22-ride__modes {
+  padding: clamp(4px, 1vh, 14px) clamp(12px, 1.4vw, 20px);
+}
+
+.cr22-ride__modes button {
+  min-height: clamp(30px, 5vh, 44px);
+}
+
+/* The map had shrunk to a 98px strip once the route panel took its height back.
+   The chrome above the workspace - back link, page heading, station row, theme
+   filters - is what funds it, so it tracks the viewport height too. */
+.cr22-ride__back {
+  min-height: clamp(28px, 4.4vh, 44px);
+}
+
+.cr22-ride__heading p {
+  margin-top: clamp(2px, 0.7vh, 8px);
+  font-size: clamp(13px, 2.1vh, 15px);
+}
+
+.cr22-ride__station {
+  padding-block: clamp(5px, 1.2vh, 14px);
+}
+
+.cr22-ride__theme-scroll {
+  padding-block: clamp(2px, 0.6vh, 10px);
+  margin-bottom: clamp(5px, 1.3vh, 16px);
+}
+
+.cr22-ride__theme-scroll button {
+  min-height: clamp(30px, 5vh, 44px);
+}
+
+.cr22-ride__truth {
+  padding: clamp(6px, 1.4vh, 14px) clamp(10px, 1.2vw, 16px);
+  font-size: clamp(12px, 1.9vh, 14px);
+}
+
+.cr22-ride__heading h1 {
+  line-height: 1.15;
+}
+
+.cr22-ride__station {
+  font-size: clamp(13px, 2.1vh, 15px);
+}
+
+.cr22-ride__selection {
+  padding-block: clamp(4px, 1.1vh, 16px);
+}
+
+.cr22-ride__selection span {
+  font-size: clamp(12px, 1.9vh, 14px);
+}

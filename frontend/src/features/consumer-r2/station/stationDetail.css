@@ -405,3 +405,38 @@
 .cr22-station__nearby-list li:last-child {
   padding-bottom: 0;
 }
+
+/* Reviewer call: stretch 평소 패턴 to the height of the column beside it rather
+   than leaving dead space under the heatmap. The panel fills the row and the
+   seven weekday rows share whatever height that gives them; the hour-label row
+   stays its natural size. */
+.cr22-station__details-grid {
+  align-items: stretch;
+}
+
+.cr22-station .cr22-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.cr22-station .cr22-card__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cr22-station__heatmap {
+  flex: 1 1 auto;
+  min-height: 0;
+  grid-template-rows: auto repeat(7, minmax(0.5rem, 1fr));
+}
+
+.cr22-station__heat {
+  height: auto;
+  min-height: 0.5rem;
+}
+
+.cr22-station__heatmap-legend {
+  flex: 0 0 auto;
+}
