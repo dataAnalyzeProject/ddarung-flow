@@ -652,7 +652,7 @@
 }
 
 .cr22-login__mobility-strip {
-  height: clamp(5rem, 14vh, 17rem);
+  height: clamp(3.5rem, 11.5vh, 17rem);
 }
 
 .cr22-opening__copy h1 {
