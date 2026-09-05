@@ -308,7 +308,7 @@ test("creates a search recheck only after the user confirms an explicit departur
   render(<ConsumerMainPage services={services} mapRenderer={PreviewMap} />);
   await waitFor(() => expect(screen.getByRole("button", { name: "대여 가능성 비교" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "대여 가능성 비교" }));
-  fireEvent.click(await screen.findByRole("button", { name: "출발 전에 다시 알려주세요" }));
+  fireEvent.click(await screen.findByRole("button", { name: "알림 신청" }));
   expect(services.createSearchRecheck).not.toHaveBeenCalled();
   const departureAt = "2099-09-03T18:30";
   fireEvent.change(screen.getByLabelText(/출발 시각/), { target: { value: departureAt } });
@@ -327,7 +327,7 @@ test("keeps comparison results when optional recent-search storage or recheck cr
   fireEvent.click(screen.getByRole("button", { name: "대여 가능성 비교" }));
   expect(await screen.findByRole("heading", { name: "추천 대여소" })).toBeInTheDocument();
   expect(screen.getByText("비교 결과는 확인했지만 최근 검색을 저장하지 못했습니다.")).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "출발 전에 다시 알려주세요" }));
+  fireEvent.click(screen.getByRole("button", { name: "알림 신청" }));
   fireEvent.change(screen.getByLabelText(/출발 시각/), { target: { value: "2099-09-03T18:30" } });
   fireEvent.click(screen.getByRole("button", { name: "15분 전 알림 받기" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("재확인 알림을 신청하지 못했습니다.");

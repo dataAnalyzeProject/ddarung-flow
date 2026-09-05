@@ -263,7 +263,7 @@ function TransitWorkspace({ candidate, destination, mapRenderer, onClose, onOpen
   );
 }
 
-function ResultsWorkspace({ input, mapRenderer, onOpenRide, onOpenStation, onReset, places, result, selectedId, setSelectedId, showTransit, setShowTransit }) {
+function ResultsWorkspace({ input, mapRenderer, onOpenRide, onOpenStation, onRecheck, onReset, places, recheckDisabled, result, selectedId, setSelectedId, showTransit, setShowTransit }) {
   const resultHeadingRef = useRef(null);
   const transitHeadingRef = useRef(null);
   const selected = result.candidates.find((candidate) => candidate.stationId === selectedId) ?? result.candidates[0];
@@ -305,6 +305,7 @@ function ResultsWorkspace({ input, mapRenderer, onOpenRide, onOpenStation, onRes
             </dl>
             <div className="cr293-evidence__actions">
               {input.travelMode === "PUBLIC_TRANSIT" && selected.routeDetail ? <ConsumerButton variant="secondary" aria-controls="cr293-transit-detail" aria-expanded={showTransit} onClick={() => setShowTransit((value) => !value)}>{showTransit ? "경로 상세 닫기" : "대중교통 경로 상세"}</ConsumerButton> : null}
+              {onRecheck ? <ConsumerButton variant="secondary" disabled={recheckDisabled} onClick={onRecheck}>알림 신청</ConsumerButton> : null}
               <ConsumerButton variant="secondary" onClick={() => onOpenStation?.(selected)}>대여소 상세</ConsumerButton>
               <ConsumerButton onClick={() => onOpenRide?.(selected)}>라이딩 둘러보기</ConsumerButton>
             </div>
@@ -457,7 +458,7 @@ export default function ConsumerMainPage({ currentResult, mapRenderer, onInputCh
   if (state === "INITIAL" || state === "LOADING") content = <SearchWorkspace authState={authState} input={input} onChange={updateInput} onOpenPlanner={() => onNavigate?.("planner")} onSearch={submit} places={places} searchPlaces={services.searchPlaces} state={state} />;
   else if (state === "ERROR") content = <AsyncState state="error" title="추천 결과를 불러오지 못했습니다" description="입력은 그대로 보존했습니다. 잠시 후 다시 시도해 주세요." onAction={submit} />;
   else if (state === "EMPTY") content = <AsyncState state="empty" title="조건에 맞는 대여소를 찾지 못했습니다" description="확인 불가 값을 0으로 바꾸지 않았습니다. 조건을 바꿔 다시 찾아보세요." actionLabel="조건 다시 선택" onAction={reset} />;
-  else content = <ResultsWorkspace input={input} mapRenderer={mapRenderer} onOpenRide={(candidate) => onOpenRide?.(candidate, searchInput)} onOpenStation={(candidate) => onOpenStation?.(candidate, searchInput)} onReset={reset} places={places} result={result} selectedId={selectedId} setSelectedId={setSelectedId} showTransit={showTransit} setShowTransit={setShowTransit} />;
+  else content = <ResultsWorkspace input={input} mapRenderer={mapRenderer} onOpenRide={(candidate) => onOpenRide?.(candidate, searchInput)} onOpenStation={(candidate) => onOpenStation?.(candidate, searchInput)} onRecheck={searchInput ? () => { setRecheckStatus("idle"); setRecheckOpen(true); } : undefined} onReset={reset} places={places} recheckDisabled={authState !== "authenticated" || recheckStatus === "saving"} result={result} selectedId={selectedId} setSelectedId={setSelectedId} showTransit={showTransit} setShowTransit={setShowTransit} />;
 
   return (
     <ConsumerR2Theme className="cr293-page">
@@ -467,7 +468,6 @@ export default function ConsumerMainPage({ currentResult, mapRenderer, onInputCh
         <ConsumerContainer className={state === "INITIAL" || state === "LOADING" ? "cr293-container--initial" : "cr293-container--result"}>
           {authState === "error" ? <AsyncState state="error" title="로그인 상태를 확인하지 못했습니다" description="입력한 조건은 유지됩니다. 연결을 확인한 뒤 다시 시도해 주세요." actionLabel="로그인 상태 다시 확인" onAction={() => setAuthAttempt((value) => value + 1)} /> : null}
           {content}
-          {(state === "RESULT" || state === "PARTIAL") && searchInput ? <ConsumerButton variant="secondary" disabled={authState !== "authenticated" || recheckStatus === "saving"} onClick={() => { setRecheckStatus("idle"); setRecheckOpen(true); }}>출발 전에 다시 알려주세요</ConsumerButton> : null}
           {recentSearchError ? <p role="status">비교 결과는 확인했지만 최근 검색을 저장하지 못했습니다.</p> : null}
           {recheckStatus === "success" ? <p role="status">출발 15분 전 재확인 알림을 신청했습니다.</p> : null}
           {recheckStatus === "error" ? <p role="alert">재확인 알림을 신청하지 못했습니다. 다시 시도해 주세요.</p> : null}
