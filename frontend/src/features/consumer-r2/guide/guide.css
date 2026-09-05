@@ -1,4 +1,4 @@
-.cr22-guide { min-height: 100vh; background: #fbfcfe; color: var(--cr22-color-ink); }
+.cr22-guide { background: #fbfcfe; color: var(--cr22-color-ink); }
 .cr22-guide__main { padding: 1.25rem 0 4rem; }
 .cr22-guide__back { min-height: 2.75rem; display: inline-flex; align-items: center; gap: .45rem; border: 0; background: transparent; color: #435571; font-size: .875rem; font-weight: 750; cursor: pointer; }
 .cr22-guide__back svg { transform: rotate(180deg); }
@@ -107,3 +107,10 @@
   .cr22-guide__facts-note { margin-inline: .8rem; }
   .cr22-guide__fact { padding-inline: 1rem; }
 }
+
+/* Viewport fit (CONSUMER-R2-FIT-01): 4rem of bottom padding and a width-sized
+   headline pushed the guide past a short laptop screen. */
+.cr22-guide__main { padding: clamp(0.6rem, 1.9vh, 1.25rem) 0 clamp(0.75rem, 2.2vh, 4rem); }
+.cr22-guide__hero { margin: clamp(0.25rem, 0.8vh, .5rem) 0 clamp(0.45rem, 1.5vh, .95rem); }
+.cr22-guide__hero h1 { font-size: clamp(1.3rem, 3.4vh, 2.25rem); }
+.cr22-guide__fact { min-height: clamp(4.25rem, 11vh, 6.9rem); padding: clamp(0.55rem, 1.6vh, 1rem) 1.15rem; }

@@ -1,5 +1,4 @@
 .cr293-page {
-  min-height: 100vh;
   background: #f7f9fc;
 }
 
@@ -10,21 +9,11 @@
   margin: 0;
 }
 
-@media (min-width: 64.01rem) {
-  .cr293-page .cr22-header {
-    min-height: 5.625rem;
-  }
-
-  .cr293-page .cr22-header__nav {
-    justify-content: flex-start;
-    gap: 3.3125rem;
-    padding-left: 8.6875rem;
-  }
-
-  .cr293-page .cr22-header__nav-link {
-    min-height: 5.625rem;
-  }
-}
+/* The Main screen used to override the shared header at desktop widths - a
+   fixed 5.625rem tall bar with the nav pushed left - so it was the one screen
+   whose header did not match the rest of the app and the one screen that did
+   not shed header height on a short viewport. It now uses the shared header
+   like every other screen. */
 
 .cr293-ride-guidance {
   display: flex;
@@ -1167,144 +1156,338 @@
   }
 }
 
-@media (min-width: 64rem) and (max-height: 56.25rem) {
-  .cr293-hero {
-    height: 12.8rem;
-  }
 
-  .cr293-hero h1 {
-    font-size: clamp(2rem, 2.7vw, 2.65rem);
-  }
 
-  .cr293-hero p {
-    margin-top: 0.65rem;
-    font-size: 0.95rem;
-  }
 
-  .cr293-search {
-    padding-top: 1.3rem;
-    padding-bottom: 1.4rem;
-  }
-
-  .cr293-search__steps {
-    margin-bottom: 1rem;
-  }
-
-  .cr293-search__step {
-    min-height: 17rem;
-  }
-
-  .cr293-search .cr22-place-card {
-    margin-top: 1rem;
-  }
-
-  .cr293-search .cr22-place-card__content {
-    min-height: 6.5rem;
-  }
-
-  .cr293-options .cr22-option-card {
-    min-height: 9rem;
-  }
-
-  .cr293-bike-count {
-    gap: 0.7rem 0.9rem;
-    margin-top: 1rem;
-  }
-
-  .cr293-bike-count button {
-    min-height: 4.15rem;
-  }
-
-  .cr293-search__actions {
-    gap: 0.8rem;
-  }
-
-  .cr293-search__actions .cr22-button {
-    min-height: 4rem;
-  }
-
-  .cr293-search__hint {
-    margin-top: 0.8rem !important;
-  }
-}
-
-/* Real compact desktop heights (e.g. 1536x695 at 125% OS scaling) leave the
-   INITIAL hero + search card mostly below the fold. Width-based breakpoints
-   above don't apply here since the viewport is still desktop-wide. */
-@media (min-width: 64rem) and (max-height: 45rem) {
-  .cr293-hero {
-    height: 12.5rem;
-  }
-
-  .cr293-hero > div {
-    width: min(34rem, 46vw);
-  }
-
-  .cr293-hero h1 {
-    font-size: clamp(1.5rem, 2.4vw, 2.1rem);
-    line-height: 1.2;
-  }
-
-  .cr293-hero p {
-    margin-top: 0.4rem;
-    font-size: 0.95rem;
-  }
-
-  .cr293-container--initial {
-    margin-top: -1.25rem;
-    padding-bottom: 3rem;
-  }
-
-  .cr293-search {
-    padding: 1.25rem 1.5rem;
-  }
-
-  .cr293-search__heading {
-    gap: 0.2rem;
-  }
-
-  .cr293-search__heading h2 {
-    font-size: 1.4rem;
-  }
-
-  .cr293-search__steps {
-    margin: 1.1rem 0 1rem;
-  }
-
-  .cr293-search__step {
-    min-height: 9rem;
-    padding: 0.85rem;
-  }
-}
-
-/* Even shorter viewports (browser chrome eating into a laptop's short
-   screen): the hero must not force a scroll that only clips its own
-   text/image via overflow: hidden. */
-@media (min-width: 64rem) and (max-height: 38rem) {
-  .cr293-hero {
-    height: 9.5rem;
-  }
-
-  .cr293-hero h1 {
-    font-size: 1.4rem;
-  }
-
-  .cr293-hero p {
-    display: none;
-  }
-
-  .cr293-container--initial {
-    margin-top: -0.75rem;
-    padding-bottom: 2rem;
-  }
-
-  .cr293-search__step {
-    min-height: 8rem;
-  }
-}
 
 @media (prefers-reduced-motion: reduce) {
   .cr293-page * {
     scroll-behavior: auto !important;
   }
+}
+
+/* Viewport fit (CONSUMER-R2-FIT-01) - the main search screen.
+
+   This screen was 155px past a 1536x695 laptop viewport. Three stepped
+   max-height blocks (900px, 720px, 608px) used to sit here and have been
+   removed: they snapped, so the same screen fit at 695px and overflowed at
+   730px, and their main lever could not work anyway - they lowered min-height
+   on the search steps, and min-height is a floor, so the steps still rendered
+   at their content height of 254px, driven by the two rows of bike-count
+   circles.
+
+   Size the chrome from viewport height instead. The calc() forms hold the
+   FINAL proportions on a tall screen and shed height as the screen gets
+   shorter, rather than snapping at a breakpoint: the hero reaches its full
+   16.25rem at roughly 1080px of viewport height and shrinks continuously
+   below that. */
+.cr293-hero {
+  height: clamp(5.25rem, calc(57vh - 192px), 16.25rem);
+}
+
+.cr293-hero h1 {
+  font-size: clamp(1.4rem, calc(7vh - 17px), 3.0625rem);
+}
+
+.cr293-hero p {
+  margin-top: clamp(0.35rem, 1.5vh, 1.05rem);
+}
+
+.cr293-search {
+  padding: clamp(0.3rem, 1.9vh, 1.7rem) 1.9rem clamp(0.3rem, 1.9vh, 1.8125rem);
+}
+
+.cr293-search__steps {
+  margin: 0 0 clamp(0.375rem, 1.6vh, 1.5rem);
+}
+
+.cr293-container--initial {
+  padding-bottom: clamp(0.25rem, 1.9vh, 2.6rem);
+}
+
+/* The bike-count circles are the tallest thing in the step row, so they set
+   the height of all four steps. They are aspect-ratio: 1, so the column width
+   controls the circle. */
+.cr293-bike-count {
+  grid-template-columns: repeat(3, minmax(2.5rem, clamp(3.4rem, calc(18vh - 70px), 5.25rem)));
+  gap: clamp(0.4rem, 1.3vh, 1rem) 1.05rem;
+  margin-top: clamp(0.5rem, 2vh, 1.55rem);
+}
+
+.cr293-bike-count button {
+  min-height: clamp(3.1rem, calc(17vh - 70px), 4.85rem);
+}
+
+/* Leave headroom rather than fitting exactly. This screen shows validation and
+   provider-failure text under the inputs ("장소 검색에 실패했습니다", "출발 위치와
+   대여 희망 지역을 검색 결과에서 각각 선택해 주세요"), which is real content that
+   appears after the happy-path layout is measured. Fitting to the pixel meant
+   one line of error text put the screen back into a scroll. */
+.cr293-search__step {
+  padding-top: clamp(0.2rem, 1.4vh, 0.85rem);
+  padding-bottom: clamp(0.2rem, 1.4vh, 0.85rem);
+}
+
+/* Viewport fit (CONSUMER-R2-FIT-01) - the search RESULT screen.
+
+   The result screen ran 608px past the viewport: the candidate list and the
+   route map are laid out side by side and both grew to their content height.
+   Keep the heading and the search conditions in place - they say what you are
+   looking at - give the list/map row whatever height is left, and scroll the
+   candidate list inside its own pane. The map fills its pane rather than
+   setting the row height. */
+.cr293-page > main {
+  display: flex;
+  flex-direction: column;
+}
+
+/* INITIAL keeps its natural height and lets <main> scroll if error text pushes
+   it over; RESULT takes the leftover height so its list/map row can be bounded. */
+.cr293-hero,
+.cr293-container--initial {
+  flex: 0 0 auto;
+}
+
+.cr293-container--result {
+  padding-top: clamp(0.75rem, 2.4vh, 2.75rem);
+  padding-bottom: clamp(0.75rem, 2.2vh, 5rem);
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cr293-result-heading,
+.cr293-condition,
+.cr293-container--result > .cr22-button,
+.cr293-container--result > .cr22-state {
+  flex: 0 0 auto;
+}
+
+.cr293-condition {
+  margin-top: clamp(0.5rem, 1.9vh, 1.75rem);
+  padding: clamp(0.45rem, 1.3vh, 0.9rem) 1.2rem;
+}
+
+.cr293-results,
+.cr293-transit-view {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-top: clamp(0.5rem, 1.6vh, 1.25rem);
+  align-items: stretch;
+}
+
+.cr293-results__list,
+.cr293-results__map,
+.cr293-transit {
+  min-height: 0;
+}
+
+.cr293-results__list {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.cr293-result-heading h1 {
+  font-size: clamp(1.3rem, 3.6vh, 2.35rem);
+}
+
+/* The dimensions the removed stepped blocks used to control, expressed
+   continuously. Each reaches its FINAL value at roughly 1080px of viewport
+   height and sheds height smoothly below that, instead of snapping at a
+   breakpoint. */
+.cr293-search__step {
+  min-height: clamp(7.5rem, calc(47.8vh - 188px), 20.5rem);
+}
+
+.cr293-search .cr22-place-card__content {
+  min-height: clamp(4.5rem, calc(8.6vh + 44px), 8.55rem);
+}
+
+.cr293-options .cr22-option-card {
+  min-height: clamp(5.5rem, calc(13vh + 18px), 11.55rem);
+}
+
+.cr293-search__actions {
+  gap: clamp(0.7rem, calc(1.45vh + 3px), 1.15rem);
+}
+
+.cr293-search__actions .cr22-button {
+  min-height: clamp(2.6rem, calc(4.4vh + 14px), 5rem);
+}
+
+.cr293-search__heading h2 {
+  font-size: clamp(1.25rem, calc(3.9vh - 5px), 1.75rem);
+}
+
+.cr293-hero > div {
+  width: min(39rem, 48vw);
+}
+
+/* The per-step helper line is chrome around the control it explains. */
+.cr293-search__step-help {
+  margin-top: clamp(0.2rem, 0.9vh, 0.6rem);
+}
+
+/* Reviewer call (2026-09-05): drop the two per-step helper lines - "라이딩의
+   최종 목적지가 아닙니다…" under step 2 and "이동 수단에 따라 예상 이동시간이
+   달라져요." under step 3. They were pinned to the bottom of their step, so
+   they also reserved a row of height on every step; removing them gives that
+   height back to the hero.
+
+   The JSX still renders them, so this hides rather than deletes. Deleting the
+   markup is a ConsumerMainPage.jsx change, which is outside this contract. */
+.cr293-search__step-help {
+  display: none;
+}
+
+/* All four steps start their control at the same height. Steps 1 and 2 put the
+   number in an absolutely positioned span beside a label inside the place
+   picker; steps 3 and 4 put the number inside the label itself. Their labels
+   also wrap to a different number of lines ("대여소까지 / 어떻게 이동하나요?"
+   is two), which is what pushed the inputs and the cards out of line. Give
+   every label the same two-line box and start every step's content at the top
+   of the same row. */
+.cr293-search__step {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  align-content: start;
+}
+
+.cr293-search__step-label,
+.cr293-place-picker > label,
+.cr293-place-picker__label {
+  min-height: clamp(2.75rem, 6.4vh, 3.25rem);
+  align-items: flex-start;
+  align-content: center;
+  font-size: clamp(0.92rem, 2.2vh, 1.05rem);
+}
+
+.cr293-place-picker {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  align-content: start;
+}
+
+/* One shared gap between a step's label and its control, so the inputs, the
+   travel-mode cards and the bike-count circles all begin on the same line. */
+.cr293-place-picker__input,
+.cr293-options,
+.cr293-bike-count {
+  margin-top: clamp(0.35rem, 1.2vh, 1rem);
+}
+
+.cr293-place-picker__input {
+  min-height: clamp(2.6rem, calc(4.4vh + 14px), 3.25rem);
+}
+
+/* Last of the height the hero needs: the travel-mode icon, the two footnotes
+   under the card, and the card's own padding all track the viewport height. */
+.cr293-options .cr22-option-card__icon .cr22-icon {
+  width: clamp(1.9rem, 4.4vh, 2.8rem);
+  height: clamp(1.9rem, 4.4vh, 2.8rem);
+}
+
+/* The walking illustration is a bitmap with its own aspect ratio, so capping
+   the width alone left it taller than the icon beside it. */
+.cr293-walk-illustration {
+  width: clamp(2.25rem, 5.1vh, 3.25rem);
+  max-height: clamp(2.25rem, 5.1vh, 3.25rem);
+  object-fit: contain;
+}
+
+.cr293-search__hint {
+  margin-top: clamp(0.5rem, 2vh, 1.35rem) !important;
+}
+
+.cr293-search__selection-hint {
+  margin-top: clamp(0.2rem, 0.7vh, 0.45rem) !important;
+}
+
+/* The hero art is object-fit: cover on a band much wider than it is tall, so
+   the crop decides what survives. Centred, it cut the bicycle's wheels off at
+   the bottom edge. Bias the crop downward: the sky at the top carries nothing. */
+.cr293-hero img {
+  object-position: center 72%;
+}
+
+/* Result screen, reviewer pass 2 (2026-09-05).
+
+   Right pane: the map and the selected-route evidence panel share one column,
+   and the pane clips. With the row bounded by the viewport the map took the
+   whole column, so the evidence numbers, the three action buttons and the
+   disclaimer were cut off entirely - not scrolled out of reach, gone. The map
+   now takes only what is left after the evidence panel, down to a floor, and
+   the pane scrolls if even that is not enough. */
+.cr293-results__map {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.cr293-map {
+  flex: 1 1 auto;
+  min-height: clamp(8rem, 20vh, 24rem);
+}
+
+.cr293-evidence {
+  flex: 0 0 auto;
+  padding: clamp(0.6rem, 1.7vh, 1.25rem) 1.4rem clamp(0.5rem, 1.4vh, 1rem);
+}
+
+.cr293-evidence__numbers {
+  gap: clamp(0.4rem, 1.1vh, 0.8rem);
+  margin-top: clamp(0.3rem, 1.1vh, 1rem);
+}
+
+.cr293-evidence__numbers span {
+  padding: clamp(0.4rem, 1.1vh, 0.8rem);
+}
+
+.cr293-evidence__numbers b {
+  font-size: clamp(0.98rem, 2.4vh, 1.15rem);
+}
+
+/* Three stacked label/value rows cost more height than they need on a short
+   screen; two columns say the same thing in two rows. */
+.cr293-evidence__metadata {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(0.25rem, 0.7vh, 0.45rem) 1.25rem;
+  margin-top: clamp(0.4rem, 1.3vh, 0.9rem);
+  padding: clamp(0.4rem, 1.1vh, 0.8rem);
+}
+
+.cr293-evidence__actions {
+  margin: clamp(0.45rem, 1.4vh, 1rem) 0 clamp(0.3rem, 1vh, 0.7rem);
+}
+
+.cr293-evidence__actions .cr22-button {
+  min-height: clamp(2.3rem, calc(3.6vh + 20px), 3rem);
+}
+
+/* Left pane: about three candidates on screen, the rest by dragging the list.
+   The card sheds padding and the probability figure, never the facts. */
+.cr293-candidate {
+  padding: clamp(0.4rem, 1.25vh, 1rem) 1.15rem;
+}
+
+.cr293-candidate__body {
+  gap: clamp(0.15rem, 0.55vh, 0.45rem);
+}
+
+.cr293-candidate__metric b {
+  font-size: clamp(1.1rem, 2.9vh, 1.45rem);
+}
+
+/* The recheck button moved into the route actions row (reviewer, 2026-09-05),
+   so that row now carries four buttons and the full-width row that used to sit
+   under the results is gone. Let the row wrap rather than squeeze the labels,
+   and let the map take the height the removed row gave back. */
+.cr293-evidence__actions {
+  flex-wrap: wrap;
+}
+
+.cr293-map {
+  min-height: clamp(10rem, 26vh, 24rem);
 }

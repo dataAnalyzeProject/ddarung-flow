@@ -1,4 +1,4 @@
-.cr22-support { min-height: 100vh; background: #f7f9fc; }
+.cr22-support { background: #f7f9fc; }
 .cr22-support__main { padding: clamp(.85rem, 1.2vw, 1rem) 0 3rem; }
 .cr22-support__hero, .cr22-support__view-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1.5rem; margin-bottom: clamp(.6rem, .9vw, .75rem); }
 .cr22-support__hero h1, .cr22-support__hero p, .cr22-support__view-head h1, .cr22-support__view-head p { margin: 0; }
@@ -93,7 +93,7 @@
 .cr22-support__event-mark.is-premium { background: var(--cr22-color-purple-soft); color: var(--cr22-color-purple); }
 .cr22-support__meta i { color: var(--cr22-color-blue-dark); font-size: .7rem; font-style: normal; font-weight: 900; }
 .cr22-support__dialog-backdrop { position: fixed; z-index: 1000; inset: 0; padding: 1rem; display: grid; place-items: center; background: rgba(5, 18, 39, .58); }
-.cr22-support__dialog { width: min(100%, 31rem); max-height: calc(100vh - 2rem); padding: clamp(1.25rem, 4vw, 2rem); overflow-y: auto; overscroll-behavior: contain; border-radius: var(--cr22-radius-lg); background: #fff; box-shadow: var(--cr22-shadow-raised); }
+.cr22-support__dialog { width: min(100%, 31rem); max-height: calc(100dvh - 2rem); padding: clamp(1.25rem, 4vw, 2rem); overflow-y: auto; overscroll-behavior: contain; border-radius: var(--cr22-radius-lg); background: #fff; box-shadow: var(--cr22-shadow-raised); }
 .cr22-support__dialog > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
 .cr22-support__dialog h2, .cr22-support__dialog p { margin: 0; }
 .cr22-support__dialog h2 { font-size: 1.45rem; line-height: 1.3; letter-spacing: -.03em; }
@@ -136,4 +136,75 @@
   .cr22-support__event { grid-template-columns: 1fr; }
   .cr22-support__event > .cr22-button { width: 100%; }
   .cr22-support__dialog-actions .cr22-button { flex: 1; padding-inline: .6rem; white-space: nowrap; }
+}
+
+/* Viewport fit (CONSUMER-R2-FIT-01).
+
+   The shell hands <main> exactly the height left below the header. Q&A and
+   Alerts are list screens, so the heading, search, filters and tabs hold their
+   place and only the list scrolls. Scrolling the whole page instead would
+   carry the filter you are using off the top of the screen while you read the
+   rows it produced. Views that are not lists (the question form, the question
+   detail) keep their natural height and let the container scroll. */
+.cr22-support__main {
+  padding-bottom: clamp(0.75rem, 1.6vh, 1.25rem);
+  display: flex;
+  flex-direction: column;
+}
+
+.cr22-support__main > .cr22-container {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.cr22-support__hero,
+.cr22-support__view-head,
+.cr22-support__recheck-panel,
+.cr22-support__form-view,
+.cr22-support__form-card,
+.cr22-support__detail-card {
+  flex: 0 0 auto;
+}
+
+.cr22-support__qna-panel,
+.cr22-support__alerts-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cr22-support__search,
+.cr22-support__filters,
+.cr22-support__tabs,
+.cr22-support__section-head,
+.cr22-support__filter-chips {
+  flex: 0 0 auto;
+}
+
+.cr22-support__question-list,
+.cr22-support__event-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* The recheck banner is secondary to the alert list it sits above, so it gives
+   up height first on a short screen. */
+.cr22-support__recheck-panel {
+  margin-bottom: clamp(0.5rem, 1.1vh, 0.8rem);
+  padding: clamp(0.5rem, 1.1vh, 0.75rem);
+}
+
+.cr22-support__recheck-art {
+  width: min(28rem, 43%);
+}
+
+.cr22-support__subscription-list article {
+  padding: clamp(0.2rem, 0.5vh, 0.3rem) 0;
 }

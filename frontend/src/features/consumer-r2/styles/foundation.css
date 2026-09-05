@@ -17,6 +17,38 @@
   text-rendering: optimizeLegibility;
 }
 
+/* App shell.
+
+   Every consumer page root is a single .cr22-scope whose direct children are
+   the shared header and exactly one <main>. Pinning the scope to the viewport
+   height makes the document itself unscrollable: the page is always exactly
+   one screen tall, and anything longer scrolls inside <main> instead of
+   pushing the header off the top.
+
+   This replaces the previous approach of shrinking min-heights at stepped
+   max-height breakpoints. That could not work: min-height is a floor, not a
+   ceiling, so a row whose content is taller than the floor ignored it. */
+.cr22-scope {
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.cr22-scope > .cr22-header {
+  flex: 0 0 auto;
+}
+
+.cr22-scope > main {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
 .cr22-scope ::selection {
   background: var(--cr22-color-blue-soft);
   color: var(--cr22-color-ink);
@@ -852,4 +884,26 @@ button.cr22-header__nav-link:disabled {
     transition: none;
     animation: none;
   }
+}
+
+/* Viewport fit (CONSUMER-R2-FIT-01): the header is fixed chrome on every
+   screen, so on a short viewport it is the cheapest height to give back. The
+   floor keeps the nav links a comfortable click target. */
+@media (min-width: 64rem) {
+  .cr22-header {
+    min-height: clamp(3.25rem, calc(4.6vh + 36px), var(--cr22-header-height));
+  }
+
+  .cr22-header__nav-link {
+    min-height: clamp(3.25rem, calc(4.6vh + 36px), var(--cr22-header-height));
+  }
+}
+
+/* Option cards are the tallest control in the Main search row, so their own
+   padding and gap track the viewport height too. min-height stays a floor for
+   the hit area; the height above it comes from the content. */
+.cr22-option-card {
+  padding: clamp(0.65rem, 2.2vh, var(--cr22-space-6));
+  gap: clamp(0.3rem, 1.1vh, var(--cr22-space-3));
+  min-height: clamp(5rem, calc(12vh + 22px), 10.5rem);
 }

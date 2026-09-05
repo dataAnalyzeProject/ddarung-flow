@@ -370,10 +370,10 @@ test("saved plan recheck requires an explicit opt-in and sends the returned save
   const recheckAdapter = { createPlanRecheck: jest.fn().mockResolvedValue({ publicId: "recheck-current", status: "ACTIVE" }) };
   const onSaved = jest.fn();
   render(<ConsumerJourneyPlanResultPage adapter={adapter} initialDecision={decision()} now={() => new Date("2030-09-03T00:00:00Z")} onSaved={onSaved} recheckAdapter={recheckAdapter} />);
-  expect(screen.queryByRole("button", { name: "출발 전에 다시 알려주세요" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "알림 신청" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "새 알림 보기" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "이 계획 저장" }));
-  fireEvent.click(await screen.findByRole("button", { name: "출발 전에 다시 알려주세요" }));
+  fireEvent.click(await screen.findByRole("button", { name: "알림 신청" }));
   expect(onSaved).toHaveBeenCalledWith(saved);
   expect(recheckAdapter.createPlanRecheck).not.toHaveBeenCalled();
   fireEvent.change(screen.getByLabelText(/출발 시각/), { target: { value: "2030-09-03T12:00" } });
@@ -439,9 +439,9 @@ test("result keeps a saved ID tied to its revision and prevents overlapping save
   fireEvent.click(screen.getByRole("button", { name: "이 계획 저장" }));
   expect(screen.getByRole("button", { name: "현재 근거로 다시 계획" })).toBeDisabled();
   await act(async () => resolveSave({ savedJourneyId: "saved-revision-1" }));
-  expect(screen.getByRole("button", { name: "출발 전에 다시 알려주세요" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "알림 신청" })).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "현재 근거로 다시 계획" }));
-  await waitFor(() => expect(screen.queryByRole("button", { name: "출발 전에 다시 알려주세요" })).not.toBeInTheDocument());
+  await waitFor(() => expect(screen.queryByRole("button", { name: "알림 신청" })).not.toBeInTheDocument());
 });
 
 test.each([

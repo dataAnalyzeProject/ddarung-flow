@@ -1,4 +1,4 @@
-.cr22-personal { min-height: 100vh; background: #f7f9fc; }
+.cr22-personal { background: #f7f9fc; }
 .cr22-personal__main { padding: clamp(1rem, 1.5vw, 1.25rem) 0 3rem; }
 .cr22-personal__hero { display: flex; align-items: flex-start; justify-content: space-between; gap: 1.5rem; margin-bottom: clamp(.7rem, 1.1vw, .9rem); }
 .cr22-personal__hero h1, .cr22-personal__hero p { margin: 0; }.cr22-personal__hero h1 { color: var(--cr22-color-ink); font-size: clamp(1.75rem, 2.6vw, 2.5rem); line-height: 1.15; letter-spacing: -.04em; }.cr22-personal__hero > div > p:last-child { max-width: 56ch; margin-top: .4rem; color: var(--cr22-color-muted); }
@@ -29,3 +29,126 @@
 .cr22-personal__service-grid button > div { display: flex; align-items: center; justify-content: space-between; gap: .35rem; }.cr22-personal__service-grid i { width: 2rem; height: 2rem; display: grid; place-items: center; border-radius: 50%; background: #e7f8f5; color: var(--cr22-color-teal); font-style: normal; }
 @media (max-width: 59.99rem) { .cr22-personal__favorite-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }.cr22-personal__row--plan { grid-template-columns: 3rem minmax(0, 1fr); }.cr22-personal__row--plan .cr22-personal__conditions { grid-column: 2; }.cr22-personal__row--plan .cr22-button { grid-column: 1 / -1; min-width: 10.5rem; justify-self: start; }.cr22-personal__account-grid { grid-template-columns: 1fr; } }
 @media (max-width: 39.99rem) { .cr22-personal__current-banner { grid-template-columns: auto minmax(0, 1fr); }.cr22-personal__current-banner img { display: none; }.cr22-personal__favorite-grid { grid-template-columns: 1fr; }.cr22-personal__panel .cr22-personal__section-head { display: grid; }.cr22-personal__panel-actions { justify-content: space-between; }.cr22-personal__sort { min-width: 7rem; }.cr22-personal__row--plan { grid-template-columns: 2.75rem minmax(0, 1fr); }.cr22-personal__row--plan .cr22-button, .cr22-personal__row--plan .cr22-personal__conditions { grid-column: 1 / -1; }.cr22-personal__row--plan .cr22-button { width: 100%; }.cr22-personal__planner-cta { align-items: flex-start; flex-direction: column; }.cr22-personal__planner-cta .cr22-button { width: 100%; } }
+
+/* Viewport fit (CONSUMER-R2-FIT-01).
+
+   Archive is a list screen: its heading and tabs hold their place and only the
+   tab panel scrolls, so switching tabs never scrolls the tab strip away. My
+   Page is not a list, so it stays whole and only gives up chrome height. */
+.cr22-personal__main {
+  padding-bottom: clamp(0.5rem, 1.4vh, 1.25rem);
+  display: flex;
+  flex-direction: column;
+}
+
+.cr22-personal__main > .cr22-container {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.cr22-personal__hero,
+.cr22-personal__state,
+.cr22-personal__bottom-note {
+  flex: 0 0 auto;
+}
+
+.cr22-personal__archive {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.cr22-personal__tabs {
+  flex: 0 0 auto;
+}
+
+.cr22-personal__panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* My Page chrome scales with the viewport height instead of stepping at fixed
+   breakpoints, so a short laptop screen loses padding rather than content. */
+.cr22-personal__sections {
+  flex: 0 0 auto;
+  gap: clamp(0.7rem, 1.6vh, 1.25rem);
+}
+
+.cr22-personal__section {
+  padding: clamp(0.8rem, 1.8vh, 1.5rem);
+}
+
+.cr22-personal__section-head {
+  margin-bottom: clamp(0.35rem, 0.8vh, 0.55rem);
+}
+
+.cr22-personal__account-grid {
+  gap: clamp(0.75rem, 1.8vh, 1.25rem);
+}
+
+.cr22-personal__service-grid {
+  gap: clamp(0.5rem, 1.1vh, 0.75rem);
+}
+
+.cr22-personal__service-grid button {
+  min-height: clamp(4.5rem, 9vh, 6.5rem);
+  padding: clamp(0.5rem, 1.2vh, 0.85rem);
+  gap: clamp(0.35rem, 0.9vh, 0.75rem);
+}
+
+.cr22-personal__hero {
+  margin-bottom: clamp(0.5rem, 1.1vh, 0.9rem);
+}
+
+/* My Page has no list to scroll, so it has to fit outright. These are the
+   chrome dimensions - heading size, avatar, card gaps, tile padding - not the
+   content itself, and they only shrink as the viewport gets shorter. */
+.cr22-personal__main {
+  padding-top: clamp(0.5rem, 1.2vh, 1.25rem);
+}
+
+.cr22-personal__hero h1 {
+  font-size: clamp(1.5rem, 3.4vh, 2.5rem);
+}
+
+.cr22-personal__avatar {
+  width: clamp(2rem, 4.4vh, 2.75rem);
+  height: clamp(2rem, 4.4vh, 2.75rem);
+  font-size: clamp(0.95rem, 2vh, 1.25rem);
+}
+
+.cr22-personal__profile,
+.cr22-personal__premium-card {
+  gap: clamp(0.25rem, 0.7vh, 0.5rem);
+}
+
+.cr22-personal__service-grid button {
+  gap: clamp(0.25rem, 0.7vh, 0.75rem);
+}
+
+.cr22-personal__service-grid i {
+  width: clamp(1.5rem, 3.2vh, 2rem);
+  height: clamp(1.5rem, 3.2vh, 2rem);
+}
+
+/* Section headings were sized off viewport width, which keeps them at their
+   largest on exactly the wide-but-short screens that have the least room. */
+.cr22-personal__section-head h2 {
+  font-size: clamp(1.05rem, 2.6vh, 1.6rem);
+}
+
+.cr22-personal__section-head p {
+  margin-top: clamp(0.15rem, 0.4vh, 0.35rem);
+}
+
+.cr22-personal__profile-rows {
+  margin: clamp(0.05rem, 0.2vh, 0.1rem) 0 clamp(0.15rem, 0.5vh, 0.35rem);
+}
