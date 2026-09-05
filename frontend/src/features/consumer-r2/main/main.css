@@ -1482,12 +1482,78 @@
 
 /* The recheck button moved into the route actions row (reviewer, 2026-09-05),
    so that row now carries four buttons and the full-width row that used to sit
-   under the results is gone. Let the row wrap rather than squeeze the labels,
-   and let the map take the height the removed row gave back. */
+   under the results is gone. Let the row wrap rather than squeeze the labels. */
 .cr293-evidence__actions {
   flex-wrap: wrap;
 }
 
+/* The map is the flexible half of this column and the panel under it is fixed,
+   so the map's floor decides whether the four route buttons stay on screen. A
+   26vh floor was 181px against a 272px panel in a 377px column and pushed them
+   off; the map keeps a small floor and grows into whatever the panel leaves. */
 .cr293-map {
-  min-height: clamp(10rem, 26vh, 24rem);
+  min-height: clamp(4rem, 9vh, 24rem);
+}
+
+/* The reviewer asked for about three candidates on screen with the rest on a
+   drag. The list header was 75px of the 377px column and a degraded card - the
+   확인 불가 state, which carries an extra line and a note - is 148px, so two and
+   a fraction fitted. The header and the card's own line spacing come down; the
+   cards themselves keep every fact. */
+.cr293-results__title {
+  padding: clamp(0.4rem, 1.2vh, 1.25rem) 1.15rem;
+}
+
+.cr293-results__title h2 {
+  margin-top: 0;
+  font-size: clamp(0.98rem, 2.5vh, 1.25rem);
+}
+
+.cr293-candidate__body {
+  line-height: 1.3;
+}
+
+.cr293-candidate__body > p,
+.cr293-candidate__note {
+  margin: 0;
+  line-height: 1.3;
+}
+
+/* Reviewer, 2026-09-05: "지도가 양옆만 길고 너무 작아". Stacking the map above
+   the route panel in a 970px-wide column left the map 103px tall - an 11:1
+   letterbox - because the panel under it is fixed and the map got the scraps.
+   On a wide screen the column splits instead: map beside the panel, so the map
+   gets the column's full height and a sane shape, and the panel gets a width
+   its metrics and four buttons can wrap into. */
+@media (min-width: 64rem) {
+  .cr293-results__map {
+    display: grid;
+    grid-template-columns: minmax(0, 1.12fr) minmax(19rem, 1fr);
+    overflow: hidden;
+  }
+
+  .cr293-map {
+    min-height: 0;
+    height: 100%;
+  }
+
+  .cr293-map__canvas {
+    height: 100%;
+  }
+
+  .cr293-evidence {
+    min-height: 0;
+    border-left: 1px solid var(--cr22-color-line);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .cr293-evidence__numbers {
+    grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  }
+
+  /* Two label/value pairs per row in a 450px panel broke words mid-syllable. */
+  .cr293-evidence__metadata {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

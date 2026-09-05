@@ -192,6 +192,11 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  /* These lists are grids that now stretch to fill the panel. A grid's default
+     align-content stretches its auto rows, so a single question grew to the full
+     panel height and centred itself in a field of white. Rows keep their own
+     height and stack from the top. */
+  align-content: start;
 }
 
 /* The recheck banner is secondary to the alert list it sits above, so it gives

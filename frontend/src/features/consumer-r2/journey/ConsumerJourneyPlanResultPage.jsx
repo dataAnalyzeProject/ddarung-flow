@@ -248,14 +248,18 @@ function ResultContent({ adapter, decision, now, onNavigate, onSaved, onUpdated,
   const serverBuiltSchedule = (decision.warnings || []).includes("AI_SCHEDULE_FALLBACK");
   if (!plan) return <AsyncState state="partial" title="통합 일정을 표시할 수 없습니다" description="백엔드가 통합 일정이나 근거를 제공하지 않았습니다." onAction={() => onNavigate?.("planner")} actionLabel="조건 다시 입력" />;
   return <>
-    <div className="cr22-journey__result-title"><div><p className="cr22-journey__breadcrumb"><ConsumerIcon name="home" size={15} /> <span aria-hidden="true">›</span> AI 플래너 <span aria-hidden="true">›</span> 결과</p><h1>{title} <StatusBadge tone="premium">PREMIUM</StatusBadge></h1><p>실제 대여·장소·경로 근거로 구성된 현재 계획입니다.</p></div><div><ConsumerButton variant="secondary" icon={<ConsumerIcon name="retry" />} onClick={() => document.getElementById("structured-replan")?.scrollIntoView()}>조건 변경 후 재추천</ConsumerButton><ConsumerButton icon={<ConsumerIcon name="plan" />} disabled={Boolean(action)} loading={action === "save"} loadingLabel="저장 중…" onClick={save}>이 계획 저장</ConsumerButton></div></div>
+    <div className="cr22-journey__result-title"><div><p className="cr22-journey__breadcrumb"><ConsumerIcon name="home" size={15} /> <span aria-hidden="true">›</span> AI 플래너 <span aria-hidden="true">›</span> 결과</p><h1>{title} <StatusBadge tone="premium">PREMIUM</StatusBadge></h1><p>실제 대여·장소·경로 근거로 구성된 현재 계획입니다.</p></div><div><ConsumerButton variant="secondary" icon={<ConsumerIcon name="retry" />} onClick={() => { const panel = document.getElementById("structured-replan"); if (!panel) return; panel.open = true; panel.scrollIntoView({ block: "nearest" }); }}>조건 변경 후 재추천</ConsumerButton><ConsumerButton icon={<ConsumerIcon name="plan" />} disabled={Boolean(action)} loading={action === "save"} loadingLabel="저장 중…" onClick={save}>이 계획 저장</ConsumerButton></div></div>
     {savedJourneyId ? <ConsumerButton variant="secondary" disabled={Boolean(action)} onClick={() => setRecheckOpen(true)}>알림 신청</ConsumerButton> : null}
-    {serverBuiltSchedule ? <p className="cr22-journey__partial" role="status"><StatusBadge tone="caution">AI 미적용</StatusBadge> AI가 제안한 일정이 실제 근거와 맞지 않아, 확인된 근거만으로 일정을 구성했습니다.</p> : null}
-    {plan.status === "PARTIAL" || decision.status === "PARTIAL" ? <p className="cr22-journey__partial" role="status"><StatusBadge tone="caution">PARTIAL</StatusBadge> 일부 근거만 확인되었습니다. 확인되지 않은 값은 따로 표시합니다.</p> : null}
-    {plan.status === "UNAVAILABLE" || decision.status === "UNAVAILABLE" ? <p className="cr22-journey__partial" role="status"><StatusBadge tone="danger">UNAVAILABLE</StatusBadge> 전체 일정은 만들지 못했습니다. 아래에는 백엔드가 제공한 사실 구간과 근거만 표시합니다.</p> : null}
-    <div className="cr22-journey__result-layout"><div><Summary plan={plan} /><Timeline intent={intent} plan={plan} /></div><aside><ConsumerJourneyMap segments={plan.segments} /><Rationale plan={plan} serverBuilt={serverBuiltSchedule} /></aside></div>
-    <SurfaceCard title="구조화 조건으로 다시 계획">
-      <div className="cr22-journey__replan" id="structured-replan">
+    <div className="cr22-journey__partials">
+      {serverBuiltSchedule ? <p className="cr22-journey__partial" role="status"><StatusBadge tone="caution">AI 미적용</StatusBadge> AI가 제안한 일정이 실제 근거와 맞지 않아, 확인된 근거만으로 일정을 구성했습니다.</p> : null}
+      {plan.status === "PARTIAL" || decision.status === "PARTIAL" ? <p className="cr22-journey__partial" role="status"><StatusBadge tone="caution">PARTIAL</StatusBadge> 일부 근거만 확인되었습니다. 확인되지 않은 값은 따로 표시합니다.</p> : null}
+      {plan.status === "UNAVAILABLE" || decision.status === "UNAVAILABLE" ? <p className="cr22-journey__partial" role="status"><StatusBadge tone="danger">UNAVAILABLE</StatusBadge> 전체 일정은 만들지 못했습니다. 아래에는 백엔드가 제공한 사실 구간과 근거만 표시합니다.</p> : null}
+    </div>
+    <Summary plan={plan} />
+    <div className="cr22-journey__result-layout"><div><Timeline intent={intent} plan={plan} /></div><ConsumerJourneyMap segments={plan.segments} /><aside><Rationale plan={plan} serverBuilt={serverBuiltSchedule} /></aside></div>
+    <details className="cr22-card cr22-journey__replan-card" id="structured-replan">
+      <summary className="cr22-card__header"><h2>구조화 조건으로 다시 계획</h2></summary>
+      <div className="cr22-journey__replan">
         <label>이용 시간<input name="availableMinutes" autoComplete="off" type="number" min="1" max="480" value={editor.availableMinutes} onChange={(event) => setEditor((current) => ({ ...current, availableMinutes: event.target.value }))} /></label>
         <fieldset className="cr22-journey__theme-field"><legend>테마</legend><div>{THEME_OPTIONS.map(([value, label]) => <label key={value}><input name="themes" type="checkbox" value={value} checked={editor.themes.includes(value)} onChange={(event) => setEditor((current) => ({ ...current, themes: event.target.checked ? [...current.themes, value] : current.themes.filter((item) => item !== value) }))} />{label}</label>)}</div></fieldset>
         <label>방문 장소 수<select name="stopCount" autoComplete="off" value={editor.stopCount} onChange={(event) => setEditor((current) => ({ ...current, stopCount: event.target.value }))}>{[1, 2, 3].map((value) => <option key={value} value={value}>{value}곳</option>)}</select></label>
@@ -263,7 +267,7 @@ function ResultContent({ adapter, decision, now, onNavigate, onSaved, onUpdated,
         <ConsumerButton disabled={Boolean(action)} loading={action === "replan"} loadingLabel="현재 근거 확인 중…" onClick={replan}>현재 근거로 다시 계획</ConsumerButton>
       </div>
       <p className="cr22-journey__muted">재계획은 자연어를 다시 보내지 않고 이용 시간·테마·방문 장소 수·경로 방식만 구조화해서 전송합니다.</p>{notice ? <p className="cr22-journey__notice" role="status">{notice}</p> : null}
-    </SurfaceCard>
+    </details>
     <RecheckOptInDialog busy={action === "recheck"} kind="PLAN_RECHECK" now={now} onClose={() => setRecheckOpen(false)} onConfirm={createRecheck} open={recheckOpen} />
   </>;
 }
