@@ -129,3 +129,126 @@
 .cr22-station__ride-cta span {
   margin-top: clamp(2px, 0.6vh, 8px);
 }
+
+/* Reviewer call (2026-09-05): the station detail has to show its inventory
+   header, the 90-day pattern heatmap, the recovery pattern and the "ride from
+   here" CTA together.
+
+   The heatmap was the obstacle. Its cells are aspect-ratio: 1.25 in a fluid
+   grid, so their height follows the panel *width* - on a 1536px screen each
+   cell rendered ~56px tall and the heatmap alone came to 514px, taller than
+   the whole content area. Capping the cell height against the viewport height
+   keeps every cell and every label; only the cells stop being squares. */
+/* The cells are aspect-ratio: 1.25, so capping their height also shrank their
+   width and the heatmap collapsed into a field of dots. Drop the ratio and let
+   each cell fill its column at a capped height: the same seven rows and nine
+   columns, read as bars instead of squares. */
+.cr22-station__heat {
+  aspect-ratio: auto;
+  height: clamp(0.5rem, 1.85vh, 2.2rem);
+  border-radius: clamp(2px, 0.45vh, 5px);
+}
+
+.cr22-station__heatmap {
+  gap: clamp(1px, 0.4vh, 6px);
+  margin-top: clamp(4px, 1.1vh, 18px);
+}
+
+.cr22-station__heatmap-legend {
+  margin-top: clamp(4px, 1.1vh, 12px);
+}
+
+.cr22-station .cr22-card__header {
+  padding: clamp(5px, 1.4vh, 16px) 20px;
+}
+
+.cr22-station .cr22-card__body {
+  padding: clamp(6px, 1.6vh, 18px) 20px;
+}
+
+.cr22-station__panel-copy,
+.cr22-station__empty-copy {
+  line-height: 1.45;
+}
+
+.cr22-station__details-grid,
+.cr22-station__side-panels {
+  gap: clamp(7px, 1.7vh, 16px);
+}
+
+.cr22-station__metrics {
+  gap: clamp(5px, 1.3vh, 12px);
+}
+
+.cr22-station__metrics div {
+  padding-bottom: clamp(5px, 1.3vh, 12px);
+}
+
+.cr22-station__nearby-list li {
+  padding: clamp(4px, 1.1vh, 10px) 0;
+}
+
+/* Everything above the panels is chrome around the two facts that matter -
+   how many bikes are there now, and where is it - so it gives up height first. */
+.cr22-station__back {
+  min-height: clamp(30px, 5vh, 44px);
+}
+
+.cr22-station__hero {
+  padding: clamp(2px, 0.8vh, 20px) 0 clamp(2px, 0.7vh, 18px);
+}
+
+.cr22-station__identity h1 {
+  font-size: clamp(18px, 2.9vh, 36px);
+}
+
+.cr22-station__inventory {
+  min-height: clamp(84px, 17vh, 196px);
+  padding: clamp(8px, 1.7vh, 26px) clamp(16px, 2vw, 30px);
+}
+
+.cr22-station__inventory strong {
+  font-size: clamp(24px, 4.6vh, 58px);
+}
+
+.cr22-station__map,
+.cr22-station__map-fallback {
+  min-height: clamp(84px, 17vh, 196px);
+}
+
+.cr22-station__history-notice {
+  margin: clamp(4px, 0.9vh, 16px) 0;
+  padding: clamp(5px, 1vh, 11px) 16px;
+}
+
+.cr22-station__ride-cta {
+  margin-top: clamp(5px, 1.2vh, 20px);
+  padding: clamp(7px, 1.5vh, 20px) 26px;
+}
+
+.cr22-station__ride-cta strong {
+  font-size: clamp(15px, 2.4vh, 19px);
+}
+
+/* The pattern panel's own chrome, so the seven weekday rows all clear the fold. */
+.cr22-station__heatmap-legend {
+  font-size: 10px;
+}
+
+/* The weekday labels, not the cells, were setting the row height: their default
+   line-height held each row taller than the bar inside it. */
+.cr22-station__hour,
+.cr22-station__weekday {
+  font-size: clamp(9px, 1.5vh, 11px);
+  line-height: 1;
+}
+
+.cr22-station .cr22-card__header h2 {
+  font-size: clamp(0.95rem, 2.4vh, 1.25rem);
+}
+
+/* The panel's explainer sits above a legend that says the same thing visually. */
+.cr22-station__panel-copy {
+  margin-bottom: 0;
+  font-size: clamp(12px, 1.9vh, 14px);
+}
