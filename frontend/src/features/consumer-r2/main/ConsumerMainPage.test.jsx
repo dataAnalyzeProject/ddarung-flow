@@ -193,7 +193,12 @@ test("shows normal zero inventory separately from missing inventory metadata", a
   fireEvent.click(await screen.findByRole("button", { name: "대여 가능성 비교" }));
 
   expect(await screen.findAllByText(/현재 0대 · 정상/)).not.toHaveLength(0);
-  expect(screen.getByRole("button", { name: /뚝섬역 1번 출구/ })).toHaveTextContent("현재 재고 확인 불가 · MISSING");
+  // TASK-333 split the card's inventory line into a 현재 자전거 figure and the
+  // status beside it, so the guarantee is checked as two parts: the count still
+  // reads 확인 불가 and the raw status is still on the card.
+  const missingCard = screen.getByRole("button", { name: /뚝섬역 1번 출구/ });
+  expect(missingCard).toHaveTextContent(/현재 자전거\s*확인 불가/);
+  expect(missingCard).toHaveTextContent("MISSING");
   expect(screen.getByText(/horizon 60분/)).toBeInTheDocument();
 });
 

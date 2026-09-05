@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import heroImage from "../../../assets/consumer-r2/main/cr22-main-initial-hero-v1.webp";
 import { fetchRouteCandidates } from "../../map/candidatesApi.js";
 import { searchPlaces } from "../../map/kakaoMapApi.js";
@@ -192,17 +192,48 @@ function SearchWorkspace({ authState, input, onChange, onOpenPlanner, onSearch, 
   );
 }
 
+function toEpoch(value) {
+  if (!value) return null;
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? null : time;
+}
+
+// A candidate whose value the server could not confirm sorts last rather than
+// first, whichever key is chosen - an unknown is not a good result.
+function byNumberAsc(a, b) {
+  if (a === null || a === undefined) return b === null || b === undefined ? 0 : 1;
+  if (b === null || b === undefined) return -1;
+  return a - b;
+}
+
+function byNumberDesc(a, b) {
+  if (a === null || a === undefined) return b === null || b === undefined ? 0 : 1;
+  if (b === null || b === undefined) return -1;
+  return b - a;
+}
+
+const CANDIDATE_SORTS = [
+  ["PROBABILITY", "대여 가능성 높은 순", (a, b) => byNumberDesc(a.probability, b.probability)],
+  ["ARRIVAL", "도착 빠른 순", (a, b) => byNumberAsc(toEpoch(a.arrivalAt), toEpoch(b.arrivalAt))],
+  ["DISTANCE", "거리 가까운 순", (a, b) => byNumberAsc(a.distanceMeters, b.distanceMeters)],
+];
+
 function CandidateCard({ candidate, index, onSelect, selected }) {
   const tone = candidate.availabilityLevel === "HIGH" ? "success" : candidate.availabilityLevel === "MEDIUM" ? "warning" : "danger";
   const unavailable = candidate.predictionStatus !== "NORMAL" || candidate.routeStatus !== "NORMAL";
+  const inventory = getInventoryPresentation(candidate);
   return (
     <button className="cr293-candidate" type="button" aria-pressed={selected} onClick={() => onSelect(candidate.stationId)}>
       <span className="cr293-candidate__rank">{index + 1}</span>
       <span className="cr293-candidate__body">
-        <span className="cr293-candidate__top"><strong>{candidate.stationName}</strong><StatusBadge tone={unavailable ? "neutral" : tone}>{candidate.availabilityLabel}</StatusBadge></span>
-        <span className="cr293-candidate__metric"><b>{formatProbability(candidate.probability)}</b><small>대여 가능성</small></span>
-        <span className="cr293-candidate__meta">{formatMinutes(candidate.durationSeconds)} · {formatDistance(candidate.distanceMeters)} · {formatArrival(candidate.arrivalAt)}</span>
-        <span className="cr293-candidate__inventory">{formatInventory(candidate)}</span>
+        <span className="cr293-candidate__top"><strong>{candidate.stationName}</strong><small className="cr293-candidate__distance">{formatDistance(candidate.distanceMeters)}</small><StatusBadge tone={unavailable ? "neutral" : tone}>{candidate.availabilityLabel}</StatusBadge></span>
+        <span className="cr293-candidate__facts">
+          <span className="cr293-candidate__fact cr293-candidate__fact--lead"><small>도착 시점 대여 가능성</small><b>{formatProbability(candidate.probability)}</b></span>
+          <span className="cr293-candidate__fact"><small>현재 자전거</small><b>{inventory.value}</b></span>
+          <span className="cr293-candidate__fact"><small>예상 도착</small><b>{formatArrival(candidate.arrivalAt)}</b></span>
+          <span className="cr293-candidate__fact"><small>이동 시간</small><b>{formatMinutes(candidate.durationSeconds)}</b></span>
+        </span>
+        <span className="cr293-candidate__inventory">{inventory.detail}</span>
         {unavailable ? <span className="cr293-candidate__unavailable">예측 또는 경로 근거를 확인할 수 없습니다.</span> : null}
       </span>
     </button>
@@ -266,38 +297,55 @@ function TransitWorkspace({ candidate, destination, mapRenderer, onClose, onOpen
 function ResultsWorkspace({ input, mapRenderer, onOpenRide, onOpenStation, onRecheck, onReset, places, recheckDisabled, result, selectedId, setSelectedId, showTransit, setShowTransit }) {
   const resultHeadingRef = useRef(null);
   const transitHeadingRef = useRef(null);
+  const [sortKey, setSortKey] = useState(CANDIDATE_SORTS[0][0]);
+  const ordered = useMemo(() => {
+    const compare = (CANDIDATE_SORTS.find(([key]) => key === sortKey) ?? CANDIDATE_SORTS[0])[2];
+    return [...result.candidates].sort(compare);
+  }, [result.candidates, sortKey]);
   const selected = result.candidates.find((candidate) => candidate.stationId === selectedId) ?? result.candidates[0];
   useEffect(() => {
     if (showTransit) transitHeadingRef.current?.focus();
     else resultHeadingRef.current?.focus();
   }, [showTransit]);
+  const conditionSummary = (
+    <section className="cr293-condition" aria-label="선택 조건">
+      <span><ConsumerIcon name="mapPin" size={18} /> {places.origin.name} → {places.destination.name}</span>
+      <span><ConsumerIcon name={input.travelMode === "PUBLIC_TRANSIT" ? "transit" : "ride"} size={18} /> {input.travelMode === "PUBLIC_TRANSIT" ? "대중교통" : "도보"}</span>
+      <span><ConsumerIcon name="bike" size={18} /> {input.requiredBikeCount}대 필요</span>
+    </section>
+  );
   return (
     <>
       {!showTransit ? (
         <section className="cr293-result-heading">
           <div><h1 ref={resultHeadingRef} tabIndex="-1">{places.destination.name} 근처 추천 결과</h1><p>선택한 이동 경로와 도착 시각을 기준으로 비교했어요.</p></div>
+          {conditionSummary}
           <ConsumerButton variant="secondary" onClick={onReset}>조건 다시 선택</ConsumerButton>
         </section>
-      ) : null}
-      <section className="cr293-condition" aria-label="선택 조건">
-        <span><ConsumerIcon name="mapPin" size={18} /> {places.origin.name} → {places.destination.name}</span>
-        <span><ConsumerIcon name={input.travelMode === "PUBLIC_TRANSIT" ? "transit" : "ride"} size={18} /> {input.travelMode === "PUBLIC_TRANSIT" ? "대중교통" : "도보"}</span>
-        <span><ConsumerIcon name="bike" size={18} /> {input.requiredBikeCount}대 필요</span>
-      </section>
+      ) : conditionSummary}
       {result.viewState === "PARTIAL" ? <AsyncState state="partial" title="일부 후보의 근거를 확인하지 못했습니다" description="확인된 후보는 그대로 비교하고, 확인 불가 값은 0으로 표시하지 않았습니다." /> : null}
       {showTransit && selected.routeDetail ? (
         <TransitWorkspace candidate={selected} destination={places.destination} mapRenderer={mapRenderer} onClose={() => setShowTransit(false)} onOpenRide={onOpenRide} onOpenStation={onOpenStation} origin={places.origin} transitHeadingRef={transitHeadingRef} />
       ) : (
         <section className="cr293-results" aria-label="대여소 추천 결과" aria-live="polite">
         <div className="cr293-results__list">
-          <div className="cr293-results__title"><div><h2>추천 대여소</h2></div><span>{result.candidates.length}곳</span></div>
-          {result.candidates.map((candidate, index) => <CandidateCard key={candidate.stationId ?? index} candidate={candidate} index={index} selected={selected?.stationId === candidate.stationId} onSelect={(stationId) => { setSelectedId(stationId); setShowTransit(false); }} />)}
+          <div className="cr293-results__title">
+            <div><h2>추천 대여소</h2><span>{result.candidates.length}곳</span></div>
+            <label className="cr293-results__sort"><span className="cr22-sr-only">후보 정렬 기준</span>
+              <select value={sortKey} onChange={(event) => setSortKey(event.target.value)}>
+                {CANDIDATE_SORTS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+              </select>
+            </label>
+          </div>
+          {ordered.map((candidate, index) => <CandidateCard key={candidate.stationId ?? index} candidate={candidate} index={index} selected={selected?.stationId === candidate.stationId} onSelect={(stationId) => { setSelectedId(stationId); setShowTransit(false); }} />)}
         </div>
         <div className="cr293-results__map">
           {selected?.routeDetail ? <ConsumerRouteMap candidate={selected} destination={places.destination} mapRenderer={mapRenderer} origin={places.origin} /> : <div className="cr293-route-unavailable" role="status"><ConsumerIcon name="info" /><strong>선택한 후보의 경로를 확인할 수 없습니다.</strong><span>다른 후보를 선택해 주세요.</span></div>}
           <section className="cr293-evidence">
-            <div><h2>선택한 경로: {selected.stationName}</h2></div>
-            <div className="cr293-evidence__numbers"><span><b>{formatProbability(selected.probability)}</b><small>대여 가능성</small></span><span><b>{formatMinutes(selected.durationSeconds)}</b><small>예상 이동</small></span><span><b>{formatArrival(selected.arrivalAt)}</b><small>예상 도착</small></span></div>
+            <div className="cr293-evidence__strip">
+              <div className="cr293-evidence__selected"><h2>선택한 경로: {selected.stationName}</h2><small>{formatDistance(selected.distanceMeters)}</small></div>
+              <div className="cr293-evidence__numbers"><span><b>{formatProbability(selected.probability)}</b><small>대여 가능성</small></span><span><b>{getInventoryPresentation(selected).value}</b><small>현재 자전거</small></span><span><b>{formatArrival(selected.arrivalAt)}</b><small>예상 도착</small></span><span><b>{formatMinutes(selected.durationSeconds)}</b><small>예상 이동</small></span></div>
+            </div>
             <dl className="cr293-evidence__metadata">
               <div><dt>현재 재고</dt><dd>{formatInventory(selected)}</dd></div>
               <div><dt>예측 기준</dt><dd>{formatDateTime(selected.predictionTargetAt)} · horizon {selected.horizonMinutes === null ? "확인 불가" : `${selected.horizonMinutes}분`}</dd></div>

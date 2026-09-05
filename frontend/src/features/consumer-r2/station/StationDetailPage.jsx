@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createKakaoMapAdapter, loadKakaoMapSdk } from "../../map/kakaoMapApi";
 import {
   AsyncState,
@@ -21,6 +21,9 @@ const INVENTORY_COPY = {
 
 const WEEKDAY_LABELS = ["월", "화", "수", "목", "금", "토", "일"];
 const RHYTHM_HOURS = [6, 8, 10, 12, 14, 16, 18, 20, 22];
+// 날씨별 is in the mockup but the rhythm response carries no weather axis, so it
+// is not offered - both views here are read off the weekday/hour cells we have.
+const RHYTHM_VIEWS = [["HOURLY", "시간별"], ["WEEKDAY", "요일별"]];
 
 function inventoryCopy(status) {
   return INVENTORY_COPY[status] || { label: "상태 확인 필요", detail: "재고 상태를 확인하지 못했습니다." };
@@ -76,8 +79,17 @@ function StationMap({ station }) {
   );
 }
 
+function rhythmRate(cell) {
+  return Math.max(0, Math.min(1, Number(cell?.stockoutRate) || 0));
+}
+
 function RhythmPanel({ rhythm, state }) {
-  const cells = Array.isArray(rhythm?.weekdayHourly) ? rhythm.weekdayHourly : [];
+  const cells = useMemo(() => (Array.isArray(rhythm?.weekdayHourly) ? rhythm.weekdayHourly : []), [rhythm]);
+  const [view, setView] = useState(RHYTHM_VIEWS[0][0]);
+  const weekdayAverages = useMemo(() => WEEKDAY_LABELS.map((weekday, index) => {
+    const rates = cells.filter((cell) => Number(cell.dayOfWeek) === index + 1).map(rhythmRate);
+    return { weekday, samples: rates.length, rate: rates.length ? rates.reduce((sum, rate) => sum + rate, 0) / rates.length : null };
+  }), [cells]);
   if (state !== "ready" || cells.length < 20) {
     return (
       <SurfaceCard title="평소 패턴">
@@ -89,7 +101,23 @@ function RhythmPanel({ rhythm, state }) {
   return (
     <SurfaceCard title="평소 패턴" actions={<span className="cr22-station__history-label">최근 90일 관측</span>}>
       <p className="cr22-station__panel-copy">시간대별 품절 관측률입니다. 미래 예측이 아닙니다.</p>
-      <div className="cr22-station__heatmap" aria-hidden="true">
+      <div className="cr22-station__rhythm-tabs" role="tablist" aria-label="평소 패턴 보기 기준">
+        {RHYTHM_VIEWS.map(([key, label]) => (
+          <button key={key} type="button" role="tab" aria-selected={view === key} className={`cr22-station__rhythm-tab${view === key ? " is-active" : ""}`} onClick={() => setView(key)}>{label}</button>
+        ))}
+      </div>
+      {view === "WEEKDAY" ? (
+        <ul className="cr22-station__weekday-bars">
+          {weekdayAverages.map(({ weekday, rate, samples }) => (
+            <li key={weekday}>
+              <span className="cr22-station__weekday-name">{weekday}</span>
+              <span className="cr22-station__weekday-track"><i style={{ "--intensity": rate ?? 0 }} /></span>
+              <span className="cr22-station__weekday-value">{samples ? `${Math.round(rate * 100)}%` : "관측 부족"}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <div className="cr22-station__heatmap" aria-hidden="true" hidden={view !== "HOURLY"}>
         <span aria-hidden="true" />
         {RHYTHM_HOURS.map((hour) => <span className="cr22-station__hour" key={hour}>{hour}시</span>)}
         {WEEKDAY_LABELS.flatMap((weekday, weekdayIndex) => {
@@ -107,7 +135,7 @@ function RhythmPanel({ rhythm, state }) {
           return <li key={`${weekday}-${hour}`}>{cell ? `${weekday}요일 ${hour}시 품절 관측률 ${Math.round(Math.max(0, Math.min(1, Number(cell.stockoutRate) || 0)) * 100)}퍼센트` : `${weekday}요일 ${hour}시 관측 부족`}</li>;
         }))}
       </ul>
-      <div className="cr22-station__heatmap-legend" aria-hidden="true"><span>낮음</span><i /><i /><i /><i /><span>높음</span></div>
+      <div className="cr22-station__heatmap-legend" aria-hidden="true" hidden={view !== "HOURLY"}><span>낮음</span><i /><i /><i /><i /><span>높음</span></div>
     </SurfaceCard>
   );
 }
