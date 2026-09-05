@@ -1,6 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
 import openingHero from "../../../assets/consumer-r2/opening/cr22-opening-hero-v1.webp";
-import { hasSeenIntro, markIntroSeen } from "../../intro/introStorage.js";
 import {
   ConsumerAppHeader,
   ConsumerButton,
@@ -10,34 +8,24 @@ import {
 } from "../shared/index.js";
 import "./entry.css";
 
-const FIRST_VISIT_AUTO_ADVANCE_MS = 5000;
-
 export default function OpeningPage({
-  autoAdvanceMs = FIRST_VISIT_AUTO_ADVANCE_MS,
-  onComplete,
-  storage = window.localStorage,
+  authState = "anonymous",
+  onLogin,
+  onNavigate,
+  onStart,
+  user,
 }) {
-  const [isRevisit] = useState(() => hasSeenIntro(storage));
-  const completedRef = useRef(false);
-  const timerRef = useRef(null);
-
-  const completeOpening = useCallback(() => {
-    if (completedRef.current) return;
-    completedRef.current = true;
-    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
-    markIntroSeen(storage);
-    onComplete?.();
-  }, [onComplete, storage]);
-
-  useEffect(() => {
-    if (isRevisit || autoAdvanceMs === null) return undefined;
-    timerRef.current = window.setTimeout(completeOpening, autoAdvanceMs);
-    return () => window.clearTimeout(timerRef.current);
-  }, [autoAdvanceMs, completeOpening, isRevisit]);
-
   return (
     <ConsumerR2Theme className="cr22-entry cr22-opening">
-      <ConsumerAppHeader activeItem="home" />
+      <ConsumerAppHeader
+        activeItem="home"
+        authState={authState}
+        onAccount={() => onNavigate?.("mypage")}
+        onLogin={onLogin}
+        onNavigate={onNavigate}
+        userName={user?.displayName ?? user?.name}
+        userTier={user?.tier?.toLowerCase()}
+      />
       <main id="main-content" className="cr22-opening__main">
         <ConsumerContainer className="cr22-opening__layout">
           <section className="cr22-opening__copy" aria-labelledby="cr22-opening-title">
@@ -52,21 +40,16 @@ export default function OpeningPage({
               className="cr22-opening__cta"
               icon={<ConsumerIcon name="arrowRight" />}
               iconPosition="end"
-              onClick={completeOpening}
+              onClick={() => onStart?.()}
               size="lg"
             >
-              {isRevisit ? "대여 예측 다시 시작하기" : "대여 가능성 예측 시작하기"}
+              대여 가능성 예측 시작하기
             </ConsumerButton>
             <ul className="cr22-opening__facts" aria-label="서비스 안내">
               <li><ConsumerIcon name="mapPin" /><span>도착지 주변 대여소 비교</span></li>
               <li><ConsumerIcon name="plan" /><span>도착 시간 기준 예상</span></li>
               <li><ConsumerIcon name="bike" /><span>필요 자전거 수 반영</span></li>
             </ul>
-            <p className="cr22-opening__visit-note" role="status" aria-live="polite">
-              {isRevisit
-                ? "이전에 안내를 확인했어요. 준비되면 바로 시작하세요."
-                : `${Math.round(autoAdvanceMs / 1000)}초 후 자동으로 대여 예측을 시작합니다.`}
-            </p>
           </section>
 
           <figure className="cr22-opening__visual">

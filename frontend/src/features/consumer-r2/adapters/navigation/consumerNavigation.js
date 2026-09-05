@@ -93,14 +93,18 @@ export function newConsumerEntryId() {
 }
 
 export function navigationTarget(name, id) {
-  const route = ({ home: 'main', planner: 'journey', premium: 'checkout', 'premium-checkout': 'checkout' })[name] || name;
+  const route = ({ planner: 'journey', premium: 'checkout', 'premium-checkout': 'checkout' })[name] || name;
+  // The empty hash is the HOME landing, a route of its own. Prediction main lives at #main so the
+  // two can never collapse into one identity the way `home -> main` used to make them.
+  if (route === 'home' || !route) return { hash: '', route: 'home', stationId: null };
   if (['station', 'ride', 'guide', 'journey-result'].includes(route) && typeof id === 'string' && id) {
     const prefix = route === 'journey-result' ? 'journey/result' : route;
     return { hash: '#' + prefix + '/' + encodeURIComponent(id), route, stationId: id };
   }
   if (route === 'checkout') return { hash: '#premium/checkout', route, stationId: null };
   if (SIMPLE_ROUTES.includes(route)) return { hash: '#' + route, route, stationId: null };
-  return { hash: '', route: 'main', stationId: null };
+  // Global RIDING carries no stationId: it asks for a new prediction, not a station's ride page.
+  return { hash: '#main', route: 'main', stationId: null };
 }
 
 export function routeFromHash(hash = window.location.hash) {

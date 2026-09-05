@@ -13,15 +13,14 @@ jest.mock('./features/admin-v2/shell/AdminV2PreviewApp', () => () => <h1>Admin p
 jest.mock('./features/admin-v2/shell/AdminV2ProductionApp', () => () => <h1>Admin production</h1>);
 jest.mock('./features/consumer-r2/entry', () => ({
   LoginPage: () => <h1>Login</h1>,
-  OpeningPage: ({ onComplete }) => <button onClick={onComplete}>Opening complete</button>,
+  OpeningPage: ({ onStart }) => <section><h1>Opening</h1><button onClick={onStart}>Opening CTA</button></section>,
 }));
-jest.mock('./features/consumer-r2/main/ConsumerMainPage', () => function MockMain({ onNavigate, onOpenStation, onOpenRide, onInputChange, onSearchComplete, restoreSearch, currentResult, rideGuidance }) {
+jest.mock('./features/consumer-r2/main/ConsumerMainPage', () => function MockMain({ onNavigate, onOpenStation, onOpenRide, onInputChange, onSearchComplete, restoreSearch, currentResult }) {
   const [liveCandidate, setLiveCandidate] = require('react').useState(null);
   require('react').useEffect(() => { mockMainRestoreChange(); }, [restoreSearch, currentResult]);
   return <section>
   <h1>Main</h1><output>{restoreSearch?.origin?.displayName || (typeof restoreSearch?.origin === 'string' ? restoreSearch.origin : '')}</output>
   <output data-testid="main-input">{JSON.stringify(restoreSearch || null)}</output><output data-testid="main-result">{JSON.stringify(currentResult || null)}</output>
-  {rideGuidance ? <p role="status">라이딩을 보려면 먼저 대여소를 선택해 주세요.</p> : null}
   <button onClick={() => onOpenStation(liveCandidate || currentResult?.candidates?.[0] || { stationId: 'ST-1' }, restoreSearch)}>Station</button>
   <button onClick={() => onOpenRide(liveCandidate || currentResult?.candidates?.[0] || { stationId: 'ST-1' }, restoreSearch)}>Ride</button>
   <button onClick={() => { onInputChange(mockInputA); onSearchComplete(mockInputA, mockResultA); setLiveCandidate(mockResultA.candidates[0]); }}>Search A</button>
@@ -32,18 +31,19 @@ jest.mock('./features/consumer-r2/main/ConsumerMainPage', () => function MockMai
   <button onClick={() => onNavigate('archive')}>Archive</button>
   <button onClick={() => onNavigate('mypage')}>Account</button>
   <button onClick={() => onNavigate('ride')}>Header ride</button>
+  <button onClick={() => onNavigate('home')}>Header home</button>
 </section>;
 });
-jest.mock('./features/consumer-r2/station/StationDetailPage', () => ({ stationId, onNavigate }) => <section><h1>Station {stationId}</h1><button onClick={() => onNavigate('ride', stationId)}>Ride</button><button onClick={() => onNavigate('ride')}>Header ride</button><button onClick={() => onNavigate('home')}>Home</button></section>);
-jest.mock('./features/consumer-r2/ride/RideExplorePage', () => ({ stationId, onNavigate }) => <section><h1>Ride {stationId}</h1><button onClick={() => onNavigate('guide', stationId)}>Guide</button><button onClick={() => onNavigate('home')}>Home</button></section>);
-jest.mock('./features/consumer-r2/guide/ConsumerRidingGuidePage', () => ({ stationId, guideContext, onNavigate }) => <section><h1>Guide {stationId}</h1><output data-testid="guide-context">{JSON.stringify(guideContext)}</output><button onClick={() => onNavigate('ride')}>Header ride</button><button onClick={() => onNavigate('home')}>Home</button></section>);
+jest.mock('./features/consumer-r2/station/StationDetailPage', () => ({ stationId, onNavigate }) => <section><h1>Station {stationId}</h1><button onClick={() => onNavigate('ride', stationId)}>Ride</button><button onClick={() => onNavigate('ride')}>Header ride</button><button onClick={() => onNavigate('main')}>Back to results</button><button onClick={() => onNavigate('home')}>Home</button></section>);
+jest.mock('./features/consumer-r2/ride/RideExplorePage', () => ({ stationId, onNavigate }) => <section><h1>Ride {stationId}</h1><button onClick={() => onNavigate('guide', stationId)}>Guide</button><button onClick={() => onNavigate('ride')}>Header ride</button><button onClick={() => onNavigate('main')}>Back to results</button><button onClick={() => onNavigate('home')}>Home</button></section>);
+jest.mock('./features/consumer-r2/guide/ConsumerRidingGuidePage', () => ({ stationId, guideContext, onNavigate }) => <section><h1>Guide {stationId}</h1><output data-testid="guide-context">{JSON.stringify(guideContext)}</output><button onClick={() => onNavigate('ride')}>Header ride</button><button onClick={() => onNavigate('main')}>Back to results</button><button onClick={() => onNavigate('home')}>Home</button></section>);
 jest.mock('./features/consumer-r2/journey', () => {
   const { useEffect } = require('react');
   return {
     ConsumerJourneyPlannerPage: ({ onNavigate, onResult, initialInput }) => <section><h1>Planner active</h1><output data-testid="planner-input">{JSON.stringify(initialInput)}</output><button onClick={() => { onResult(mockDecision); onNavigate('journey-result', mockDecision.decisionId); }}>Result</button></section>,
     ConsumerJourneyPlanResultPage: ({ decisionId, initialDecision, onResult, onNavigate }) => {
       useEffect(() => { if (!initialDecision) mockLoadDecision(decisionId); if (decisionId === mockDecision.decisionId) onResult(initialDecision || mockDecision); }, [decisionId, initialDecision, onResult]);
-      return <section><h1>Result {decisionId}</h1><output data-testid="result-initial">{JSON.stringify(initialDecision || null)}</output><button onClick={() => onNavigate('ride')}>Selected ride</button></section>;
+      return <section><h1>Result {decisionId}</h1><output data-testid="result-initial">{JSON.stringify(initialDecision || null)}</output><button onClick={() => onNavigate('ride', 'ST-J')}>Selected ride</button><button onClick={() => onNavigate('ride')}>Header ride</button></section>;
     },
   };
 });
@@ -56,7 +56,7 @@ jest.mock('./features/consumer-r2/personal', () => ({
 }));
 jest.mock('./features/consumer-r2/support', () => ({
   ConsumerQnaPage: ({ initialQuestionId }) => <h1>Qna {initialQuestionId}</h1>,
-  ConsumerAlertsPage: ({ onNavigate, onCurrentData, searchInput }) => <section><h1>Alerts</h1><output data-testid="alerts-input">{JSON.stringify(searchInput || null)}</output><button onClick={() => onNavigate('qna', { questionId: 'q1' })}>Answer</button><button onClick={() => onCurrentData({ kind: 'SEARCH_RECHECK', result: mockResultA }, mockInputA)}>Recheck A</button><button onClick={() => onCurrentData({ kind: 'SEARCH_RECHECK', result: mockResultB }, mockInputB)}>Recheck B</button><button onClick={() => onNavigate('home')}>Home</button></section>,
+  ConsumerAlertsPage: ({ onNavigate, onCurrentData, searchInput }) => <section><h1>Alerts</h1><output data-testid="alerts-input">{JSON.stringify(searchInput || null)}</output><button onClick={() => onNavigate('qna', { questionId: 'q1' })}>Answer</button><button onClick={() => onCurrentData({ kind: 'SEARCH_RECHECK', result: mockResultA }, mockInputA)}>Recheck A</button><button onClick={() => onCurrentData({ kind: 'SEARCH_RECHECK', result: mockResultB }, mockInputB)}>Recheck B</button><button onClick={() => onNavigate('main')}>Back to results</button><button onClick={() => onNavigate('home')}>Home</button></section>,
 }));
 
 const mockInputA = { origin: { providerId: 'origin-A', displayName: '출발 A', latitude: 37.55, longitude: 126.97 }, destination: { providerId: 'anchor-A', displayName: '대여 기준 A', latitude: 37.57, longitude: 126.98 }, travelMode: 'WALK', requiredBikeCount: 3 };
@@ -94,14 +94,46 @@ function visit(path) {
   return render(<App />);
 }
 
-test('first visit Opening completes into the new Main', async () => {
+test('/ is the HOME landing and its CTA opens a fresh Prediction main', async () => {
   render(<App />);
-  fireEvent.click(screen.getByText('Opening complete'));
+  expect(await screen.findByRole('heading', { name: 'Opening' })).toBeInTheDocument();
+  fireEvent.click(screen.getByText('Opening CTA'));
   expect(await screen.findByRole('heading', { name: 'Main' })).toBeInTheDocument();
+  expect(window.location.hash).toBe('#main');
+});
+
+test('a stored intro-seen flag cannot hide the HOME landing', async () => {
+  window.localStorage.setItem(INTRO_SEEN_KEY, 'true');
+  window.history.replaceState({}, '', '/');
+  render(<App />);
+  expect(await screen.findByRole('heading', { name: 'Opening' })).toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: 'Main' })).not.toBeInTheDocument();
+});
+
+test('the landing never advances on its own, however long the visitor waits', async () => {
+  jest.useFakeTimers();
+  try {
+    render(<App />);
+    expect(await screen.findByRole('heading', { name: 'Opening' })).toBeInTheDocument();
+    await act(async () => { jest.advanceTimersByTime(5000); });
+    expect(screen.getByRole('heading', { name: 'Opening' })).toBeInTheDocument();
+    await act(async () => { jest.advanceTimersByTime(30000); });
+    expect(screen.getByRole('heading', { name: 'Opening' })).toBeInTheDocument();
+    expect(window.location.hash).toBe('');
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+test.each(['#main', '#station/ST-1', '#ride/ST-1', '#alerts'])('HOME returns to the landing from %s', async (hash) => {
+  visit('/' + hash);
+  fireEvent.click(await screen.findByText(hash === '#main' ? 'Header home' : 'Home'));
+  expect(await screen.findByRole('heading', { name: 'Opening' })).toBeInTheDocument();
+  expect(window.location.hash).toBe('');
 });
 
 test.each([
-  ['/login', 'Login'], ['/', 'Main'], ['/#station/ST-1', 'Station ST-1'],
+  ['/login', 'Login'], ['/', 'Opening'], ['/#main', 'Main'], ['/#station/ST-1', 'Station ST-1'],
   ['/#ride/ST-1', 'Ride ST-1'], ['/#guide/ST-1', 'Guide ST-1'],
   ['/#journey', 'Planner active'], ['/#journey/result/decision-1', 'Result decision-1'],
   ['/#premium/checkout', 'Checkout ACTIVE'], ['/#archive', 'Archive authenticated'],
@@ -124,7 +156,7 @@ test.each(['ANONYMOUS', 'FREE', 'EXPIRED', 'ERROR'])('AI entry is gated for %s',
 });
 
 test('candidate callbacks and browser back restore the route', async () => {
-  visit('/');
+  visit('/#main');
   fireEvent.click(await screen.findByText('Station'));
   expect(await screen.findByRole('heading', { name: 'Station ST-1' })).toBeInTheDocument();
   expect(window.location.hash).toBe('#station/ST-1');
@@ -164,6 +196,13 @@ test('encoded identifiers round-trip and consumer returns cannot leave the app',
   expect(routeFromHash(target.hash)).toEqual(target);
   expect(routeFromHash('#station/%broken')).toEqual(navigationTarget('main'));
   expect(navigationTarget('planner').hash).toBe('#journey');
+  expect(navigationTarget('home')).toEqual({ hash: '', route: 'home', stationId: null });
+  expect(navigationTarget('main')).toEqual({ hash: '#main', route: 'main', stationId: null });
+  expect(navigationTarget('home')).not.toEqual(navigationTarget('main'));
+  expect(routeFromHash('')).toEqual(navigationTarget('home'));
+  expect(routeFromHash('#main')).toEqual(navigationTarget('main'));
+  expect(navigationTarget('ride')).toEqual(navigationTarget('main'));
+  expect(navigationTarget('ride', 'ST-1').hash).toBe('#ride/ST-1');
   expect(normalizeConsumerReturn('//evil.example')).toBeNull();
   expect(normalizeConsumerReturn('/admin')).toBeNull();
   expect(normalizeConsumerReturn('/login')).toBeNull();
@@ -173,7 +212,7 @@ test('encoded identifiers round-trip and consumer returns cannot leave the app',
 });
 
 test('Main results and complete selected input survive Station and browser back', async () => {
-  visit('/');
+  visit('/#main');
   fireEvent.click(await screen.findByText('Search A'));
   fireEvent.click(screen.getByText('Station'));
   await screen.findByRole('heading', { name: 'Station ST-A' });
@@ -183,12 +222,12 @@ test('Main results and complete selected input survive Station and browser back'
   expect(output('main-result')).toEqual(mockResultA);
 });
 
-test('Ride and Home retain the related Main input/result, while refresh retains input only', async () => {
-  const view = visit('/');
+test('Ride and back-to-results retain the related Main input/result, while refresh retains input only', async () => {
+  const view = visit('/#main');
   fireEvent.click(await screen.findByText('Search A'));
   fireEvent.click(screen.getByText('Ride'));
   await screen.findByRole('heading', { name: 'Ride ST-A' });
-  fireEvent.click(screen.getByText('Home'));
+  fireEvent.click(screen.getByText('Back to results'));
   expect(output('main-input')).toEqual(mockInputA);
   expect(output('main-result')).toEqual(mockResultA);
   expect(JSON.stringify(window.history.state)).not.toMatch(/predictionProbability|arrivalAt|candidates/);
@@ -218,7 +257,7 @@ test('two search rechecks retain their own input/result pair across two browser 
 });
 
 test('explicit archive restoration never receives the preceding Main result', async () => {
-  visit('/');
+  visit('/#main');
   fireEvent.click(await screen.findByText('Search A'));
   fireEvent.click(screen.getByText('Archive'));
   fireEvent.click(await screen.findByText('Restore search'));
@@ -227,19 +266,19 @@ test('explicit archive restoration never receives the preceding Main result', as
 });
 
 test('editing a search invalidates its memory result and preserves partial input', async () => {
-  visit('/');
+  visit('/#main');
   fireEvent.click(await screen.findByText('Search A'));
   fireEvent.click(screen.getByText('Edit input'));
   expect(output('main-result')).toBeNull();
   expect(output('main-input').origin).toBe('수정 중');
   fireEvent.click(screen.getByText('Alerts'));
-  fireEvent.click(await screen.findByText('Home'));
+  fireEvent.click(await screen.findByText('Back to results'));
   expect(output('main-result')).toBeNull();
   expect(output('main-input').origin).toBe('수정 중');
 });
 
 test('Guide uses remaining arrival time and clears relative time after refreshed mount', async () => {
-  const view = visit('/');
+  const view = visit('/#main');
   fireEvent.click(await screen.findByText('Search A'));
   fireEvent.click(screen.getByText('Station'));
   await screen.findByRole('heading', { name: 'Station ST-A' });
@@ -266,7 +305,7 @@ test('a different Guide station cannot inherit the prior station request context
 });
 
 test('Main planner prefills origin and count without converting its rental anchor to a bicycle destination', async () => {
-  visit('/');
+  visit('/#main');
   fireEvent.click(await screen.findByText('Search A'));
   fireEvent.click(screen.getByText('Planner'));
   await screen.findByRole('heading', { name: 'Planner active' });
@@ -285,7 +324,7 @@ test('a loaded Journey decision connects only its selected rental station to Gui
 });
 
 test('Guide recomputes time after time spent on Ride rather than replaying the model horizon', async () => {
-  visit('/');
+  visit('/#main');
   fireEvent.click(await screen.findByText('Search A'));
   fireEvent.click(screen.getByText('Ride'));
   await screen.findByRole('heading', { name: 'Ride ST-A' });
@@ -297,7 +336,7 @@ test('Guide recomputes time after time spent on Ride rather than replaying the m
 
 test('a new live response without cache freshness does not restart the current Main restoration effect', async () => {
   mockResultA.candidates[0].arrivalAt = null;
-  visit('/');
+  visit('/#main');
   fireEvent.click(await screen.findByText('Enter A'));
   const restoresBeforeResponse = mockMainRestoreChange.mock.calls.length;
   fireEvent.click(screen.getByText('Search A'));
@@ -310,12 +349,12 @@ test.each([
   ['provided expiry passed', '2030-09-03T00:50:00Z', '2030-09-03T00:45:00Z'],
 ])('Main restores input only after %s', async (_label, now, expiresAt) => {
   mockResultA.candidates[0].expiresAt = expiresAt;
-  visit('/');
+  visit('/#main');
   fireEvent.click(await screen.findByText('Search A'));
   fireEvent.click(screen.getByText('Ride'));
   await screen.findByRole('heading', { name: 'Ride ST-A' });
   Date.now.mockReturnValue(Date.parse(now));
-  fireEvent.click(screen.getByText('Home'));
+  fireEvent.click(screen.getByText('Back to results'));
   expect(output('main-input')).toEqual(mockInputA);
   expect(output('main-result')).toBeNull();
 });
@@ -329,7 +368,7 @@ test.each([null, 'invalid', '2030-09-03T00:30:00Z'])('missing, invalid, or past 
 });
 
 test('Guide cannot combine a cached candidate with a different current origin', async () => {
-  visit('/');
+  visit('/#main');
   fireEvent.click(await screen.findByText('Search A'));
   fireEvent.click(screen.getByText('Ride'));
   await screen.findByRole('heading', { name: 'Ride ST-A' });
@@ -358,37 +397,80 @@ test('Journey result always requests the server even after a completed planner s
   expect(mockLoadDecision.mock.calls.length).toBeGreaterThan(initialLoads);
 });
 
-test('Header Ride reuses the station or guide context already on screen without a fixture id', async () => {
+test.each(['#station/ST-9', '#ride/ST-9', '#guide/ST-9', '#journey/result/decision-1'])('global RIDING from %s starts a new prediction instead of inheriting that station', async (hash) => {
+  visit('/' + hash);
+  fireEvent.click(await screen.findByText('Header ride'));
+  expect(await screen.findByRole('heading', { name: 'Main' })).toBeInTheDocument();
+  expect(window.location.hash).toBe('#main');
+  expect(window.history.state.selectedStationId).toBeUndefined();
+});
+
+test('an explicit station ride still opens that station RideExplore', async () => {
   visit('/#station/ST-9');
   await screen.findByRole('heading', { name: 'Station ST-9' });
-  fireEvent.click(screen.getByText('Header ride'));
-  expect(await screen.findByRole('heading', { name: 'Ride ST-9' })).toBeInTheDocument();
-  expect(window.location.hash).toBe('#ride/ST-9');
-
-  fireEvent.click(screen.getByText('Guide'));
-  await screen.findByRole('heading', { name: 'Guide ST-9' });
-  fireEvent.click(screen.getByText('Header ride'));
+  fireEvent.click(screen.getByText('Ride'));
   expect(await screen.findByRole('heading', { name: 'Ride ST-9' })).toBeInTheDocument();
   expect(window.location.hash).toBe('#ride/ST-9');
 });
 
-test('Header Ride with no station context lands on Main with a one-time guidance instead of a silent no-op', async () => {
-  visit('/');
-  fireEvent.click(await screen.findByText('Header ride'));
-  expect(window.location.hash).toBe('');
-  expect(await screen.findByText('라이딩을 보려면 먼저 대여소를 선택해 주세요.')).toBeInTheDocument();
+test('global RIDING from a RESULT drops the stale result and hands back an empty INITIAL', async () => {
+  visit('/#main');
+  fireEvent.click(await screen.findByText('Search A'));
+  expect(output('main-result')).toEqual(mockResultA);
 
-  fireEvent.click(screen.getByText('Alerts'));
-  await screen.findByRole('heading', { name: 'Alerts' });
-  fireEvent.click(screen.getByText('Home'));
+  fireEvent.click(screen.getByText('Header ride'));
   await screen.findByRole('heading', { name: 'Main' });
-  expect(screen.queryByText('라이딩을 보려면 먼저 대여소를 선택해 주세요.')).not.toBeInTheDocument();
+  expect(window.location.hash).toBe('#main');
+  expect(output('main-result')).toBeNull();
+  expect(output('main-input')).toBeNull();
 });
 
-test('a ride guidance shown after Header Ride does not leak into an unrelated Main visit reached via browser back', async () => {
+test('HOME and the in-screen back land in different places from the same Station', async () => {
+  visit('/#main');
+  fireEvent.click(await screen.findByText('Search A'));
+  fireEvent.click(screen.getByText('Station'));
+  await screen.findByRole('heading', { name: 'Station ST-A' });
+
+  fireEvent.click(screen.getByText('Back to results'));
+  await screen.findByRole('heading', { name: 'Main' });
+  expect(output('main-result')).toEqual(mockResultA);
+  expect(window.location.hash).toBe('#main');
+
+  fireEvent.click(screen.getByText('Station'));
+  await screen.findByRole('heading', { name: 'Station ST-A' });
+  fireEvent.click(screen.getByText('Home'));
+  expect(await screen.findByRole('heading', { name: 'Opening' })).toBeInTheDocument();
+  expect(window.location.hash).toBe('');
+});
+
+test('the landing keeps no search to restore, so its CTA opens an empty INITIAL', async () => {
+  visit('/#main');
+  fireEvent.click(await screen.findByText('Search A'));
+  fireEvent.click(screen.getByText('Header home'));
+  await screen.findByRole('heading', { name: 'Opening' });
+
+  fireEvent.click(screen.getByText('Opening CTA'));
+  await screen.findByRole('heading', { name: 'Main' });
+  expect(output('main-input')).toBeNull();
+  expect(output('main-result')).toBeNull();
+});
+
+test('back and forward keep HOME and Prediction main as distinct routes', async () => {
   visit('/');
-  fireEvent.click(await screen.findByText('Header ride'));
-  expect(await screen.findByText('라이딩을 보려면 먼저 대여소를 선택해 주세요.')).toBeInTheDocument();
+  fireEvent.click(await screen.findByText('Opening CTA'));
+  await screen.findByRole('heading', { name: 'Main' });
+  fireEvent.click(screen.getByText('Station'));
+  await screen.findByRole('heading', { name: 'Station ST-1' });
+
   await act(async () => { window.history.back(); });
-  await waitFor(() => expect(screen.queryByText('라이딩을 보려면 먼저 대여소를 선택해 주세요.')).not.toBeInTheDocument());
+  await screen.findByRole('heading', { name: 'Main' });
+  expect(window.location.hash).toBe('#main');
+
+  await act(async () => { window.history.back(); });
+  await screen.findByRole('heading', { name: 'Opening' });
+  expect(window.location.hash).toBe('');
+
+  await act(async () => { window.history.forward(); });
+  await screen.findByRole('heading', { name: 'Main' });
+  expect(window.location.hash).toBe('#main');
 });

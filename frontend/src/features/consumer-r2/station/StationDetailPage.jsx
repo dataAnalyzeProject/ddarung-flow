@@ -184,9 +184,9 @@ export default function StationDetailPage({
   const status = inventoryCopy(station?.inventoryStatus);
   return (
     <ConsumerR2Theme className="cr22-station">
-      <ConsumerAppHeader activeItem="home" authState={authState} onAccount={() => onNavigate?.("mypage")} onLogin={() => window.location.assign("/login")} onNavigate={onNavigate} userName={user?.name} userTier={user?.tier} />
+      <ConsumerAppHeader activeItem="ride" authState={authState} onAccount={() => onNavigate?.("mypage")} onLogin={() => window.location.assign("/login")} onNavigate={onNavigate} userName={user?.name} userTier={user?.tier} />
       <ConsumerContainer as="main" id="main-content" className="cr22-station__content">
-        <button className="cr22-station__back" type="button" onClick={() => onNavigate?.("home")}><ConsumerIcon name="arrowRight" size={16} /> 검색 결과로 돌아가기</button>
+        <button className="cr22-station__back" type="button" onClick={() => onNavigate?.("main")}><ConsumerIcon name="arrowRight" size={16} /> 검색 결과로 돌아가기</button>
         <AsyncState state={pageState} title="대여소 정보를 불러오지 못했습니다" description="잠시 후 다시 시도해 주세요." onAction={pageState === "error" ? () => setReloadKey((value) => value + 1) : undefined}>
           {pageState === "success" ? <>
           <section className="cr22-station__hero" aria-labelledby="station-title">
