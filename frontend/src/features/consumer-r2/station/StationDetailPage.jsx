@@ -117,7 +117,7 @@ function RhythmPanel({ rhythm, state }) {
           ))}
         </ul>
       ) : null}
-      <div className="cr22-station__heatmap" aria-hidden="true" hidden={view !== "HOURLY"}>
+      {view === "HOURLY" ? <div className="cr22-station__heatmap" aria-hidden="true">
         <span aria-hidden="true" />
         {RHYTHM_HOURS.map((hour) => <span className="cr22-station__hour" key={hour}>{hour}시</span>)}
         {WEEKDAY_LABELS.flatMap((weekday, weekdayIndex) => {
@@ -128,14 +128,14 @@ function RhythmPanel({ rhythm, state }) {
             return <span className={`cr22-station__heat${cell ? "" : " is-missing"}`} key={`${dayOfWeek}-${hour}`} style={{ "--intensity": rate }} title={cell ? `${weekday} ${hour}시 · 품절 관측률 ${Math.round(rate * 100)}%` : `${weekday} ${hour}시 · 관측 부족`} />;
           })];
         })}
-      </div>
+      </div> : null}
       <ul className="cr22-sr-only" aria-label="요일과 시간대별 품절 관측률">
         {WEEKDAY_LABELS.flatMap((weekday, weekdayIndex) => RHYTHM_HOURS.map((hour) => {
           const cell = cells.find((item) => Number(item.dayOfWeek) === weekdayIndex + 1 && Number(item.hourOfDay) === hour);
           return <li key={`${weekday}-${hour}`}>{cell ? `${weekday}요일 ${hour}시 품절 관측률 ${Math.round(Math.max(0, Math.min(1, Number(cell.stockoutRate) || 0)) * 100)}퍼센트` : `${weekday}요일 ${hour}시 관측 부족`}</li>;
         }))}
       </ul>
-      <div className="cr22-station__heatmap-legend" aria-hidden="true" hidden={view !== "HOURLY"}><span>낮음</span><i /><i /><i /><i /><span>높음</span></div>
+      {view === "HOURLY" ? <div className="cr22-station__heatmap-legend" aria-hidden="true"><span>낮음</span><i /><i /><i /><i /><span>높음</span></div> : null}
     </SurfaceCard>
   );
 }
