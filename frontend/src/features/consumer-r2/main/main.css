@@ -1519,41 +1519,203 @@
   line-height: 1.3;
 }
 
-/* Reviewer, 2026-09-05: "지도가 양옆만 길고 너무 작아". Stacking the map above
-   the route panel in a 970px-wide column left the map 103px tall - an 11:1
-   letterbox - because the panel under it is fixed and the map got the scraps.
-   On a wide screen the column splits instead: map beside the panel, so the map
-   gets the column's full height and a sane shape, and the panel gets a width
-   its metrics and four buttons can wrap into. */
-@media (min-width: 64rem) {
-  .cr293-results__map {
-    display: grid;
-    grid-template-columns: minmax(0, 1.12fr) minmax(19rem, 1fr);
-    overflow: hidden;
-  }
+/* ── TASK-333 CONSUMER-R2-UI-01: the reviewer's mockup for the result screen ──
+   Mockup: condition summary beside the title, the map large on top, the route
+   facts as one horizontal strip under it, and the candidate cards carrying four
+   figures across instead of stacked lines. Drawn at 1.76:1; this screen has to
+   hold it at 2.21:1, so the arrangement is the mockup's and the vertical values
+   are recomputed for 695px. */
 
-  .cr293-map {
-    min-height: 0;
-    height: 100%;
-  }
+/* The title row carries the condition chips, which used to be a full-width band
+   of their own under it - 66px back for the results. */
+.cr293-result-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: clamp(0.6rem, 1.4vw, 1.5rem);
+}
 
-  .cr293-map__canvas {
-    height: 100%;
-  }
+.cr293-result-heading > div:first-child {
+  flex: 1 1 18rem;
+  min-width: 0;
+}
 
-  .cr293-evidence {
-    min-height: 0;
-    border-left: 1px solid var(--cr22-color-line);
-    overflow-y: auto;
-    overscroll-behavior: contain;
-  }
+.cr293-result-heading > .cr293-button,
+.cr293-result-heading > .cr22-button {
+  flex: 0 0 auto;
+}
 
-  .cr293-evidence__numbers {
-    grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
-  }
+.cr293-result-heading .cr293-condition {
+  flex: 1 1 26rem;
+  min-width: 0;
+  margin: 0;
+  padding: clamp(0.4rem, 1.1vh, 0.75rem) clamp(0.7rem, 1.2vw, 1.15rem);
+  justify-content: space-around;
+  gap: clamp(0.5rem, 1.2vw, 1.25rem);
+}
 
-  /* Two label/value pairs per row in a 450px panel broke words mid-syllable. */
-  .cr293-evidence__metadata {
-    grid-template-columns: minmax(0, 1fr);
-  }
+/* ── candidate list ── */
+.cr293-results__title {
+  align-items: center;
+}
+
+.cr293-results__title > div:first-child {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.cr293-results__sort select {
+  max-width: 100%;
+  padding: 0.3rem 1.6rem 0.3rem 0.6rem;
+  border: 1px solid var(--cr22-color-line);
+  border-radius: 0.5rem;
+  background: #fff;
+  color: var(--cr22-color-copy);
+  font: inherit;
+  font-size: clamp(0.75rem, 1.8vh, 0.85rem);
+  cursor: pointer;
+}
+
+.cr293-candidate__top {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+.cr293-candidate__top strong {
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow-wrap: anywhere;
+}
+
+.cr293-candidate__distance {
+  flex: 0 0 auto;
+  color: var(--cr22-color-muted);
+  font-size: 0.78rem;
+}
+
+.cr293-candidate__top .cr22-badge {
+  margin-left: auto;
+}
+
+/* Four figures across, the way the mockup reads them, rather than four stacked
+   lines. The lead figure keeps the size it had; the rest are supporting. */
+.cr293-candidate__facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: end;
+  gap: clamp(0.2rem, 0.6vw, 0.6rem);
+  margin-top: clamp(0.15rem, 0.5vh, 0.35rem);
+}
+
+.cr293-candidate__fact {
+  min-width: 0;
+  display: grid;
+  gap: 0.05rem;
+}
+
+/* "도착 시점 대여 가능성" needs two lines in a quarter of this column while the
+   other three need one, so the label box reserves both and the four figures
+   still line up. */
+.cr293-candidate__fact small {
+  min-height: 2.4em;
+  display: flex;
+  align-items: flex-end;
+  color: var(--cr22-color-muted);
+  font-size: clamp(0.6rem, 1.35vh, 0.7rem);
+  line-height: 1.2;
+  /* Korean wraps at word boundaries here; "가능성" must not split across lines. */
+  word-break: keep-all;
+  overflow-wrap: normal;
+}
+
+.cr293-candidate__fact b {
+  color: var(--cr22-color-ink);
+  font-size: clamp(0.85rem, 2vh, 1rem);
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.cr293-candidate__fact--lead b {
+  color: var(--cr22-color-blue-dark);
+  font-size: clamp(1rem, 2.6vh, 1.35rem);
+}
+
+.cr293-candidate__inventory {
+  color: var(--cr22-color-muted);
+  font-size: clamp(0.65rem, 1.5vh, 0.75rem);
+  line-height: 1.25;
+}
+
+/* ── map on top, facts in one strip under it ── */
+.cr293-results__map {
+  display: flex;
+  flex-direction: column;
+}
+
+.cr293-map {
+  flex: 1 1 auto;
+  min-height: clamp(6rem, 16vh, 30rem);
+}
+
+.cr293-evidence {
+  flex: 0 0 auto;
+}
+
+.cr293-evidence__strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: clamp(0.4rem, 1.4vw, 1.5rem);
+}
+
+.cr293-evidence__selected {
+  flex: 1 1 19rem;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.cr293-evidence__selected h2 {
+  margin: 0;
+  min-width: 0;
+  font-size: clamp(0.92rem, 2.2vh, 1.15rem);
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.cr293-evidence__selected small {
+  flex: 0 0 auto;
+  color: var(--cr22-color-muted);
+}
+
+.cr293-evidence__strip .cr293-evidence__numbers {
+  flex: 2 1 22rem;
+  min-width: 0;
+  margin: 0;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+/* The reviewer kept all four actions. With the map on top the strip is the full
+   width of the column, so all four fit one row here and fold to two only when
+   the window is too narrow for that. */
+.cr293-evidence__actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: clamp(0.3rem, 0.9vh, 0.6rem) clamp(0.3rem, 0.8vw, 0.7rem);
+  margin-top: clamp(0.3rem, 0.9vh, 0.75rem);
+}
+
+.cr293-evidence__metadata {
+  margin-top: clamp(0.25rem, 0.8vh, 0.9rem);
+  padding: clamp(0.25rem, 0.8vh, 0.8rem) clamp(0.5rem, 1vw, 0.8rem);
+  grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr));
+}
+
+.cr293-evidence__metadata dt,
+.cr293-evidence__metadata dd {
+  font-size: clamp(0.66rem, 1.5vh, 0.76rem);
+  line-height: 1.25;
 }

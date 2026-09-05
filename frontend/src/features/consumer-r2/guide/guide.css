@@ -234,3 +234,37 @@
   font-size: clamp(0.76rem, 1.8vh, 0.9rem);
   line-height: 1.3;
 }
+
+/* TASK-333: the mockup draws the arrival probability as a ring. It occupies the
+   icon's slot, so the tile keeps its height. */
+.cr22-guide__fact-ring {
+  width: clamp(2.1rem, 5.2vh, 3rem);
+  height: clamp(2.1rem, 5.2vh, 3rem);
+  display: grid;
+  place-items: center;
+}
+
+.cr22-guide__fact-ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.cr22-guide__fact-ring circle {
+  fill: none;
+  stroke-width: 4;
+}
+
+.cr22-guide__fact-ring-track {
+  stroke: #e3eef1;
+}
+
+.cr22-guide__fact-ring-value {
+  stroke: var(--cr22-color-green);
+  stroke-linecap: round;
+}
+
+.cr22-guide__fact--missing .cr22-guide__fact-ring-track,
+.cr22-guide__fact--unavailable .cr22-guide__fact-ring-track {
+  stroke: #e6e9ee;
+}

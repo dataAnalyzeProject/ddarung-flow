@@ -38,10 +38,26 @@ function formatNumber(value) {
   return new Intl.NumberFormat("ko-KR").format(value);
 }
 
-function FactItem({ icon, label, state = "UNAVAILABLE", value, detail }) {
+// The mockup shows the arrival probability as a ring rather than an icon. The
+// ring draws the number the server already sent; when that number is missing
+// the ring is empty and the value still reads 확인 불가.
+function ProbabilityRing({ ratio }) {
+  const filled = typeof ratio === "number" && Number.isFinite(ratio) ? Math.max(0, Math.min(1, ratio)) : null;
+  const circumference = 2 * Math.PI * 15.5;
+  return (
+    <span className="cr22-guide__fact-ring" aria-hidden="true">
+      <svg viewBox="0 0 36 36">
+        <circle className="cr22-guide__fact-ring-track" cx="18" cy="18" r="15.5" />
+        {filled === null ? null : <circle className="cr22-guide__fact-ring-value" cx="18" cy="18" r="15.5" strokeDasharray={`${(filled * circumference).toFixed(2)} ${circumference.toFixed(2)}`} />}
+      </svg>
+    </span>
+  );
+}
+
+function FactItem({ icon, label, state = "UNAVAILABLE", value, detail, ring }) {
   return (
     <div className={`cr22-guide__fact cr22-guide__fact--${state.toLowerCase()}`}>
-      <span className="cr22-guide__fact-icon" aria-hidden="true"><ConsumerIcon name={icon} size={24} /></span>
+      {ring === undefined ? <span className="cr22-guide__fact-icon" aria-hidden="true"><ConsumerIcon name={icon} size={24} /></span> : <ProbabilityRing ratio={ring} />}
       <div className="cr22-guide__fact-copy">
         <span>{label}</span>
         <strong>{value}</strong>
@@ -60,7 +76,7 @@ function FactualOverview({ guide }) {
   return (
     <section className="cr22-guide__facts" aria-labelledby="guide-facts-title">
       <h2 className="cr22-sr-only" id="guide-facts-title">현재 라이딩 정보</h2>
-      <FactItem icon="bike" label="도착 시점 대여 가능성" state={rental?.status} value={formatPercent(rental?.numeric.rentalProbability)} detail={availability} />
+      <FactItem icon="bike" label="도착 시점 대여 가능성" state={rental?.status} value={formatPercent(rental?.numeric.rentalProbability)} detail={availability} ring={rental?.numeric.rentalProbability ?? null} />
       <FactItem icon="bike" label="현재 자전거" state={rental?.status} value={formatCount(rental?.numeric.availableBikeCount)} detail={INVENTORY_LABELS[rental?.text.inventoryStatus] || "상태 확인 불가"} />
       <FactItem icon="info" label="도착 시점 기온" state={weather?.status} value={formatTemperature(weather?.numeric.temperatureCelsius)} detail={sky} />
       <FactItem icon="info" label="현재 대기질" state={airQuality?.status} value={airGrade} detail={airQuality?.numeric.pm25 === null || airQuality?.numeric.pm25 === undefined ? "미세먼지 확인 불가" : `미세먼지 ${formatNumber(airQuality.numeric.pm25)}㎍/㎥`} />
