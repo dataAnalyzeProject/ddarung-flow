@@ -17,8 +17,10 @@ test("presents the approved opening hierarchy and starts only on the CTA", () =>
   expect(container.querySelector(".cr22-opening__visual > img")).toHaveAttribute("alt", "");
   expect(container.querySelector(".cr22-opening__visual > img")).toHaveAttribute("aria-hidden", "true");
   expect(container.querySelector(".cr22-opening__visual > img")).toHaveAttribute("width", "1600");
-  expect(screen.getByText("도착지 주변 대여소 비교")).toBeInTheDocument();
-  expect(screen.getByText("주변 대여소의 대여 가능성을 한눈에 비교해요")).toBeInTheDocument();
+  expect(container.querySelector(".cr22-opening__visual > img")).toHaveAttribute("height", "800");
+  expect(screen.getByText("출발지와 빌릴 지역, 이동 방법과 필요한 자전거 수를 선택하면 도착할 때의 대여 가능성을 비교해요.")).toBeInTheDocument();
+  expect(container.querySelector(".cr22-opening__facts")).not.toBeInTheDocument();
+  expect(container.querySelector(".cr22-opening__visual figcaption")).not.toBeInTheDocument();
 
   expect(onStart).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "대여 가능성 예측 시작하기" }));

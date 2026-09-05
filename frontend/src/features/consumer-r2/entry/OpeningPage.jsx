@@ -34,7 +34,7 @@ export default function OpeningPage({
               <strong>따릉이 대여 가능성</strong>을 확인하세요
             </h1>
             <p>
-              도착할 시간과 필요한 자전거 수를 반영해 주변 대여소를 미리 비교할 수 있어요.
+              출발지와 빌릴 지역, 이동 방법과 필요한 자전거 수를 선택하면 도착할 때의 대여 가능성을 비교해요.
             </p>
             <ConsumerButton
               className="cr22-opening__cta"
@@ -45,11 +45,6 @@ export default function OpeningPage({
             >
               대여 가능성 예측 시작하기
             </ConsumerButton>
-            <ul className="cr22-opening__facts" aria-label="서비스 안내">
-              <li><ConsumerIcon name="mapPin" /><span>도착지 주변 대여소 비교</span></li>
-              <li><ConsumerIcon name="plan" /><span>도착 시간 기준 예상</span></li>
-              <li><ConsumerIcon name="bike" /><span>필요 자전거 수 반영</span></li>
-            </ul>
           </section>
 
           <figure className="cr22-opening__visual">
@@ -61,10 +56,6 @@ export default function OpeningPage({
               height="800"
               fetchpriority="high"
             />
-            <figcaption>
-              <span><ConsumerIcon name="check" />도착 시간과 조건을 입력하세요</span>
-              <strong>주변 대여소의 대여 가능성을 한눈에 비교해요</strong>
-            </figcaption>
           </figure>
         </ConsumerContainer>
       </main>

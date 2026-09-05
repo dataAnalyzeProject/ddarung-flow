@@ -34,7 +34,7 @@
 }
 
 .cr22-opening__copy h1 {
-  max-width: 13ch;
+  max-width: 100%;
   color: var(--cr22-color-ink);
   font-size: clamp(2.75rem, 4.3vw, 4.75rem);
   font-weight: 900;
@@ -60,28 +60,6 @@
   box-shadow: 0 0.75rem 1.5rem rgba(9, 105, 232, 0.2);
 }
 
-.cr22-opening__facts {
-  margin-top: var(--cr22-space-8);
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--cr22-space-3) var(--cr22-space-5);
-  color: var(--cr22-color-copy);
-  font-size: var(--cr22-font-size-sm);
-  font-weight: 750;
-  list-style: none;
-}
-
-.cr22-opening__facts li {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--cr22-space-2);
-}
-
-.cr22-opening__facts .cr22-icon {
-  color: var(--cr22-color-green-dark);
-}
-
 .cr22-opening__visit-note {
   margin-top: var(--cr22-space-4);
   color: var(--cr22-color-muted);
@@ -99,37 +77,6 @@
   display: block;
   border-radius: var(--cr22-radius-lg);
   box-shadow: 0 1.75rem 4rem rgba(18, 65, 91, 0.16);
-}
-
-.cr22-opening__visual figcaption {
-  width: min(27rem, calc(100% - 3rem));
-  position: absolute;
-  right: 1.5rem;
-  bottom: 1.5rem;
-  padding: var(--cr22-space-4) var(--cr22-space-5);
-  border-radius: var(--cr22-radius-md);
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 0.75rem 2rem rgba(18, 44, 79, 0.16);
-}
-
-.cr22-opening__visual figcaption span,
-.cr22-opening__visual figcaption strong {
-  display: flex;
-}
-
-.cr22-opening__visual figcaption span {
-  align-items: center;
-  gap: var(--cr22-space-2);
-  color: var(--cr22-color-green-dark);
-  font-size: var(--cr22-font-size-sm);
-  font-weight: 850;
-}
-
-.cr22-opening__visual figcaption strong {
-  margin-top: var(--cr22-space-2);
-  color: var(--cr22-color-ink);
-  font-size: var(--cr22-font-size-lg);
-  line-height: 1.4;
 }
 
 .cr22-login__main {
@@ -495,10 +442,6 @@
     font-size: clamp(2.3rem, 5vw, 3.5rem);
   }
 
-  .cr22-opening__facts {
-    display: grid;
-  }
-
   .cr22-login__layout {
     grid-template-columns: minmax(0, 1.35fr) minmax(14rem, 0.75fr);
   }
@@ -521,16 +464,6 @@
   .cr22-opening__copy h1,
   .cr22-opening__copy > p:not(.cr22-opening__visit-note) {
     margin-inline: auto;
-  }
-
-  .cr22-opening__facts {
-    width: fit-content;
-    margin-inline: auto;
-    text-align: left;
-  }
-
-  .cr22-opening__visual {
-    order: -1;
   }
 
   .cr22-login__layout {
@@ -570,20 +503,9 @@
   }
 
   .cr22-opening__visual > img {
-    min-height: 12rem;
-    object-fit: cover;
-    object-position: 60% center;
-  }
-
-  .cr22-opening__visual figcaption {
-    width: calc(100% - 2rem);
-    right: 1rem;
-    bottom: 1rem;
-    padding: var(--cr22-space-3) var(--cr22-space-4);
-  }
-
-  .cr22-opening__visual figcaption strong {
-    font-size: var(--cr22-font-size-md);
+    min-height: 0;
+    object-fit: contain;
+    object-position: center;
   }
 
   .cr22-login__intro {
@@ -660,6 +582,6 @@
 }
 
 .cr22-opening__visual > img {
-  max-height: clamp(9rem, 34vh, 26rem);
-  object-fit: cover;
+  max-height: none;
+  object-fit: contain;
 }
