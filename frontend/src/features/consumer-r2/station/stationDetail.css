@@ -173,7 +173,7 @@
 
 .cr22-station__details-grid,
 .cr22-station__side-panels {
-  gap: clamp(7px, 1.7vh, 16px);
+  gap: clamp(5px, 1.3vh, 16px);
 }
 
 .cr22-station__metrics {
@@ -251,4 +251,157 @@
 .cr22-station__panel-copy {
   margin-bottom: 0;
   font-size: clamp(12px, 1.9vh, 14px);
+}
+
+/* Reviewer call: 가까운 대여소 has to be fully visible too. The side column was
+   395px against a 234px row, so the height comes from both ends - the fixed
+   chrome above and below gives up ~69px, the two side cards give up ~96px.
+   The 상세 보기 targets keep their 44px minimum; what shrinks is padding,
+   header height and the secondary line, never a hit area. */
+.cr22-station__inventory,
+.cr22-station__map,
+.cr22-station__map-fallback {
+  min-height: clamp(76px, 13vh, 196px);
+}
+
+.cr22-station__hero {
+  padding: clamp(2px, 0.5vh, 20px) 0 clamp(2px, 0.5vh, 18px);
+}
+
+.cr22-station__history-notice {
+  margin: clamp(3px, 0.7vh, 16px) 0;
+  padding: clamp(4px, 0.8vh, 11px) 16px;
+  font-size: clamp(12px, 1.9vh, 14px);
+}
+
+.cr22-station__ride-cta {
+  margin-top: clamp(4px, 0.9vh, 20px);
+  padding: clamp(5px, 1.2vh, 20px) 26px;
+}
+
+.cr22-station__ride-cta span {
+  margin-top: clamp(1px, 0.4vh, 8px);
+}
+
+.cr22-station__back {
+  min-height: clamp(28px, 4.4vh, 44px);
+}
+
+.cr22-station .cr22-card__header {
+  padding: clamp(4px, 1vh, 16px) 20px;
+}
+
+.cr22-station .cr22-card__body {
+  padding: clamp(5px, 1.2vh, 18px) 20px;
+}
+
+.cr22-station__nearby-list li {
+  padding: clamp(1px, 0.3vh, 10px) 0;
+}
+
+.cr22-station__nearby-list small {
+  margin-top: clamp(0px, 0.2vh, 3px);
+}
+
+.cr22-station__metrics {
+  gap: clamp(3px, 0.8vh, 12px);
+}
+
+.cr22-station__metrics div {
+  padding-bottom: clamp(3px, 0.8vh, 12px);
+}
+
+/* The last 74px, all from chrome: the inventory band and the map keep enough
+   height for the figure and a readable map, the identity block loses leading,
+   and the CTA keeps its button at full size while its own padding shrinks. */
+.cr22-station__inventory,
+.cr22-station__map,
+.cr22-station__map-fallback {
+  min-height: clamp(66px, 10vh, 196px);
+}
+
+.cr22-station__identity span {
+  margin-top: clamp(1px, 0.4vh, 10px);
+}
+
+.cr22-station__identity p {
+  margin-bottom: clamp(1px, 0.3vh, 8px);
+}
+
+.cr22-station__ride-cta {
+  margin-top: clamp(3px, 0.7vh, 20px);
+  padding: clamp(3px, 0.9vh, 20px) 26px;
+}
+
+.cr22-station__history-notice {
+  margin: clamp(2px, 0.5vh, 16px) 0;
+  padding: clamp(3px, 0.6vh, 11px) 16px;
+}
+
+.cr22-station__back {
+  min-height: clamp(24px, 3.8vh, 44px);
+}
+
+/* The inventory band is content-sized, not min-height-sized, so the figure and
+   its meta column are what remain to trim. The 44px 상세 보기 targets in
+   가까운 대여소 are the floor this screen is balanced against. */
+.cr22-station__inventory strong {
+  font-size: clamp(22px, 3.8vh, 58px);
+}
+
+.cr22-station__inventory--missing strong,
+.cr22-station__inventory--unavailable strong {
+  font-size: clamp(20px, 3.2vh, 44px);
+}
+
+.cr22-station__inventory > div:first-child span {
+  font-size: clamp(12px, 2vh, 15px);
+}
+
+.cr22-station__inventory-meta {
+  font-size: clamp(11px, 1.8vh, 13px);
+}
+
+.cr22-station__inventory-meta time {
+  margin-top: clamp(2px, 0.6vh, 10px);
+}
+
+.cr22-station__inventory-meta p {
+  margin-top: clamp(2px, 0.5vh, 8px);
+  line-height: 1.4;
+}
+
+.cr22-station__nearby-list strong {
+  font-size: clamp(13px, 2vh, 14px);
+}
+
+.cr22-station__nearby-list small {
+  font-size: clamp(11px, 1.7vh, 12px);
+}
+
+/* Last 39px: the two side cards' headers and bodies. */
+.cr22-station .cr22-card__header h2 {
+  font-size: clamp(0.85rem, 2vh, 1.25rem);
+  line-height: 1.25;
+}
+
+.cr22-station .cr22-card__header {
+  padding: clamp(3px, 0.8vh, 16px) 20px;
+}
+
+.cr22-station .cr22-card__body {
+  padding: clamp(2px, 0.7vh, 18px) 20px;
+}
+
+.cr22-station__side-panels {
+  gap: clamp(3px, 0.9vh, 16px);
+}
+
+.cr22-station__metrics dt,
+.cr22-station__metrics dd {
+  font-size: clamp(12px, 2vh, 14px);
+}
+
+.cr22-station__nearby-list li:last-child {
+  padding-bottom: 0;
 }
