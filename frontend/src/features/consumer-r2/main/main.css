@@ -1166,144 +1166,184 @@
   }
 }
 
-@media (min-width: 64rem) and (max-height: 56.25rem) {
-  .cr293-hero {
-    height: 12.8rem;
-  }
 
-  .cr293-hero h1 {
-    font-size: clamp(2rem, 2.7vw, 2.65rem);
-  }
 
-  .cr293-hero p {
-    margin-top: 0.65rem;
-    font-size: 0.95rem;
-  }
 
-  .cr293-search {
-    padding-top: 1.3rem;
-    padding-bottom: 1.4rem;
-  }
-
-  .cr293-search__steps {
-    margin-bottom: 1rem;
-  }
-
-  .cr293-search__step {
-    min-height: 17rem;
-  }
-
-  .cr293-search .cr22-place-card {
-    margin-top: 1rem;
-  }
-
-  .cr293-search .cr22-place-card__content {
-    min-height: 6.5rem;
-  }
-
-  .cr293-options .cr22-option-card {
-    min-height: 9rem;
-  }
-
-  .cr293-bike-count {
-    gap: 0.7rem 0.9rem;
-    margin-top: 1rem;
-  }
-
-  .cr293-bike-count button {
-    min-height: 4.15rem;
-  }
-
-  .cr293-search__actions {
-    gap: 0.8rem;
-  }
-
-  .cr293-search__actions .cr22-button {
-    min-height: 4rem;
-  }
-
-  .cr293-search__hint {
-    margin-top: 0.8rem !important;
-  }
-}
-
-/* Real compact desktop heights (e.g. 1536x695 at 125% OS scaling) leave the
-   INITIAL hero + search card mostly below the fold. Width-based breakpoints
-   above don't apply here since the viewport is still desktop-wide. */
-@media (min-width: 64rem) and (max-height: 45rem) {
-  .cr293-hero {
-    height: 12.5rem;
-  }
-
-  .cr293-hero > div {
-    width: min(34rem, 46vw);
-  }
-
-  .cr293-hero h1 {
-    font-size: clamp(1.5rem, 2.4vw, 2.1rem);
-    line-height: 1.2;
-  }
-
-  .cr293-hero p {
-    margin-top: 0.4rem;
-    font-size: 0.95rem;
-  }
-
-  .cr293-container--initial {
-    margin-top: -1.25rem;
-    padding-bottom: 3rem;
-  }
-
-  .cr293-search {
-    padding: 1.25rem 1.5rem;
-  }
-
-  .cr293-search__heading {
-    gap: 0.2rem;
-  }
-
-  .cr293-search__heading h2 {
-    font-size: 1.4rem;
-  }
-
-  .cr293-search__steps {
-    margin: 1.1rem 0 1rem;
-  }
-
-  .cr293-search__step {
-    min-height: 9rem;
-    padding: 0.85rem;
-  }
-}
-
-/* Even shorter viewports (browser chrome eating into a laptop's short
-   screen): the hero must not force a scroll that only clips its own
-   text/image via overflow: hidden. */
-@media (min-width: 64rem) and (max-height: 38rem) {
-  .cr293-hero {
-    height: 9.5rem;
-  }
-
-  .cr293-hero h1 {
-    font-size: 1.4rem;
-  }
-
-  .cr293-hero p {
-    display: none;
-  }
-
-  .cr293-container--initial {
-    margin-top: -0.75rem;
-    padding-bottom: 2rem;
-  }
-
-  .cr293-search__step {
-    min-height: 8rem;
-  }
-}
 
 @media (prefers-reduced-motion: reduce) {
   .cr293-page * {
     scroll-behavior: auto !important;
   }
+}
+
+/* Viewport fit (CONSUMER-R2-FIT-01) - the main search screen.
+
+   This screen was 155px past a 1536x695 laptop viewport. Three stepped
+   max-height blocks (900px, 720px, 608px) used to sit here and have been
+   removed: they snapped, so the same screen fit at 695px and overflowed at
+   730px, and their main lever could not work anyway - they lowered min-height
+   on the search steps, and min-height is a floor, so the steps still rendered
+   at their content height of 254px, driven by the two rows of bike-count
+   circles.
+
+   Size the chrome from viewport height instead. The calc() forms hold the
+   FINAL proportions on a tall screen and shed height as the screen gets
+   shorter, rather than snapping at a breakpoint: the hero reaches its full
+   16.25rem at roughly 1080px of viewport height and shrinks continuously
+   below that. */
+.cr293-hero {
+  height: clamp(5.25rem, calc(40vh - 156px), 16.25rem);
+}
+
+.cr293-hero h1 {
+  font-size: clamp(1.4rem, calc(7vh - 17px), 3.0625rem);
+}
+
+.cr293-hero p {
+  margin-top: clamp(0.35rem, 1.5vh, 1.05rem);
+}
+
+.cr293-search {
+  padding: clamp(0.3rem, 1.9vh, 1.7rem) 1.9rem clamp(0.3rem, 1.9vh, 1.8125rem);
+}
+
+.cr293-search__steps {
+  margin: 0 0 clamp(0.375rem, 1.6vh, 1.5rem);
+}
+
+.cr293-container--initial {
+  padding-bottom: clamp(0.25rem, 1.9vh, 2.6rem);
+}
+
+/* The bike-count circles are the tallest thing in the step row, so they set
+   the height of all four steps. They are aspect-ratio: 1, so the column width
+   controls the circle. */
+.cr293-bike-count {
+  grid-template-columns: repeat(3, minmax(2.5rem, clamp(3.5rem, calc(20vh - 78px), 5.25rem)));
+  gap: clamp(0.4rem, 1.3vh, 1rem) 1.05rem;
+  margin-top: clamp(0.5rem, 2vh, 1.55rem);
+}
+
+.cr293-bike-count button {
+  min-height: clamp(3.25rem, calc(19vh - 78px), 4.85rem);
+}
+
+/* Leave headroom rather than fitting exactly. This screen shows validation and
+   provider-failure text under the inputs ("장소 검색에 실패했습니다", "출발 위치와
+   대여 희망 지역을 검색 결과에서 각각 선택해 주세요"), which is real content that
+   appears after the happy-path layout is measured. Fitting to the pixel meant
+   one line of error text put the screen back into a scroll. */
+.cr293-search__step {
+  padding-top: clamp(0.2rem, 1.4vh, 0.85rem);
+  /* .cr293-search__step-help is position: absolute and pinned to the bottom of
+     the step. The FINAL design reserved its row through a 20.5rem min-height;
+     with the step now sized to the viewport, the padding has to reserve it
+     explicitly or the flowed content runs underneath the help text. */
+  padding-bottom: clamp(2.5rem, 6vh, 3.5rem);
+}
+
+/* Viewport fit (CONSUMER-R2-FIT-01) - the search RESULT screen.
+
+   The result screen ran 608px past the viewport: the candidate list and the
+   route map are laid out side by side and both grew to their content height.
+   Keep the heading and the search conditions in place - they say what you are
+   looking at - give the list/map row whatever height is left, and scroll the
+   candidate list inside its own pane. The map fills its pane rather than
+   setting the row height. */
+.cr293-page > main {
+  display: flex;
+  flex-direction: column;
+}
+
+/* INITIAL keeps its natural height and lets <main> scroll if error text pushes
+   it over; RESULT takes the leftover height so its list/map row can be bounded. */
+.cr293-hero,
+.cr293-container--initial {
+  flex: 0 0 auto;
+}
+
+.cr293-container--result {
+  padding-top: clamp(0.75rem, 2.4vh, 2.75rem);
+  padding-bottom: clamp(0.75rem, 2.2vh, 5rem);
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cr293-result-heading,
+.cr293-condition,
+.cr293-container--result > .cr22-button,
+.cr293-container--result > .cr22-state {
+  flex: 0 0 auto;
+}
+
+.cr293-condition {
+  margin-top: clamp(0.5rem, 1.9vh, 1.75rem);
+  padding: clamp(0.45rem, 1.3vh, 0.9rem) 1.2rem;
+}
+
+.cr293-results,
+.cr293-transit-view {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-top: clamp(0.5rem, 1.6vh, 1.25rem);
+  align-items: stretch;
+}
+
+.cr293-results__list,
+.cr293-results__map,
+.cr293-transit {
+  min-height: 0;
+}
+
+.cr293-results__list {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.cr293-result-heading h1 {
+  font-size: clamp(1.3rem, 3.6vh, 2.35rem);
+}
+
+/* The dimensions the removed stepped blocks used to control, expressed
+   continuously. Each reaches its FINAL value at roughly 1080px of viewport
+   height and sheds height smoothly below that, instead of snapping at a
+   breakpoint. */
+.cr293-search__step {
+  min-height: clamp(7.5rem, calc(47.8vh - 188px), 20.5rem);
+}
+
+.cr293-search .cr22-place-card__content {
+  min-height: clamp(4.5rem, calc(8.6vh + 44px), 8.55rem);
+}
+
+.cr293-options .cr22-option-card {
+  min-height: clamp(6.25rem, calc(15.1vh + 22px), 11.55rem);
+}
+
+.cr293-search__actions {
+  gap: clamp(0.7rem, calc(1.45vh + 3px), 1.15rem);
+}
+
+.cr293-search__actions .cr22-button {
+  min-height: clamp(2.875rem, calc(5.5vh + 12px), 5rem);
+}
+
+.cr293-search__heading h2 {
+  font-size: clamp(1.25rem, calc(3.9vh - 5px), 1.75rem);
+}
+
+.cr293-hero > div {
+  width: min(39rem, 48vw);
+}
+
+/* The per-step helper line is chrome around the control it explains. */
+.cr293-search__step-help {
+  margin-top: clamp(0.2rem, 0.9vh, 0.6rem);
+}
+
+.cr293-search__step-help {
+  bottom: clamp(0.5rem, 1.4vh, 1.4rem);
+  line-height: 1.4;
 }
