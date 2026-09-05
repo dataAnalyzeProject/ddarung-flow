@@ -1104,3 +1104,32 @@
 .cr22-checkout__heading p {
   font-size: clamp(0.78rem, 1.9vh, 0.95rem);
 }
+
+/* Reviewer, 2026-09-05: "양옆으로 길어서 비율 이상한 것 같아". Restoring the row's
+   width had swung the cards the other way - 560px wide against 311 tall reads
+   as a banner, not a plan. The row keeps the narrower measure and the feature
+   columns come down with it, so each card sits near 3:2. */
+.cr22-checkout__plans {
+  max-width: 62rem;
+}
+
+.cr22-checkout__plan ul {
+  grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
+}
+
+.cr22-checkout__plan li small {
+  font-size: 0.72rem;
+}
+
+/* The page title and its one-line explanation read fine side by side, and that
+   is the last row the buy buttons needed. */
+.cr22-checkout__heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 0.75rem;
+}
+
+.cr22-checkout__plan > .cr22-button {
+  min-height: 2.75rem;
+}

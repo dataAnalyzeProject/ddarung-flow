@@ -1447,3 +1447,246 @@ button[aria-pressed="true"] .cr22-journey__radio {
 .cr22-journey--planner .cr22-journey__stepper strong {
   font-size: clamp(0.82rem, 1.9vh, 1rem);
 }
+
+/* Reviewer, 2026-09-05: the confirm step still cut fields off the bottom.
+   Squeezing further would have made it cramped, so the step uses the width it
+   already had: on a desktop screen the four field groups pair up two-by-two
+   instead of stacking, which halves the form's height without shrinking a
+   single control. The description, the conflict notice and the actions stay
+   full width, so the reading order is unchanged. */
+@media (min-width: 64rem) {
+  .cr22-journey--planner .cr22-journey__confirmation {
+    /* The input step is a single textarea and reads better narrow, but the
+       confirm step is now a two-column form and needs the container's width. */
+    max-width: none;
+    display: grid;
+    /* The places group carries two text fields and an auto-pick row, so it
+       takes the larger share; the three number fields are compact. */
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-content: start;
+    column-gap: clamp(0.9rem, 1.8vw, 2rem);
+  }
+
+  .cr22-journey--planner .cr22-journey__confirmation > .cr22-journey__draft-text,
+  .cr22-journey--planner .cr22-journey__confirmation > .cr22-journey__conflict,
+  .cr22-journey--planner .cr22-journey__confirmation > .cr22-journey__input-explanation,
+  .cr22-journey--planner .cr22-journey__confirmation > .cr22-journey__input-actions,
+  .cr22-journey--planner .cr22-journey__confirmation > .cr22-journey__notice {
+    grid-column: 1 / -1;
+  }
+
+  .cr22-journey--planner .cr22-journey__confirm-places,
+  .cr22-journey--planner .cr22-journey__confirmation > .cr22-journey__theme-field {
+    grid-column: 1;
+  }
+
+  .cr22-journey--planner .cr22-journey__confirm-numbers,
+  .cr22-journey--planner .cr22-journey__confirmation > .cr22-journey__preferences {
+    grid-column: 2;
+    align-self: start;
+  }
+
+  /* Half width has to fit a datetime picker, so the time field keeps the room
+     it needs and the two short number fields give some back. */
+  .cr22-journey--planner .cr22-journey__confirm-numbers {
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 0.85fr);
+  }
+
+  .cr22-journey--planner .cr22-journey__selected-place {
+    margin-top: clamp(0.2rem, 0.7vh, 0.5rem);
+    gap: 0.35rem 0.6rem;
+    font-size: clamp(0.72rem, 1.7vh, 0.85rem);
+    line-height: 1.25;
+  }
+
+  .cr22-journey--planner .cr22-journey__quick-times {
+    gap: 0.35rem;
+  }
+
+  /* At half width these two rows were one wrap away from a second line each,
+     which is where the remaining overflow came from. */
+  .cr22-journey--planner .cr22-journey__selected-place .cr22-button {
+    min-height: 2.25rem;
+    padding: 0.3rem 0.7rem;
+    font-size: 0.8rem;
+  }
+
+  .cr22-journey--planner .cr22-journey__quick-times .cr22-button {
+    min-height: 2.25rem;
+    padding: 0.3rem 0.7rem;
+    font-size: 0.8rem;
+  }
+
+  .cr22-journey--planner .cr22-journey__confirm-numbers input {
+    font-size: 0.9rem;
+  }
+
+  .cr22-journey--planner .cr22-journey__confirm-numbers .cr22-field__label {
+    white-space: nowrap;
+  }
+
+  .cr22-journey--planner .cr22-journey__confirmation {
+    row-gap: clamp(0.25rem, 0.75vh, 1rem);
+  }
+
+  .cr22-journey--planner .cr22-journey__conflict .cr22-button {
+    min-height: 2.25rem;
+    padding: 0.3rem 0.8rem;
+    font-size: 0.82rem;
+  }
+
+  .cr22-journey--planner .cr22-journey__theme-field > div label {
+    min-height: 2.5rem;
+  }
+
+  .cr22-journey--planner .cr22-journey__page-title p {
+    font-size: clamp(0.78rem, 1.9vh, 0.95rem);
+  }
+
+  .cr22-journey--planner .cr22-journey__confirmation .cr22-field small,
+  .cr22-journey--planner .cr22-journey__confirmation .cr22-field > p {
+    font-size: clamp(0.7rem, 1.6vh, 0.8rem);
+  }
+
+  .cr22-journey--planner .cr22-journey__input-explanation {
+    margin: 0;
+    font-size: clamp(0.72rem, 1.7vh, 0.85rem);
+    line-height: 1.25;
+  }
+}
+
+/* Reviewer, 2026-09-05: "왼쪽 일정가이드도 오른쪽 추천이유도 많은데 다 짤려있어".
+   전체 일정 요약 is four numbers that were sitting inside the left column and
+   taking 132px of the 368px the plan had - so the timeline, which needs about
+   340px for seven stops, only ever got 227. It is a full-width strip above the
+   two columns now, and the two caution notices share one row instead of two,
+   which hands roughly 170px back to the plan itself. */
+/* A plan with no warnings renders the wrapper with nothing in it. */
+.cr22-journey__partials:empty {
+  display: none;
+}
+
+.cr22-journey__partials {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: clamp(0.3rem, 0.9vh, 0.6rem);
+}
+
+.cr22-journey__partials > .cr22-journey__partial {
+  flex: 1 1 22rem;
+  margin: 0;
+}
+
+.cr22-journey__content > .cr22-journey__result-summary {
+  flex: 0 0 auto;
+  margin: clamp(0.3rem, 0.9vh, 0.75rem) 0 0;
+}
+
+.cr22-journey__content > .cr22-journey__result-summary .cr22-card__body,
+.cr22-journey__content > .cr22-journey__result-summary > .cr22-card__body {
+  padding-block: clamp(0.35rem, 1vh, 0.9rem);
+}
+
+.cr22-journey__result-layout {
+  margin-top: clamp(0.3rem, 0.9vh, 0.75rem);
+}
+
+/* More evidence cards on screen at once, without dropping a fact from any. */
+.cr22-journey__evidence-list > p {
+  padding-block: clamp(0.25rem, 0.8vh, 0.6rem);
+  line-height: 1.3;
+}
+
+/* As a full-width strip the summary reads better with its title beside the
+   numbers than stacked above them, and that is another 40px for the plan. */
+.cr22-journey__content > .cr22-journey__result-summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(0.75rem, 2vw, 2rem);
+  padding-block: clamp(0.35rem, 1vh, 0.9rem);
+}
+
+.cr22-journey__content > .cr22-journey__result-summary > h2 {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.cr22-journey__result-title p {
+  font-size: clamp(0.78rem, 1.9vh, 0.95rem);
+}
+
+/* 27 evidence cards and seven timeline stops will never all fit a 695px laptop,
+   so the point is how many are on screen before the reader has to scroll. The
+   stop cards lose padding, not facts: 102px each becomes about 80, which is
+   four stops instead of two and a half. */
+.cr22-journey__timeline ol > li {
+  gap: clamp(0.4rem, 1vw, 1rem);
+}
+
+.cr22-journey__timeline ol > li > article {
+  padding: clamp(0.4rem, 1.1vh, 0.9rem) clamp(0.6rem, 1vw, 1rem);
+  gap: clamp(0.4rem, 0.9vw, 0.8rem);
+}
+
+.cr22-journey__timeline ol > li > article > div {
+  gap: clamp(0.1rem, 0.4vh, 0.35rem);
+}
+
+.cr22-journey__timeline ol > li > article h3 {
+  font-size: clamp(0.86rem, 2vh, 1rem);
+  line-height: 1.3;
+}
+
+.cr22-journey__timeline ol > li > article p {
+  line-height: 1.25;
+}
+
+.cr22-journey__facts {
+  gap: 0.3rem;
+}
+
+/* The 추천 이유 card spent 90px on a header and a one-line preamble before the
+   first piece of evidence; tightening both puts another row of cards on screen. */
+.cr22-journey__result-layout > aside > .cr22-card > .cr22-card__header {
+  padding-block: clamp(0.35rem, 1vh, 0.9rem);
+}
+
+.cr22-journey__result-layout > aside > .cr22-card > .cr22-card__body {
+  padding-block: clamp(0.35rem, 1vh, 0.9rem);
+}
+
+.cr22-journey__rationale {
+  margin: 0;
+  font-size: clamp(0.8rem, 1.9vh, 0.95rem);
+  line-height: 1.3;
+}
+
+/* Stacked above 추천 이유, the route map was a 700x118 letterbox and left the
+   evidence 159px - two rows of 27 cards. Beside them it gets a column of its
+   own with the full height, which is both a readable map and six rows of
+   evidence. Same correction as the search result screen. */
+@media (min-width: 64rem) {
+  .cr22-journey__result-layout {
+    grid-template-columns: minmax(0, 1.22fr) minmax(13rem, 0.6fr) minmax(0, 1.25fr);
+  }
+
+  .cr22-journey__result-layout > .cr22-map-shell {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .cr22-journey__result-layout > .cr22-map-shell .cr22-map-shell__canvas {
+    flex: 1 1 auto;
+    min-height: clamp(6rem, 14vh, 34rem);
+  }
+
+  .cr22-journey__result-layout > aside > .cr22-card {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+}
