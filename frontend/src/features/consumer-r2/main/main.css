@@ -1410,3 +1410,72 @@
 .cr293-hero img {
   object-position: center 72%;
 }
+
+/* Result screen, reviewer pass 2 (2026-09-05).
+
+   Right pane: the map and the selected-route evidence panel share one column,
+   and the pane clips. With the row bounded by the viewport the map took the
+   whole column, so the evidence numbers, the three action buttons and the
+   disclaimer were cut off entirely - not scrolled out of reach, gone. The map
+   now takes only what is left after the evidence panel, down to a floor, and
+   the pane scrolls if even that is not enough. */
+.cr293-results__map {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.cr293-map {
+  flex: 1 1 auto;
+  min-height: clamp(8rem, 20vh, 24rem);
+}
+
+.cr293-evidence {
+  flex: 0 0 auto;
+  padding: clamp(0.6rem, 1.7vh, 1.25rem) 1.4rem clamp(0.5rem, 1.4vh, 1rem);
+}
+
+.cr293-evidence__numbers {
+  gap: clamp(0.4rem, 1.1vh, 0.8rem);
+  margin-top: clamp(0.3rem, 1.1vh, 1rem);
+}
+
+.cr293-evidence__numbers span {
+  padding: clamp(0.4rem, 1.1vh, 0.8rem);
+}
+
+.cr293-evidence__numbers b {
+  font-size: clamp(0.98rem, 2.4vh, 1.15rem);
+}
+
+/* Three stacked label/value rows cost more height than they need on a short
+   screen; two columns say the same thing in two rows. */
+.cr293-evidence__metadata {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(0.25rem, 0.7vh, 0.45rem) 1.25rem;
+  margin-top: clamp(0.4rem, 1.3vh, 0.9rem);
+  padding: clamp(0.4rem, 1.1vh, 0.8rem);
+}
+
+.cr293-evidence__actions {
+  margin: clamp(0.45rem, 1.4vh, 1rem) 0 clamp(0.3rem, 1vh, 0.7rem);
+}
+
+.cr293-evidence__actions .cr22-button {
+  min-height: clamp(2.3rem, calc(3.6vh + 20px), 3rem);
+}
+
+/* Left pane: about three candidates on screen, the rest by dragging the list.
+   The card sheds padding and the probability figure, never the facts. */
+.cr293-candidate {
+  padding: clamp(0.4rem, 1.25vh, 1rem) 1.15rem;
+}
+
+.cr293-candidate__body {
+  gap: clamp(0.15rem, 0.55vh, 0.45rem);
+}
+
+.cr293-candidate__metric b {
+  font-size: clamp(1.1rem, 2.9vh, 1.45rem);
+}
