@@ -1668,8 +1668,12 @@ button[aria-pressed="true"] .cr22-journey__radio {
    own with the full height, which is both a readable map and six rows of
    evidence. Same correction as the search result screen. */
 @media (min-width: 64rem) {
+  /* Reviewer, 2026-09-05: 시간순 일정을 위아래로 길게, 지도 비율도 크게. The
+     evidence column moved into a dialog, so the two things the reader actually
+     looks at split the width - the timeline gets the full height of the content
+     area and the map takes the larger share. */
   .cr22-journey__result-layout {
-    grid-template-columns: minmax(0, 1.22fr) minmax(13rem, 0.6fr) minmax(0, 1.25fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.12fr);
   }
 
   .cr22-journey__result-layout > .cr22-map-shell {
@@ -1689,4 +1693,127 @@ button[aria-pressed="true"] .cr22-journey__radio {
     flex: 1 1 auto;
     min-height: 0;
   }
+}
+
+/* ── TASK-333 second pass: evidence in a dialog, taller timeline, bigger map ── */
+
+/* The banner row is gone; the same badges and wording are the subtitle line,
+   which stays a live region so the state is still announced. */
+.cr22-journey__result-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.5rem;
+}
+
+.cr22-journey__result-layout > .cr22-map-shell {
+  height: auto;
+}
+
+.cr22-journey__result-layout > .cr22-map-shell .cr22-map-shell__canvas {
+  min-height: clamp(8rem, 22vh, 40rem);
+}
+
+/* The timeline is the spine of this screen: it takes the whole column and
+   scrolls in place rather than being cut by a neighbour. */
+.cr22-journey__timeline {
+  height: 100%;
+}
+
+.cr22-journey__evidence-backdrop {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  padding: clamp(0.75rem, 3vh, 2rem);
+  display: grid;
+  place-items: center;
+  background: rgba(5, 18, 39, 0.58);
+}
+
+.cr22-journey__evidence-dialog {
+  width: min(100%, 60rem);
+  max-height: calc(100dvh - clamp(1.5rem, 6vh, 4rem));
+  display: flex;
+  flex-direction: column;
+  padding: clamp(0.9rem, 2.4vh, 1.6rem) clamp(1rem, 2vw, 1.75rem) clamp(0.9rem, 2.4vh, 1.5rem);
+  border-radius: var(--cr22-radius-lg);
+  background: #fff;
+  box-shadow: var(--cr22-shadow-raised);
+}
+
+.cr22-journey__evidence-dialog > header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.cr22-journey__evidence-dialog h2 {
+  margin: 0;
+  font-size: clamp(1.05rem, 2.6vh, 1.45rem);
+  letter-spacing: -0.03em;
+}
+
+.cr22-journey__evidence-close {
+  width: 2.5rem;
+  height: 2.5rem;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 50%;
+  background: var(--cr22-color-surface-subtle);
+  color: var(--cr22-color-ink);
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+
+.cr22-journey__evidence-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* With a 60rem dialog the 27 cards read three across instead of two. */
+.cr22-journey__evidence-dialog .cr22-journey__evidence-list {
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+}
+
+/* Reviewer, 2026-09-05: "ai계획부분도 비율이 아쉽다" - the input step. The card
+   was 498px wide inside a 1441px container with 164px of dead space under it,
+   because `margin-inline: auto` on a flex item sizes it to its content instead
+   of stretching (the same trap the checkout plans row had). Width restored, and
+   the card takes the height that is going spare so the description box is a
+   box you can actually write in. */
+.cr22-journey--planner .cr22-journey__input-card:not(.cr22-journey__confirmation) {
+  width: 100%;
+  max-width: min(100%, 56rem);
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: clamp(0.9rem, 2.4vh, 1.6rem) clamp(1rem, 1.6vw, 1.75rem);
+}
+
+.cr22-journey--planner .cr22-journey__input-card:not(.cr22-journey__confirmation) > .cr22-journey__input-head,
+.cr22-journey--planner .cr22-journey__input-card:not(.cr22-journey__confirmation) > .cr22-journey__context,
+.cr22-journey--planner .cr22-journey__input-card:not(.cr22-journey__confirmation) > .cr22-journey__input-explanation,
+.cr22-journey--planner .cr22-journey__input-card:not(.cr22-journey__confirmation) > .cr22-journey__input-actions,
+.cr22-journey--planner .cr22-journey__input-card:not(.cr22-journey__confirmation) > .cr22-journey__premium-note {
+  flex: 0 0 auto;
+}
+
+.cr22-journey--planner .cr22-journey__input-card:not(.cr22-journey__confirmation) > .cr22-journey__prompt {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cr22-journey--planner .cr22-journey__input-card:not(.cr22-journey__confirmation) .cr22-journey__prompt textarea {
+  flex: 1 1 auto;
+  min-height: clamp(5rem, 22vh, 18rem);
+  resize: none;
 }
