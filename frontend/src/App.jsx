@@ -250,7 +250,9 @@ function App() {
   if (route === 'journey') return <ConsumerJourneyPlannerPage key={location.state.entryId} {...common} initialInput={location.state.journeyInput || {}} onInputChange={handleJourneyInput} onResult={handleJourneyResult} />;
   if (route === 'journey-result') return <ConsumerJourneyPlanResultPage key={stationId} {...common} decisionId={stationId} onResult={handleJourneyResult} />;
   if (route === 'archive') return <PersonalArchivePage {...common} onReplay={(decision) => { handleJourneyResult(decision); navigate('journey-result', decision.decisionId); }} />;
-  if (route === 'mypage') return <PersonalMyPage adapter={personalAdapter} onNavigate={navigate} />;
+  // My page's Riding-guide shortcut needs a real station: without one, navigationTarget would fall
+  // through to #main and silently land the reader on Prediction main instead of a guide.
+  if (route === 'mypage') return <PersonalMyPage adapter={personalAdapter} onNavigate={navigate} selectedStationId={location.state.selectedStationId || null} />;
   if (route === 'qna') return <ConsumerQnaPage key={location.state.questionId || 'list'} {...common} initialQuestionId={location.state.questionId} />;
   if (route === 'alerts') return <ConsumerAlertsPage {...common} searchInput={location.state.restoreSearch} onCurrentData={handleCurrentData} />;
   return <ConsumerMainPage key={entryId} onNavigate={navigate} onLogin={login} onInputChange={handleInputChange} onSearchComplete={handleSearchComplete} restoreSearch={restoreSearch} currentResult={restoredMainResult} onOpenStation={(candidate, input) => openCandidate('station', candidate, input)} onOpenRide={(candidate, input) => openCandidate('ride', candidate, input)} />;

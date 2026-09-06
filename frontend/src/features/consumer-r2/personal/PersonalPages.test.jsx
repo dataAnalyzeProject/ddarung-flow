@@ -86,3 +86,20 @@ test("my page keeps loading, guest, unavailable Premium, and logout failure stat
   fireEvent.click(screen.getByRole("button", { name: "로그아웃" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("로그아웃하지 못했습니다");
 });
+
+test("my page's riding guide shortcut carries a real station and offers nothing without one", async () => {
+  const onNavigate = jest.fn();
+  const adapter = { loadMyPage: jest.fn().mockResolvedValue({ authState: "authenticated", user, subscription: { status: "ACTIVE" } }), logout: jest.fn() };
+  const { rerender } = render(<PersonalMyPage adapter={adapter} onNavigate={onNavigate} />);
+  await screen.findByText("Premium 활성");
+
+  // Without a station the guide route falls through to #main, so the shortcut must not promise a guide.
+  const shortcut = screen.getByRole("button", { name: "라이딩 가이드" });
+  expect(shortcut).toBeDisabled();
+  fireEvent.click(shortcut);
+  expect(onNavigate).not.toHaveBeenCalled();
+
+  rerender(<PersonalMyPage adapter={adapter} onNavigate={onNavigate} selectedStationId="37-2" />);
+  fireEvent.click(await screen.findByRole("button", { name: "라이딩 가이드" }));
+  expect(onNavigate).toHaveBeenCalledWith("guide", "37-2");
+});

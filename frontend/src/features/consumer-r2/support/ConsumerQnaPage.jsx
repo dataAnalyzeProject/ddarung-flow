@@ -19,7 +19,7 @@ function QuestionStatus({ status }) {
   return <StatusBadge tone={status === "ANSWERED" ? "success" : "neutral"}>{label}</StatusBadge>;
 }
 
-function QuestionForm({ initialQuestion, onCancel, onSubmit, submitting }) {
+function QuestionForm({ initialQuestion, onBackToList, onCancel, onSubmit, submitting }) {
   const [values, setValues] = useState({
     category: initialQuestion?.category || "USAGE",
     visibility: initialQuestion?.visibility || "PUBLIC",
@@ -44,7 +44,8 @@ function QuestionForm({ initialQuestion, onCancel, onSubmit, submitting }) {
     <section aria-labelledby="qna-form-title" className="cr22-support__form-view">
       <header className="cr22-support__view-head">
         <div><p className="cr22-support__eyebrow">Q&amp;A</p><h1 id="qna-form-title" tabIndex="-1">{editing ? "질문 수정" : "질문 작성"}</h1><p>문의 내용을 확인한 뒤 답변으로 알려 드립니다.</p></div>
-        <ConsumerButton disabled={submitting} onClick={onCancel} variant="ghost">목록으로</ConsumerButton>
+        {/* 목록으로 must reach the list even while editing; 취소 is the one that returns to the detail. */}
+        <ConsumerButton disabled={submitting} onClick={onBackToList} variant="ghost">목록으로</ConsumerButton>
       </header>
       <form className="cr22-support__form-card" onSubmit={submit}>
         {error ? <p className="cr22-support__form-error" role="alert">{error}</p> : null}
@@ -248,7 +249,7 @@ export default function ConsumerQnaPage({ adapter = consumerSupportAdapter, auth
       <main className="cr22-support__main" id="main-content" ref={mainRef}>
         <ConsumerContainer>
           {message ? <p className="cr22-support__notice" role="status">{message}</p> : null}
-          {authState === "authenticated" && view === "form" ? <QuestionForm initialQuestion={selectedQuestion} onCancel={() => setView(selectedQuestion ? "detail" : "list")} onSubmit={saveQuestion} submitting={mutationState === "saving"} /> : authState === "authenticated" && view === "detail" && selectedQuestion ? <QuestionDetail deleting={mutationState === "deleting"} onBack={() => { setSelectedQuestion(null); setView("list"); }} onDelete={deleteSelected} onEdit={() => setView("form")} question={selectedQuestion} /> : <>
+          {authState === "authenticated" && view === "form" ? <QuestionForm initialQuestion={selectedQuestion} onBackToList={() => { setSelectedQuestion(null); setView("list"); }} onCancel={() => setView(selectedQuestion ? "detail" : "list")} onSubmit={saveQuestion} submitting={mutationState === "saving"} /> : authState === "authenticated" && view === "detail" && selectedQuestion ? <QuestionDetail deleting={mutationState === "deleting"} onBack={() => { setSelectedQuestion(null); setView("list"); }} onDelete={deleteSelected} onEdit={() => setView("form")} question={selectedQuestion} /> : <>
             <header className="cr22-support__hero"><div><p className="cr22-support__eyebrow">HELP CENTER</p><h1>Q&amp;A</h1><p>서비스 이용 중 궁금한 내용을 찾거나 질문을 남겨 주세요.</p></div><ConsumerButton disabled={authState === "loading"} onClick={() => { if (authState !== "authenticated") { onNavigate?.("login"); return; } setSelectedQuestion(null); setView("form"); }}>질문 작성</ConsumerButton></header>
             <section className="cr22-support__qna-panel" aria-label="질문 찾아보기">
               <form className="cr22-support__search" onSubmit={(event) => { event.preventDefault(); setSubmittedQuery(query.trim()); setPage(0); }} role="search"><label className="cr22-support__sr-only" htmlFor="qna-search">질문 검색</label><input autoComplete="off" id="qna-search" name="query" onChange={(event) => setQuery(event.target.value)} placeholder="궁금한 내용을 검색하세요" type="search" value={query} /><ConsumerButton type="submit">검색</ConsumerButton></form>

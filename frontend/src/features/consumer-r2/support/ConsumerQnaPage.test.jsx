@@ -177,3 +177,37 @@ test("shows loading, empty, error, and auth states without fetching guest data",
   rerender(<ConsumerQnaPage adapter={failingApi} />);
   expect(await screen.findByRole("alert")).toHaveTextContent("질문을 불러오지 못했습니다");
 });
+
+test("목록으로 opens the question list from the edit form, while 취소 keeps returning to that detail", async () => {
+  const api = adapter();
+  render(<ConsumerQnaPage adapter={api} />);
+  fireEvent.click(await screen.findByRole("button", { name: /대여소 검색은 어떻게 하나요.*질문 보기/ }));
+  await screen.findByRole("heading", { name: "대여소 검색은 어떻게 하나요?" });
+
+  // 취소 keeps its own meaning: back to the detail the edit was opened from.
+  fireEvent.click(screen.getByRole("button", { name: "수정" }));
+  await screen.findByRole("heading", { name: "질문 수정" });
+  fireEvent.click(screen.getByRole("button", { name: "취소" }));
+  expect(await screen.findByRole("heading", { name: "대여소 검색은 어떻게 하나요?" })).toBeInTheDocument();
+
+  // 목록으로 must not land back on the same detail it was opened from.
+  fireEvent.click(screen.getByRole("button", { name: "수정" }));
+  await screen.findByRole("heading", { name: "질문 수정" });
+  fireEvent.click(screen.getByRole("button", { name: "목록으로" }));
+  expect(await screen.findByRole("button", { name: /대여소 검색은 어떻게 하나요.*질문 보기/ })).toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "질문 수정" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "대여소 검색은 어떻게 하나요?" })).not.toBeInTheDocument();
+  expect(api.updateQuestion).not.toHaveBeenCalled();
+});
+
+test("목록으로 still opens the list from a new question form without saving it", async () => {
+  const api = adapter();
+  render(<ConsumerQnaPage adapter={api} />);
+  await screen.findByRole("button", { name: /대여소 검색은 어떻게 하나요.*질문 보기/ });
+  fireEvent.click(screen.getByRole("button", { name: "질문 작성" }));
+  await screen.findByRole("heading", { name: "질문 작성" });
+
+  fireEvent.click(screen.getByRole("button", { name: "목록으로" }));
+  expect(await screen.findByRole("button", { name: /대여소 검색은 어떻게 하나요.*질문 보기/ })).toBeInTheDocument();
+  expect(api.createQuestion).not.toHaveBeenCalled();
+});
