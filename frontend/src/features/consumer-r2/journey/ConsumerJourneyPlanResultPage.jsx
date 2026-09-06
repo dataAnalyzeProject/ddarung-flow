@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AsyncState,
   ConsumerAppHeader,
@@ -7,7 +7,6 @@ import {
   ConsumerIcon,
   ConsumerR2Theme,
   StatusBadge,
-  SurfaceCard,
 } from "../shared/index.js";
 import { consumerJourneyAdapter, hasValue } from "../adapters/journey/index.js";
 import { consumerSupportAdapter } from "../adapters/support";
@@ -187,11 +186,38 @@ function Rationale({ plan, serverBuilt }) {
   const rationale = plan.rationale === "STRUCTURED_SERVER_SELECTION"
     ? "확인된 대여소·장소·경로 근거만으로 서버가 구성한 일정입니다."
     : plan.rationale;
-  return <SurfaceCard title={serverBuilt ? "추천 이유" : "AI 추천 이유"}>
+  return <div className="cr22-journey__evidence-body">
     <p className="cr22-journey__rationale">{rationale || "추천 이유가 제공되지 않았습니다."}</p>
     <div className="cr22-journey__evidence-list" aria-label="추천 근거 상세">{items.length ? items.map((item) => { const summary = evidenceSummary(item); return <p key={`${item.kind}-${item.evidenceId}`}><span><strong>{sourceLabel(item.source)}</strong>{summary.length ? <small className="cr22-journey__evidence-facts">{summary.map(([label, value]) => `${label} ${value}`).join(" · ")}</small> : null}</span><StatusBadge tone={item.status === "NORMAL" ? "positive" : item.status === "UNAVAILABLE" || item.status === "MISSING" ? "danger" : "caution"}>{item.status}</StatusBadge></p>; }) : <p><span><strong>근거 목록 없음</strong><small>UNAVAILABLE</small></span><StatusBadge tone="danger">UNAVAILABLE</StatusBadge></p>}</div>
     <p className="cr22-journey__muted">PARTIAL·MISSING·UNAVAILABLE은 정상 근거와 구분해 그대로 표시합니다.</p>
-  </SurfaceCard>;
+  </div>;
+}
+
+// The evidence list is 27 cards on a busy plan. It held a whole column of a
+// 695px screen for something the reader opens once, so it moved behind a button.
+function EvidenceDialog({ onClose, open, plan, serverBuilt }) {
+  const closeRef = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.requestAnimationFrame(() => closeRef.current?.focus());
+    const onKey = (event) => { if (event.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => { document.body.style.overflow = previous; document.removeEventListener("keydown", onKey); };
+  }, [open, onClose]);
+  if (!open) return null;
+  return (
+    <div className="cr22-journey__evidence-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <section aria-labelledby="journey-evidence-title" aria-modal="true" className="cr22-journey__evidence-dialog" role="dialog">
+        <header>
+          <h2 id="journey-evidence-title">{serverBuilt ? "추천 이유" : "AI 추천 이유"}</h2>
+          <button aria-label="추천 이유 닫기" className="cr22-journey__evidence-close" onClick={onClose} ref={closeRef} type="button">×</button>
+        </header>
+        <Rationale plan={plan} serverBuilt={serverBuilt} />
+      </section>
+    </div>
+  );
 }
 
 function ResultContent({ adapter, decision, now, onNavigate, onSaved, onUpdated, recheckAdapter }) {
@@ -208,6 +234,7 @@ function ResultContent({ adapter, decision, now, onNavigate, onSaved, onUpdated,
   const [notice, setNotice] = useState("");
   const [savedJourneyId, setSavedJourneyId] = useState(null);
   const [recheckOpen, setRecheckOpen] = useState(false);
+  const [evidenceOpen, setEvidenceOpen] = useState(false);
 
   async function replan() {
     const availableMinutes = Number(editor.availableMinutes);
@@ -246,17 +273,20 @@ function ResultContent({ adapter, decision, now, onNavigate, onSaved, onUpdated,
   const destination = intent.destination?.displayName;
   const title = [origin, destination].filter(Boolean).join(" → ") || "AI 라이딩 계획";
   const serverBuiltSchedule = (decision.warnings || []).includes("AI_SCHEDULE_FALLBACK");
+  // The banner row cost a full width of the screen to say what a badge beside
+  // the title says. The wording moves to the subtitle so the state is never
+  // dropped, only made smaller (reviewer, 2026-09-05).
+  const planStatus = [plan?.status, decision.status].includes("UNAVAILABLE") ? "UNAVAILABLE"
+    : [plan?.status, decision.status].includes("PARTIAL") ? "PARTIAL" : null;
+  const statusCopy = planStatus === "UNAVAILABLE" ? "전체 일정은 만들지 못했습니다. 아래는 확인된 사실 구간과 근거입니다."
+    : planStatus === "PARTIAL" ? "일부 근거만 확인되었습니다. 확인되지 않은 값은 따로 표시합니다."
+    : "실제 대여·장소·경로 근거로 구성된 현재 계획입니다.";
   if (!plan) return <AsyncState state="partial" title="통합 일정을 표시할 수 없습니다" description="백엔드가 통합 일정이나 근거를 제공하지 않았습니다." onAction={() => onNavigate?.("planner")} actionLabel="조건 다시 입력" />;
   return <>
-    <div className="cr22-journey__result-title"><div><p className="cr22-journey__breadcrumb"><ConsumerIcon name="home" size={15} /> <span aria-hidden="true">›</span> AI 플래너 <span aria-hidden="true">›</span> 결과</p><h1>{title} <StatusBadge tone="premium">PREMIUM</StatusBadge></h1><p>실제 대여·장소·경로 근거로 구성된 현재 계획입니다.</p></div><div><ConsumerButton variant="secondary" icon={<ConsumerIcon name="retry" />} onClick={() => { const panel = document.getElementById("structured-replan"); if (!panel) return; panel.open = true; panel.scrollIntoView({ block: "nearest" }); }}>조건 변경 후 재추천</ConsumerButton><ConsumerButton icon={<ConsumerIcon name="plan" />} disabled={Boolean(action)} loading={action === "save"} loadingLabel="저장 중…" onClick={save}>이 계획 저장</ConsumerButton></div></div>
+    <div className="cr22-journey__result-title"><div><p className="cr22-journey__breadcrumb"><ConsumerIcon name="home" size={15} /> <span aria-hidden="true">›</span> AI 플래너 <span aria-hidden="true">›</span> 결과</p><h1>{title} <StatusBadge tone="premium">PREMIUM</StatusBadge></h1><p className="cr22-journey__result-status" role="status">{serverBuiltSchedule ? <StatusBadge tone="caution">AI 미적용</StatusBadge> : null}{planStatus ? <StatusBadge tone={planStatus === "UNAVAILABLE" ? "danger" : "caution"}>{planStatus}</StatusBadge> : null}<span>{statusCopy}</span></p></div><div><ConsumerButton variant="secondary" icon={<ConsumerIcon name="info" />} onClick={() => setEvidenceOpen(true)}>{serverBuiltSchedule ? "추천 이유" : "AI 추천 이유"}</ConsumerButton><ConsumerButton variant="secondary" icon={<ConsumerIcon name="retry" />} onClick={() => { const panel = document.getElementById("structured-replan"); if (!panel) return; panel.open = true; panel.scrollIntoView({ block: "nearest" }); }}>조건 변경 후 재추천</ConsumerButton><ConsumerButton icon={<ConsumerIcon name="plan" />} disabled={Boolean(action)} loading={action === "save"} loadingLabel="저장 중…" onClick={save}>이 계획 저장</ConsumerButton></div></div>
     {savedJourneyId ? <ConsumerButton variant="secondary" disabled={Boolean(action)} onClick={() => setRecheckOpen(true)}>알림 신청</ConsumerButton> : null}
-    <div className="cr22-journey__partials">
-      {serverBuiltSchedule ? <p className="cr22-journey__partial" role="status"><StatusBadge tone="caution">AI 미적용</StatusBadge> AI가 제안한 일정이 실제 근거와 맞지 않아, 확인된 근거만으로 일정을 구성했습니다.</p> : null}
-      {plan.status === "PARTIAL" || decision.status === "PARTIAL" ? <p className="cr22-journey__partial" role="status"><StatusBadge tone="caution">PARTIAL</StatusBadge> 일부 근거만 확인되었습니다. 확인되지 않은 값은 따로 표시합니다.</p> : null}
-      {plan.status === "UNAVAILABLE" || decision.status === "UNAVAILABLE" ? <p className="cr22-journey__partial" role="status"><StatusBadge tone="danger">UNAVAILABLE</StatusBadge> 전체 일정은 만들지 못했습니다. 아래에는 백엔드가 제공한 사실 구간과 근거만 표시합니다.</p> : null}
-    </div>
     <Summary plan={plan} />
-    <div className="cr22-journey__result-layout"><div><Timeline intent={intent} plan={plan} /></div><ConsumerJourneyMap segments={plan.segments} /><aside><Rationale plan={plan} serverBuilt={serverBuiltSchedule} /></aside></div>
+    <div className="cr22-journey__result-layout"><div><Timeline intent={intent} plan={plan} /></div><ConsumerJourneyMap segments={plan.segments} /></div>
     <details className="cr22-card cr22-journey__replan-card" id="structured-replan">
       <summary className="cr22-card__header"><h2>구조화 조건으로 다시 계획</h2></summary>
       <div className="cr22-journey__replan">
@@ -268,6 +298,7 @@ function ResultContent({ adapter, decision, now, onNavigate, onSaved, onUpdated,
       </div>
       <p className="cr22-journey__muted">재계획은 자연어를 다시 보내지 않고 이용 시간·테마·방문 장소 수·경로 방식만 구조화해서 전송합니다.</p>{notice ? <p className="cr22-journey__notice" role="status">{notice}</p> : null}
     </details>
+    <EvidenceDialog onClose={() => setEvidenceOpen(false)} open={evidenceOpen} plan={plan} serverBuilt={serverBuiltSchedule} />
     <RecheckOptInDialog busy={action === "recheck"} kind="PLAN_RECHECK" now={now} onClose={() => setRecheckOpen(false)} onConfirm={createRecheck} open={recheckOpen} />
   </>;
 }

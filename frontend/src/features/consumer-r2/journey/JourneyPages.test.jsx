@@ -298,10 +298,13 @@ test("a server-rebuilt schedule is labelled and its rationale is readable", () =
   fallback.warnings = ["AI_SCHEDULE_FALLBACK", "AI_SCHEDULE_STAGE_VALIDATE_SELECTION"];
   fallback.unifiedPlan.rationale = "STRUCTURED_SERVER_SELECTION";
   render(<ConsumerJourneyPlanResultPage initialDecision={fallback} />);
-  expect(screen.getByText(/AI가 제안한 일정이 실제 근거와 맞지 않아/)).toBeInTheDocument();
+  // The label is a badge on the live-region subtitle now, not a banner row, and
+  // the rationale sits behind the 추천 이유 button (reviewer, 2026-09-05).
+  expect(screen.getByRole("status")).toHaveTextContent("AI 미적용");
+  fireEvent.click(screen.getByRole("button", { name: "추천 이유" }));
+  expect(screen.getByRole("heading", { name: "추천 이유" })).toBeInTheDocument();
   expect(screen.getByText("확인된 대여소·장소·경로 근거만으로 서버가 구성한 일정입니다.")).toBeInTheDocument();
   expect(screen.queryByText("STRUCTURED_SERVER_SELECTION")).not.toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "추천 이유" })).toBeInTheDocument();
 });
 
 test("result renders backend segments, zero values, pathPoints and evidence gaps without invented fallback", () => {
@@ -315,6 +318,9 @@ test("result renders backend segments, zero values, pathPoints and evidence gaps
   expect(screen.getByText("시간 0분")).toBeInTheDocument();
   expect(screen.getAllByText("0%").length).toBeGreaterThan(0);
   expect(screen.getByRole("region", { name: "실제 여정 경로 지도" })).toBeInTheDocument();
+  // Evidence moved into the 추천 이유 dialog; every fact below is still shown
+  // verbatim, one click away rather than in a column of its own.
+  fireEvent.click(screen.getByRole("button", { name: "AI 추천 이유" }));
   expect(screen.getByText("MISSING")).toBeInTheDocument();
   expect(screen.getByText("UNAVAILABLE")).toBeInTheDocument();
   expect(screen.getByText("실시간 대여 예측")).toBeInTheDocument();
