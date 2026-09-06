@@ -55,6 +55,21 @@ test("my page exposes account, sandbox premium state, and personal shortcuts", a
   expect(screen.getByText(/sandbox 접근 상태입니다/)).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: /AI 플래너 전체 일정 만들기/ }));
   expect(onNavigate).toHaveBeenCalledWith("planner");
+  // The profile card only reports what /auth/me returns, so it offers no edit the product cannot do.
+  expect(screen.queryByRole("button", { name: "프로필 정보 수정" })).not.toBeInTheDocument();
+});
+
+test("my page shows the admin console entry to ADMIN only (TS-ADMIN-MYPAGE-01)", async () => {
+  const onNavigate = jest.fn();
+  const memberAdapter = { loadMyPage: jest.fn().mockResolvedValue({ authState: "authenticated", user: { ...user, role: "USER" }, subscription: { status: "ACTIVE" } }), logout: jest.fn() };
+  const { rerender } = render(<PersonalMyPage adapter={memberAdapter} onNavigate={onNavigate} />);
+  await screen.findByText("Premium 활성");
+  expect(screen.queryByRole("button", { name: /관리자 콘솔/ })).not.toBeInTheDocument();
+
+  const adminAdapter = { loadMyPage: jest.fn().mockResolvedValue({ authState: "authenticated", user: { ...user, role: "ADMIN" }, subscription: { status: "ACTIVE" } }), logout: jest.fn() };
+  rerender(<PersonalMyPage adapter={adminAdapter} onNavigate={onNavigate} />);
+  fireEvent.click(await screen.findByRole("button", { name: /관리자 콘솔 서비스 운영 관리/ }));
+  expect(onNavigate).toHaveBeenCalledWith("admin");
 });
 
 test("my page keeps loading, guest, unavailable Premium, and logout failure states distinct", async () => {

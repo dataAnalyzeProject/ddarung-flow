@@ -152,3 +152,8 @@
 .cr22-personal__profile-rows {
   margin: clamp(0.05rem, 0.2vh, 0.1rem) 0 clamp(0.15rem, 0.5vh, 0.35rem);
 }
+
+/* CONSUMER-R2-MYPAGE-01: the ADMIN-only console tile makes five, and the row must stay
+   one row so My Page keeps the no-scroll height TASK-332 secured. */
+.cr22-personal__service-grid--admin { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media (max-width: 39.99rem) { .cr22-personal__service-grid--admin { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
