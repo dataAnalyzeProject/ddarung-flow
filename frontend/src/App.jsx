@@ -10,7 +10,7 @@ import { ConsumerQnaPage, ConsumerAlertsPage } from './features/consumer-r2/supp
 import { PremiumAccessGatePage, PremiumSandboxCheckoutPage } from './features/consumer-r2/premium';
 import { AsyncState, ConsumerContainer, ConsumerR2Theme } from './features/consumer-r2/shared';
 import { consumerPersonalAdapter } from './features/consumer-r2/adapters/personal/consumerPersonalAdapter';
-import { candidateGuideContext, consumerHistoryState, consumeConsumerReturn, guideContextForStation, isFreshMainResult, isFutureTimestamp, journeyHistoryInput, navigationTarget, newConsumerEntryId, routeFromHash, searchHistoryInput, storeConsumerReturn } from './features/consumer-r2/adapters/navigation/consumerNavigation';
+import { candidateGuideContext, consumerHistoryState, consumeConsumerReturn, guideContextForStation, isFreshMainResult, isFutureTimestamp, journeyHistoryInput, mainHistoryView, navigationTarget, newConsumerEntryId, routeFromHash, searchHistoryInput, storeConsumerReturn } from './features/consumer-r2/adapters/navigation/consumerNavigation';
 import AdminV2PreviewApp from './features/admin-v2/shell/AdminV2PreviewApp';
 import AdminV2ProductionApp from './features/admin-v2/shell/AdminV2ProductionApp';
 import { isAdminV2PreviewPath, isAdminV2ProductionPath } from './features/admin-v2/routes/routeMap';
@@ -20,12 +20,22 @@ import { clearAdminReturnTarget, consumeAdminReturnTarget } from './features/adm
 
 export { navigationTarget } from './features/consumer-r2/adapters/navigation/consumerNavigation';
 
-function readLocation() {
+function readLocation(searchSessionId) {
   if (window.location.pathname !== '/') return { pathname: window.location.pathname, ...routeFromHash(), state: window.history.state || {} };
-  const state = consumerHistoryState(window.history.state);
+  const target = routeFromHash();
+  let state = consumerHistoryState(window.history.state);
+  if (searchSessionId && state.searchSessionId && state.searchSessionId !== searchSessionId) {
+    state = { entryId: newConsumerEntryId(), searchSessionId };
+    if (target.stationId) {
+      window.history.replaceState(state, '', '/#main');
+      return { pathname: '/', ...routeFromHash('#main'), state };
+    }
+    window.history.replaceState(state, '');
+    return { pathname: '/', ...target, state };
+  } else if (searchSessionId && !state.searchSessionId) state.searchSessionId = searchSessionId;
   if (!state.entryId) state.entryId = newConsumerEntryId();
   if (JSON.stringify(state) !== JSON.stringify(window.history.state)) window.history.replaceState(state, '');
-  return { pathname: window.location.pathname, ...routeFromHash(), state };
+  return { pathname: window.location.pathname, ...target, state };
 }
 
 function decisionNavigationState(decision) {
@@ -39,7 +49,8 @@ function decisionNavigationState(decision) {
 }
 
 function App() {
-  const [location, setLocation] = useState(readLocation);
+  const searchSessionId = useRef(window.history.state?.searchSessionId || newConsumerEntryId());
+  const [location, setLocation] = useState(() => readLocation(searchSessionId.current));
   const [authState, setAuthState] = useState('loading');
   const [user, setUser] = useState(null);
   const [subscription, setSubscription] = useState({ status: 'PROCESSING' });
@@ -54,7 +65,7 @@ function App() {
   const protectedAi = ['journey', 'journey-result', 'guide'].includes(route);
   const needsSubscription = protectedAi || route === 'checkout';
 
-  const syncLocation = useCallback(() => setLocation(readLocation()), []);
+  const syncLocation = useCallback(() => setLocation(readLocation(searchSessionId.current)), []);
   useEffect(() => {
     const onHistoryNav = () => syncLocation();
     window.addEventListener('hashchange', onHistoryNav);
@@ -126,23 +137,37 @@ function App() {
       window.location.assign('/login?returnTo=' + encodeURIComponent(target));
       return;
     }
-    const source = readLocation();
-    // Global RIDING ('ride' with no id) is a fresh prediction intent, so it never inherits the
-    // station the current screen happens to be showing. Only station/guide still resolve one.
+    const source = readLocation(searchSessionId.current);
+    if (nextRoute === 'ride' && !id && source.route === 'main') {
+      const saved = mainResults.current.get(source.state.entryId);
+      if (!saved || resultFor(source.state)) return;
+      mainResults.current.delete(source.state.entryId);
+      window.history.replaceState(consumerHistoryState({
+        ...source.state,
+        entryId: newConsumerEntryId(),
+        mainView: undefined,
+      }), '');
+      syncLocation();
+      return;
+    }
+    // Global RIDING never inherits a station-specific route. It resumes the current prediction
+    // flow; only an explicit station id opens RideExplore.
     const candidateId = ['guide', 'station'].includes(nextRoute) && !id ? source.state.selectedStationId || (['station', 'ride', 'guide'].includes(source.route) ? source.stationId : null) : id;
     const target = navigationTarget(nextRoute, candidateId);
     const mainEntryId = source.route === 'main' ? source.state.entryId : source.state.mainEntryId;
     let state = { ...source.state, entryId: newConsumerEntryId(), mainEntryId };
     delete state.questionId;
-    if (target.route === 'home') state = { entryId: state.entryId };
+    if (target.route === 'home') {
+      state = { entryId: state.entryId, mainEntryId, searchSessionId: searchSessionId.current, restoreSearch: source.state.restoreSearch, mainView: source.state.mainView };
+    }
     if (target.route === 'main') {
       const restoring = Boolean(id?.restoreSearch);
-      // Global RIDING starts over: it drops the previous search and its cached result instead of
-      // reopening the RESULT the user was just looking at.
-      const startingNew = nextRoute === 'ride';
+      const startingNew = id?.intent === 'new';
+      const resumeEntryId = source.route === 'main' ? source.state.entryId : source.state.mainEntryId;
       const input = startingNew ? null : searchHistoryInput(restoring ? id.restoreSearch : source.state.restoreSearch);
-      const result = startingNew ? null : (restoring ? suppliedResult : resultFor(source.state, mainEntryId));
-      state = { entryId: state.entryId, restoreSearch: input };
+      const result = startingNew ? null : (restoring ? suppliedResult : resultFor(source.state, resumeEntryId));
+      const view = !startingNew && !restoring && result ? mainHistoryView(source.state.mainView) : null;
+      state = { entryId: state.entryId, searchSessionId: searchSessionId.current, restoreSearch: input, mainView: view };
       if (result) mainResults.current.set(state.entryId, { inputKey: JSON.stringify(input), result: Array.isArray(result) ? { candidates: result } : result });
     }
     if (target.route === 'qna' && id?.questionId) state.questionId = id.questionId;
@@ -173,33 +198,42 @@ function App() {
     setSubscription({ status: 'ANONYMOUS' });
     mainResults.current.clear();
     decisions.current.clear();
-    window.history.replaceState({ entryId: newConsumerEntryId() }, '');
+    searchSessionId.current = newConsumerEntryId();
+    window.history.replaceState({ entryId: newConsumerEntryId(), searchSessionId: searchSessionId.current }, '');
     syncLocation();
   }, [syncLocation]);
   const handleCheckoutSuccess = useCallback((value) => setSubscription(value), []);
   const personalAdapter = useMemo(() => ({ ...consumerPersonalAdapter, logout: handleLogout }), [handleLogout]);
   const handleInputChange = useCallback((input) => {
-    const current = readLocation();
+    const current = readLocation(searchSessionId.current);
     if (current.route !== 'main' || current.state.entryId !== location.state.entryId) return;
     const restoreSearch = searchHistoryInput(input);
     if (JSON.stringify(restoreSearch) === JSON.stringify(current.state.restoreSearch)) return;
-    window.history.replaceState({ entryId: current.state.entryId, restoreSearch }, '');
+    window.history.replaceState(consumerHistoryState({ ...current.state, restoreSearch, mainView: undefined }), '');
     syncLocation();
   }, [location.state.entryId, syncLocation]);
   const handleSearchComplete = useCallback((input, result) => {
-    const current = readLocation();
+    const current = readLocation(searchSessionId.current);
     if (current.route !== 'main' || current.state.entryId !== location.state.entryId) return;
     const restoreSearch = searchHistoryInput(input);
     if (result) mainResults.current.set(current.state.entryId, { inputKey: JSON.stringify(restoreSearch), result: Array.isArray(result) ? { candidates: result } : result });
     else mainResults.current.delete(current.state.entryId);
-    window.history.replaceState({ entryId: current.state.entryId, restoreSearch }, '');
+    window.history.replaceState(consumerHistoryState({ ...current.state, restoreSearch, mainView: undefined }), '');
+    syncLocation();
+  }, [location.state.entryId, syncLocation]);
+  const handleMainViewChange = useCallback((view) => {
+    const current = readLocation(searchSessionId.current);
+    if (current.route !== 'main' || current.state.entryId !== location.state.entryId) return;
+    const state = consumerHistoryState({ ...current.state, mainView: mainHistoryView(view) });
+    if (JSON.stringify(state) === JSON.stringify(current.state)) return;
+    window.history.replaceState(state, '');
     syncLocation();
   }, [location.state.entryId, syncLocation]);
   const handleJourneyResult = useCallback((decision) => {
     if (!decision?.decisionId) return;
     const navigationState = decisionNavigationState(decision);
     decisions.current.set(decision.decisionId, { state: navigationState, expiresAt: decision.expiresAt });
-    const current = readLocation();
+    const current = readLocation(searchSessionId.current);
     if (current.route !== 'journey' && (current.route !== 'journey-result' || current.stationId !== decision.decisionId)) return;
     const state = consumerHistoryState({ ...current.state, ...navigationState });
     if (JSON.stringify(state) === JSON.stringify(current.state)) return;
@@ -207,13 +241,13 @@ function App() {
     syncLocation();
   }, [syncLocation]);
   const handleJourneyInput = useCallback((input) => {
-    const current = readLocation();
+    const current = readLocation(searchSessionId.current);
     if (current.route !== 'journey') return;
     window.history.replaceState(consumerHistoryState({ ...current.state, journeyInput: journeyHistoryInput(input) }), '');
     syncLocation();
   }, [syncLocation]);
   const openCandidate = (nextRoute, candidate, input) => {
-    const source = readLocation();
+    const source = readLocation(searchSessionId.current);
     window.history.replaceState(consumerHistoryState({ ...source.state,
       restoreSearch: searchHistoryInput(input || source.state.restoreSearch), selectedStationId: candidate.stationId,
       guideContext: candidateGuideContext(candidate.stationId, candidate, input || source.state.restoreSearch),
@@ -234,7 +268,7 @@ function App() {
   if (isAdminV2Production) return <AdminV2ProductionApp />;
   if (isLoginPath) return <LoginPage />;
   // HOME is a landing anyone can return to, so it renders regardless of intro history or auth state.
-  if (route === 'home') return <OpeningPage authState={authState} user={user} onNavigate={navigate} onLogin={login} onStart={() => navigate('main')} />;
+  if (route === 'home') return <OpeningPage authState={authState} user={user} onNavigate={navigate} onLogin={login} onStart={() => navigate('main', { intent: 'new' })} />;
   if (route !== 'main' && ['loading', 'error'].includes(authState)) {
     return <ConsumerR2Theme><ConsumerContainer as="main" id="main-content"><AsyncState state={authState === 'loading' ? 'loading' : 'error'} title={authState === 'loading' ? '로그인 상태를 확인하고 있습니다' : '로그인 상태를 확인하지 못했습니다'} onAction={refreshSession} /></ConsumerContainer></ConsumerR2Theme>;
   }
@@ -253,7 +287,7 @@ function App() {
   if (route === 'mypage') return <PersonalMyPage adapter={personalAdapter} onNavigate={navigate} />;
   if (route === 'qna') return <ConsumerQnaPage key={location.state.questionId || 'list'} {...common} initialQuestionId={location.state.questionId} />;
   if (route === 'alerts') return <ConsumerAlertsPage {...common} searchInput={location.state.restoreSearch} onCurrentData={handleCurrentData} />;
-  return <ConsumerMainPage key={entryId} onNavigate={navigate} onLogin={login} onInputChange={handleInputChange} onSearchComplete={handleSearchComplete} restoreSearch={restoreSearch} currentResult={restoredMainResult} onOpenStation={(candidate, input) => openCandidate('station', candidate, input)} onOpenRide={(candidate, input) => openCandidate('ride', candidate, input)} />;
+  return <ConsumerMainPage key={entryId} onNavigate={navigate} onLogin={login} onInputChange={handleInputChange} onSearchComplete={handleSearchComplete} onStartNew={() => navigate('main', { intent: 'new' })} onViewChange={handleMainViewChange} restoreSearch={restoreSearch} currentResult={restoredMainResult} currentView={restoredMainResult ? location.state.mainView : null} onOpenStation={(candidate, input) => openCandidate('station', candidate, input)} onOpenRide={(candidate, input) => openCandidate('ride', candidate, input)} />;
 }
 
 export default App;

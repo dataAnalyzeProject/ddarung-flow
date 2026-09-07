@@ -294,10 +294,9 @@ function TransitWorkspace({ candidate, destination, mapRenderer, onClose, onOpen
   );
 }
 
-function ResultsWorkspace({ input, mapRenderer, onOpenRide, onOpenStation, onRecheck, onReset, places, recheckDisabled, result, selectedId, setSelectedId, showTransit, setShowTransit }) {
+function ResultsWorkspace({ input, mapRenderer, onOpenRide, onOpenStation, onRecheck, onReset, onStartNew, onViewChange, places, recheckDisabled, result, selectedId, showTransit, sortKey }) {
   const resultHeadingRef = useRef(null);
   const transitHeadingRef = useRef(null);
-  const [sortKey, setSortKey] = useState(CANDIDATE_SORTS[0][0]);
   const ordered = useMemo(() => {
     const compare = (CANDIDATE_SORTS.find(([key]) => key === sortKey) ?? CANDIDATE_SORTS[0])[2];
     return [...result.candidates].sort(compare);
@@ -321,23 +320,24 @@ function ResultsWorkspace({ input, mapRenderer, onOpenRide, onOpenStation, onRec
           <div><h1 ref={resultHeadingRef} tabIndex="-1">{places.destination.name} 근처 추천 결과</h1><p>선택한 이동 경로와 도착 시각을 기준으로 비교했어요.</p></div>
           {conditionSummary}
           <ConsumerButton variant="secondary" onClick={onReset}>조건 다시 선택</ConsumerButton>
+          <ConsumerButton variant="secondary" onClick={onStartNew}>새 비교 시작</ConsumerButton>
         </section>
       ) : conditionSummary}
       {result.viewState === "PARTIAL" ? <AsyncState state="partial" title="일부 후보의 근거를 확인하지 못했습니다" description="확인된 후보는 그대로 비교하고, 확인 불가 값은 0으로 표시하지 않았습니다." /> : null}
       {showTransit && selected.routeDetail ? (
-        <TransitWorkspace candidate={selected} destination={places.destination} mapRenderer={mapRenderer} onClose={() => setShowTransit(false)} onOpenRide={onOpenRide} onOpenStation={onOpenStation} origin={places.origin} transitHeadingRef={transitHeadingRef} />
+        <TransitWorkspace candidate={selected} destination={places.destination} mapRenderer={mapRenderer} onClose={() => onViewChange({ selectedStationId: selected.stationId, sortKey, showTransit: false })} onOpenRide={onOpenRide} onOpenStation={onOpenStation} origin={places.origin} transitHeadingRef={transitHeadingRef} />
       ) : (
         <section className="cr293-results" aria-label="대여소 추천 결과" aria-live="polite">
         <div className="cr293-results__list">
           <div className="cr293-results__title">
             <div><h2>추천 대여소</h2><span>{result.candidates.length}곳</span></div>
             <label className="cr293-results__sort"><span className="cr22-sr-only">후보 정렬 기준</span>
-              <select value={sortKey} onChange={(event) => setSortKey(event.target.value)}>
+              <select value={sortKey} onChange={(event) => onViewChange({ selectedStationId: selected?.stationId, sortKey: event.target.value, showTransit })}>
                 {CANDIDATE_SORTS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
               </select>
             </label>
           </div>
-          {ordered.map((candidate, index) => <CandidateCard key={candidate.stationId ?? index} candidate={candidate} index={index} selected={selected?.stationId === candidate.stationId} onSelect={(stationId) => { setSelectedId(stationId); setShowTransit(false); }} />)}
+          {ordered.map((candidate, index) => <CandidateCard key={candidate.stationId ?? index} candidate={candidate} index={index} selected={selected?.stationId === candidate.stationId} onSelect={(stationId) => onViewChange({ selectedStationId: stationId, sortKey, showTransit: false })} />)}
         </div>
         <div className="cr293-results__map">
           {selected?.routeDetail ? <ConsumerRouteMap candidate={selected} destination={places.destination} mapRenderer={mapRenderer} origin={places.origin} /> : <div className="cr293-route-unavailable" role="status"><ConsumerIcon name="info" /><strong>선택한 후보의 경로를 확인할 수 없습니다.</strong><span>다른 후보를 선택해 주세요.</span></div>}
@@ -352,7 +352,7 @@ function ResultsWorkspace({ input, mapRenderer, onOpenRide, onOpenStation, onRec
               <div><dt>피처 기준 / 만료</dt><dd>{formatDateTime(selected.featureAsOf)} / {formatDateTime(selected.expiresAt)}</dd></div>
             </dl>
             <div className="cr293-evidence__actions">
-              {input.travelMode === "PUBLIC_TRANSIT" && selected.routeDetail ? <ConsumerButton variant="secondary" aria-controls="cr293-transit-detail" aria-expanded={showTransit} onClick={() => setShowTransit((value) => !value)}>{showTransit ? "경로 상세 닫기" : "대중교통 경로 상세"}</ConsumerButton> : null}
+              {input.travelMode === "PUBLIC_TRANSIT" && selected.routeDetail ? <ConsumerButton variant="secondary" aria-controls="cr293-transit-detail" aria-expanded={showTransit} onClick={() => onViewChange({ selectedStationId: selected.stationId, sortKey, showTransit: !showTransit })}>{showTransit ? "경로 상세 닫기" : "대중교통 경로 상세"}</ConsumerButton> : null}
               {onRecheck ? <ConsumerButton variant="secondary" disabled={recheckDisabled} onClick={onRecheck}>알림 신청</ConsumerButton> : null}
               <ConsumerButton variant="secondary" onClick={() => onOpenStation?.(selected)}>대여소 상세</ConsumerButton>
               <ConsumerButton onClick={() => onOpenRide?.(selected)}>라이딩 둘러보기</ConsumerButton>
@@ -366,7 +366,7 @@ function ResultsWorkspace({ input, mapRenderer, onOpenRide, onOpenStation, onRec
   );
 }
 
-export default function ConsumerMainPage({ currentResult, mapRenderer, onInputChange, onLogin, onNavigate, onOpenRide, onOpenStation, onSearchComplete, restoreSearch, services = DEFAULT_SERVICES }) {
+export default function ConsumerMainPage({ currentResult, currentView, mapRenderer, onInputChange, onLogin, onNavigate, onOpenRide, onOpenStation, onSearchComplete, onStartNew, onViewChange, restoreSearch, services = DEFAULT_SERVICES }) {
   const [authState, setAuthState] = useState("loading");
   const [authAttempt, setAuthAttempt] = useState(0);
   const [user, setUser] = useState(null);
@@ -376,13 +376,14 @@ export default function ConsumerMainPage({ currentResult, mapRenderer, onInputCh
   const [result, setResult] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
   const [showTransit, setShowTransit] = useState(false);
+  const [sortKey, setSortKey] = useState(CANDIDATE_SORTS[0][0]);
   const [recheckOpen, setRecheckOpen] = useState(false);
   const [recheckStatus, setRecheckStatus] = useState("idle");
   const [recentSearchError, setRecentSearchError] = useState(false);
   const requestRef = useRef(0);
   const inputRef = useRef({ input: DEFAULT_INPUT, places: { origin: null, destination: null } });
-  const callbacksRef = useRef({ onInputChange, onSearchComplete });
-  callbacksRef.current = { onInputChange, onSearchComplete };
+  const callbacksRef = useRef({ onInputChange, onSearchComplete, onViewChange });
+  callbacksRef.current = { onInputChange, onSearchComplete, onViewChange };
 
   useEffect(() => {
     const restored = restoreConsumerMainInput(restoreSearch || services.loadPendingPrediction?.());
@@ -394,14 +395,25 @@ export default function ConsumerMainPage({ currentResult, mapRenderer, onInputCh
     setInput(restored.input);
     setPlaces(restored.places);
     setResult(suppliedResult);
-    setSelectedId(suppliedResult?.selectedStationId ?? null);
+    const selected = suppliedResult?.candidates.some((candidate) => candidate.stationId === currentView?.selectedStationId)
+      ? currentView.selectedStationId : suppliedResult?.selectedStationId ?? null;
+    const nextSortKey = CANDIDATE_SORTS.some(([key]) => key === currentView?.sortKey) ? currentView.sortKey : CANDIDATE_SORTS[0][0];
+    setSelectedId(selected);
     setState(suppliedResult?.viewState ?? "INITIAL");
-    setShowTransit(false);
+    setSortKey(nextSortKey);
+    setShowTransit(Boolean(suppliedResult && currentView?.showTransit && suppliedResult.candidates.find((candidate) => candidate.stationId === selected)?.routeDetail));
     setRecheckOpen(false);
     setRecheckStatus("idle");
     setRecentSearchError(false);
     callbacksRef.current.onInputChange?.(inputSnapshot(restored.input, restored.places));
-  }, [currentResult, restoreSearch, services]);
+  }, [currentResult, currentView, restoreSearch, services]);
+
+  const updateView = (next) => {
+    setSelectedId(next.selectedStationId ?? null);
+    setSortKey(next.sortKey);
+    setShowTransit(next.showTransit);
+    callbacksRef.current.onViewChange?.(next);
+  };
 
   useEffect(() => {
     let active = true;
@@ -443,6 +455,7 @@ export default function ConsumerMainPage({ currentResult, mapRenderer, onInputCh
     setResult(null);
     setSelectedId(null);
     setShowTransit(false);
+    setSortKey(CANDIDATE_SORTS[0][0]);
     setRecheckStatus("idle");
     callbacksRef.current.onSearchComplete?.(inputSnapshot(input, places), null);
   };
@@ -470,6 +483,7 @@ export default function ConsumerMainPage({ currentResult, mapRenderer, onInputCh
       setSelectedId(adapted.selectedStationId);
       setState(adapted.viewState);
       callbacksRef.current.onSearchComplete?.(searchInput, response);
+      callbacksRef.current.onViewChange?.({ selectedStationId: adapted.selectedStationId, sortKey: CANDIDATE_SORTS[0][0], showTransit: false });
       services.clearPendingPrediction?.();
       try {
         services.saveRecentSearch?.(user, searchInput);
@@ -506,7 +520,7 @@ export default function ConsumerMainPage({ currentResult, mapRenderer, onInputCh
   if (state === "INITIAL" || state === "LOADING") content = <SearchWorkspace authState={authState} input={input} onChange={updateInput} onOpenPlanner={() => onNavigate?.("planner")} onSearch={submit} places={places} searchPlaces={services.searchPlaces} state={state} />;
   else if (state === "ERROR") content = <AsyncState state="error" title="추천 결과를 불러오지 못했습니다" description="입력은 그대로 보존했습니다. 잠시 후 다시 시도해 주세요." onAction={submit} />;
   else if (state === "EMPTY") content = <AsyncState state="empty" title="조건에 맞는 대여소를 찾지 못했습니다" description="확인 불가 값을 0으로 바꾸지 않았습니다. 조건을 바꿔 다시 찾아보세요." actionLabel="조건 다시 선택" onAction={reset} />;
-  else content = <ResultsWorkspace input={input} mapRenderer={mapRenderer} onOpenRide={(candidate) => onOpenRide?.(candidate, searchInput)} onOpenStation={(candidate) => onOpenStation?.(candidate, searchInput)} onRecheck={searchInput ? () => { setRecheckStatus("idle"); setRecheckOpen(true); } : undefined} onReset={reset} places={places} recheckDisabled={authState !== "authenticated" || recheckStatus === "saving"} result={result} selectedId={selectedId} setSelectedId={setSelectedId} showTransit={showTransit} setShowTransit={setShowTransit} />;
+  else content = <ResultsWorkspace input={input} mapRenderer={mapRenderer} onOpenRide={(candidate) => onOpenRide?.(candidate, searchInput)} onOpenStation={(candidate) => onOpenStation?.(candidate, searchInput)} onRecheck={searchInput ? () => { setRecheckStatus("idle"); setRecheckOpen(true); } : undefined} onReset={reset} onStartNew={onStartNew} onViewChange={updateView} places={places} recheckDisabled={authState !== "authenticated" || recheckStatus === "saving"} result={result} selectedId={selectedId} showTransit={showTransit} sortKey={sortKey} />;
 
   return (
     <ConsumerR2Theme className="cr293-page">
