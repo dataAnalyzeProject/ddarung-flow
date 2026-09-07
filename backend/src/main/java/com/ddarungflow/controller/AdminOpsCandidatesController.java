@@ -3,6 +3,7 @@ package com.ddarungflow.controller;
 import com.ddarungflow.admin.operations.AdminOpsCandidateDtos;
 import com.ddarungflow.admin.operations.AdminOpsCandidateService;
 import com.ddarungflow.admin.operations.AdminOpsDtos;
+import com.ddarungflow.admin.operations.AdminOpsRiskSnapshotService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -23,16 +24,19 @@ public class AdminOpsCandidatesController {
     @GetMapping @PreAuthorize("hasAuthority('OPS_CANDIDATE_READ')")
     public AdminOpsCandidateDtos.Response candidates(@RequestParam(defaultValue = "60") int horizonMinutes, @RequestParam(required = false) Integer requiredBikeCount,
                                                        @RequestParam(defaultValue = "RENTAL") String riskType, @RequestParam(defaultValue = "100") int limit,
-                                                       @RequestParam(required = false) String cursor) {
+                                                       @RequestParam(required = false) String cursor, @RequestParam(required = false) String snapshotId) {
         if (horizonMinutes != 60 && horizonMinutes != 120 && horizonMinutes != 180 && horizonMinutes != 240) throw new UnsupportedHorizonException();
         if (requiredBikeCount != null && (requiredBikeCount < 1 || requiredBikeCount > 5) || limit < 1 || limit > 500) throw new IllegalArgumentException("validation");
         if (!"RENTAL".equals(riskType)) throw new UnsupportedRiskTypeException();
-        return service.list(OffsetDateTime.now(), horizonMinutes, requiredBikeCount == null ? 1 : requiredBikeCount, riskType, limit, cursor);
+        return service.list(OffsetDateTime.now(), horizonMinutes, requiredBikeCount == null ? 1 : requiredBikeCount, riskType, limit, cursor, snapshotId);
     }
-    @ExceptionHandler(UnsupportedHorizonException.class) ResponseEntity<AdminOpsDtos.ErrorResponse> horizon() { return error("UNSUPPORTED_HORIZON"); }
-    @ExceptionHandler(UnsupportedRiskTypeException.class) ResponseEntity<AdminOpsDtos.ErrorResponse> riskType() { return error("UNSUPPORTED_RISK_TYPE"); }
-    @ExceptionHandler({IllegalArgumentException.class, MethodArgumentTypeMismatchException.class}) ResponseEntity<AdminOpsDtos.ErrorResponse> invalid() { return error("VALIDATION_ERROR"); }
-    private ResponseEntity<AdminOpsDtos.ErrorResponse> error(String code) { return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new AdminOpsDtos.ErrorResponse(code, "입력값이 올바르지 않습니다.")); }
+    @ExceptionHandler(UnsupportedHorizonException.class) ResponseEntity<AdminOpsDtos.ErrorResponse> horizon() { return error(HttpStatus.BAD_REQUEST, "UNSUPPORTED_HORIZON"); }
+    @ExceptionHandler(UnsupportedRiskTypeException.class) ResponseEntity<AdminOpsDtos.ErrorResponse> riskType() { return error(HttpStatus.BAD_REQUEST, "UNSUPPORTED_RISK_TYPE"); }
+    @ExceptionHandler({AdminOpsRiskSnapshotService.ExpiredSnapshotException.class})
+    ResponseEntity<AdminOpsDtos.ErrorResponse> expiredSnapshot() { return error(HttpStatus.CONFLICT, "RISK_SNAPSHOT_EXPIRED"); }
+    @ExceptionHandler({IllegalArgumentException.class, MethodArgumentTypeMismatchException.class, AdminOpsRiskSnapshotService.UnknownSnapshotException.class})
+    ResponseEntity<AdminOpsDtos.ErrorResponse> invalid() { return error(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR"); }
+    private ResponseEntity<AdminOpsDtos.ErrorResponse> error(HttpStatus status, String code) { return ResponseEntity.status(status).body(new AdminOpsDtos.ErrorResponse(code, "입력값이 올바르지 않습니다.")); }
     private static class UnsupportedHorizonException extends RuntimeException { }
     private static class UnsupportedRiskTypeException extends RuntimeException { }
 }

@@ -9,6 +9,7 @@ function payload(overrides = {}) {
     referenceTime: '2026-08-31T06:00:00Z', generatedAt: '2026-08-31T06:01:00Z', dataState: 'NORMAL',
     inventory: { dataState: 'NORMAL', expectedStationCount: 3, latestStationCount: 3, missingStationCount: 0, latestCollectedAt: '2026-08-31T05:58:00Z', p50DelayMinutes: 2, p95DelayMinutes: 4, inventoryStatusBreakdown: { NORMAL: 3, UNAVAILABLE: 0 } },
     prediction: { dataState: 'NORMAL', featureAsOf: '2026-08-31T05:00:00Z', generatedAt: '2026-08-31T05:01:00Z', publishedAt: '2026-08-31T05:02:00Z', expiresAt: '2026-08-31T07:00:00Z', predictedStationCount: 3, predictionRowCount: 3, coverageRatio: 1 },
+    runtimeAnalysis: { dataState: 'NORMAL', hasRecentSnapshot: true, snapshotExpired: false, referenceTime: '2026-08-31T05:59:00Z', createdAt: '2026-08-31T05:59:30Z', expiresAt: '2026-08-31T06:01:30Z', horizonMinutes: 60, requiredBikeCount: 1, eligibleStationCount: 3, evaluatedStationCount: 3, normalInferenceSuccessCount: 3 },
     profile: { dataState: 'NORMAL', activePublicStationCount: 3, profileAvailableStationCount: 3, coverageRatio: 1, latestGeneratedAt: '2026-08-30T06:00:00Z' },
     limitations: ['AFFECTED_SCOPE_NOT_SOURCE_BACKED', 'LAST_NORMAL_REFRESH_NOT_SOURCE_BACKED', 'REASON_LEDGER_NOT_SOURCE_BACKED'],
     ...overrides,
@@ -71,6 +72,34 @@ describe('OperationsDataStatusPage', () => {
     expect(screen.getAllByText('확인 정보 없음').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText('수집 상태 결측')).toBeInTheDocument();
     expect(screen.queryByText('MISSING')).not.toBeInTheDocument();
+  });
+
+  test('surfaces the on-demand runtime analysis as a root-driving source distinct from the historical prediction batch', async () => {
+    renderPage(jest.fn().mockResolvedValue(payload()));
+    expect(await screen.findByRole('heading', { name: '실시간 분석 범위 (on-demand)' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '예측 배치 (이력)' })).toBeInTheDocument();
+    expect(screen.getByText(/전체 데이터 상태 판단에는 반영되지 않습니다\./)).toBeInTheDocument();
+    expect(screen.getByText(/평가 완료 3곳/)).toBeInTheDocument();
+  });
+
+  test('shows the risk-map guidance when no scope has ever been analyzed and distinguishes it from an expired one', async () => {
+    renderPage(jest.fn().mockResolvedValue(payload({
+      dataState: 'INSUFFICIENT_DATA',
+      runtimeAnalysis: { dataState: 'INSUFFICIENT_DATA', hasRecentSnapshot: false, snapshotExpired: false, referenceTime: null, createdAt: null, expiresAt: null, horizonMinutes: null, requiredBikeCount: null, eligibleStationCount: 0, evaluatedStationCount: 0, normalInferenceSuccessCount: 0 },
+      limitations: ['ANALYSIS_SCOPE_REQUIRED'],
+    })));
+    expect((await screen.findAllByText('아직 분석한 범위 없음')).length).toBeGreaterThan(0);
+    expect(screen.getByText(/아직 분석한 범위가 없습니다\./)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '수급 위험 지도에서 범위를 분석해 주세요.' })).toHaveAttribute('href', '/admin/ops/risk-map');
+  });
+
+  test('shows the expired-analysis guidance distinctly from a never-analyzed scope', async () => {
+    renderPage(jest.fn().mockResolvedValue(payload({
+      dataState: 'INSUFFICIENT_DATA',
+      runtimeAnalysis: { ...payload().runtimeAnalysis, dataState: 'INSUFFICIENT_DATA', snapshotExpired: true },
+      limitations: ['ANALYSIS_SNAPSHOT_EXPIRED'],
+    })));
+    expect(await screen.findByText(/이전 분석이 만료됐습니다\./)).toBeInTheDocument();
   });
 
   test('maps limitation codes to Korean user-facing headers and copies', async () => {

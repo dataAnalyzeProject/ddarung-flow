@@ -3,7 +3,7 @@ import CandidatesPage from './CandidatesPage';
 
 const first = {
   referenceTime: '2026-08-30T00:00:00Z', generatedAt: '2026-08-30T00:01:00Z', horizonMinutes: 60, requiredBikeCount: 1, riskType: 'RENTAL', dataState: 'NORMAL',
-  coverage: { activePublicStationCount: 10, inventoryAvailableCount: 9, predictionAvailableCount: 8, profileAvailableCount: 7, eligibleCandidateCount: 2 }, limitations: ['STATION_NUMBER_MISSING'], nextCursor: 'opaque-next',
+  coverage: { activePublicStationCount: 10, analyzedStationCount: 9, analysisNormalCount: 8, profileAvailableCount: 7, eligibleCandidateCount: 2 }, limitations: ['STATION_NUMBER_MISSING'], nextCursor: 'opaque-next',
   items: [
     { rank: 2, dataState: 'NORMAL', station: { name: '두 번째', stationNumber: '1002', currentBikes: null }, prediction: { selectedShortageProbability: 0.5, predictionTargetAt: '2026-08-30T01:00:00Z' }, recurrence: { available: false, reasonCode: 'RECURRENCE_PROFILE_MISSING' } },
     { rank: 1, dataState: 'NORMAL', station: { name: '첫 번째', stationNumber: '1001', currentBikes: 0 }, prediction: { selectedShortageProbability: 0.9, predictionTargetAt: '2026-08-30T02:00:00Z' }, recurrence: { available: true, sampleCount: 12, observedStockoutRate: 0.25, windowStart: '2026-08-01', windowEnd: '2026-08-28', episodeCount: 3, medianBikeCount: 0, medianDurationMinutes: 10, p90DurationMinutes: 20, medianRecoveryMinutesToThree: 5 } },
@@ -62,6 +62,21 @@ describe('CandidatesPage', () => {
     render(<CandidatesPage createAdapter={adapterFor(() => Promise.resolve({ ...first, ...partial }))} />);
     expect(await screen.findByText(label)).toBeInTheDocument();
     expect(within(screen.getByLabelText('목록 기준')).getByText(partial.dataState)).toHaveClass('candidates-root-state', stateClass);
+  });
+
+  test('offers the risk map as a safe entry point when no scope has been analyzed yet', async () => {
+    render(<CandidatesPage createAdapter={adapterFor(() => Promise.resolve({ ...first, items: [], dataState: 'INSUFFICIENT_DATA', limitations: ['ANALYSIS_SCOPE_REQUIRED'] }))} />);
+    expect(await screen.findByText('판단에 필요한 정보 부족')).toBeInTheDocument();
+    expect(screen.getByText(/아직 분석한 범위가 없습니다\./)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '수급 위험 지도에서 범위를 분석해 주세요.' })).toHaveAttribute('href', '/admin/ops/risk-map');
+  });
+
+  test('distinguishes an expired analysis from one that was never run', async () => {
+    // The backend can only report ANALYSIS_SCOPE_REQUIRED after the adapter drops an expired
+    // snapshot id and retries; scopeExpired is how the adapter carries the difference forward.
+    render(<CandidatesPage createAdapter={adapterFor(() => Promise.resolve({ ...first, items: [], dataState: 'INSUFFICIENT_DATA', limitations: ['ANALYSIS_SCOPE_REQUIRED'], scopeExpired: true }))} />);
+    expect(await screen.findByText(/이전 분석이 만료됐습니다\./)).toBeInTheDocument();
+    expect(screen.queryByText(/아직 분석한 범위가 없습니다\./)).not.toBeInTheDocument();
   });
 
   test('uses a neutral root state badge for an unsupported source value', async () => {

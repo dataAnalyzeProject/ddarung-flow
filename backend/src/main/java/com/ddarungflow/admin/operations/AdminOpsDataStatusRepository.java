@@ -85,6 +85,28 @@ public class AdminOpsDataStatusRepository {
                 rs.getObject("latest_generated_at", OffsetDateTime.class)));
     }
 
+    /**
+     * Reads the single most recent on-demand risk analysis snapshot, expired or not, regardless of
+     * who created it (OPS-02 risk map, OPS-01 dashboard, or a future consumer). This is a read of
+     * TASK-277's {@code admin_ops_runtime_risk_snapshots} table — it does not touch
+     * AdminOpsRiskSnapshotRepository/Service, does not evaluate any station, and creates nothing.
+     * A null return means no analysis has ever been run (or none survived any prior cleanup), not
+     * that the runtime is unavailable — {@link AdminOpsDataStatusService} draws that distinction.
+     */
+    public LatestRiskSnapshot latestRiskSnapshot() {
+        List<LatestRiskSnapshot> rows = jdbc.query("""
+                SELECT created_at, expires_at, reference_time, horizon_minutes, required_bike_count,
+                       eligible_station_count, evaluated_station_count, normal_inference_success_count
+                FROM admin_ops_runtime_risk_snapshots
+                ORDER BY created_at DESC
+                LIMIT 1
+                """, (rs, row) -> new LatestRiskSnapshot(
+                rs.getObject("created_at", OffsetDateTime.class), rs.getObject("expires_at", OffsetDateTime.class),
+                rs.getObject("reference_time", OffsetDateTime.class), rs.getInt("horizon_minutes"), rs.getInt("required_bike_count"),
+                rs.getInt("eligible_station_count"), rs.getInt("evaluated_station_count"), rs.getInt("normal_inference_success_count")));
+        return rows.isEmpty() ? null : rows.getFirst();
+    }
+
     public record InventoryCounts(long expectedStationCount, long latestStationCount, OffsetDateTime latestCollectedAt) { }
     public record StatusCount(String status, long count) { }
     public record PredictionBatch(UUID batchId, OffsetDateTime featureAsOf, OffsetDateTime generatedAt,
@@ -92,4 +114,7 @@ public class AdminOpsDataStatusRepository {
     public record PredictionCounts(long predictedStationCount, long predictionRowCount) { }
     public record ProfileCounts(long activePublicStationCount, long profileAvailableStationCount,
                                 OffsetDateTime latestGeneratedAt) { }
+    public record LatestRiskSnapshot(OffsetDateTime createdAt, OffsetDateTime expiresAt, OffsetDateTime referenceTime,
+                                     int horizonMinutes, int requiredBikeCount, int eligibleStationCount,
+                                     int evaluatedStationCount, int normalInferenceSuccessCount) { }
 }

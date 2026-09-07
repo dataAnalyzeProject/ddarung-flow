@@ -7,6 +7,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,10 +26,19 @@ public class AdminOpsDataStatusService {
     public AdminOpsDataStatusDtos.Response dataStatus(OffsetDateTime referenceTime) {
         InventoryResult inventory = inventory(referenceTime);
         PredictionResult prediction = prediction(referenceTime);
+        RuntimeAnalysisResult runtimeAnalysis = runtimeAnalysis();
         ProfileResult profile = profile();
+        List<String> limitations = new ArrayList<>(LIMITATIONS);
+        if (runtimeAnalysis.limitation() != null) limitations.add(runtimeAnalysis.limitation());
+        // Only the two continuously maintained citywide sources drive the root. prediction is a
+        // historical record now (see AdminOpsDataStatusDtos.Prediction), so a stale/absent legacy
+        // batch can no longer force the root to MISSING. runtimeAnalysis is deliberately excluded
+        // too, in the other direction: it covers one operator-drawn bbox and expires after
+        // TTL_MINUTES, so it can neither certify citywide health nor flap the root every 2 minutes.
+        // It is reported as its own disclosed source instead.
         return new AdminOpsDataStatusDtos.Response(referenceTime, OffsetDateTime.now(),
-                rootState(inventory.state(), prediction.state(), profile.state()),
-                inventory.response(), prediction.response(), profile.response(), LIMITATIONS);
+                rootState(inventory.state(), profile.state()),
+                inventory.response(), prediction.response(), runtimeAnalysis.response(), profile.response(), limitations);
     }
 
     private InventoryResult inventory(OffsetDateTime referenceTime) {
@@ -64,6 +74,38 @@ public class AdminOpsDataStatusService {
                 counts.predictedStationCount(), counts.predictionRowCount(), coverage));
     }
 
+    /**
+     * Reports the current on-demand risk-serving path independently of the legacy batch. A missing
+     * or expired snapshot is reported as "정보 부족" evidence with a distinct limitation code so the
+     * frontend can tell "no one has analyzed a scope yet" from "the last analysis expired" from a
+     * genuinely degraded runtime (every evaluated station failed inference) — never as MISSING,
+     * which this repository reserves for a real absence the operator cannot self-serve out of.
+     */
+    private RuntimeAnalysisResult runtimeAnalysis() {
+        var snapshot = repository.latestRiskSnapshot();
+        if (snapshot == null) {
+            return new RuntimeAnalysisResult("INSUFFICIENT_DATA", "ANALYSIS_SCOPE_REQUIRED",
+                    new AdminOpsDataStatusDtos.RuntimeAnalysis("INSUFFICIENT_DATA", false, false,
+                            null, null, null, null, null, null, null, null));
+        }
+        boolean expired = !snapshot.expiresAt().isAfter(OffsetDateTime.now());
+        if (expired) {
+            return new RuntimeAnalysisResult("INSUFFICIENT_DATA", "ANALYSIS_SNAPSHOT_EXPIRED",
+                    new AdminOpsDataStatusDtos.RuntimeAnalysis("INSUFFICIENT_DATA", true, true,
+                            snapshot.referenceTime(), snapshot.createdAt(), snapshot.expiresAt(),
+                            snapshot.horizonMinutes(), snapshot.requiredBikeCount(),
+                            snapshot.eligibleStationCount(), snapshot.evaluatedStationCount(), snapshot.normalInferenceSuccessCount()));
+        }
+        String state = snapshot.evaluatedStationCount() == 0 ? "INSUFFICIENT_DATA"
+                : snapshot.normalInferenceSuccessCount() == 0 ? "UNAVAILABLE"
+                : snapshot.normalInferenceSuccessCount() == snapshot.evaluatedStationCount() ? "NORMAL" : "PARTIAL";
+        return new RuntimeAnalysisResult(state, null,
+                new AdminOpsDataStatusDtos.RuntimeAnalysis(state, true, false,
+                        snapshot.referenceTime(), snapshot.createdAt(), snapshot.expiresAt(),
+                        snapshot.horizonMinutes(), snapshot.requiredBikeCount(),
+                        snapshot.eligibleStationCount(), snapshot.evaluatedStationCount(), snapshot.normalInferenceSuccessCount()));
+    }
+
     private ProfileResult profile() {
         var counts = repository.profileCounts();
         BigDecimal coverage = ratio(counts.profileAvailableStationCount(), counts.activePublicStationCount());
@@ -91,5 +133,6 @@ public class AdminOpsDataStatusService {
 
     private record InventoryResult(String state, AdminOpsDataStatusDtos.Inventory response) { }
     private record PredictionResult(String state, AdminOpsDataStatusDtos.Prediction response) { }
+    private record RuntimeAnalysisResult(String state, String limitation, AdminOpsDataStatusDtos.RuntimeAnalysis response) { }
     private record ProfileResult(String state, AdminOpsDataStatusDtos.Profile response) { }
 }

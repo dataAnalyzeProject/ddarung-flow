@@ -55,9 +55,27 @@ function Inventory({ inventory }) {
 }
 
 function Prediction({ prediction }) {
-  return <section className="operations-data-section" aria-labelledby="operations-data-prediction-heading"><div className="operations-data-section-heading"><div><h2 id="operations-data-prediction-heading">예측 데이터</h2><p>현재 시점에 유효한 예측 배치의 범위만 표시합니다.</p></div>{prediction ? <State value={prediction.dataState} /> : null}</div>
+  return <section className="operations-data-section" aria-labelledby="operations-data-prediction-heading"><div className="operations-data-section-heading"><div><h2 id="operations-data-prediction-heading">예측 배치 (이력)</h2><p>과거 배치 파이프라인이 남긴 이력 기록입니다. 전체 데이터 상태 판단에는 반영되지 않습니다.</p></div>{prediction ? <State value={prediction.dataState} /> : null}</div>
     {!prediction ? <p className="operations-data-absence">유효한 예측 배치 없음</p> : <dl className="operations-data-metrics"><Metric label="feature as-of">{time(prediction.featureAsOf)}</Metric><Metric label="생성 시각">{time(prediction.generatedAt)}</Metric><Metric label="게시 시각">{time(prediction.publishedAt)}</Metric><Metric label="만료 시각">{time(prediction.expiresAt)}</Metric><Metric label="예측 대여소 수">{count(prediction.predictedStationCount)}</Metric><Metric label="예측 행 수">{count(prediction.predictionRowCount)}</Metric><Metric label="커버리지">{ratio(prediction.coverageRatio)}</Metric></dl>}
   </section>;
+}
+
+function RuntimeAnalysis({ runtimeAnalysis }) {
+  const neverAnalyzed = !runtimeAnalysis?.hasRecentSnapshot;
+  return <section className="operations-data-section" aria-labelledby="operations-data-runtime-analysis-heading"><div className="operations-data-section-heading"><div><h2 id="operations-data-runtime-analysis-heading">실시간 분석 범위 (on-demand)</h2><p>운영자가 수급 위험 지도에서 분석한 범위의 최신 상태입니다. 대여소 재고·profile과 함께 전체 데이터 상태에 반영됩니다.</p></div><State value={runtimeAnalysis?.dataState} /></div>
+    {neverAnalyzed ? <p className="operations-data-absence">아직 분석한 범위 없음</p> : <dl className="operations-data-metrics">
+      <Metric label="기준 시각">{time(runtimeAnalysis.referenceTime)}</Metric><Metric label="생성 시각">{time(runtimeAnalysis.createdAt)}</Metric><Metric label="만료 시각">{time(runtimeAnalysis.expiresAt)}</Metric>
+      <Metric label="분석 유효성">{runtimeAnalysis.snapshotExpired ? '만료됨' : '유효함'}</Metric><Metric label="horizon">{runtimeAnalysis.horizonMinutes == null ? '확인 정보 없음' : `${runtimeAnalysis.horizonMinutes}분`}</Metric><Metric label="필요 자전거 수">{runtimeAnalysis.requiredBikeCount == null ? '확인 정보 없음' : `${runtimeAnalysis.requiredBikeCount}대`}</Metric>
+      <Metric label="분석 대상 대여소 수">{count(runtimeAnalysis.eligibleStationCount)}</Metric><Metric label="분석 완료 대여소 수">{count(runtimeAnalysis.evaluatedStationCount)}</Metric><Metric label="정상 추론 성공 수">{count(runtimeAnalysis.normalInferenceSuccessCount)}</Metric>
+    </dl>}
+  </section>;
+}
+
+function RuntimeAnalysisGuidance({ limitations }) {
+  const scopeRequired = limitations?.includes('ANALYSIS_SCOPE_REQUIRED');
+  const expired = limitations?.includes('ANALYSIS_SNAPSHOT_EXPIRED');
+  if (!scopeRequired && !expired) return null;
+  return <p className="operations-data-scope-guidance">{expired ? '이전 분석이 만료됐습니다. ' : '아직 분석한 범위가 없습니다. '}<a href="/admin/ops/risk-map">수급 위험 지도에서 범위를 분석해 주세요.</a></p>;
 }
 
 function Profile({ profile }) {
@@ -86,8 +104,9 @@ function StatusCriteria() {
 function SourceSummary({ result }) {
   const rows = [
     ['대여소 재고', result?.inventory?.latestCollectedAt, result?.inventory?.dataState, result?.inventory?.expectedStationCount == null ? '확인 정보 없음' : `기대 대여소 ${count(result.inventory.expectedStationCount)}곳`],
-    ['예측 배치', result?.prediction?.publishedAt, result?.prediction?.dataState, result?.prediction ? `커버리지 ${ratio(result.prediction.coverageRatio)}` : '현재 예측 배치 없음'],
+    ['실시간 분석 범위', result?.runtimeAnalysis?.createdAt, result?.runtimeAnalysis?.dataState, result?.runtimeAnalysis?.hasRecentSnapshot ? `평가 완료 ${count(result.runtimeAnalysis.evaluatedStationCount)}곳` : '아직 분석한 범위 없음'],
     ['패턴/profile', result?.profile?.latestGeneratedAt, result?.profile?.dataState, result?.profile?.profileAvailableStationCount == null ? '확인 정보 없음' : `profile 보유 ${count(result.profile.profileAvailableStationCount)}곳`],
+    ['예측 배치 (이력)', result?.prediction?.publishedAt, result?.prediction?.dataState, result?.prediction ? `이력 전용 · 커버리지 ${ratio(result.prediction.coverageRatio)}` : '현재 예측 배치 없음'],
   ];
   return <section className="operations-data-source-summary" aria-labelledby="operations-data-source-summary-heading"><h2 id="operations-data-source-summary-heading">데이터 소스 상태</h2><table><caption>운영 판단에 쓰는 데이터 소스별 최신 시각과 상태</caption><thead><tr><th scope="col">데이터 소스</th><th scope="col">최신 수집 시각</th><th scope="col">상태</th><th scope="col">커버리지 / 비고</th></tr></thead><tbody>{rows.map(([name, collectedAt, state, note]) => <tr key={name}><th scope="row">{name}</th><td>{time(collectedAt)}</td><td><State value={state} /></td><td>{note}</td></tr>)}</tbody></table></section>;
 }
@@ -119,5 +138,5 @@ export default function OperationsDataStatusPage({ createAdapter }) {
 
   if (loading) return <AsyncStatePanel state="LOADING" />;
   if (error) return <RequestError error={error} onRetry={retry} />;
-  return <main className="operations-data-page" aria-label="운영 데이터 상태"><header className="operations-data-header"><div><p className="operations-data-eyebrow">UI-OPS-05 · DATA_STATUS_READ</p><h1>운영 데이터 상태</h1><p>현재 운영 위험 판단에 쓰는 데이터의 freshness/coverage 확인.</p></div><dl><Metric label="전체 데이터 상태"><State value={result?.dataState} /></Metric><Metric label="기준 시각">{time(result?.referenceTime)}</Metric><Metric label="생성 시각">{time(result?.generatedAt)}</Metric></dl></header><StatusCriteria /><p className="operations-data-safety-notice">결측 데이터는 정상 값으로 대체하지 않습니다.</p><SourceSummary result={result} /><Inventory inventory={result?.inventory} /><div className="operations-data-supporting"><Prediction prediction={result?.prediction} /><Profile profile={result?.profile} /></div><Limitations limitations={result?.limitations} /></main>;
+  return <main className="operations-data-page" aria-label="운영 데이터 상태"><header className="operations-data-header"><div><p className="operations-data-eyebrow">UI-OPS-05 · DATA_STATUS_READ</p><h1>운영 데이터 상태</h1><p>현재 운영 위험 판단에 쓰는 데이터의 freshness/coverage 확인.</p></div><dl><Metric label="전체 데이터 상태"><State value={result?.dataState} /></Metric><Metric label="기준 시각">{time(result?.referenceTime)}</Metric><Metric label="생성 시각">{time(result?.generatedAt)}</Metric></dl></header><StatusCriteria /><p className="operations-data-safety-notice">결측 데이터는 정상 값으로 대체하지 않습니다.</p><SourceSummary result={result} /><Inventory inventory={result?.inventory} /><RuntimeAnalysis runtimeAnalysis={result?.runtimeAnalysis} /><RuntimeAnalysisGuidance limitations={result?.limitations} /><div className="operations-data-supporting"><Prediction prediction={result?.prediction} /><Profile profile={result?.profile} /></div><Limitations limitations={result?.limitations} /></main>;
 }
