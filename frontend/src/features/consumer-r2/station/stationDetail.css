@@ -45,7 +45,7 @@
 .cr22-station__heatmap-legend i:nth-of-type(2) { background: #aee4df; }.cr22-station__heatmap-legend i:nth-of-type(3) { background: #62c0ba; }.cr22-station__heatmap-legend i:nth-of-type(4) { background: #198b88; }
 .cr22-station__metrics { display: grid; gap: 12px; margin: 0; }
 .cr22-station__metrics div { display: flex; justify-content: space-between; gap: 15px; border-bottom: 1px solid #e7edf3; padding-bottom: 12px; }.cr22-station__metrics div:last-child { border: 0; padding-bottom: 0; }
-.cr22-station__metrics dt { color: #617287; font-size: 14px; }.cr22-station__metrics dd { margin: 0; color: #183552; font-weight: 800; }
+.cr22-station__metrics dt { color: #617287; font-size: 14px; line-height: 1.45; }.cr22-station__metrics dd { margin: 0; color: #183552; font-weight: 800; }
 .cr22-station__nearby-list { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }.cr22-station__nearby-list li { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid #e7edf3; }.cr22-station__nearby-list li:last-child { border: 0; padding-bottom: 0; }
 .cr22-station__nearby-list strong, .cr22-station__nearby-list small { display: block; }.cr22-station__nearby-list strong { color: #213e5d; font-size: 14px; }.cr22-station__nearby-list small { margin-top: 3px; color: #536b83; font-size: 12px; }.cr22-station__nearby-list button { display: inline-flex; min-width: 44px; min-height: 44px; align-items: center; justify-content: center; gap: 2px; border: 0; background: transparent; color: #087c78; font-size: 12px; font-weight: 800; cursor: pointer; }
 .cr22-station__nearby-list button:hover { color: #005f5b; text-decoration: underline; }

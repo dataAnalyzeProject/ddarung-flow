@@ -64,10 +64,18 @@ test("requests a real bicycle route for the selected provider POI and all route 
   expect(screen.getByText("자전거")).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /Premium 라이딩 가이드/ })).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "다른 장소 선택" })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "접근성 우선" }));
+  expect(screen.getByRole("button", { name: "자전거도로 우선" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "편안한 길" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "최단 거리" })).toBeInTheDocument();
+  expect(screen.getByText("자전거도로를 우선해 경로를 찾습니다. 최단 경로보다 거리가 길 수 있어요.")).toBeInTheDocument();
+  expect(screen.getByLabelText("선택한 자전거 경로 정보")).toHaveTextContent("자전거도로 우선");
+  fireEvent.click(screen.getByRole("button", { name: "편안한 길" }));
   await waitFor(() => expect(adapter.loadRoute).toHaveBeenLastCalledWith(expect.objectContaining({ routeMode: "ACCESSIBLE" })));
+  expect(screen.getByText("카카오의 편안한길 기준으로 경로를 찾습니다.")).toBeInTheDocument();
+  expect(screen.getByLabelText("선택한 자전거 경로 정보")).toHaveTextContent("편안한 길");
   fireEvent.click(screen.getByRole("button", { name: "최단 거리" }));
   await waitFor(() => expect(adapter.loadRoute).toHaveBeenLastCalledWith(expect.objectContaining({ routeMode: "SHORTEST" })));
+  expect(screen.getByText("총 이동거리가 짧은 경로를 찾습니다.")).toBeInTheDocument();
 });
 
 test("keeps POI empty and POI provider error distinct", async () => {
@@ -179,7 +187,7 @@ test("clears an old route immediately and ignores a late route-mode response", a
   });
   render(<RideExplorePage adapter={adapter} stationId="ST-10" MapComponent={TestMap} />);
   fireEvent.click(await screen.findByRole("button", { name: "서울숲 선택" }));
-  fireEvent.click(await screen.findByRole("button", { name: "접근성 우선" }));
+  fireEvent.click(await screen.findByRole("button", { name: "편안한 길" }));
   expect(await screen.findByRole("heading", { name: "자전거 경로를 찾는 중…" })).toBeInTheDocument();
 
   await act(async () => bikeRequest.resolve(route));
@@ -187,7 +195,7 @@ test("clears an old route immediately and ignores a late route-mode response", a
 
   await act(async () => accessibleRequest.resolve({ ...route, durationSeconds: 1200 }));
   expect(await screen.findByText("약 20분")).toBeInTheDocument();
-  expect(screen.getAllByText("접근성 우선")).toHaveLength(2);
+  expect(screen.getAllByText("편안한 길")).toHaveLength(2);
 });
 
 test("does not request a route before the source station is available", async () => {

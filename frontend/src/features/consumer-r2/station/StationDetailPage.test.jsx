@@ -45,12 +45,17 @@ describe("StationDetailPage", () => {
 
   it("shows a normal station with a factual zero-bike count", async () => {
     await renderPage();
+    expect(screen.getByText("시간대별 품절 경향")).toBeInTheDocument();
+    expect(screen.getByText(/관측 기간 동안 이 요일·시간대에 자전거가 0대였던 비율입니다/)).toBeInTheDocument();
+    expect(screen.getByText("자전거가 다 떨어졌을 때")).toBeInTheDocument();
+    expect(screen.getByText("0대 상태가 보통 얼마나 이어지나요?")).toBeInTheDocument();
+    expect(screen.getByText("0대가 된 뒤 3대 이상으로 돌아오기까지")).toBeInTheDocument();
     expect(screen.getByText("0대")).toBeInTheDocument();
     expect(screen.getByText("정상")).toBeInTheDocument();
     expect(screen.getByText("12분")).toBeInTheDocument();
     expect(screen.getByTitle("월 8시 · 품절 관측률 30%")).toBeInTheDocument();
     expect(screen.getByText("월요일 8시 품절 관측률 30퍼센트")).toBeInTheDocument();
-    expect(screen.getByText(/미래의 대여 가능 대수를 예측하지 않습니다/)).toBeInTheDocument();
+    expect(screen.getByText(/미래 재고 예측은 아닙니다/)).toBeInTheDocument();
   });
 
   it("does not turn missing inventory into a normal zero", async () => {

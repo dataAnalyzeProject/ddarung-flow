@@ -279,6 +279,28 @@ test("renders a supplied fresh Alerts result with its matching restored inputs w
   expect(services.fetchRouteCandidates).not.toHaveBeenCalled();
 });
 
+test("shows two supported sort options, retains distance evidence, and falls back from legacy DISTANCE", async () => {
+  const onViewChange = jest.fn();
+  const sortableCandidates = [
+    { ...candidates[0], arrivalAt: candidates[1].arrivalAt },
+    { ...candidates[1], arrivalAt: candidates[0].arrivalAt },
+  ];
+  const { container, rerender } = render(<ConsumerMainPage currentResult={{ candidates: sortableCandidates }} currentView={{ selectedStationId: "ST-2", sortKey: "DISTANCE" }} restoreSearch={searchInput} services={createServices()} mapRenderer={PreviewMap} onViewChange={onViewChange} />);
+  await screen.findByRole("heading", { name: "추천 대여소" });
+  const sort = screen.getByRole("combobox", { name: "후보 정렬 기준" });
+  expect([...sort.options].map((option) => option.text)).toEqual(["대여 가능성 높은 순", "빨리 도착하는 순"]);
+  expect(sort).toHaveValue("PROBABILITY");
+  expect(screen.queryByRole("option", { name: "거리 가까운 순" })).not.toBeInTheDocument();
+  expect(screen.getAllByText("3.1km")).not.toHaveLength(0);
+  expect(container.querySelector(".cr293-candidate strong")).toHaveTextContent("서울숲역 2번 출구");
+  expect(screen.getByText("뚝섬역 1번 출구").closest("button")).toHaveAttribute("aria-pressed", "true");
+  fireEvent.change(sort, { target: { value: "ARRIVAL" } });
+  expect(onViewChange).toHaveBeenLastCalledWith(expect.objectContaining({ selectedStationId: "ST-2", sortKey: "ARRIVAL" }));
+  rerender(<ConsumerMainPage currentResult={{ candidates: sortableCandidates }} currentView={{ selectedStationId: "ST-2", sortKey: "ARRIVAL" }} restoreSearch={searchInput} services={createServices()} mapRenderer={PreviewMap} onViewChange={onViewChange} />);
+  expect(await screen.findByRole("combobox", { name: "후보 정렬 기준" })).toHaveValue("ARRIVAL");
+  expect(container.querySelector(".cr293-candidate strong")).toHaveTextContent("뚝섬역 1번 출구");
+});
+
 test.each([undefined, { ...searchInput, requiredBikeCount: 0 }])("does not render supplied evidence without matching complete restore inputs", async (restoreSearch) => {
   const services = createServices({ loadPendingPrediction: jest.fn(() => null) });
   render(<ConsumerMainPage currentResult={{ candidates }} restoreSearch={restoreSearch} services={services} mapRenderer={PreviewMap} />);

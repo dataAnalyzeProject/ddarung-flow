@@ -217,8 +217,7 @@ function byNumberDesc(a, b) {
 
 const CANDIDATE_SORTS = [
   ["PROBABILITY", "대여 가능성 높은 순", (a, b) => byNumberDesc(a.probability, b.probability)],
-  ["ARRIVAL", "도착 빠른 순", (a, b) => byNumberAsc(toEpoch(a.arrivalAt), toEpoch(b.arrivalAt))],
-  ["DISTANCE", "거리 가까운 순", (a, b) => byNumberAsc(a.distanceMeters, b.distanceMeters)],
+  ["ARRIVAL", "빨리 도착하는 순", (a, b) => byNumberAsc(toEpoch(a.arrivalAt), toEpoch(b.arrivalAt))],
 ];
 
 function CandidateCard({ candidate, index, onSelect, selected }) {

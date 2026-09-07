@@ -92,16 +92,16 @@ function RhythmPanel({ rhythm, state }) {
   }), [cells]);
   if (state !== "ready" || cells.length < 20) {
     return (
-      <SurfaceCard title="평소 패턴">
+      <SurfaceCard title="시간대별 품절 경향">
         <p className="cr22-station__empty-copy">최근 90일의 관측 패턴을 아직 제공하지 않습니다.</p>
       </SurfaceCard>
     );
   }
 
   return (
-    <SurfaceCard title="평소 패턴" actions={<span className="cr22-station__history-label">최근 90일 관측</span>}>
-      <p className="cr22-station__panel-copy">시간대별 품절 관측률입니다. 미래 예측이 아닙니다.</p>
-      <div className="cr22-station__rhythm-tabs" role="tablist" aria-label="평소 패턴 보기 기준">
+    <SurfaceCard title="시간대별 품절 경향" actions={<span className="cr22-station__history-label">최근 90일 관측</span>}>
+      <p className="cr22-station__panel-copy">관측 기간 동안 이 요일·시간대에 자전거가 0대였던 비율입니다. 색이 진할수록 0대였던 경우가 많았습니다. 미래 재고 예측은 아닙니다.</p>
+      <div className="cr22-station__rhythm-tabs" role="tablist" aria-label="시간대별 품절 경향 보기 기준">
         {RHYTHM_VIEWS.map(([key, label]) => (
           <button key={key} type="button" role="tab" aria-selected={view === key} className={`cr22-station__rhythm-tab${view === key ? " is-active" : ""}`} onClick={() => setView(key)}>{label}</button>
         ))}
@@ -143,11 +143,12 @@ function RhythmPanel({ rhythm, state }) {
 function RhythmSummary({ rhythm, state }) {
   const duration = (value) => value !== null && value !== undefined && Number.isFinite(Number(value)) ? `${value}분` : "관측 없음";
   const metrics = [
-    ["한번 비면 보통", duration(rhythm?.stockout?.medianDurationMinutes)],
-    ["3대 이상 회복까지", duration(rhythm?.stockout?.medianRecoveryMinutesToThree)],
+    ["0대 상태가 보통 얼마나 이어지나요?", duration(rhythm?.stockout?.medianDurationMinutes)],
+    ["0대가 된 뒤 3대 이상으로 돌아오기까지", duration(rhythm?.stockout?.medianRecoveryMinutesToThree)],
   ];
   return (
-    <SurfaceCard title="품절·회복 패턴">
+    <SurfaceCard title="자전거가 다 떨어졌을 때">
+      <p className="cr22-station__panel-copy">과거에 자전거가 0대가 된 뒤 얼마나 오래 비어 있었고, 다시 채워지는 데 얼마나 걸렸는지 보여줍니다.</p>
       {state === "ready" ? (
         <dl className="cr22-station__metrics">
           {metrics.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}

@@ -22,9 +22,15 @@ const THEME_COPY = {
 };
 
 const ROUTE_MODE_COPY = {
-  BIKE_ONLY: "자전거 우선",
-  ACCESSIBLE: "접근성 우선",
+  BIKE_ONLY: "자전거도로 우선",
+  ACCESSIBLE: "편안한 길",
   SHORTEST: "최단 거리",
+};
+
+const ROUTE_MODE_DESCRIPTION = {
+  BIKE_ONLY: "자전거도로를 우선해 경로를 찾습니다. 최단 경로보다 거리가 길 수 있어요.",
+  ACCESSIBLE: "카카오의 편안한길 기준으로 경로를 찾습니다.",
+  SHORTEST: "총 이동거리가 짧은 경로를 찾습니다.",
 };
 
 function formatDistance(value) {
@@ -253,6 +259,7 @@ export default function RideExplorePage({
                 {!selectedPoi ? <section className="cr22-ride__route-prompt"><ConsumerIcon name="bike" size={24} /><h2>자전거 경로를 볼 장소를 선택하세요</h2><p>선택한 한 곳에 대해서만 실제 경로를 요청합니다.</p></section> : <>
                   <section className="cr22-ride__selection"><div><strong>{selectedPoi.name}</strong><span>{selectedPoi.address || selectedPoi.category || "주소 정보 없음"}</span></div><button type="button" onClick={clearPoi}>다른 장소 선택</button></section>
                   <div className="cr22-ride__modes" role="group" aria-label="자전거 경로 방식">{RIDE_ROUTE_MODES.map((value) => <button key={value} type="button" aria-pressed={routeMode === value} onClick={() => selectRouteMode(value)}>{ROUTE_MODE_COPY[value]}</button>)}</div>
+                  <p className="cr22-ride__mode-description">{ROUTE_MODE_DESCRIPTION[routeMode]}</p>
                   {routeState === "loading" ? <AsyncState state="loading" title="자전거 경로를 찾는 중…" description="실제 경로 제공자의 응답을 기다리고 있습니다." /> : null}
                   {routeState === "error" ? <AsyncState state="error" title="자전거 경로를 불러오지 못했습니다" description="장소는 확인되었지만 경로 제공자 연결에 실패했습니다." onAction={() => setRouteRetry((value) => value + 1)} /> : null}
                   {routeState === "success" ? <RouteSummary route={route} routeMode={route.routeMode} /> : null}

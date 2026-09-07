@@ -346,6 +346,15 @@
   min-height: clamp(30px, 5vh, 44px);
 }
 
+.cr22-ride__mode-description {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0 clamp(12px, 1.4vw, 20px) clamp(6px, 1.2vh, 14px);
+  color: #536b83;
+  font-size: clamp(12px, 1.9vh, 14px);
+  line-height: 1.45;
+}
+
 /* The map had shrunk to a 98px strip once the route panel took its height back.
    The chrome above the workspace - back link, page heading, station row, theme
    filters - is what funds it, so it tracks the viewport height too. */
