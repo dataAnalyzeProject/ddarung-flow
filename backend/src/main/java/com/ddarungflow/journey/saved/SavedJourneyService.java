@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
@@ -76,6 +77,12 @@ public class SavedJourneyService {
         repository.delete(saved);
     }
 
+    // Replay is an orchestration step, not a unit of work: it reads one owned row and then hands off
+    // to the Journey planner, which persists a brand new decision through its own write transaction.
+    // Inheriting the class-level read-only transaction made that INSERT run inside a read-only
+    // transaction, which PostgreSQL rejects outright (SQLSTATE 25006). Suspending the transaction here
+    // also keeps a pooled connection from being held across the current-evidence provider calls.
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public JourneyPlanService.Decision replay(Long userId, String savedJourneyId,
                                               SavedJourneyDtos.ReplayRequest request,
                                               Runnable requireAiEntitlement) {
