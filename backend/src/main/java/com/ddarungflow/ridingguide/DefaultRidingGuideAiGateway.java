@@ -22,6 +22,9 @@ public class DefaultRidingGuideAiGateway implements RidingGuideAiGateway {
             Every selected evidence ID must be an exact map key from the matching evidence map.
             Never use raw stationId or placeId text facts as evidence IDs.
             Keep the preview short and stayMinutes between 10 and 120.
+            Use locale ko-KR for all user-visible prose. guideSummary, rationale, and every stop rationale
+            must be natural Korean sentences and must contain Korean Hangul syllables. Source-provided place names,
+            station names, line names, and other proper nouns may retain their original spelling, but explanations must be Korean.
             guideSummary, rationale, every stop rationale, and every rationaleTags item must contain no numeric characters.
             Numbers are allowed only in the structured stayMinutes fields.
             Return factRefs and factValues as empty arrays.

@@ -56,6 +56,7 @@ test("returns a C01 direct entry to search results without changing the selected
   const onNavigate = jest.fn();
   render(<ConsumerRidingGuidePage stationId="ST-4" returnRoute="main" services={service({ accessState: "ACTIVE", guide: guide() })} onNavigate={onNavigate} />);
 
+  await screen.findByText("지금 출발하기 좋은 조건이에요.");
   await userEvent.click(await screen.findByRole("button", { name: "검색 결과로 돌아가기" }));
   expect(onNavigate).toHaveBeenCalledWith("main");
 });
@@ -64,6 +65,7 @@ test("keeps the Ride Explore return meaning when no C01 return intent exists", a
   const onNavigate = jest.fn();
   render(<ConsumerRidingGuidePage stationId="ST-4" services={service({ accessState: "ACTIVE", guide: guide() })} onNavigate={onNavigate} />);
 
+  await screen.findByText("지금 출발하기 좋은 조건이에요.");
   await userEvent.click(await screen.findByRole("button", { name: "대여소로 돌아가기" }));
   expect(onNavigate).toHaveBeenCalledWith("ride", "ST-4");
 });
@@ -103,6 +105,58 @@ test("keeps factual values visible while AI and unavailable facts stay explicit"
   expect(screen.getByRole("heading", { name: "확인된 주변 장소" })).toBeInTheDocument();
   expect(screen.getByText("서울숲")).toBeInTheDocument();
   expect(screen.queryByText(/AI_PROVIDER_UNAVAILABLE/)).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "AI 요약 다시 불러오기" })).toBeInTheDocument();
+  expect(screen.queryByText(/페이지를 다시 열어|새로고침/)).not.toBeInTheDocument();
+});
+
+test("retries an unavailable AI summary with the same request input", async () => {
+  const unavailable = guide({
+    status: "PARTIAL",
+    aiStatus: "UNAVAILABLE",
+    aiCode: "AI_PROVIDER_UNAVAILABLE",
+    ai: { summary: null, rationale: null, rationaleTags: [], itinerary: [] },
+  });
+  const services = {
+    load: jest.fn()
+      .mockResolvedValueOnce({ accessState: "ACTIVE", guide: unavailable })
+      .mockResolvedValueOnce({ accessState: "ACTIVE", guide: guide() }),
+  };
+  render(<ConsumerRidingGuidePage stationId="ST-4" guideContext={{ minutesAhead: 30, requiredBikeCount: 2 }} services={services} onNavigate={jest.fn()} />);
+
+  const retryButton = await screen.findByRole("button", { name: "AI 요약 다시 불러오기" });
+  await act(async () => {
+    userEvent.click(retryButton);
+    await Promise.resolve();
+  });
+  expect(await screen.findByText("지금 출발하기 좋은 조건이에요.")).toBeInTheDocument();
+  expect(services.load).toHaveBeenCalledTimes(2);
+  expect(services.load.mock.calls[1][0]).toEqual(services.load.mock.calls[0][0]);
+});
+
+test("keeps factual information and restores retry after a manual retry fails", async () => {
+  const unavailable = guide({
+    status: "PARTIAL",
+    aiStatus: "UNAVAILABLE",
+    aiCode: "AI_PROVIDER_UNAVAILABLE",
+    ai: { summary: null, rationale: null, rationaleTags: [], itinerary: [] },
+  });
+  const services = {
+    load: jest.fn()
+      .mockResolvedValueOnce({ accessState: "ACTIVE", guide: unavailable })
+      .mockRejectedValueOnce(new Error("NETWORK_ERROR")),
+  };
+  render(<ConsumerRidingGuidePage stationId="ST-4" services={services} onNavigate={jest.fn()} />);
+
+  const retryButton = await screen.findByRole("button", { name: "AI 요약 다시 불러오기" });
+  await act(async () => {
+    userEvent.click(retryButton);
+    await Promise.resolve();
+  });
+
+  expect(await screen.findByRole("button", { name: "AI 요약 다시 불러오기" })).toBeEnabled();
+  expect(screen.getByText("82%")).toBeInTheDocument();
+  expect(screen.getByText("7대")).toBeInTheDocument();
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 });
 
 test("does not relabel unselected factual POIs as AI recommendations", async () => {

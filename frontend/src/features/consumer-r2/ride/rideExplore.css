@@ -198,21 +198,17 @@
 .cr22-ride__route-summary dt { color: #6b7c91; font-size: 12px; }
 .cr22-ride__route-summary dd { margin: 5px 0 0; color: #172c47; font-size: 18px; font-weight: 900; font-variant-numeric: tabular-nums; }
 
-.cr22-ride__actions { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0 0 calc(38% + 22px); }
-
 @media (max-width: 980px) {
   .cr22-ride__workspace { grid-template-columns: minmax(300px, 42%) minmax(0, 58%); gap: 16px; }
   .cr22-ride__map { min-height: 430px; }
   .cr22-ride__route-summary dl { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 0; }
   .cr22-ride__route-summary dl > div:nth-child(3) { padding-left: 0; border-left: 0; }
-  .cr22-ride__actions { margin-left: calc(42% + 16px); }
 }
 
 @media (max-width: 760px) {
   .cr22-ride__workspace { grid-template-columns: 1fr; }
   .cr22-ride__route { grid-row: 1; }
   .cr22-ride__map { min-height: 360px; }
-  .cr22-ride__actions { margin-left: 0; }
 }
 
 @media (max-width: 520px) {
@@ -227,7 +223,6 @@
   .cr22-ride__modes { grid-template-columns: 1fr; }
   .cr22-ride__route-summary dl { grid-template-columns: 1fr 1fr; }
   .cr22-ride__route-summary dl > div { padding: 0 10px; }
-  .cr22-ride__actions { grid-template-columns: 1fr; }
 }
 
 /* Viewport fit (CONSUMER-R2-FIT-01).
@@ -321,8 +316,7 @@
 
 .cr22-ride__selection,
 .cr22-ride__modes,
-.cr22-ride__route-summary,
-.cr22-ride__actions {
+.cr22-ride__route-summary {
   flex: 0 0 auto;
 }
 

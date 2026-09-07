@@ -317,6 +317,28 @@ test("passes the selected candidate and current input conditions to destination 
   expect(onOpenStation).toHaveBeenCalledWith(expect.objectContaining({ stationId: "ST-1" }), searchInput);
 });
 
+test("keeps one condition action, four large transit actions, and a bell recheck utility", async () => {
+  const { container } = render(<ConsumerMainPage services={createServices()} mapRenderer={PreviewMap} />);
+  fireEvent.click(await screen.findByRole("button", { name: "대여 가능성 비교" }));
+  await screen.findByRole("heading", { name: "추천 대여소" });
+
+  expect(screen.getAllByRole("button", { name: "조건 다시 선택" })).toHaveLength(1);
+  expect(screen.queryByRole("button", { name: "새 비교 시작" })).not.toBeInTheDocument();
+  expect(container.querySelectorAll(".cr293-evidence__actions .cr22-button")).toHaveLength(4);
+  const recheck = screen.getByRole("button", { name: "출발 전 재확인 예약" });
+  expect(recheck).toHaveClass("cr293-evidence__recheck");
+  expect(recheck).toHaveAttribute("title", "출발 전 재확인 예약");
+  expect(recheck.querySelector("svg")).toBeInTheDocument();
+});
+
+test("keeps only three large actions for walk results", async () => {
+  const { container } = render(<ConsumerMainPage restoreSearch={{ ...searchInput, travelMode: "WALK" }} currentResult={{ candidates }} services={createServices()} mapRenderer={PreviewMap} />);
+
+  await screen.findByRole("heading", { name: "추천 대여소" });
+  expect(container.querySelectorAll(".cr293-evidence__actions .cr22-button")).toHaveLength(3);
+  expect(screen.queryByRole("button", { name: "대중교통 경로 상세" })).not.toBeInTheDocument();
+});
+
 test("shows provider-supplied transit fare, vehicle subtype, and stop endpoints without inventing missing facts", async () => {
   render(<ConsumerMainPage services={createServices()} mapRenderer={PreviewMap} />);
   await waitFor(() => expect(screen.getByRole("button", { name: "대여 가능성 비교" })).toBeEnabled());
@@ -326,6 +348,9 @@ test("shows provider-supplied transit fare, vehicle subtype, and stop endpoints 
   expect(screen.getByText(/1,400원/)).toBeInTheDocument();
   expect(screen.getByText("2호선 일반")).toBeInTheDocument();
   expect(screen.getByText("서울역 → 성수역")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "라이딩 가이드" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "대여소 상세" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "라이딩 둘러보기" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "경로 상세 닫기" }));
   expect(await screen.findByRole("heading", { name: "추천 대여소" })).toBeInTheDocument();
 });
@@ -461,7 +486,7 @@ test("restores and reports the selected candidate, sort, and route-detail presen
   expect(onViewChange).toHaveBeenLastCalledWith({ selectedStationId: "ST-1", sortKey: "ARRIVAL", showTransit: false });
 });
 
-test("keeps condition editing separate from an explicit new comparison", async () => {
+test("keeps condition editing while hiding the explicit new comparison action in RESULT", async () => {
   const onSearchComplete = jest.fn();
   const onStartNew = jest.fn();
   render(<ConsumerMainPage restoreSearch={searchInput} currentResult={{ candidates }} services={createServices()} mapRenderer={PreviewMap} onSearchComplete={onSearchComplete} onStartNew={onStartNew} />);
@@ -471,8 +496,9 @@ test("keeps condition editing separate from an explicit new comparison", async (
   expect(onStartNew).not.toHaveBeenCalled();
 
   render(<ConsumerMainPage restoreSearch={searchInput} currentResult={{ candidates }} services={createServices()} mapRenderer={PreviewMap} onStartNew={onStartNew} />);
-  fireEvent.click((await screen.findAllByRole("button", { name: "새 비교 시작" }))[0]);
-  expect(onStartNew).toHaveBeenCalledTimes(1);
+  expect(await screen.findByRole("heading", { name: "추천 대여소" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "새 비교 시작" })).not.toBeInTheDocument();
+  expect(onStartNew).not.toHaveBeenCalled();
 });
 
 test("reports restored conditions without re-emitting a supplied current result", async () => {

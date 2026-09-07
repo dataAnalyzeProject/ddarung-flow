@@ -1787,9 +1787,50 @@
    the window is too narrow for that. */
 .cr293-evidence__actions {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: clamp(0.3rem, 0.9vh, 0.6rem) clamp(0.3rem, 0.8vw, 0.7rem);
   margin-top: clamp(0.3rem, 0.9vh, 0.75rem);
+}
+
+.cr293-evidence__utility {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: clamp(0.25rem, 0.7vh, 0.5rem);
+}
+
+.cr293-evidence__recheck {
+  width: 2.75rem;
+  min-height: 2.75rem;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--cr22-color-line);
+  border-radius: 0.75rem;
+  background: #fff;
+  color: var(--cr22-color-muted);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.cr293-evidence__recheck:hover:not(:disabled) {
+  border-color: var(--cr22-color-blue);
+  background: var(--cr22-color-blue-soft);
+  color: var(--cr22-color-blue);
+}
+
+.cr293-evidence__recheck:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--cr22-color-blue) 35%, transparent);
+  outline-offset: 2px;
+}
+
+.cr293-evidence__recheck:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+@media (max-width: 980px) {
+  .cr293-evidence__actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .cr293-evidence__metadata {
