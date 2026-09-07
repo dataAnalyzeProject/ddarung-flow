@@ -6,7 +6,7 @@ function adapter(name = 'SUCCESS') { return () => ({ loadList: ({ cursor }) => P
 function noMap() { return Promise.reject(new Error('KAKAO_MAP_KEY_MISSING')); }
 function readyMap(node, maps, callbacks) { callbacks.onViewportChange('126,37,127,38'); return { setStations: jest.fn(), focusStation: jest.fn(), destroy: jest.fn() }; }
 
-afterEach(() => window.history.replaceState({}, '', '/'));
+afterEach(() => { window.history.replaceState({}, '', '/'); window.sessionStorage.clear(); });
 
 function makeError(error) { return Object.assign(new Error(error.message || 'error'), error); }
 
@@ -84,6 +84,37 @@ test('clears the selected station and snapshot context when the map viewport cha
   act(() => reportBounds('bbox-after-marker'));
   await waitFor(() => expect(loadList).toHaveBeenCalledWith(expect.objectContaining({ bbox: 'bbox-after-marker' })));
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
+
+test('hands a successful scope selection off to the ops dashboard via sessionStorage', async () => {
+  window.history.replaceState({}, '', '/admin-v2-preview/ops/risk-map?horizonMinutes=120&requiredBikeCount=3');
+  let reportBounds;
+  const loadList = jest.fn(() => Promise.resolve({ ...riskMapFixture(), snapshotId: 'snapshot-handoff' }));
+  render(<RiskMapPage
+    createDataAdapter={() => ({ loadList, loadDetail: (number) => Promise.resolve(detailFixture(number)) })}
+    loadMapSdk={() => Promise.resolve({})}
+    createMapAdapter={(node, maps, callbacks) => { reportBounds = callbacks.onViewportChange; return { setStations: jest.fn(), focusStation: jest.fn(), destroy: jest.fn() }; }}
+  />);
+
+  expect(window.sessionStorage.getItem('adminOpsRiskSnapshot:120:3')).toBeNull();
+  await waitFor(() => expect(reportBounds).toBeDefined());
+  act(() => reportBounds('bbox-scoped'));
+  await waitFor(() => expect(window.sessionStorage.getItem('adminOpsRiskSnapshot:120:3')).toBe('snapshot-handoff'));
+});
+
+test('does not write a snapshot key while the scope is too large to evaluate', async () => {
+  let reportBounds;
+  const loadList = jest.fn(() => Promise.reject(Object.assign(new Error('too large'), { code: 'RISK_SCOPE_TOO_LARGE' })));
+  render(<RiskMapPage
+    createDataAdapter={() => ({ loadList, loadDetail: (number) => Promise.resolve(detailFixture(number)) })}
+    loadMapSdk={() => Promise.resolve({})}
+    createMapAdapter={(node, maps, callbacks) => { reportBounds = callbacks.onViewportChange; return { setStations: jest.fn(), focusStation: jest.fn(), destroy: jest.fn() }; }}
+  />);
+
+  await waitFor(() => expect(reportBounds).toBeDefined());
+  act(() => reportBounds('bbox-too-large'));
+  await waitFor(() => expect(loadList).toHaveBeenCalled());
+  expect(window.sessionStorage.getItem('adminOpsRiskSnapshot:60:1')).toBeNull();
 });
 
 test('loads only after a map bounds callback and supports cursor append', async () => {
