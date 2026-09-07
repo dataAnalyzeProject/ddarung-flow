@@ -7,6 +7,7 @@ import { parseRiskMapQuery, riskMapFixtureName, updateRiskMapQuery } from './ris
 import RiskLegend from './RiskLegend';
 import RiskStationList from './RiskStationList';
 import RiskStationDrawer from './RiskStationDrawer';
+import { writeOpsRiskSnapshotId } from '../opsRiskSnapshotStorage.js';
 
 const isScopeTooLargeError = (candidate) =>
   candidate && (candidate.code === 'RISK_SCOPE_TOO_LARGE' || String(candidate.message || '').includes('RISK_SCOPE_TOO_LARGE'));
@@ -41,7 +42,12 @@ export default function RiskMapPage({ createDataAdapter, loadMapSdk = loadKakaoM
   const snapshotRef = useRef(null);
   useEffect(() => {
     snapshotRef.current = result?.snapshotId || null;
-  }, [result?.snapshotId]);
+    // Hand a successful scope selection off to the ops dashboard, keyed by
+    // the same horizon/required-bikes pair it reads on load — without this
+    // write, the dashboard's "우선 확인 Top 5" and risk map panels have no
+    // way to learn that a scope was ever chosen here.
+    if (result?.snapshotId) writeOpsRiskSnapshotId(filters.horizonMinutes, filters.requiredBikeCount, result.snapshotId);
+  }, [result?.snapshotId, filters.horizonMinutes, filters.requiredBikeCount]);
 
   const setManagedFilters = useCallback((next) => {
     const normalized = { ...filters, ...next };

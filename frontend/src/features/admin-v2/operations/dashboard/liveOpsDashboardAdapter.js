@@ -1,4 +1,5 @@
 import { adminFetch } from '../../auth/adminSession.js';
+import { clearOpsRiskSnapshotId, readOpsRiskSnapshotId } from '../opsRiskSnapshotStorage.js';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080';
 
@@ -26,13 +27,10 @@ function queryString({ horizonMinutes, requiredBikeCount, limit, snapshotId }) {
   return query.toString();
 }
 
-function snapshotKey(horizonMinutes, requiredBikeCount) { return `adminOpsRiskSnapshot:${horizonMinutes}:${requiredBikeCount}`; }
-
 export function createLiveOpsDashboardAdapter() {
   return {
     async load({ horizonMinutes, requiredBikeCount, signal }) {
-      const key = snapshotKey(horizonMinutes, requiredBikeCount);
-      const snapshotId = window.sessionStorage.getItem(key);
+      const snapshotId = readOpsRiskSnapshotId(horizonMinutes, requiredBikeCount);
       if (!snapshotId) {
         const overview = await request(`/api/v1/admin/ops/overview?${queryString({ horizonMinutes, requiredBikeCount })}`, signal);
         return { overview, risk: null, riskError: null };
@@ -49,7 +47,7 @@ export function createLiveOpsDashboardAdapter() {
         }
       } catch (error) {
         if (error.code !== 'RISK_SNAPSHOT_EXPIRED') throw error;
-        window.sessionStorage.removeItem(key);
+        clearOpsRiskSnapshotId(horizonMinutes, requiredBikeCount);
         const overview = await request(`/api/v1/admin/ops/overview?${queryString({ horizonMinutes, requiredBikeCount })}`, signal);
         return { overview, risk: null, riskError: null };
       }
