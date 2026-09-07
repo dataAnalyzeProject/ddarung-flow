@@ -4,6 +4,7 @@ import { fetchRouteCandidates } from "../../map/candidatesApi.js";
 import { searchPlaces } from "../../map/kakaoMapApi.js";
 import { getCurrentUser } from "../../login/authApi.js";
 import { clearPendingPrediction, loadPendingPrediction } from "../../login/loginStorage.js";
+import { fetchStationDetail, fetchStationLocations } from "../../station-detail/stationRhythmApi.js";
 import { adaptConsumerMainResponse, buildConsumerMainRequest } from "../adapters/main/index.js";
 import { restoreConsumerMainInput, saveConsumerMainPendingPrediction, toConsumerMainSearchInput } from "../adapters/main/consumerMainState.js";
 import { consumerPersonalAdapter } from "../adapters/personal/consumerPersonalAdapter.js";
@@ -22,6 +23,8 @@ import "../support/support.css";
 const DEFAULT_SERVICES = {
   clearPendingPrediction,
   fetchRouteCandidates,
+  fetchStationDetail,
+  fetchStationLocations,
   getCurrentUser,
   loadPendingPrediction,
   savePendingPrediction: saveConsumerMainPendingPrediction,
@@ -260,7 +263,7 @@ function RouteDetail({ candidate }) {
   );
 }
 
-function TransitWorkspace({ candidate, destination, mapRenderer, onClose, onOpenRide, onOpenStation, origin, transitHeadingRef }) {
+function TransitWorkspace({ authState, candidate, destination, mapRenderer, onClose, onOpenRide, onOpenStation, onStationBrowse, origin, stationServices, transitHeadingRef }) {
   const unavailable = candidate.predictionStatus !== "NORMAL" || candidate.routeStatus !== "NORMAL";
   const inventory = getInventoryPresentation(candidate);
   const tone = candidate.availabilityLevel === "HIGH" ? "success" : candidate.availabilityLevel === "MEDIUM" ? "warning" : "danger";
@@ -282,7 +285,7 @@ function TransitWorkspace({ candidate, destination, mapRenderer, onClose, onOpen
         <p>{candidate.probability === null ? "도착 시각은 표시된 대중교통 경로 기준이며, 대여 가능성은 현재 확인하지 못했습니다." : "도착 시각과 대여 가능성은 표시된 동일 대중교통 경로를 기준으로 계산했습니다."}</p>
       </aside>
       <div className="cr293-transit-view__route">
-        <ConsumerRouteMap candidate={candidate} destination={destination} mapRenderer={mapRenderer} origin={origin} />
+        <ConsumerRouteMap authState={authState} candidate={candidate} destination={destination} fetchStationDetail={stationServices.fetchStationDetail} fetchStationLocations={stationServices.fetchStationLocations} mapRenderer={mapRenderer} onStationDetail={onStationBrowse} origin={origin} />
         <div id="cr293-transit-detail"><RouteDetail candidate={candidate} /></div>
         <div className="cr293-transit-view__actions">
           <ConsumerButton variant="secondary" aria-controls="cr293-transit-detail" aria-expanded="true" onClick={onClose}>경로 상세 닫기</ConsumerButton>
@@ -294,7 +297,7 @@ function TransitWorkspace({ candidate, destination, mapRenderer, onClose, onOpen
   );
 }
 
-function ResultsWorkspace({ input, mapRenderer, onOpenRide, onOpenStation, onRecheck, onReset, onStartNew, onViewChange, places, recheckDisabled, result, selectedId, showTransit, sortKey }) {
+function ResultsWorkspace({ authState, input, mapRenderer, onOpenRide, onOpenStation, onRecheck, onReset, onStartNew, onStationBrowse, onViewChange, places, recheckDisabled, result, selectedId, showTransit, sortKey, stationServices }) {
   const resultHeadingRef = useRef(null);
   const transitHeadingRef = useRef(null);
   const ordered = useMemo(() => {
@@ -325,7 +328,7 @@ function ResultsWorkspace({ input, mapRenderer, onOpenRide, onOpenStation, onRec
       ) : conditionSummary}
       {result.viewState === "PARTIAL" ? <AsyncState state="partial" title="일부 후보의 근거를 확인하지 못했습니다" description="확인된 후보는 그대로 비교하고, 확인 불가 값은 0으로 표시하지 않았습니다." /> : null}
       {showTransit && selected.routeDetail ? (
-        <TransitWorkspace candidate={selected} destination={places.destination} mapRenderer={mapRenderer} onClose={() => onViewChange({ selectedStationId: selected.stationId, sortKey, showTransit: false })} onOpenRide={onOpenRide} onOpenStation={onOpenStation} origin={places.origin} transitHeadingRef={transitHeadingRef} />
+        <TransitWorkspace authState={authState} candidate={selected} destination={places.destination} mapRenderer={mapRenderer} onClose={() => onViewChange({ selectedStationId: selected.stationId, sortKey, showTransit: false })} onOpenRide={onOpenRide} onOpenStation={onOpenStation} onStationBrowse={onStationBrowse} origin={places.origin} stationServices={stationServices} transitHeadingRef={transitHeadingRef} />
       ) : (
         <section className="cr293-results" aria-label="대여소 추천 결과" aria-live="polite">
         <div className="cr293-results__list">
@@ -340,7 +343,7 @@ function ResultsWorkspace({ input, mapRenderer, onOpenRide, onOpenStation, onRec
           {ordered.map((candidate, index) => <CandidateCard key={candidate.stationId ?? index} candidate={candidate} index={index} selected={selected?.stationId === candidate.stationId} onSelect={(stationId) => onViewChange({ selectedStationId: stationId, sortKey, showTransit: false })} />)}
         </div>
         <div className="cr293-results__map">
-          {selected?.routeDetail ? <ConsumerRouteMap candidate={selected} destination={places.destination} mapRenderer={mapRenderer} origin={places.origin} /> : <div className="cr293-route-unavailable" role="status"><ConsumerIcon name="info" /><strong>선택한 후보의 경로를 확인할 수 없습니다.</strong><span>다른 후보를 선택해 주세요.</span></div>}
+          {selected?.routeDetail ? <ConsumerRouteMap authState={authState} candidate={selected} destination={places.destination} fetchStationDetail={stationServices.fetchStationDetail} fetchStationLocations={stationServices.fetchStationLocations} mapRenderer={mapRenderer} onStationDetail={onStationBrowse} origin={places.origin} /> : <div className="cr293-route-unavailable" role="status"><ConsumerIcon name="info" /><strong>선택한 후보의 경로를 확인할 수 없습니다.</strong><span>다른 후보를 선택해 주세요.</span></div>}
           <section className="cr293-evidence">
             <div className="cr293-evidence__strip">
               <div className="cr293-evidence__selected"><h2>선택한 경로: {selected.stationName}</h2><small>{formatDistance(selected.distanceMeters)}</small></div>
@@ -520,7 +523,7 @@ export default function ConsumerMainPage({ currentResult, currentView, mapRender
   if (state === "INITIAL" || state === "LOADING") content = <SearchWorkspace authState={authState} input={input} onChange={updateInput} onOpenPlanner={() => onNavigate?.("planner")} onSearch={submit} places={places} searchPlaces={services.searchPlaces} state={state} />;
   else if (state === "ERROR") content = <AsyncState state="error" title="추천 결과를 불러오지 못했습니다" description="입력은 그대로 보존했습니다. 잠시 후 다시 시도해 주세요." onAction={submit} />;
   else if (state === "EMPTY") content = <AsyncState state="empty" title="조건에 맞는 대여소를 찾지 못했습니다" description="확인 불가 값을 0으로 바꾸지 않았습니다. 조건을 바꿔 다시 찾아보세요." actionLabel="조건 다시 선택" onAction={reset} />;
-  else content = <ResultsWorkspace input={input} mapRenderer={mapRenderer} onOpenRide={(candidate) => onOpenRide?.(candidate, searchInput)} onOpenStation={(candidate) => onOpenStation?.(candidate, searchInput)} onRecheck={searchInput ? () => { setRecheckStatus("idle"); setRecheckOpen(true); } : undefined} onReset={reset} onStartNew={onStartNew} onViewChange={updateView} places={places} recheckDisabled={authState !== "authenticated" || recheckStatus === "saving"} result={result} selectedId={selectedId} showTransit={showTransit} sortKey={sortKey} />;
+  else content = <ResultsWorkspace authState={authState} input={input} mapRenderer={mapRenderer} onOpenRide={(candidate) => onOpenRide?.(candidate, searchInput)} onOpenStation={(candidate) => onOpenStation?.(candidate, searchInput)} onRecheck={searchInput ? () => { setRecheckStatus("idle"); setRecheckOpen(true); } : undefined} onReset={reset} onStartNew={onStartNew} onStationBrowse={(stationId) => onNavigate?.("station", stationId)} onViewChange={updateView} places={places} recheckDisabled={authState !== "authenticated" || recheckStatus === "saving"} result={result} selectedId={selectedId} showTransit={showTransit} sortKey={sortKey} stationServices={services} />;
 
   return (
     <ConsumerR2Theme className="cr293-page">
