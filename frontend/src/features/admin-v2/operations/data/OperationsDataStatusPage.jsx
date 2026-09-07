@@ -62,7 +62,7 @@ function Prediction({ prediction }) {
 
 function RuntimeAnalysis({ runtimeAnalysis }) {
   const neverAnalyzed = !runtimeAnalysis?.hasRecentSnapshot;
-  return <section className="operations-data-section" aria-labelledby="operations-data-runtime-analysis-heading"><div className="operations-data-section-heading"><div><h2 id="operations-data-runtime-analysis-heading">실시간 분석 범위 (on-demand)</h2><p>운영자가 수급 위험 지도에서 분석한 범위의 최신 상태입니다. 대여소 재고·profile과 함께 전체 데이터 상태에 반영됩니다.</p></div><State value={runtimeAnalysis?.dataState} /></div>
+  return <section className="operations-data-section" aria-labelledby="operations-data-runtime-analysis-heading"><div className="operations-data-section-heading"><div><h2 id="operations-data-runtime-analysis-heading">실시간 분석 범위 (on-demand)</h2><p>운영자가 수급 위험 지도에서 분석한 범위의 최신 상태입니다. 한 번에 한 범위만 다루고 2분 뒤 만료되므로 전체 데이터 상태에는 반영하지 않고 따로 표시합니다.</p></div><State value={runtimeAnalysis?.dataState} /></div>
     {neverAnalyzed ? <p className="operations-data-absence">아직 분석한 범위 없음</p> : <dl className="operations-data-metrics">
       <Metric label="기준 시각">{time(runtimeAnalysis.referenceTime)}</Metric><Metric label="생성 시각">{time(runtimeAnalysis.createdAt)}</Metric><Metric label="만료 시각">{time(runtimeAnalysis.expiresAt)}</Metric>
       <Metric label="분석 유효성">{runtimeAnalysis.snapshotExpired ? '만료됨' : '유효함'}</Metric><Metric label="horizon">{runtimeAnalysis.horizonMinutes == null ? '확인 정보 없음' : `${runtimeAnalysis.horizonMinutes}분`}</Metric><Metric label="필요 자전거 수">{runtimeAnalysis.requiredBikeCount == null ? '확인 정보 없음' : `${runtimeAnalysis.requiredBikeCount}대`}</Metric>
