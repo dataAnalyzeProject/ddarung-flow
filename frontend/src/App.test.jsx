@@ -13,14 +13,14 @@ jest.mock('./features/admin-v2/shell/AdminV2PreviewApp', () => () => <h1>Admin p
 jest.mock('./features/admin-v2/shell/AdminV2ProductionApp', () => () => <h1>Admin production</h1>);
 jest.mock('./features/consumer-r2/entry', () => ({
   LoginPage: () => <h1>Login</h1>,
-  OpeningPage: ({ onStart }) => <section><h1>Opening</h1><button onClick={onStart}>Opening CTA</button></section>,
+  OpeningPage: ({ onNavigate, onStart }) => <section><h1>Opening</h1><button onClick={onStart}>Opening CTA</button><button onClick={() => onNavigate('ride')}>Header ride</button></section>,
 }));
-jest.mock('./features/consumer-r2/main/ConsumerMainPage', () => function MockMain({ onNavigate, onOpenStation, onOpenRide, onInputChange, onSearchComplete, restoreSearch, currentResult }) {
+jest.mock('./features/consumer-r2/main/ConsumerMainPage', () => function MockMain({ currentResult, currentView, onInputChange, onNavigate, onOpenRide, onOpenStation, onSearchComplete, onStartNew, onViewChange, restoreSearch }) {
   const [liveCandidate, setLiveCandidate] = require('react').useState(null);
   require('react').useEffect(() => { mockMainRestoreChange(); }, [restoreSearch, currentResult]);
   return <section>
   <h1>Main</h1><output>{restoreSearch?.origin?.displayName || (typeof restoreSearch?.origin === 'string' ? restoreSearch.origin : '')}</output>
-  <output data-testid="main-input">{JSON.stringify(restoreSearch || null)}</output><output data-testid="main-result">{JSON.stringify(currentResult || null)}</output>
+  <output data-testid="main-input">{JSON.stringify(restoreSearch || null)}</output><output data-testid="main-result">{JSON.stringify(currentResult || null)}</output><output data-testid="main-view">{JSON.stringify(currentView || null)}</output>
   <button onClick={() => onOpenStation(liveCandidate || currentResult?.candidates?.[0] || { stationId: 'ST-1' }, restoreSearch)}>Station</button>
   <button onClick={() => onOpenRide(liveCandidate || currentResult?.candidates?.[0] || { stationId: 'ST-1' }, restoreSearch)}>Ride</button>
   <button onClick={() => { onInputChange(mockInputA); onSearchComplete(mockInputA, mockResultA); setLiveCandidate(mockResultA.candidates[0]); }}>Search A</button>
@@ -32,9 +32,11 @@ jest.mock('./features/consumer-r2/main/ConsumerMainPage', () => function MockMai
   <button onClick={() => onNavigate('mypage')}>Account</button>
   <button onClick={() => onNavigate('ride')}>Header ride</button>
   <button onClick={() => onNavigate('home')}>Header home</button>
+  <button onClick={() => onViewChange({ selectedStationId: 'ST-B', sortKey: 'DISTANCE', showTransit: true })}>Change result view</button>
+  <button onClick={onStartNew}>New comparison</button>
 </section>;
 });
-jest.mock('./features/consumer-r2/station/StationDetailPage', () => ({ stationId, onNavigate }) => <section><h1>Station {stationId}</h1><button onClick={() => onNavigate('ride', stationId)}>Ride</button><button onClick={() => onNavigate('ride')}>Header ride</button><button onClick={() => onNavigate('main')}>Back to results</button><button onClick={() => onNavigate('home')}>Home</button></section>);
+jest.mock('./features/consumer-r2/station/StationDetailPage', () => ({ stationId, onNavigate }) => <section><h1>Station {stationId}</h1><button onClick={() => onNavigate('ride', stationId)}>Ride</button><button onClick={() => onNavigate('ride')}>Header ride</button><button onClick={() => onNavigate('main')}>Back to results</button><button onClick={() => onNavigate('mypage')}>Account</button><button onClick={() => onNavigate('home')}>Home</button></section>);
 jest.mock('./features/consumer-r2/ride/RideExplorePage', () => ({ stationId, onNavigate }) => <section><h1>Ride {stationId}</h1><button onClick={() => onNavigate('guide', stationId)}>Guide</button><button onClick={() => onNavigate('ride')}>Header ride</button><button onClick={() => onNavigate('main')}>Back to results</button><button onClick={() => onNavigate('home')}>Home</button></section>);
 jest.mock('./features/consumer-r2/guide/ConsumerRidingGuidePage', () => ({ stationId, guideContext, onNavigate }) => <section><h1>Guide {stationId}</h1><output data-testid="guide-context">{JSON.stringify(guideContext)}</output><button onClick={() => onNavigate('ride')}>Header ride</button><button onClick={() => onNavigate('main')}>Back to results</button><button onClick={() => onNavigate('home')}>Home</button></section>);
 jest.mock('./features/consumer-r2/journey', () => {
@@ -51,12 +53,13 @@ jest.mock('./features/consumer-r2/personal', () => ({
   PersonalArchivePage: ({ authState, onNavigate, onReplay }) => <section><h1>Archive {authState}</h1>
     <button onClick={() => onNavigate('main', { restoreSearch: { origin: { displayName: '서울역' } } })}>Restore search</button>
     <button onClick={() => onReplay({ decisionId: 'replay-1' })}>Replay</button>
+    <button onClick={() => onNavigate('ride')}>Header ride</button>
   </section>,
-  PersonalMyPage: ({ adapter, onNavigate }) => <section><h1>Account</h1><button onClick={async () => { await adapter.logout(); onNavigate('archive'); }}>Logout</button></section>,
+  PersonalMyPage: ({ adapter, onNavigate }) => <section><h1>Account</h1><button onClick={() => onNavigate('ride')}>Header ride</button><button onClick={async () => { await adapter.logout(); onNavigate('archive'); }}>Logout</button></section>,
 }));
 jest.mock('./features/consumer-r2/support', () => ({
-  ConsumerQnaPage: ({ initialQuestionId }) => <h1>Qna {initialQuestionId}</h1>,
-  ConsumerAlertsPage: ({ onNavigate, onCurrentData, searchInput }) => <section><h1>Alerts</h1><output data-testid="alerts-input">{JSON.stringify(searchInput || null)}</output><button onClick={() => onNavigate('qna', { questionId: 'q1' })}>Answer</button><button onClick={() => onCurrentData({ kind: 'SEARCH_RECHECK', result: mockResultA }, mockInputA)}>Recheck A</button><button onClick={() => onCurrentData({ kind: 'SEARCH_RECHECK', result: mockResultB }, mockInputB)}>Recheck B</button><button onClick={() => onNavigate('main')}>Back to results</button><button onClick={() => onNavigate('home')}>Home</button></section>,
+  ConsumerQnaPage: ({ initialQuestionId, onNavigate }) => <section><h1>Qna {initialQuestionId}</h1><button onClick={() => onNavigate('ride')}>Header ride</button></section>,
+  ConsumerAlertsPage: ({ onNavigate, onCurrentData, searchInput }) => <section><h1>Alerts</h1><output data-testid="alerts-input">{JSON.stringify(searchInput || null)}</output><button onClick={() => onNavigate('qna', { questionId: 'q1' })}>Answer</button><button onClick={() => onCurrentData({ kind: 'SEARCH_RECHECK', result: mockResultA }, mockInputA)}>Recheck A</button><button onClick={() => onCurrentData({ kind: 'SEARCH_RECHECK', result: mockResultB }, mockInputB)}>Recheck B</button><button onClick={() => onNavigate('ride')}>Header ride</button><button onClick={() => onNavigate('main')}>Back to results</button><button onClick={() => onNavigate('home')}>Home</button></section>,
 }));
 
 const mockInputA = { origin: { providerId: 'origin-A', displayName: '출발 A', latitude: 37.55, longitude: 126.97 }, destination: { providerId: 'anchor-A', displayName: '대여 기준 A', latitude: 37.57, longitude: 126.98 }, travelMode: 'WALK', requiredBikeCount: 3 };
@@ -254,6 +257,12 @@ test('two search rechecks retain their own input/result pair across two browser 
   await screen.findByRole('heading', { name: 'Main' });
   expect(output('main-input')).toEqual(mockInputA);
   expect(output('main-result')).toEqual(mockResultA);
+  await act(async () => { window.history.forward(); });
+  await screen.findByRole('heading', { name: 'Alerts' });
+  await act(async () => { window.history.forward(); });
+  await screen.findByRole('heading', { name: 'Main' });
+  expect(output('main-input')).toEqual(mockInputB);
+  expect(output('main-result')).toEqual(mockResultB);
 });
 
 test('explicit archive restoration never receives the preceding Main result', async () => {
@@ -413,16 +422,149 @@ test('an explicit station ride still opens that station RideExplore', async () =
   expect(window.location.hash).toBe('#ride/ST-9');
 });
 
-test('global RIDING from a RESULT drops the stale result and hands back an empty INITIAL', async () => {
+test('active global RIDING is a no-op that preserves the fresh RESULT and history entry', async () => {
   visit('/#main');
   fireEvent.click(await screen.findByText('Search A'));
   expect(output('main-result')).toEqual(mockResultA);
+  const entryId = window.history.state.entryId;
 
   fireEvent.click(screen.getByText('Header ride'));
   await screen.findByRole('heading', { name: 'Main' });
   expect(window.location.hash).toBe('#main');
+  expect(window.history.state.entryId).toBe(entryId);
+  expect(output('main-result')).toEqual(mockResultA);
+  expect(output('main-input')).toEqual(mockInputA);
+});
+
+test('active global RIDING invalidates a RESULT exactly at expiry without adding history', async () => {
+  mockResultA.candidates[0].expiresAt = '2030-09-03T00:45:00Z';
+  visit('/#main');
+  fireEvent.click(await screen.findByText('Search A'));
+  const entryId = window.history.state.entryId;
+  const historyLength = window.history.length;
+  Date.now.mockReturnValue(Date.parse('2030-09-03T00:45:00Z'));
+
+  fireEvent.click(screen.getByText('Header ride'));
+  await waitFor(() => expect(window.history.state.entryId).not.toBe(entryId));
+  expect(window.history.length).toBe(historyLength);
+  expect(output('main-input')).toEqual(mockInputA);
   expect(output('main-result')).toBeNull();
+  expect(output('main-view')).toBeNull();
+});
+
+test('logout replaces an older selected-station history entry before Back or Forward can expose it', async () => {
+  visit('/#main');
+  fireEvent.click(await screen.findByText('Search A'));
+  const priorSessionId = window.history.state.searchSessionId;
+  fireEvent.click(screen.getByText('Station'));
+  await screen.findByRole('heading', { name: 'Station ST-A' });
+  fireEvent.click(screen.getByText('Account'));
+  fireEvent.click(await screen.findByText('Logout'));
+  await screen.findByRole('heading', { name: 'Archive anonymous' });
+  const historyLength = window.history.length;
+
+  await act(async () => { window.history.back(); });
+  await screen.findByRole('heading', { name: 'Account' });
+  await act(async () => { window.history.back(); });
+  await screen.findByRole('heading', { name: 'Main' });
+  await waitFor(() => expect(window.history.state.searchSessionId).not.toBe(priorSessionId));
+  expect(window.location.hash).toBe('#main');
+  expect(window.history.length).toBe(historyLength);
   expect(output('main-input')).toBeNull();
+  expect(output('main-result')).toBeNull();
+  expect(output('main-view')).toBeNull();
+  expect(screen.queryByRole('heading', { name: 'Station ST-A' })).not.toBeInTheDocument();
+
+  await act(async () => { window.history.forward(); });
+  await screen.findByRole('heading', { name: 'Account' });
+  await act(async () => { window.history.forward(); });
+  await screen.findByRole('heading', { name: 'Archive anonymous' });
+  expect(screen.queryByRole('heading', { name: 'Station ST-A' })).not.toBeInTheDocument();
+});
+
+test('logout clears old Main state but preserves the HOME route across Back and Forward', async () => {
+  visit('/');
+  fireEvent.click(await screen.findByText('Opening CTA'));
+  fireEvent.click(await screen.findByText('Search A'));
+  fireEvent.click(screen.getByText('Account'));
+  fireEvent.click(await screen.findByText('Logout'));
+  await screen.findByRole('heading', { name: 'Archive anonymous' });
+
+  await act(async () => { window.history.back(); });
+  await screen.findByRole('heading', { name: 'Account' });
+  await act(async () => { window.history.back(); });
+  await screen.findByRole('heading', { name: 'Main' });
+  expect(output('main-input')).toBeNull();
+  expect(output('main-result')).toBeNull();
+  await act(async () => { window.history.back(); });
+  await screen.findByRole('heading', { name: 'Opening' });
+  expect(window.location.pathname + window.location.hash).toBe('/');
+
+  await act(async () => { window.history.forward(); });
+  await screen.findByRole('heading', { name: 'Main' });
+  expect(output('main-input')).toBeNull();
+  expect(output('main-result')).toBeNull();
+});
+
+test.each([
+  ['HOME', 'home', 'Opening'],
+  ['mypage', 'mypage', 'Account'],
+  ['Q&A', 'qna', 'Qna'],
+  ['alerts', 'alerts', 'Alerts'],
+])('input in progress survives %s and global RIDING', async (_label, destination, heading) => {
+  visit('/#main');
+  fireEvent.click(await screen.findByText('Enter A'));
+  if (destination === 'mypage') fireEvent.click(screen.getByText('Account'));
+  else if (destination === 'qna') { fireEvent.click(screen.getByText('Alerts')); fireEvent.click(await screen.findByText('Answer')); }
+  else if (destination === 'alerts') fireEvent.click(screen.getByText('Alerts'));
+  else fireEvent.click(screen.getByText('Header home'));
+  await screen.findByRole('heading', { name: new RegExp(heading) });
+  fireEvent.click(screen.getByText('Header ride'));
+  await screen.findByRole('heading', { name: 'Main' });
+  expect(output('main-input')).toEqual(mockInputA);
+  expect(output('main-result')).toBeNull();
+});
+
+test.each([
+  ['HOME', 'home', 'Opening'],
+  ['mypage', 'mypage', 'Account'],
+  ['Q&A', 'qna', 'Qna'],
+  ['alerts', 'alerts', 'Alerts'],
+])('fresh multi-candidate RESULT and its selected/sort/route-detail view survive %s and RIDING', async (_label, destination, heading) => {
+  mockResultA.candidates.push({ stationId: 'ST-B', horizonMinutes: 90, predictionProbability: 0.74, arrivalAt: '2030-09-03T01:03:00Z', expiresAt: '2030-09-03T01:01:00Z', featureAsOf: '2030-09-03T00:39:00Z', routeDetail: { pathPoints: [[37.55, 126.97], [37.57, 126.98]], durationMinutes: 23 } });
+  visit('/#main');
+  fireEvent.click(await screen.findByText('Search A'));
+  fireEvent.click(screen.getByText('Change result view'));
+  if (destination === 'mypage') fireEvent.click(screen.getByText('Account'));
+  else if (destination === 'qna') { fireEvent.click(screen.getByText('Alerts')); fireEvent.click(await screen.findByText('Answer')); }
+  else if (destination === 'alerts') fireEvent.click(screen.getByText('Alerts'));
+  else fireEvent.click(screen.getByText('Header home'));
+  await screen.findByRole('heading', { name: new RegExp(heading) });
+  fireEvent.click(screen.getByText('Header ride'));
+  await screen.findByRole('heading', { name: 'Main' });
+  expect(output('main-input')).toEqual(mockInputA);
+  expect(output('main-result')).toEqual(mockResultA);
+  expect(output('main-view')).toEqual({ selectedStationId: 'ST-B', sortKey: 'DISTANCE', showTransit: true });
+});
+
+test('explicit new comparison creates an empty entry and never resumes the previous RESULT', async () => {
+  visit('/#main');
+  fireEvent.click(await screen.findByText('Search A'));
+  const resultEntry = window.history.state.entryId;
+  fireEvent.click(screen.getByText('New comparison'));
+  expect(window.history.state.entryId).not.toBe(resultEntry);
+  expect(output('main-input')).toBeNull();
+  expect(output('main-result')).toBeNull();
+  await act(async () => { window.history.back(); });
+  await waitFor(() => expect(window.history.state.entryId).toBe(resultEntry));
+  expect(output('main-result')).toEqual(mockResultA);
+  await act(async () => { window.history.forward(); });
+  await waitFor(() => expect(window.history.state.entryId).not.toBe(resultEntry));
+  expect(output('main-result')).toBeNull();
+  fireEvent.click(screen.getByText('Header home'));
+  fireEvent.click(await screen.findByText('Header ride'));
+  expect(output('main-input')).toBeNull();
+  expect(output('main-result')).toBeNull();
 });
 
 test('HOME and the in-screen back land in different places from the same Station', async () => {

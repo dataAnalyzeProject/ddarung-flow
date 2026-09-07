@@ -63,6 +63,15 @@ export function isFreshMainResult(result, now = Date.now()) {
     && result.candidates.every((candidate) => isFreshCandidate(candidate, now));
 }
 
+export function mainHistoryView(value = {}) {
+  const view = {
+    sortKey: ['PROBABILITY', 'ARRIVAL', 'DISTANCE'].includes(value?.sortKey) ? value.sortKey : 'PROBABILITY',
+    showTransit: value?.showTransit === true,
+  };
+  if (typeof value?.selectedStationId === 'string' && value.selectedStationId) view.selectedStationId = value.selectedStationId;
+  return view;
+}
+
 export function candidateGuideContext(stationId, candidate, input, decisionId = null, now = Date.now()) {
   if (!candidate || candidate.stationId !== stationId) return {};
   const remainingMinutes = !decisionId && isFreshCandidate(candidate, now)
@@ -77,10 +86,11 @@ export function candidateGuideContext(stationId, candidate, input, decisionId = 
 
 export function consumerHistoryState(value = {}) {
   const state = {};
-  for (const key of ['entryId', 'mainEntryId', 'selectedStationId', 'journeyDecisionId', 'questionId']) {
+  for (const key of ['entryId', 'mainEntryId', 'searchSessionId', 'selectedStationId', 'journeyDecisionId', 'questionId']) {
     if (typeof value?.[key] === 'string' && value[key]) state[key] = value[key];
   }
   if (value?.restoreSearch) state.restoreSearch = searchHistoryInput(value.restoreSearch);
+  if (value?.mainView) state.mainView = mainHistoryView(value.mainView);
   if (value?.journeyInput) state.journeyInput = journeyHistoryInput(value.journeyInput);
   if (typeof value?.guideContext?.stationId === 'string') {
     state.guideContext = guideContextForStation({ ...value.guideContext, minutesAhead: null }, value.guideContext.stationId);

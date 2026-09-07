@@ -1,15 +1,22 @@
-import { candidateGuideContext, consumerHistoryState, guideContextForStation, isFreshMainResult, journeyHistoryInput, routeFromHash, searchHistoryInput } from './consumerNavigation';
+import { candidateGuideContext, consumerHistoryState, guideContextForStation, isFreshMainResult, journeyHistoryInput, mainHistoryView, routeFromHash, searchHistoryInput } from './consumerNavigation';
 
 const input = { origin: { providerId: 'origin', displayName: '출발지', latitude: 37.5, longitude: 127 }, destination: { providerId: 'anchor', displayName: '대여 기준점', latitude: 37.6, longitude: 127.1 }, travelMode: 'WALK', requiredBikeCount: 2 };
 const now = Date.parse('2030-09-03T00:40:00Z');
 const candidate = { stationId: 'ST-A', arrivalAt: '2030-09-03T01:00:00Z', expiresAt: null, horizonMinutes: 60 };
 
 test('history retains only selected inputs and identifiers, never live result fields', () => {
-  const state = consumerHistoryState({ entryId: 'visit-A', mainEntryId: 'main-A', restoreSearch: { ...input, candidates: [{ probability: 0.7 }], origin: { ...input.origin, availableBikeCount: 8 } }, currentResult: { candidates: [] }, journeyInput: { ...input, departureAt: '2026-09-03T18:00', maxJourneyMinutes: 90, rentalProbability: 0.9 }, guideContext: { stationId: 'ST-A', originLatitude: 37.5, originLongitude: 127, minutesAhead: 73, requiredBikeCount: 2, arrivalAt: 'server-time', availableBikeCount: 8 } });
+  const state = consumerHistoryState({ entryId: 'visit-A', mainEntryId: 'main-A', searchSessionId: 'session-A', restoreSearch: { ...input, candidates: [{ probability: 0.7 }], origin: { ...input.origin, availableBikeCount: 8 } }, mainView: { selectedStationId: 'ST-A', sortKey: 'DISTANCE', showTransit: true, probability: 0.91 }, currentResult: { candidates: [] }, journeyInput: { ...input, departureAt: '2026-09-03T18:00', maxJourneyMinutes: 90, rentalProbability: 0.9 }, guideContext: { stationId: 'ST-A', originLatitude: 37.5, originLongitude: 127, minutesAhead: 73, requiredBikeCount: 2, arrivalAt: 'server-time', availableBikeCount: 8 } });
+  expect(state.searchSessionId).toBe('session-A');
   expect(state.restoreSearch).toEqual(input);
+  expect(state.mainView).toEqual({ selectedStationId: 'ST-A', sortKey: 'DISTANCE', showTransit: true });
   expect(JSON.stringify(state)).not.toMatch(/candidates|currentResult|probability|rentalProbability|availableBikeCount|arrivalAt/);
   expect(state.guideContext.minutesAhead).toBeNull();
   expect(state.guideContext.originLatitude).toBeNull();
+});
+
+test('main view history accepts only presentation state', () => {
+  expect(mainHistoryView({ selectedStationId: 'ST-A', sortKey: 'ARRIVAL', showTransit: true, routeDetail: { pathPoints: [] } })).toEqual({ selectedStationId: 'ST-A', sortKey: 'ARRIVAL', showTransit: true });
+  expect(mainHistoryView({ selectedStationId: 3, sortKey: 'UNKNOWN', showTransit: 'yes' })).toEqual({ sortKey: 'PROBABILITY', showTransit: false });
 });
 
 test('typed text stays input and does not become a selected provider location', () => {

@@ -391,6 +391,30 @@ test("reports the exact successful response once and invalidates it when resetti
   expect(screen.queryByRole("heading", { name: "추천 대여소" })).not.toBeInTheDocument();
 });
 
+test("restores and reports the selected candidate, sort, and route-detail presentation", async () => {
+  const onViewChange = jest.fn();
+  render(<ConsumerMainPage restoreSearch={searchInput} currentResult={{ candidates }} currentView={{ selectedStationId: "ST-2", sortKey: "DISTANCE", showTransit: true }} services={createServices()} mapRenderer={PreviewMap} onViewChange={onViewChange} />);
+  expect(await screen.findByRole("heading", { name: "뚝섬역 1번 출구까지 가는 길" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "경로 상세 닫기" }));
+  fireEvent.change(screen.getByLabelText("후보 정렬 기준"), { target: { value: "ARRIVAL" } });
+  fireEvent.click(screen.getByRole("button", { name: /서울숲역 2번 출구/ }));
+  expect(onViewChange).toHaveBeenLastCalledWith({ selectedStationId: "ST-1", sortKey: "ARRIVAL", showTransit: false });
+});
+
+test("keeps condition editing separate from an explicit new comparison", async () => {
+  const onSearchComplete = jest.fn();
+  const onStartNew = jest.fn();
+  render(<ConsumerMainPage restoreSearch={searchInput} currentResult={{ candidates }} services={createServices()} mapRenderer={PreviewMap} onSearchComplete={onSearchComplete} onStartNew={onStartNew} />);
+  await screen.findByRole("heading", { name: "추천 대여소" });
+  fireEvent.click(screen.getByRole("button", { name: "조건 다시 선택" }));
+  expect(onSearchComplete).toHaveBeenCalledWith(searchInput, null);
+  expect(onStartNew).not.toHaveBeenCalled();
+
+  render(<ConsumerMainPage restoreSearch={searchInput} currentResult={{ candidates }} services={createServices()} mapRenderer={PreviewMap} onStartNew={onStartNew} />);
+  fireEvent.click((await screen.findAllByRole("button", { name: "새 비교 시작" }))[0]);
+  expect(onStartNew).toHaveBeenCalledTimes(1);
+});
+
 test("reports restored conditions without re-emitting a supplied current result", async () => {
   const onInputChange = jest.fn();
   const onSearchComplete = jest.fn();
