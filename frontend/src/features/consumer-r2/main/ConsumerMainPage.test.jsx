@@ -57,6 +57,10 @@ function PreviewMap({ routeDetail: detail }) {
   return <div aria-label="테스트 경로 지도">경로 {detail.distanceMeters}m</div>;
 }
 
+function BrowsableMap({ candidate, onStationDetail }) {
+  return <div><output data-testid="prediction-map-candidate">{candidate.stationId}</output><button type="button" onClick={() => onStationDetail("ST-MAP")}>일반 대여소 상세 보기</button></div>;
+}
+
 test("shows only the input workspace before a result and restores completed place selections", async () => {
   const { container } = render(<ConsumerMainPage services={createServices()} mapRenderer={PreviewMap} />);
 
@@ -306,6 +310,18 @@ test("passes the selected candidate and current input conditions to destination 
   fireEvent.click(screen.getByRole("button", { name: "대여소 상세" }));
   expect(onOpenRide).toHaveBeenCalledWith(expect.objectContaining({ stationId: "ST-1", probability: 0.91 }), searchInput);
   expect(onOpenStation).toHaveBeenCalledWith(expect.objectContaining({ stationId: "ST-1" }), searchInput);
+});
+
+test("opens a browsed map station without changing the selected prediction candidate", async () => {
+  const onNavigate = jest.fn();
+  const onViewChange = jest.fn();
+  render(<ConsumerMainPage restoreSearch={searchInput} currentResult={{ candidates }} currentView={{ selectedStationId: "ST-2", sortKey: "DISTANCE", showTransit: false }} services={createServices()} mapRenderer={BrowsableMap} onNavigate={onNavigate} onViewChange={onViewChange} />);
+  expect(await screen.findByTestId("prediction-map-candidate")).toHaveTextContent("ST-2");
+
+  fireEvent.click(screen.getByRole("button", { name: "일반 대여소 상세 보기" }));
+  expect(onNavigate).toHaveBeenCalledWith("station", "ST-MAP");
+  expect(onViewChange).not.toHaveBeenCalled();
+  expect(screen.getByTestId("prediction-map-candidate")).toHaveTextContent("ST-2");
 });
 
 test("creates a search recheck only after the user confirms an explicit departure time", async () => {
