@@ -7,6 +7,7 @@ import com.ddarungflow.journey.ai.EvidenceSelectionValidator;
 import com.ddarungflow.journey.ai.JourneyAiGateway;
 import com.ddarungflow.journey.application.JourneyEvidencePort;
 import com.ddarungflow.journey.application.JourneyRentalPredictionPort;
+import com.ddarungflow.journey.persistence.JourneyDecisionRepository;
 import com.ddarungflow.map.KakaoMapClient;
 import com.ddarungflow.payment.Subscription;
 import com.ddarungflow.payment.SubscriptionPlan;
@@ -22,10 +23,12 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +36,7 @@ import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.nullValue;
@@ -40,6 +44,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
@@ -71,6 +76,7 @@ class SavedJourneyControllerTest {
     @Autowired private SavedJourneyIdempotencyKeyRepository idempotencyKeys;
     @Autowired private UsersRepository users;
     @Autowired private SubscriptionRepository subscriptions;
+    @Autowired private JourneyDecisionRepository journeyDecisions;
     @MockitoBean private JourneyRentalPredictionPort rentalPrediction;
     @MockitoBean private JourneyEvidencePort evidence;
     @MockitoBean private JourneyAiGateway aiGateway;
@@ -230,6 +236,61 @@ class SavedJourneyControllerTest {
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("JOURNEY_INTENT_INVALID"));
 
         verifyNoInteractions(rentalPrediction);
+    }
+
+    @Test
+    void replayPersistsTheNewDecisionOutsideAReadOnlyTransaction() throws Exception {
+        activatePremium(userA);
+        String savedId = savedJourneyId(save("replay-read-only", VALID_INPUT));
+        // The rental prediction runs in the same JourneyPlanService frame that afterwards persists the
+        // new decision, with no transaction boundary in between, so the transaction state observed here
+        // is the state the INSERT runs under. Staging (PostgreSQL) answered HTTP 500 because replay
+        // inherited the class-level read-only transaction and the decision INSERT was rejected with
+        // SQLSTATE 25006; H2 silently ignores read-only connections, which is why this stayed green.
+        AtomicReference<Boolean> readOnlyWhileReplaying = new AtomicReference<>();
+        doAnswer(invocation -> {
+            readOnlyWhileReplaying.set(TransactionSynchronizationManager.isCurrentTransactionReadOnly());
+            JourneyRentalPredictionPort.RentalPredictionRequest request = invocation.getArgument(0);
+            return List.of(rentalCandidate(request.departureAt(), request.requiredBikeCount()));
+        }).when(rentalPrediction).predict(any());
+
+        String replay = mvc.perform(post("/api/v1/saved-journeys/{id}/replay", savedId)
+                        .with(authentication(userA)).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content(frontendReplayRequest()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.decisionId").isNotEmpty())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(readOnlyWhileReplaying.get()).isFalse();
+        assertThat(journeyDecisions.findFirstByPublicIdAndUserIdOrderByRevisionDesc(decisionId(replay), userAUserId()))
+                .isPresent();
+    }
+
+    @Test
+    void replayWithOnlyTheCurrentFrontendDepartureAtReturnsAFreshDecisionEveryTime() throws Exception {
+        activatePremium(userA);
+        String savedId = savedJourneyId(save("replay-departure-only", VALID_INPUT));
+        String storedBefore = savedJourneys.findByUserIdAndPublicId(userAUserId(), savedId).orElseThrow()
+                .getReplayInputJson();
+
+        String firstReplay = mvc.perform(post("/api/v1/saved-journeys/{id}/replay", savedId)
+                        .with(authentication(userA)).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content(frontendReplayRequest()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.decisionId").isNotEmpty())
+                .andExpect(jsonPath("$.normalizedIntent.requestMode").value("FORM"))
+                .andExpect(jsonPath("$.normalizedIntent.requiredBikeCount").value(2))
+                .andReturn().getResponse().getContentAsString();
+        String secondReplay = mvc.perform(post("/api/v1/saved-journeys/{id}/replay", savedId)
+                        .with(authentication(userA)).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content(frontendReplayRequest()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.decisionId").isNotEmpty())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(decisionId(secondReplay)).isNotEqualTo(decisionId(firstReplay));
+        // Current rental evidence is re-collected per replay; nothing is served from the saved snapshot.
+        verify(rentalPrediction, times(2)).predict(any());
+        assertThat(savedJourneys.findByUserIdAndPublicId(userAUserId(), savedId).orElseThrow()
+                .getReplayInputJson()).isEqualTo(storedBefore);
+        assertThat(savedJourneys.countByUserId(userAUserId())).isEqualTo(1);
     }
 
     @Test
@@ -411,6 +472,11 @@ class SavedJourneyControllerTest {
         return mvc.perform(post("/api/v1/saved-journeys").with(authentication(userA)).with(csrf())
                         .header("Idempotency-Key", key).contentType(MediaType.APPLICATION_JSON).content(input))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+    }
+
+    // Exactly what the archive screen sends today: a new departure time and nothing else.
+    private String frontendReplayRequest() {
+        return "{\"departureAt\":\"" + Instant.now().plusSeconds(60).toString() + "\"}";
     }
 
     private String savedJourneyId(String response) throws Exception {
