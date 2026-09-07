@@ -16,7 +16,13 @@
   color: var(--admin-v2-ink);
   font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-variant-numeric: tabular-nums;
-  min-height: 100vh;
+  /* Viewport-fit shell (ADMIN-R2-FIT-01): the document never scrolls, the
+     content column does. 100vh is the fallback for browsers without dvh. */
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
 }
 
 .admin-v2-shell *, .admin-v2-shell *::before, .admin-v2-shell *::after { box-sizing: border-box; }
@@ -27,24 +33,29 @@
 .admin-v2-skip-link:focus-visible { top: 16px; }
 .admin-v2-page-grid { display: grid; gap: 24px; grid-template-columns: repeat(var(--admin-v2-grid-columns), minmax(0, 1fr)); }
 
-.admin-v2-header { align-items: center; background: var(--admin-v2-surface); border-bottom: 1px solid var(--admin-v2-border); display: flex; gap: 24px; justify-content: space-between; min-height: 80px; padding: 12px max(24px, calc((100vw - 1600px) / 2)); }
+.admin-v2-header { align-items: center; background: var(--admin-v2-surface); border-bottom: 1px solid var(--admin-v2-border); display: flex; gap: 24px; justify-content: space-between; flex: 0 0 auto; min-height: 80px; padding: 12px max(24px, calc((100% - 1600px) / 2)); }
 .admin-v2-brand { align-items: center; display: flex; flex: 0 0 auto; gap: 16px; min-width: max-content; }
 .admin-v2-brand img { display: block; height: 34px; object-fit: contain; width: auto; }
 .admin-v2-brand-context { border-left: 1px solid var(--admin-v2-border); color: var(--admin-v2-ink); font-size: .9rem; font-weight: 750; padding-left: 16px; }
-.admin-v2-header-context { align-items: center; display: flex; gap: 20px; justify-content: flex-end; min-width: 0; }
-.admin-v2-account-context { align-items: center; border-left: 1px solid var(--admin-v2-border); color: var(--admin-v2-muted); display: flex; font-size: .78rem; gap: 8px; max-width: 225px; padding-left: 16px; }
+.admin-v2-header-context { align-items: center; display: flex; flex: 0 1 auto; gap: 20px; justify-content: flex-end; min-width: 0; }
+.admin-v2-account-context { align-items: center; border-left: 1px solid var(--admin-v2-border); color: var(--admin-v2-muted); display: flex; flex: 0 0 auto; font-size: .78rem; gap: 8px; min-width: 0; padding-left: 16px; white-space: nowrap; }
+.admin-v2-account-context > span { flex: 0 0 auto; }
 .admin-v2-account-context strong { color: var(--admin-v2-ink); font-weight: 750; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.admin-v2-logout { background: transparent; border: 1px solid var(--admin-v2-border); border-radius: 7px; color: var(--admin-v2-muted); cursor: pointer; font-size: .78rem; font-weight: 700; min-height: 32px !important; padding: 5px 9px; }
+.admin-v2-logout { background: transparent; flex: 0 0 auto; white-space: nowrap; border: 1px solid var(--admin-v2-border); border-radius: 7px; color: var(--admin-v2-muted); cursor: pointer; font-size: .78rem; font-weight: 700; min-height: 32px !important; padding: 5px 9px; }
 .admin-v2-logout:hover:not(:disabled) { background: var(--admin-v2-surface); color: var(--admin-v2-ink); }
-.admin-v2-logout-error { background: #fff1f2; border-bottom: 1px solid #fecdd3; color: #9f1239; margin: 0; padding: 8px 24px; text-align: right; }
+.admin-v2-logout-error { background: #fff1f2; flex: 0 0 auto; border-bottom: 1px solid #fecdd3; color: #9f1239; margin: 0; padding: 8px 24px; text-align: right; }
 
 .admin-v2-console-switcher { background: #f5f6f5; border: 1px solid var(--admin-v2-border); border-radius: 10px; display: flex; gap: 2px; padding: 3px; }
 .admin-v2-console-switcher button, .admin-v2-nav button { background: transparent; border: 0; border-radius: 8px; color: var(--admin-v2-muted); cursor: pointer; font-weight: 700; padding: 8px 12px; }
 .admin-v2-console-switcher button[aria-current='page'] { background: var(--admin-v2-surface); box-shadow: 0 2px 5px rgba(16, 37, 74, .08); color: var(--admin-v2-accent); }
 
-.admin-v2-layout { display: grid; gap: 28px; grid-template-columns: 244px minmax(0, 1fr); margin: 0 auto; max-width: 1600px; padding: 28px 32px 44px; }
-.admin-v2-sidebar { align-self: start; padding: 8px 0; position: sticky; top: 20px; }
-.admin-v2-content { min-width: 0; }
+.admin-v2-layout { display: grid; flex: 1 1 auto; gap: 28px; grid-template-columns: 244px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); margin: 0 auto; max-width: 1600px; min-height: 0; padding: clamp(14px, 2.6vh, 28px) 32px clamp(14px, 2.6vh, 28px); width: 100%; }
+.admin-v2-sidebar { align-self: stretch; min-height: 0; overflow-y: auto; padding: 8px 0; }
+/* position: relative keeps visually-hidden `position: absolute` table captions
+   (candidates, audit, releases, analysis, data) inside this scroll container.
+   Without it they resolve against the initial containing block and stretch the
+   document back open — measured +209px on /admin/ops/data. */
+.admin-v2-content { min-height: 0; min-width: 0; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 4px; position: relative; scrollbar-gutter: stable; }
 .admin-v2-nav { display: grid; gap: 4px; list-style: none; margin: 0; padding: 0; }
 .admin-v2-nav button { display: flex; text-align: left; width: 100%; }
 .admin-v2-nav button[aria-current='page'] { background: var(--admin-v2-accent-soft); color: var(--admin-v2-accent); }
@@ -73,7 +84,7 @@
 .admin-v2-drawer > button:last-child { align-self: flex-start; margin-top: auto; }
 .admin-v2-dialog-backdrop { background: rgba(16, 37, 74, .44); display: grid; inset: 0; place-items: center; position: fixed; z-index: 40; }
 .admin-v2-dialog { background: #fff; border-radius: 12px; box-shadow: var(--admin-v2-shadow); max-width: 480px; padding: 24px; }
-.admin-v2-reference-time { align-items: center; color: var(--admin-v2-muted); display: flex; font-size: .78rem; gap: 8px; margin: 0; white-space: nowrap; }
+.admin-v2-reference-time { align-items: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--admin-v2-muted); display: flex; font-size: .78rem; gap: 8px; margin: 0; white-space: nowrap; }
 .admin-v2-preview-badge { background: #fff8e8; border: 1px solid #ead39c; border-radius: 999px; color: #8a5b00; font-size: .72rem; font-weight: 800; padding: 3px 8px; }
 
 @media (max-width: 1180px) {
@@ -84,8 +95,8 @@
 }
 
 @media (max-width: 960px) {
-  .admin-v2-layout { grid-template-columns: 1fr; }
-  .admin-v2-sidebar { background: var(--admin-v2-surface); border: 1px solid var(--admin-v2-border); border-radius: 12px; padding: 8px; position: static; }
+  .admin-v2-layout { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+  .admin-v2-sidebar { align-self: start; background: var(--admin-v2-surface); border: 1px solid var(--admin-v2-border); border-radius: 12px; overflow: visible; padding: 8px; }
   .admin-v2-nav { display: flex; gap: 4px; overflow-x: auto; }
   .admin-v2-nav li { flex: 0 0 auto; }
   .admin-v2-nav button[aria-current='page'] { border-radius: 8px; }
