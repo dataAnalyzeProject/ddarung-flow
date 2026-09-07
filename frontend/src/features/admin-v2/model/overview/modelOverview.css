@@ -6,12 +6,12 @@
 .model-overview-eyebrow { color: var(--admin-v2-accent) !important; font-size: .75rem !important; font-weight: 800; letter-spacing: .06em; margin-top: 0 !important; }
 .model-overview-source { color: var(--admin-v2-ink); font-size: .8125rem; font-weight: 700; padding: 6px 0; white-space: nowrap; }
 .model-overview-service-card, .model-overview-section, .model-overview-summary-grid article, .model-overview-limitation { background: var(--admin-v2-surface); border: 1px solid var(--admin-v2-border); border-radius: 12px; }
-.model-overview-service-card { align-items: center; box-shadow: var(--admin-v2-shadow); display: grid; gap: 24px; grid-template-columns: 94px minmax(190px, .55fr) minmax(0, 1.45fr); min-height: 160px; padding: 28px; }
+.model-overview-service-card { align-items: center; box-shadow: var(--admin-v2-shadow); display: grid; gap: clamp(16px, 1.6vw, 24px); grid-template-columns: clamp(64px, 5vw, 94px) minmax(240px, .74fr) minmax(0, 1.26fr); min-height: 0; padding: clamp(14px, 2vh, 28px); }
 .model-overview-service-identity { border-right: 1px solid var(--admin-v2-border); }
 .model-overview-service-card p { color: var(--admin-v2-muted); font-size: .8125rem; line-height: 1.55; margin: 0; }
-.model-overview-service-card h2 { color: #f97316; font-size: clamp(1.7rem, 2.5vw, 2.25rem); letter-spacing: -.03em; margin-top: 5px; }
-.model-overview-unknown-icon, .model-overview-state-icon, .model-overview-summary-icon, .model-overview-limitation-icon { align-items: center; display: inline-flex; justify-content: center; }
-.model-overview-unknown-icon { background: #fff5e7; border: 1px solid #fed7aa; border-radius: 50%; color: #f97316; height: 86px; width: 86px; }.model-overview-unknown-icon svg { height: 45px; width: 45px; }
+.model-overview-service-card h2 { color: #f97316; font-size: clamp(1.15rem, 1.5vw, 1.6rem); letter-spacing: -.03em; margin-top: 5px; overflow-wrap: anywhere; }
+.model-overview-service-icon, .model-overview-state-icon, .model-overview-summary-icon, .model-overview-limitation-icon { align-items: center; display: inline-flex; justify-content: center; }
+.model-overview-service-icon { background: #fff5e7; border: 1px solid #fed7aa; border-radius: 50%; color: #f97316; height: clamp(58px, 7vh, 86px); width: clamp(58px, 7vh, 86px); }.model-overview-service-icon svg { height: clamp(32px, 4vh, 45px); width: clamp(32px, 4vh, 45px); }
 .model-overview-service-copy { display: grid; gap: 7px; }
 .model-overview-service-copy strong { font-size: clamp(1rem, 1.4vw, 1.25rem); font-weight: 750; line-height: 1.45; max-width: 580px; }
 .model-overview-section { box-shadow: var(--admin-v2-shadow); padding: 22px; }
@@ -33,5 +33,5 @@
 .model-overview-limitation p { color: var(--admin-v2-muted); font-size: .8125rem; line-height: 1.5; margin: 5px 0 0; max-width: 760px; }
 .model-overview-limitation nav { display: flex; flex: 0 0 auto; flex-wrap: wrap; gap: 12px; }
 .model-overview-limitation a { color: var(--admin-v2-accent); font-size: .8125rem; font-weight: 800; text-underline-offset: 3px; }
-@media (max-width: 1024px) { .model-overview-service-card { grid-template-columns: 78px minmax(160px, .7fr) minmax(0, 1.3fr); padding: 22px; }.model-overview-unknown-icon { height: 68px; width: 68px; } .model-overview-count-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }.model-overview-count-card { min-height: 190px; } }
-@media (max-width: 760px) { .model-overview-header, .model-overview-limitation { align-items: start; flex-direction: column; } .model-overview-header { gap: 2px; }.model-overview-service-card { grid-template-columns: 68px 1fr; }.model-overview-service-copy { border-top: 1px solid var(--admin-v2-border); grid-column: 1 / -1; padding-top: 16px; }.model-overview-service-identity { border-right: 0; } .model-overview-count-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .model-overview-summary-grid { grid-template-columns: 1fr; } }
+@media (max-width: 1024px) { .model-overview-service-card { grid-template-columns: 78px minmax(200px, .8fr) minmax(0, 1.2fr); padding: 22px; }.model-overview-service-icon { height: 68px; width: 68px; } .model-overview-count-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }.model-overview-count-card { min-height: 190px; } }
+@media (max-width: 760px) { .model-overview-header, .model-overview-limitation { align-items: start; flex-direction: column; } .model-overview-header { gap: 2px; }.model-overview-service-card { grid-template-columns: 68px minmax(0, 1fr); }.model-overview-service-copy { border-top: 1px solid var(--admin-v2-border); grid-column: 1 / -1; padding-top: 16px; }.model-overview-service-identity { border-right: 0; } .model-overview-count-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .model-overview-summary-grid { grid-template-columns: 1fr; } }
