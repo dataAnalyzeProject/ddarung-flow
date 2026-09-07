@@ -8,6 +8,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.lang.reflect.Method;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -130,6 +133,50 @@ class RetentionServiceTest {
 
             assertThatThrownBy(() -> retentionService.addSavedRoute(1L, "ROUTE", "서울역", new BigDecimal("37.55"), new BigDecimal("126.97"), "광화문", new BigDecimal("37.57"), new BigDecimal("126.98"), null, "WALK", null, 2))
                     .isInstanceOf(IllegalStateException.class).hasMessageContaining("최대 10개");
+        }
+
+        @Test
+        @DisplayName("구세대 저장 경로는 목록 조회에서 그대로 반환된다")
+        void getSavedRoutes_ReturnsLegacyRowsForTheOwner() {
+            // GET /api/v1/saved-routes concatenates current-generation and legacy rows, so users who
+            // saved before saved_prediction_routes existed still see their entries.
+            SavedRoute legacy = SavedRoute.builder().userId(1L).name("출발 → 도착").startStationId(1L)
+                    .startStationName("출발").endStationId(2L).endStationName("도착").travelMode("BIKE").build();
+            given(savedRouteRepository.findByUserIdOrderByCreatedAtDesc(1L)).willReturn(List.of(legacy));
+
+            assertThat(retentionService.getSavedRoutes(1L)).containsExactly(legacy);
+        }
+
+        @Test
+        @DisplayName("현세대에 없는 id는 구세대 저장 경로를 삭제한다")
+        void deleteSavedRoute_FallsThroughToTheLegacyRow() {
+            SavedRoute legacy = SavedRoute.builder().userId(1L).name("출발 → 도착").startStationId(1L)
+                    .startStationName("출발").endStationId(2L).endStationName("도착").travelMode("BIKE").build();
+            given(savedPredictionRouteRepository.findByUserIdAndId(1L, 7L)).willReturn(Optional.empty());
+            given(savedRouteRepository.findByUserIdAndId(1L, 7L)).willReturn(Optional.of(legacy));
+
+            retentionService.deleteSavedRoute(1L, 7L);
+
+            verify(savedRouteRepository).delete(legacy);
+        }
+
+        @Test
+        @DisplayName("모든 저장 경로 쓰기 메서드는 읽기 전용이 아닌 자체 트랜잭션을 선언한다")
+        void savedRouteWriters_DeclareTheirOwnReadWriteTransaction() throws Exception {
+            // RetentionService is annotated @Transactional(readOnly = true) at class level, so a writer
+            // without its own @Transactional inherits it and PostgreSQL rejects the INSERT with SQLSTATE
+            // 25006. H2 ignores read-only connections, so only the declaration can be checked here.
+            Method legacyWriter = RetentionService.class.getMethod("addSavedRoute", Long.class, String.class,
+                    Long.class, String.class, Long.class, String.class, String.class);
+            Method currentWriter = RetentionService.class.getMethod("addSavedRoute", Long.class, String.class,
+                    String.class, BigDecimal.class, BigDecimal.class, String.class, BigDecimal.class,
+                    BigDecimal.class, String.class, String.class, Integer.class, Integer.class);
+
+            for (Method writer : List.of(legacyWriter, currentWriter)) {
+                Transactional transactional = writer.getAnnotation(Transactional.class);
+                assertThat(transactional).as("%s must declare @Transactional", writer).isNotNull();
+                assertThat(transactional.readOnly()).as("%s must not be read-only", writer).isFalse();
+            }
         }
 
         @Test

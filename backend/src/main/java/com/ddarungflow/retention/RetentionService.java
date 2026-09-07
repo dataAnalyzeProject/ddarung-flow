@@ -105,7 +105,11 @@ public class RetentionService {
     }
 
     /** Legacy writer retained only for V1 compatibility tests; new API writes saved_prediction_routes. */
+    // Declares its own read-write transaction like every other writer here: without it the method
+    // inherited the class-level read-only transaction, and PostgreSQL rejects the INSERT outright
+    // (SQLSTATE 25006). The legacy read and delete paths are still live, so the method is kept.
     @Deprecated
+    @Transactional
     public SavedRoute addSavedRoute(Long userId, String name, Long startStationId, String startStationName,
                                     Long endStationId, String endStationName, String travelMode) {
         if (savedRouteRepository.countByUserId(userId) >= MAX_SAVED_ROUTES) throw new IllegalStateException("저장 경로는 최대 " + MAX_SAVED_ROUTES + "개까지 저장할 수 있습니다.");
