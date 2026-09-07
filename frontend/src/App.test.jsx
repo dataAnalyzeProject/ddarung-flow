@@ -55,7 +55,7 @@ jest.mock('./features/consumer-r2/personal', () => ({
     <button onClick={() => onReplay({ decisionId: 'replay-1' })}>Replay</button>
     <button onClick={() => onNavigate('ride')}>Header ride</button>
   </section>,
-  PersonalMyPage: ({ adapter, onNavigate }) => <section><h1>Account</h1><button onClick={() => onNavigate('ride')}>Header ride</button><button onClick={async () => { await adapter.logout(); onNavigate('archive'); }}>Logout</button></section>,
+  PersonalMyPage: ({ adapter, onNavigate }) => <section><h1>Account</h1><button onClick={() => onNavigate('ride')}>Header ride</button><button onClick={async () => { await adapter.logout(); onNavigate('archive'); }}>Logout</button><button onClick={async () => { await adapter.logout(); onNavigate('main'); }}>Logout to main</button></section>,
 }));
 jest.mock('./features/consumer-r2/support', () => ({
   ConsumerQnaPage: ({ initialQuestionId, onNavigate }) => <section><h1>Qna {initialQuestionId}</h1><button onClick={() => onNavigate('ride')}>Header ride</button></section>,
@@ -184,6 +184,39 @@ test('logout updates App auth before another personal route opens', async () => 
   fireEvent.click(await screen.findByText('Logout'));
   expect(await screen.findByRole('heading', { name: 'Archive anonymous' })).toBeInTheDocument();
   expect(logout).toHaveBeenCalledTimes(1);
+});
+
+test('logout returns to the same fresh RESULT while moving it into the anonymous session', async () => {
+  mockResultA.candidates.push({ stationId: 'ST-B', horizonMinutes: 90, predictionProbability: 0.74, arrivalAt: '2030-09-03T01:03:00Z', expiresAt: '2030-09-03T01:01:00Z', featureAsOf: '2030-09-03T00:39:00Z', routeDetail: { pathPoints: [[37.55, 126.97], [37.57, 126.98]], durationMinutes: 23 } });
+  visit('/#main');
+  fireEvent.click(await screen.findByText('Search A'));
+  fireEvent.click(screen.getByText('Change result view'));
+  const priorSessionId = window.history.state.searchSessionId;
+  fireEvent.click(screen.getByText('Account'));
+  fireEvent.click(await screen.findByText('Logout to main'));
+
+  await screen.findByRole('heading', { name: 'Main' });
+  expect(window.location.hash).toBe('#main');
+  expect(window.history.state.searchSessionId).not.toBe(priorSessionId);
+  expect(output('main-input')).toEqual(mockInputA);
+  expect(output('main-result')).toEqual(mockResultA);
+  expect(output('main-view')).toEqual({ selectedStationId: 'ST-B', sortKey: 'DISTANCE', showTransit: true });
+  expect(logout).toHaveBeenCalledTimes(1);
+});
+
+test.each(['expired RESULT', 'input in progress'])('logout does not migrate %s into the anonymous session', async (scenario) => {
+  if (scenario === 'expired RESULT') {
+    mockResultA.candidates[0].expiresAt = '2030-09-03T00:40:00Z';
+  }
+  visit('/#main');
+  fireEvent.click(await screen.findByText(scenario === 'expired RESULT' ? 'Search A' : 'Enter A'));
+  fireEvent.click(screen.getByText('Account'));
+  fireEvent.click(await screen.findByText('Logout to main'));
+
+  await screen.findByRole('heading', { name: 'Main' });
+  expect(output('main-input')).toBeNull();
+  expect(output('main-result')).toBeNull();
+  expect(output('main-view')).toBeNull();
 });
 
 test('admin routing is preserved and skips the consumer session request', async () => {
