@@ -192,16 +192,23 @@ function App() {
   };
   const login = () => navigate('login');
   const handleLogout = useCallback(async () => {
+    const source = readLocation(searchSessionId.current);
+    const mainEntryId = source.route === 'main' ? source.state.entryId : source.state.mainEntryId;
+    const result = mainEntryId ? resultFor(source.state, mainEntryId) : null;
+    const restoreSearch = result ? searchHistoryInput(source.state.restoreSearch) : null;
+    const mainView = result ? mainHistoryView(source.state.mainView) : null;
     await logout();
     setUser(null);
     setAuthState('anonymous');
     setSubscription({ status: 'ANONYMOUS' });
     mainResults.current.clear();
     decisions.current.clear();
+    const entryId = newConsumerEntryId();
     searchSessionId.current = newConsumerEntryId();
-    window.history.replaceState({ entryId: newConsumerEntryId(), searchSessionId: searchSessionId.current }, '');
+    if (result) mainResults.current.set(entryId, { inputKey: JSON.stringify(restoreSearch), result });
+    window.history.replaceState(consumerHistoryState({ entryId, mainEntryId: entryId, searchSessionId: searchSessionId.current, restoreSearch, mainView }), '');
     syncLocation();
-  }, [syncLocation]);
+  }, [resultFor, syncLocation]);
   const handleCheckoutSuccess = useCallback((value) => setSubscription(value), []);
   const personalAdapter = useMemo(() => ({ ...consumerPersonalAdapter, logout: handleLogout }), [handleLogout]);
   const handleInputChange = useCallback((input) => {
