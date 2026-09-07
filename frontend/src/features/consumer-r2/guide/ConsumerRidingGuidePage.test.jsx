@@ -52,6 +52,22 @@ test("renders the NO PLAN guide with server facts and routes schedule creation t
   expect(services.load).toHaveBeenCalledWith(expect.objectContaining({ stationId: "ST-4", journeyDecisionId: null }));
 });
 
+test("returns a C01 direct entry to search results without changing the selected station context", async () => {
+  const onNavigate = jest.fn();
+  render(<ConsumerRidingGuidePage stationId="ST-4" returnRoute="main" services={service({ accessState: "ACTIVE", guide: guide() })} onNavigate={onNavigate} />);
+
+  await userEvent.click(await screen.findByRole("button", { name: "검색 결과로 돌아가기" }));
+  expect(onNavigate).toHaveBeenCalledWith("main");
+});
+
+test("keeps the Ride Explore return meaning when no C01 return intent exists", async () => {
+  const onNavigate = jest.fn();
+  render(<ConsumerRidingGuidePage stationId="ST-4" services={service({ accessState: "ACTIVE", guide: guide() })} onNavigate={onNavigate} />);
+
+  await userEvent.click(await screen.findByRole("button", { name: "대여소로 돌아가기" }));
+  expect(onNavigate).toHaveBeenCalledWith("ride", "ST-4");
+});
+
 test("renders only the short server itinerary for an existing plan and uses its CTA", async () => {
   const existing = guide({ hasExistingPlan: true, scheduleCta: "내 AI 일정 보기" });
   const services = service({ accessState: "ACTIVE", guide: existing });

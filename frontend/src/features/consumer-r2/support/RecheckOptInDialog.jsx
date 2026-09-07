@@ -95,11 +95,11 @@ export default function RecheckOptInDialog({ busy = false, kind = "SEARCH_RECHEC
         <header>
           <div>
             <p className="cr22-support__eyebrow">{isSearch ? "검색 재확인" : "계획 재확인"}</p>
-            <h2 id="recheck-dialog-title">출발 전에 다시 확인할까요?</h2>
+            <h2 id="recheck-dialog-title">{isSearch ? "출발 전 재확인을 예약할까요?" : "출발 15분 전 알림을 받을까요?"}</h2>
           </div>
           <button aria-label="재확인 신청 닫기" className="cr22-support__dialog-close" disabled={busy} onClick={onClose} type="button">×</button>
         </header>
-        <p id="recheck-dialog-description">직접 탈 예정인 출발 시각을 입력해 주세요. 그 시각의 15분 전에 알림을 보내 드리고, 알림을 열면 저장된 조건으로 현재 데이터를 새로 확인합니다.</p>
+        <p id="recheck-dialog-description">{isSearch ? "출발 시각 15분 전부터 앱 내 알림함에 재확인 안내가 표시됩니다. 알림함에서 ‘현재 정보 다시 확인’을 누르면 저장한 검색 조건으로 그때의 대여 가능성을 다시 조회합니다. 푸시·메일·문자 알림은 제공하지 않습니다." : "출발 시각 15분 전에 현재 정보 재확인 알림을 보내 드려요."}</p>
         <form noValidate onSubmit={submit}>
           <div className="cr22-field">
             <label className="cr22-field__label" htmlFor="recheck-departure-at">출발 시각 <span aria-hidden="true" className="cr22-field__required">*</span></label>
@@ -116,12 +116,12 @@ export default function RecheckOptInDialog({ busy = false, kind = "SEARCH_RECHEC
               type="datetime-local"
               value={departureAt}
             />
-            <p className="cr22-field__hint" id="recheck-departure-at-hint">이 출발 시각의 15분 전에 알림을 보내 드려요. 입력 가능한 가장 이른 시각은 지금부터 15분 뒤입니다.</p>
+            <p className="cr22-field__hint" id="recheck-departure-at-hint">입력 가능한 가장 이른 시각은 지금부터 15분 뒤입니다.</p>
             {error ? <p className="cr22-field__error" id="recheck-departure-at-error" role="alert">{error}</p> : null}
           </div>
           <div className="cr22-support__dialog-actions">
             <ConsumerButton disabled={busy} onClick={onClose} variant="secondary">취소</ConsumerButton>
-            <ConsumerButton loading={busy} loadingLabel="신청 중…" type="submit">15분 전 알림 받기</ConsumerButton>
+            <ConsumerButton loading={busy} loadingLabel={isSearch ? "예약 중…" : "신청 중…"} type="submit">{isSearch ? "재확인 예약하기" : "15분 전 알림 받기"}</ConsumerButton>
           </div>
         </form>
       </section>

@@ -355,7 +355,7 @@ public class KakaoMapClient {
                 travelMode,
                 pathPoints,
                 publicTransit ? optionalInt(routeProperties, "transfers", "transferCount") : null,
-                publicTransit ? optionalInt(routeProperties, "fare", "totalFare") : null,
+                publicTransit ? optionalInt(routeProperties.path("fare"), "value") : null,
                 transitSteps
             ));
         } catch (Exception e) {
@@ -396,28 +396,28 @@ public class KakaoMapClient {
     private void appendTransitSteps(JsonNode sourceSteps, List<MapApiDtos.RouteStepDto> target) {
         if (!sourceSteps.isArray()) return;
         for (JsonNode step : sourceSteps) {
-            String type = transitStepType(step);
-            if (type == null) continue;
+            JsonNode properties = step.path("properties");
+            String type = transitStepType(properties);
             target.add(new MapApiDtos.RouteStepDto(
                 type,
-                text(step, "guidance", "description"),
-                optionalInt(step, "distanceMeters", "distance"),
-                optionalInt(step, "durationSeconds", "duration", "time"),
-                extractStops(step.path("stops")),
-                extractVehicles(step.path("vehicles")),
+                text(properties, "guidance"),
+                optionalInt(properties, "distance"),
+                optionalInt(properties, "time"),
+                extractStops(properties.path("stops")),
+                extractVehicles(properties.path("vehicles")),
                 extractPathPoints(step)
             ));
         }
     }
 
     private String transitStepType(JsonNode step) {
-        String raw = text(step, "type", "travelMode", "mode");
-        if (raw == null) return null;
+        String raw = text(step, "type");
+        if (raw == null) return "TRANSIT";
         return switch (raw.toUpperCase(java.util.Locale.ROOT)) {
             case "WALK", "WALKING" -> "WALKING";
             case "BUS" -> "BUS";
             case "SUBWAY" -> "SUBWAY";
-            default -> null;
+            default -> raw;
         };
     }
 

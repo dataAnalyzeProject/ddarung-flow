@@ -23,7 +23,9 @@ export { navigationTarget } from './features/consumer-r2/adapters/navigation/con
 function readLocation(searchSessionId) {
   if (window.location.pathname !== '/') return { pathname: window.location.pathname, ...routeFromHash(), state: window.history.state || {} };
   const target = routeFromHash();
-  let state = consumerHistoryState(window.history.state);
+  const rawState = window.history.state || {};
+  let state = consumerHistoryState(rawState);
+  if (target.route === 'guide' && rawState.guideReturnRoute === 'main') state.guideReturnRoute = 'main';
   if (searchSessionId && state.searchSessionId && state.searchSessionId !== searchSessionId) {
     state = { entryId: newConsumerEntryId(), searchSessionId };
     if (target.stationId) {
@@ -187,7 +189,9 @@ function App() {
         state.journeyDecisionId = target.stationId;
       }
     }
-    window.history.pushState(consumerHistoryState(state), '', '/' + target.hash);
+    const nextHistoryState = consumerHistoryState(state);
+    if (target.route === 'guide' && source.route === 'main') nextHistoryState.guideReturnRoute = 'main';
+    window.history.pushState(nextHistoryState, '', '/' + target.hash);
     syncLocation();
   };
   const login = () => navigate('login');
@@ -287,14 +291,14 @@ function App() {
   if (route === 'checkout') return <PremiumSandboxCheckoutPage {...common} accessState={accessState} onBack={() => navigate('journey')} onSuccess={handleCheckoutSuccess} />;
   if (route === 'station') return <StationDetailPage key={stationId} {...common} stationId={stationId} />;
   if (route === 'ride') return <RideExplorePage key={stationId} {...common} stationId={stationId} />;
-  if (route === 'guide') return <ConsumerRidingGuidePage key={stationId} {...common} stationId={stationId} guideContext={guideFor(location.state, stationId)} />;
+  if (route === 'guide') return <ConsumerRidingGuidePage key={stationId} {...common} stationId={stationId} guideContext={guideFor(location.state, stationId)} returnRoute={location.state.guideReturnRoute} />;
   if (route === 'journey') return <ConsumerJourneyPlannerPage key={location.state.entryId} {...common} initialInput={location.state.journeyInput || {}} onInputChange={handleJourneyInput} onResult={handleJourneyResult} />;
   if (route === 'journey-result') return <ConsumerJourneyPlanResultPage key={stationId} {...common} decisionId={stationId} onResult={handleJourneyResult} />;
   if (route === 'archive') return <PersonalArchivePage {...common} onReplay={(decision) => { handleJourneyResult(decision); navigate('journey-result', decision.decisionId); }} />;
   if (route === 'mypage') return <PersonalMyPage adapter={personalAdapter} onNavigate={navigate} />;
   if (route === 'qna') return <ConsumerQnaPage key={location.state.questionId || 'list'} {...common} initialQuestionId={location.state.questionId} />;
   if (route === 'alerts') return <ConsumerAlertsPage {...common} searchInput={location.state.restoreSearch} onCurrentData={handleCurrentData} />;
-  return <ConsumerMainPage key={entryId} onNavigate={navigate} onLogin={login} onInputChange={handleInputChange} onSearchComplete={handleSearchComplete} onStartNew={() => navigate('main', { intent: 'new' })} onViewChange={handleMainViewChange} restoreSearch={restoreSearch} currentResult={restoredMainResult} currentView={restoredMainResult ? location.state.mainView : null} onOpenStation={(candidate, input) => openCandidate('station', candidate, input)} onOpenRide={(candidate, input) => openCandidate('ride', candidate, input)} />;
+  return <ConsumerMainPage key={entryId} onNavigate={navigate} onLogin={login} onInputChange={handleInputChange} onSearchComplete={handleSearchComplete} onStartNew={() => navigate('main', { intent: 'new' })} onViewChange={handleMainViewChange} restoreSearch={restoreSearch} currentResult={restoredMainResult} currentView={restoredMainResult ? location.state.mainView : null} onOpenGuide={(candidate, input) => openCandidate('guide', candidate, input)} onOpenStation={(candidate, input) => openCandidate('station', candidate, input)} onOpenRide={(candidate, input) => openCandidate('ride', candidate, input)} />;
 }
 
 export default App;

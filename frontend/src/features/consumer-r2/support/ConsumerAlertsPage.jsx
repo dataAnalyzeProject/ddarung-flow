@@ -121,19 +121,20 @@ export default function ConsumerAlertsPage({
 
   async function createRecheck(departureAt) {
     const sessionId = sessionRequestIdRef.current;
+    const isSearchRecheck = dialogKind === "SEARCH_RECHECK";
     setBusyKey("create-recheck");
     setNotice("");
     try {
-      const created = dialogKind === "SEARCH_RECHECK"
+      const created = isSearchRecheck
         ? await adapter.createSearchRecheck(searchInput, departureAt)
         : await adapter.createPlanRecheck(savedJourneyId, departureAt);
       if (sessionId !== sessionRequestIdRef.current) return;
       setSubscriptions((current) => [created, ...current.filter((item) => item.publicId !== created.publicId)]);
       setDialogKind(null);
-      setNotice("출발 15분 전 재확인 알림을 신청했습니다.");
+      setNotice(isSearchRecheck ? "재확인 예약을 등록했습니다. 출발 전에 앱 내 알림함에서 재확인 안내를 확인하세요." : "출발 15분 전 재확인 알림을 신청했습니다.");
     } catch (error) {
       if (sessionId !== sessionRequestIdRef.current) return;
-      setNotice(error.status === 401 ? "로그인이 필요합니다." : error.code === "PREMIUM_REQUIRED" ? "계획 재확인은 Premium 활성 계정에서 사용할 수 있습니다." : "재확인 알림을 신청하지 못했습니다.");
+      setNotice(error.status === 401 ? "로그인이 필요합니다." : error.code === "PREMIUM_REQUIRED" ? "계획 재확인은 Premium 활성 계정에서 사용할 수 있습니다." : isSearchRecheck ? "재확인 예약을 등록하지 못했습니다. 다시 시도해 주세요." : "재확인 알림을 신청하지 못했습니다.");
     } finally {
       if (sessionId === sessionRequestIdRef.current) setBusyKey("");
     }

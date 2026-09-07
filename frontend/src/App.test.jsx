@@ -15,7 +15,7 @@ jest.mock('./features/consumer-r2/entry', () => ({
   LoginPage: () => <h1>Login</h1>,
   OpeningPage: ({ onNavigate, onStart }) => <section><h1>Opening</h1><button onClick={onStart}>Opening CTA</button><button onClick={() => onNavigate('ride')}>Header ride</button></section>,
 }));
-jest.mock('./features/consumer-r2/main/ConsumerMainPage', () => function MockMain({ currentResult, currentView, onInputChange, onNavigate, onOpenRide, onOpenStation, onSearchComplete, onStartNew, onViewChange, restoreSearch }) {
+jest.mock('./features/consumer-r2/main/ConsumerMainPage', () => function MockMain({ currentResult, currentView, onInputChange, onNavigate, onOpenGuide, onOpenRide, onOpenStation, onSearchComplete, onStartNew, onViewChange, restoreSearch }) {
   const [liveCandidate, setLiveCandidate] = require('react').useState(null);
   require('react').useEffect(() => { mockMainRestoreChange(); }, [restoreSearch, currentResult]);
   return <section>
@@ -23,6 +23,7 @@ jest.mock('./features/consumer-r2/main/ConsumerMainPage', () => function MockMai
   <output data-testid="main-input">{JSON.stringify(restoreSearch || null)}</output><output data-testid="main-result">{JSON.stringify(currentResult || null)}</output><output data-testid="main-view">{JSON.stringify(currentView || null)}</output>
   <button onClick={() => onOpenStation(liveCandidate || currentResult?.candidates?.[0] || { stationId: 'ST-1' }, restoreSearch)}>Station</button>
   <button onClick={() => onOpenRide(liveCandidate || currentResult?.candidates?.[0] || { stationId: 'ST-1' }, restoreSearch)}>Ride</button>
+  <button onClick={() => onOpenGuide(currentResult?.candidates?.find((candidate) => candidate.stationId === currentView?.selectedStationId) || liveCandidate || currentResult?.candidates?.[0] || { stationId: 'ST-1' }, restoreSearch)}>Direct guide</button>
   <button onClick={() => { onInputChange(mockInputA); onSearchComplete(mockInputA, mockResultA); setLiveCandidate(mockResultA.candidates[0]); }}>Search A</button>
   <button onClick={() => onInputChange(mockInputA)}>Enter A</button>
   <button onClick={() => { const input = { ...mockInputA, origin: '수정 중' }; onInputChange(input); onSearchComplete(input, null); }}>Edit input</button>
@@ -38,7 +39,7 @@ jest.mock('./features/consumer-r2/main/ConsumerMainPage', () => function MockMai
 });
 jest.mock('./features/consumer-r2/station/StationDetailPage', () => ({ stationId, onNavigate }) => <section><h1>Station {stationId}</h1><button onClick={() => onNavigate('ride', stationId)}>Ride</button><button onClick={() => onNavigate('ride')}>Header ride</button><button onClick={() => onNavigate('main')}>Back to results</button><button onClick={() => onNavigate('mypage')}>Account</button><button onClick={() => onNavigate('home')}>Home</button></section>);
 jest.mock('./features/consumer-r2/ride/RideExplorePage', () => ({ stationId, onNavigate }) => <section><h1>Ride {stationId}</h1><button onClick={() => onNavigate('guide', stationId)}>Guide</button><button onClick={() => onNavigate('ride')}>Header ride</button><button onClick={() => onNavigate('main')}>Back to results</button><button onClick={() => onNavigate('home')}>Home</button></section>);
-jest.mock('./features/consumer-r2/guide/ConsumerRidingGuidePage', () => ({ stationId, guideContext, onNavigate }) => <section><h1>Guide {stationId}</h1><output data-testid="guide-context">{JSON.stringify(guideContext)}</output><button onClick={() => onNavigate('ride')}>Header ride</button><button onClick={() => onNavigate('main')}>Back to results</button><button onClick={() => onNavigate('home')}>Home</button></section>);
+jest.mock('./features/consumer-r2/guide/ConsumerRidingGuidePage', () => ({ stationId, guideContext, onNavigate, returnRoute }) => <section><h1>Guide {stationId}</h1><output data-testid="guide-context">{JSON.stringify(guideContext)}</output><output data-testid="guide-return">{returnRoute || 'ride'}</output><button onClick={() => returnRoute === 'main' ? onNavigate('main') : onNavigate('ride', stationId)}>Guide back</button><button onClick={() => onNavigate('ride')}>Header ride</button><button onClick={() => onNavigate('main')}>Back to results</button><button onClick={() => onNavigate('home')}>Home</button></section>);
 jest.mock('./features/consumer-r2/journey', () => {
   const { useEffect } = require('react');
   return {
@@ -167,6 +168,47 @@ test('candidate callbacks and browser back restore the route', async () => {
   await screen.findByRole('heading', { name: 'Main' });
   fireEvent.click(screen.getByText('Ride'));
   expect(await screen.findByRole('heading', { name: 'Ride ST-1' })).toBeInTheDocument();
+});
+
+test.each(['ANONYMOUS', 'FREE'])('C01 direct Guide keeps the existing %s Premium gate', async (state) => {
+  if (state === 'ANONYMOUS') getCurrentUser.mockResolvedValue({ authenticated: false, user: null });
+  else fetchSubscription.mockResolvedValue({ status: state });
+  visit('/#main');
+  fireEvent.click(await screen.findByText('Search A'));
+  fireEvent.click(screen.getByText('Direct guide'));
+
+  expect(await screen.findByRole('heading', { name: 'Gate ' + state })).toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: /Guide ST/ })).not.toBeInTheDocument();
+});
+
+test('C01 direct Guide uses the selected candidate and returns to the same RESULT view', async () => {
+  mockResultA.candidates.push({ stationId: 'ST-B', horizonMinutes: 90, predictionProbability: 0.74, arrivalAt: '2030-09-03T01:03:00Z', expiresAt: '2030-09-03T01:01:00Z', routeDetail: { pathPoints: [[37.55, 126.97], [37.57, 126.98]] } });
+  visit('/#main');
+  fireEvent.click(await screen.findByText('Search A'));
+  fireEvent.click(screen.getByText('Change result view'));
+  fireEvent.click(screen.getByText('Direct guide'));
+
+  expect(await screen.findByRole('heading', { name: 'Guide ST-B' })).toBeInTheDocument();
+  expect(screen.getByTestId('guide-return')).toHaveTextContent('main');
+  expect(output('guide-context')).toEqual(expect.objectContaining({ stationId: 'ST-B', requiredBikeCount: 3 }));
+  expect(JSON.stringify(window.history.state)).not.toMatch(/predictionProbability|arrivalAt|candidates/);
+
+  fireEvent.click(screen.getByText('Guide back'));
+  await screen.findByRole('heading', { name: 'Main' });
+  expect(output('main-result')).toEqual(mockResultA);
+  expect(output('main-view')).toEqual({ selectedStationId: 'ST-B', sortKey: 'DISTANCE', showTransit: true });
+});
+
+test('Ride Explore Guide keeps its existing return to the selected ride station', async () => {
+  visit('/#main');
+  fireEvent.click(await screen.findByText('Search A'));
+  fireEvent.click(screen.getByText('Ride'));
+  fireEvent.click(await screen.findByText('Guide'));
+
+  expect(await screen.findByRole('heading', { name: 'Guide ST-A' })).toBeInTheDocument();
+  expect(screen.getByTestId('guide-return')).toHaveTextContent('ride');
+  fireEvent.click(screen.getByText('Guide back'));
+  expect(await screen.findByRole('heading', { name: 'Ride ST-A' })).toBeInTheDocument();
 });
 
 test('archive restores input and alerts deep-link to the actual question', async () => {

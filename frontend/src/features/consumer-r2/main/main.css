@@ -1566,6 +1566,11 @@
   flex-wrap: wrap;
 }
 
+.cr293-evidence__actions .cr293-evidence__recheck {
+  border-style: dashed;
+  color: var(--cr22-color-muted);
+}
+
 /* The map is the flexible half of this column and the panel under it is fixed,
    so the map's floor decides whether the four route buttons stay on screen. A
    26vh floor was 181px against a 272px panel in a 377px column and pushed them
