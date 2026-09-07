@@ -10,11 +10,11 @@ const ROOT_DATA_STATE_CLASS = {
   UNAVAILABLE: 'candidates-root-state--unavailable',
 };
 const COVERAGE_FIELDS = [
-  ['activePublicStationCount', '활성 공개 대여소'],
-  ['inventoryAvailableCount', '재고 확인 가능'],
-  ['predictionAvailableCount', '예측 확인 가능'],
-  ['profileAvailableCount', '반복 근거 확인 가능'],
-  ['eligibleCandidateCount', '집중관리 후보'],
+  ['activePublicStationCount', '활성 공개 대여소 (전체)'],
+  ['analyzedStationCount', '분석한 대여소 (분석 범위)'],
+  ['analysisNormalCount', '정상 추론 (분석 범위)'],
+  ['profileAvailableCount', '반복 근거 확인 가능 (분석 범위)'],
+  ['eligibleCandidateCount', '집중관리 후보 (분석 범위)'],
 ];
 
 function formatTime(value) { return value ? new Date(value).toLocaleString('ko-KR') : '확인 정보 없음'; }
@@ -90,6 +90,8 @@ export default function CandidatesPage({ createAdapter }) {
   const items = result?.items || [];
   const rootDataState = result?.dataState || 'UNAVAILABLE';
   const rootUiState = DATA_STATE_TO_UI[result?.dataState] || (!items.length ? 'EMPTY' : 'SUCCESS');
+  const scopeRequired = result?.limitations?.some((code) => code === 'ANALYSIS_SCOPE_REQUIRED');
+  const scopeLimitation = scopeRequired ? (result?.scopeExpired ? 'ANALYSIS_SNAPSHOT_EXPIRED' : 'ANALYSIS_SCOPE_REQUIRED') : null;
   const selectedCandidate = items.find((candidate) => candidate.station?.stationNumber === selectedStationNumber) || items[0] || null;
   return <main className="candidates-page" aria-label="집중관리 목록">
     <header className="candidates-header">
@@ -121,7 +123,10 @@ export default function CandidatesPage({ createAdapter }) {
         <div><h2 id="candidates-heading">우선 확인 후보</h2><p>API가 제공한 순서를 그대로 표시합니다.</p></div>
         <nav aria-label="운영 화면 이동"><a href="/admin/ops/risk-map">대여 부족 위험 지도</a><a href="/admin/ops/analysis">반복 품절 패턴</a></nav>
       </div>
-      {rootUiState !== 'SUCCESS' ? <div className="candidates-state-panel"><AsyncStatePanel state={rootUiState} code={result?.dataState === 'MISSING' ? 'MISSING' : undefined} /></div> : null}
+      {rootUiState !== 'SUCCESS' ? <div className="candidates-state-panel">
+        <AsyncStatePanel state={rootUiState} code={scopeLimitation || (result?.dataState === 'MISSING' ? 'MISSING' : undefined)} />
+        {scopeLimitation ? <p className="candidates-scope-guidance">{scopeLimitation === 'ANALYSIS_SNAPSHOT_EXPIRED' ? '이전 분석이 만료됐습니다. ' : '아직 분석한 범위가 없습니다. '}<a href="/admin/ops/risk-map">수급 위험 지도에서 범위를 분석해 주세요.</a></p> : null}
+      </div> : null}
       {items.length ? <div className="candidates-table-wrap"><table><caption>집중관리 후보 목록</caption><thead><tr><th scope="col">순위</th><th scope="col">대여소</th><th scope="col">대여 부족 확률</th><th scope="col">예상 시점</th><th scope="col">현재 재고</th><th scope="col">후보 데이터 상태</th><th scope="col">반복 품절 근거</th></tr></thead><tbody>{items.map((candidate) => { const selected = candidate.station?.stationNumber === selectedCandidate?.station?.stationNumber; return <tr key={`${candidate.rank}-${candidate.station?.stationNumber}`} className={selected ? 'is-selected' : undefined}><td className="candidates-rank"><strong>{candidate.rank}</strong></td><td className="candidates-station"><button type="button" onClick={() => setSelectedStationNumber(candidate.station?.stationNumber)} aria-pressed={selected}><strong>{candidate.station?.name || '이름 확인 필요'}</strong><small>{candidate.station?.stationNumber || '번호 확인 필요'}</small></button></td><td className="candidates-probability">{formatPercent(candidate.prediction?.selectedShortageProbability)}</td><td className="candidates-target-time">{formatTime(candidate.prediction?.predictionTargetAt)}</td><td>{formatBikes(candidate.station?.currentBikes)}</td><td><span className="candidates-data-state">{candidate.dataState || '확인 정보 없음'}</span></td><td><RecurrenceEvidence recurrence={candidate.recurrence} /></td></tr>; })}</tbody></table></div> : <p className="candidates-empty">현재 조건에서 표시할 집중관리 후보가 없습니다.</p>}
       {result?.nextCursor ? <button type="button" onClick={loadMore} disabled={loadingMore}>{loadingMore ? '추가 항목을 불러오는 중' : '더 보기'}</button> : null}
       {loadMoreError ? <p role="status" className="candidates-load-more-error">추가 항목을 불러오지 못했습니다. <button type="button" onClick={loadMore}>재시도</button></p> : null}

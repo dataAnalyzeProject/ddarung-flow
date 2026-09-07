@@ -16,6 +16,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Set;
@@ -38,6 +39,7 @@ class AdminOpsDataStatusControllerTest {
     @Autowired UsersRepository users;
 
     @BeforeEach void clear() {
+        jdbc.update("DELETE FROM admin_ops_runtime_risk_snapshots");
         jdbc.update("DELETE FROM station_predictions");
         jdbc.update("DELETE FROM prediction_batches");
         jdbc.update("DELETE FROM station_inventory_current");
@@ -67,14 +69,20 @@ class AdminOpsDataStatusControllerTest {
 
         mvc.perform(get("/api/v1/admin/ops/data-status").with(allowed()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.*", hasSize(7)))
+                .andExpect(jsonPath("$.*", hasSize(8)))
                 .andExpect(jsonPath("$.inventory.*", hasSize(8)))
                 .andExpect(jsonPath("$.prediction.*", hasSize(8)))
+                // All 11 declared fields are always serialized as keys (this DTO has no
+                // @JsonInclude(NON_NULL)); the 8 snapshot-derived ones are simply null here.
+                .andExpect(jsonPath("$.runtimeAnalysis.*", hasSize(11)))
+                .andExpect(jsonPath("$.runtimeAnalysis.hasRecentSnapshot").value(false))
                 .andExpect(jsonPath("$.profile.*", hasSize(5)))
+                // Root reports the real inventory PARTIAL. Neither the legacy batch nor the
+                // absence of an on-demand analysis scope can override the citywide sources.
                 .andExpect(jsonPath("$.dataState").value("PARTIAL"))
                 .andExpect(jsonPath("$.inventory.inventoryStatusBreakdown.NORMAL").value(1))
                 .andExpect(jsonPath("$.inventory.inventoryStatusBreakdown.UNAVAILABLE").value(1))
-                .andExpect(jsonPath("$.limitations", contains("AFFECTED_SCOPE_NOT_SOURCE_BACKED", "LAST_NORMAL_REFRESH_NOT_SOURCE_BACKED", "REASON_LEDGER_NOT_SOURCE_BACKED")))
+                .andExpect(jsonPath("$.limitations", contains("AFFECTED_SCOPE_NOT_SOURCE_BACKED", "LAST_NORMAL_REFRESH_NOT_SOURCE_BACKED", "REASON_LEDGER_NOT_SOURCE_BACKED", "ANALYSIS_SCOPE_REQUIRED")))
                 .andExpect(jsonPath("$..batchId").doesNotExist()).andExpect(jsonPath("$..modelVersion").doesNotExist())
                 .andExpect(jsonPath("$..modelId").doesNotExist()).andExpect(jsonPath("$..artifact").doesNotExist())
                 .andExpect(jsonPath("$..artifactPath").doesNotExist()).andExpect(jsonPath("$..sha").doesNotExist())
@@ -119,11 +127,17 @@ class AdminOpsDataStatusControllerTest {
         insertStation("A", "1001", true); insertStation("B", "1002", true);
         insertInventory("A", now.minusMinutes(1), "NORMAL"); insertInventory("B", now.minusMinutes(1), "NORMAL");
         insertProfile("A", now); insertProfile("B", now);
+        // Regression for the bug this task fixes: inventory and profile are both fully healthy and
+        // there is no valid legacy batch, so root is NORMAL. The batch-absence path used to force
+        // MISSING here regardless of how healthy everything else was.
         mvc.perform(get("/api/v1/admin/ops/data-status").with(allowed()))
-                .andExpect(jsonPath("$.prediction").doesNotExist()).andExpect(jsonPath("$.dataState").value("MISSING"));
+                .andExpect(jsonPath("$.prediction").doesNotExist())
+                .andExpect(jsonPath("$.runtimeAnalysis.hasRecentSnapshot").value(false))
+                .andExpect(jsonPath("$.runtimeAnalysis.dataState").value("INSUFFICIENT_DATA"))
+                .andExpect(jsonPath("$.dataState").value("NORMAL"));
         UUID expired = insertBatch(now.minusHours(2), now.minusHours(2), now.minusMinutes(1), "ACTIVE"); insertPrediction(expired, "A");
         mvc.perform(get("/api/v1/admin/ops/data-status").with(allowed()))
-                .andExpect(jsonPath("$.prediction").doesNotExist()).andExpect(jsonPath("$.dataState").value("MISSING"));
+                .andExpect(jsonPath("$.prediction").doesNotExist()).andExpect(jsonPath("$.dataState").value("NORMAL"));
         UUID future = insertBatch(now.plusMinutes(1), now.plusMinutes(1), now.plusHours(2), "ACTIVE"); insertPrediction(future, "A");
         UUID inactive = insertBatch(now.minusMinutes(1), now.minusMinutes(1), now.plusHours(2), "INACTIVE"); insertPrediction(inactive, "A");
         UUID older = insertBatch(now.minusMinutes(10), now.minusMinutes(10), now.plusHours(2), "ACTIVE"); insertPrediction(older, "A");
@@ -147,47 +161,98 @@ class AdminOpsDataStatusControllerTest {
                 .andExpect(jsonPath("$.prediction.predictedStationCount").value(2));
     }
 
-    @Test void profileUsesOnlyActivePublicStationsAndRootPrecedenceIsExact() throws Exception {
+    @Test void profileAndRuntimeAnalysisUseIndependentSourcesAndRootPrecedenceIsExact() throws Exception {
+        // No prediction_batches/station_predictions row exists anywhere in this test. Root reaches
+        // every precedence level (DELAYED, NORMAL, PARTIAL, INSUFFICIENT_DATA) purely from
+        // inventory, the on-demand risk snapshot, and profile — proving the legacy batch is not
+        // needed to reach a truthful, non-MISSING root when the real sources say otherwise.
         OffsetDateTime now = OffsetDateTime.now().withNano(0);
         insertStation("A", "1001", true); insertStation("B", null, true); insertStation("C", "1003", false);
         insertInventory("A", now.minusMinutes(31), "NORMAL"); insertInventory("B", now.minusMinutes(31), "NORMAL");
+
         mvc.perform(get("/api/v1/admin/ops/data-status").with(allowed()))
                 .andExpect(jsonPath("$.inventory.dataState").value("DELAYED"))
                 .andExpect(jsonPath("$.prediction").doesNotExist())
-                .andExpect(jsonPath("$.dataState").value("MISSING"));
-        UUID batch = insertBatch(now.minusMinutes(1), now.minusMinutes(1), now.plusHours(1), "ACTIVE");
-        insertPrediction(batch, "A"); insertPrediction(batch, "B");
-        mvc.perform(get("/api/v1/admin/ops/data-status").with(allowed()))
-                .andExpect(jsonPath("$.profile.activePublicStationCount").value(1))
-                .andExpect(jsonPath("$.profile.dataState").value("INSUFFICIENT_DATA"))
+                .andExpect(jsonPath("$.runtimeAnalysis.hasRecentSnapshot").value(false))
+                .andExpect(jsonPath("$.runtimeAnalysis.dataState").value("INSUFFICIENT_DATA"))
                 .andExpect(jsonPath("$.dataState").value("DELAYED"));
+
+        UUID snapshot = insertRiskSnapshot(now, now, now.plusMinutes(2), 60, 1, 2, 2, 2);
+        mvc.perform(get("/api/v1/admin/ops/data-status").with(allowed()))
+                .andExpect(jsonPath("$.runtimeAnalysis.hasRecentSnapshot").value(true))
+                .andExpect(jsonPath("$.runtimeAnalysis.dataState").value("NORMAL"))
+                .andExpect(jsonPath("$.dataState").value("DELAYED"));
+
+        jdbc.update("UPDATE station_inventory_current SET collected_at = ?", now.minusMinutes(1));
         insertProfile("A", now.minusDays(2));
         mvc.perform(get("/api/v1/admin/ops/data-status").with(allowed()))
+                .andExpect(jsonPath("$.inventory.dataState").value("NORMAL"))
+                .andExpect(jsonPath("$.profile.activePublicStationCount").value(1))
                 .andExpect(jsonPath("$.profile.dataState").value("NORMAL"))
                 .andExpect(jsonPath("$.profile.latestGeneratedAt").value(apiTimestamp(now.minusDays(2))))
-                .andExpect(jsonPath("$.dataState").value("DELAYED"));
+                .andExpect(jsonPath("$.dataState").value("NORMAL"));
+
         jdbc.update("UPDATE stations SET station_number = '1002' WHERE station_id = 'B'");
         mvc.perform(get("/api/v1/admin/ops/data-status").with(allowed()))
                 .andExpect(jsonPath("$.profile.dataState").value("PARTIAL"))
                 .andExpect(jsonPath("$.profile.coverageRatio").value(0.5))
-                .andExpect(jsonPath("$.dataState").value("DELAYED"));
-        jdbc.update("UPDATE station_inventory_current SET collected_at = ?", now.minusMinutes(1));
-        jdbc.update("DELETE FROM station_predictions WHERE batch_id = ?", batch);
-        mvc.perform(get("/api/v1/admin/ops/data-status").with(allowed()))
-                .andExpect(jsonPath("$.prediction.dataState").value("INSUFFICIENT_DATA"))
-                .andExpect(jsonPath("$.dataState").value("INSUFFICIENT_DATA"));
-        insertPrediction(batch, "A");
-        mvc.perform(get("/api/v1/admin/ops/data-status").with(allowed()))
-                .andExpect(jsonPath("$.prediction.dataState").value("PARTIAL"))
                 .andExpect(jsonPath("$.dataState").value("PARTIAL"));
-        jdbc.update("DELETE FROM station_inventory_current WHERE station_id = 'A'");
+
+        // An expired scope is reported honestly on its own source, but must not drag the root:
+        // it covers one operator-drawn bbox and expires on a 2-minute TTL, so letting it into root
+        // would flip the citywide headline every two minutes with nothing underneath changing.
+        jdbc.update("UPDATE admin_ops_runtime_risk_snapshots SET expires_at = ? WHERE snapshot_id = ?", now.minusSeconds(1), snapshot);
         mvc.perform(get("/api/v1/admin/ops/data-status").with(allowed()))
-                .andExpect(jsonPath("$.inventory.dataState").value("PARTIAL"));
-        jdbc.update("DELETE FROM station_predictions WHERE batch_id = ?", batch);
+                .andExpect(jsonPath("$.runtimeAnalysis.snapshotExpired").value(true))
+                .andExpect(jsonPath("$.runtimeAnalysis.dataState").value("INSUFFICIENT_DATA"))
+                .andExpect(jsonPath("$.dataState").value("PARTIAL"));
+    }
+
+    @Test void runtimeAnalysisDistinguishesNeverAnalyzedExpiredAndDegradedRuntime() throws Exception {
+        OffsetDateTime now = OffsetDateTime.now().withNano(0);
+        insertStation("A", "1001", true);
+        insertInventory("A", now.minusMinutes(1), "NORMAL");
+        insertProfile("A", now);
+
         mvc.perform(get("/api/v1/admin/ops/data-status").with(allowed()))
-                .andExpect(jsonPath("$.inventory.dataState").value("PARTIAL"))
-                .andExpect(jsonPath("$.prediction.dataState").value("INSUFFICIENT_DATA"))
-                .andExpect(jsonPath("$.dataState").value("INSUFFICIENT_DATA"));
+                .andExpect(jsonPath("$.runtimeAnalysis.hasRecentSnapshot").value(false))
+                .andExpect(jsonPath("$.runtimeAnalysis.snapshotExpired").value(false))
+                .andExpect(jsonPath("$.runtimeAnalysis.dataState").value("INSUFFICIENT_DATA"))
+                .andExpect(jsonPath("$.limitations").value(org.hamcrest.Matchers.hasItem("ANALYSIS_SCOPE_REQUIRED")));
+
+        UUID expired = insertRiskSnapshot(now, now.minusMinutes(5), now.minusMinutes(3), 60, 1, 1, 1, 1);
+        mvc.perform(get("/api/v1/admin/ops/data-status").with(allowed()))
+                .andExpect(jsonPath("$.runtimeAnalysis.hasRecentSnapshot").value(true))
+                .andExpect(jsonPath("$.runtimeAnalysis.snapshotExpired").value(true))
+                .andExpect(jsonPath("$.runtimeAnalysis.dataState").value("INSUFFICIENT_DATA"))
+                .andExpect(jsonPath("$.limitations").value(org.hamcrest.Matchers.hasItem("ANALYSIS_SNAPSHOT_EXPIRED")));
+        jdbc.update("DELETE FROM admin_ops_runtime_risk_snapshots WHERE snapshot_id = ?", expired);
+
+        // A live, non-expired snapshot where every evaluated station still failed inference is a
+        // real degraded-runtime signal, distinct from "no one has looked yet". It is surfaced on its
+        // own source; root stays NORMAL because both citywide sources are healthy and one bbox
+        // cannot speak for the city in either direction.
+        insertRiskSnapshot(now, now, now.plusMinutes(2), 60, 1, 1, 1, 0);
+        mvc.perform(get("/api/v1/admin/ops/data-status").with(allowed()))
+                .andExpect(jsonPath("$.runtimeAnalysis.hasRecentSnapshot").value(true))
+                .andExpect(jsonPath("$.runtimeAnalysis.snapshotExpired").value(false))
+                .andExpect(jsonPath("$.runtimeAnalysis.dataState").value("UNAVAILABLE"))
+                .andExpect(jsonPath("$.dataState").value("NORMAL"));
+    }
+
+    private UUID insertRiskSnapshot(OffsetDateTime referenceTime, OffsetDateTime createdAt, OffsetDateTime expiresAt,
+                                    int horizonMinutes, int requiredBikeCount, int eligible, int evaluated, int normalSuccess) {
+        UUID id = UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO admin_ops_runtime_risk_snapshots
+                  (snapshot_id, created_at, expires_at, reference_time, horizon_minutes, required_bike_count,
+                   min_lng, min_lat, max_lng, max_lat, data_state_filter, model_version,
+                   eligible_station_count, evaluated_station_count, normal_inference_success_count)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                """, id, createdAt, expiresAt, referenceTime, horizonMinutes, requiredBikeCount,
+                new BigDecimal("126.9"), new BigDecimal("37.4"), new BigDecimal("127.1"), new BigDecimal("37.6"),
+                (Object) null, "model", eligible, evaluated, normalSuccess);
+        return id;
     }
 
     private void expectInventory(String state, int p95) throws Exception {

@@ -255,6 +255,19 @@
 .operations-data-limitations span {
   color: var(--admin-v2-muted);
 }
+.operations-data-scope-guidance {
+  background: var(--admin-v2-caution-soft);
+  border: 1px solid #f3d995;
+  border-radius: 9px;
+  color: #9b6807;
+  font-size: 0.86rem;
+  font-weight: 700;
+  padding: clamp(9px, 1.2vh, 13px) 16px;
+}
+.operations-data-scope-guidance a {
+  color: inherit;
+  text-decoration: underline;
+}
 .operations-data-request-error {
   display: grid;
   gap: 10px;

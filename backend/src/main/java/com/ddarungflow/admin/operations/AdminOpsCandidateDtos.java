@@ -7,7 +7,12 @@ import java.util.List;
 
 public final class AdminOpsCandidateDtos {
     private AdminOpsCandidateDtos() { }
-    public record Coverage(long activePublicStationCount, long inventoryAvailableCount, long predictionAvailableCount, long profileAvailableCount, long eligibleCandidateCount) { }
+    /**
+     * activePublicStationCount is citywide. analyzedStationCount/analysisNormalCount/profileAvailableCount
+     * describe only the one bounded map scope that was analyzed for the requested horizon/required count,
+     * and are null before any scope has been analyzed — never a confirmed zero.
+     */
+    public record Coverage(long activePublicStationCount, Long analyzedStationCount, Long analysisNormalCount, Long profileAvailableCount, long eligibleCandidateCount) { }
     public record Prediction(OffsetDateTime predictionTargetAt, int selectedRequiredBikeCount, BigDecimal selectedShortageProbability) { }
     public record Factor(Object value, String role) { }
     public record RankingFactors(Factor severity, Factor imminence, String recurrence, String dataQuality) { }
