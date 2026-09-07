@@ -1,7 +1,7 @@
 .operations-data-page {
   color: var(--admin-v2-ink);
   display: grid;
-  gap: 20px;
+  gap: clamp(12px, 1.7vh, 20px);
   max-width: 1280px;
 }
 .operations-data-page h1,
@@ -28,10 +28,10 @@
   padding: 0;
 }
 .operations-data-header > div {
-  padding: 20px 22px;
+  padding: clamp(12px, 1.8vh, 20px) 22px;
 }
 .operations-data-header h1 {
-  font-size: clamp(1.75rem, 3vw, 2.3rem);
+  font-size: clamp(1.5rem, 2.4vw, 2.05rem);
   letter-spacing: -0.045em;
   margin-top: 4px;
 }
@@ -53,7 +53,7 @@
 }
 .operations-data-header dl .operations-data-metric {
   border-left: 1px solid var(--admin-v2-border);
-  padding: 20px 16px;
+  padding: clamp(12px, 1.8vh, 20px) 16px;
 }
 .operations-data-metric {
   display: grid;
@@ -73,8 +73,8 @@
 }
 .operations-data-status-criteria {
   display: grid;
-  gap: 10px;
-  padding: 14px 18px;
+  gap: 8px;
+  padding: clamp(10px, 1.4vh, 14px) 18px;
 }
 .operations-data-status-criteria h2 {
   font-size: 1.01rem;
@@ -82,12 +82,12 @@
 .operations-data-status-criteria-list {
   display: grid;
   gap: 8px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
 }
 .operations-data-status-criteria-item {
   background: var(--admin-v2-surface-soft);
   border: 1px solid var(--admin-v2-border);
-  padding: 22px;
+  padding: 10px 12px;
   border-radius: 9px;
   font-size: 0.84rem;
   font-weight: 800;
@@ -103,12 +103,12 @@
   color: var(--admin-v2-critical);
   font-size: 0.9rem;
   font-weight: 750;
-  padding: 15px 18px;
+  padding: clamp(10px, 1.3vh, 15px) 18px;
 }
 .operations-data-source-summary {
   display: grid;
-  gap: 14px;
-  padding: 18px 20px;
+  gap: clamp(9px, 1.2vh, 14px);
+  padding: clamp(12px, 1.7vh, 18px) 20px;
 }
 .operations-data-source-summary h2 {
   font-size: 1.08rem;
@@ -130,7 +130,7 @@
 .operations-data-source-summary td {
   border-top: 1px solid var(--admin-v2-border);
   font-size: 0.82rem;
-  padding: 14px 10px;
+  padding: clamp(8px, 1.1vh, 14px) 10px;
   text-align: left;
   vertical-align: middle;
 }
@@ -144,8 +144,8 @@
 }
 .operations-data-section {
   display: grid;
-  gap: 14px;
-  padding: 18px;
+  gap: clamp(9px, 1.2vh, 14px);
+  padding: clamp(12px, 1.7vh, 18px);
 }
 .operations-data-section-heading {
   align-items: start;
