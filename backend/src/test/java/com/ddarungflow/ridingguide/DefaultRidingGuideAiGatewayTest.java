@@ -42,9 +42,13 @@ class DefaultRidingGuideAiGatewayTest {
         assertThat(output.stops()).singleElement().extracting(RidingGuideAiGateway.StopOutput::poiId)
                 .isEqualTo("poi:POI-1");
         ArgumentCaptor<JsonNode> input = ArgumentCaptor.forClass(JsonNode.class);
-        verify(client).requestStructuredOutput(input.capture(), anyString(), anyString(), any(JsonNode.class));
+        ArgumentCaptor<String> instructions = ArgumentCaptor.forClass(String.class);
+        verify(client).requestStructuredOutput(input.capture(), instructions.capture(), anyString(), any(JsonNode.class));
         assertThat(input.getValue().path("evidence").path("rentalCandidates").has("rental:ST-4")).isTrue();
         assertThat(input.getValue().toString()).doesNotContain("userId", "cookie", "Authorization");
+        assertThat(instructions.getValue())
+                .contains("ko-KR", "guideSummary", "every stop rationale")
+                .containsIgnoringCase("Korean");
     }
 
     @Test

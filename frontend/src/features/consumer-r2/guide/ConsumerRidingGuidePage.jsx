@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import emptyScheduleIllustration from "../../../assets/consumer-r2/guide/cr22-guide-empty-ai-calendar-v1.webp";
 import { consumerGuideAdapter } from "../adapters/guide/index.js";
 import ConsumerAppHeader from "../shared/ConsumerAppHeader.jsx";
@@ -85,12 +85,13 @@ function FactualOverview({ guide }) {
   );
 }
 
-function AiSummary({ guide }) {
+function AiSummary({ guide, onRetry, retrying }) {
   if (guide.aiStatus !== "AVAILABLE") {
     return (
       <section className="cr22-guide__panel cr22-guide__ai-unavailable" aria-labelledby="guide-ai-title" role="status">
         <header><span aria-hidden="true"><ConsumerIcon name="info" /></span><h2 id="guide-ai-title">AI 요약을 지금 제공할 수 없습니다</h2></header>
-        <p>AI 설명은 숨겼습니다. 위의 대여 예측·날씨·대기질 정보는 계속 확인할 수 있으며, 잠시 후 페이지를 다시 열어 재시도할 수 있습니다.</p>
+        <p>AI 설명은 잠시 제공하지 못하고 있습니다. 위의 대여 예측·날씨·대기질 정보와 확인된 장소는 계속 확인할 수 있습니다.</p>
+        <ConsumerButton className="cr22-guide__ai-retry" variant="secondary" disabled={retrying} loading={retrying} loadingLabel="AI 요약을 다시 불러오는 중…" onClick={onRetry}>AI 요약 다시 불러오기</ConsumerButton>
       </section>
     );
   }
@@ -192,6 +193,8 @@ export default function ConsumerRidingGuidePage({
   const { journeyDecisionId = null, originLatitude = null, originLongitude = null, minutesAhead = null, requiredBikeCount = null, poiTheme = "PARK", poiLimit = 3 } = guideContext;
   const requestInput = useMemo(() => ({ stationId, journeyDecisionId, originLatitude, originLongitude, minutesAhead, requiredBikeCount, poiTheme, poiLimit }), [stationId, journeyDecisionId, originLatitude, originLongitude, minutesAhead, requiredBikeCount, poiTheme, poiLimit]);
   const [reloadKey, setReloadKey] = useState(0);
+  const [retryingAi, setRetryingAi] = useState(false);
+  const manualRetryRef = useRef(false);
   const [view, setView] = useState({ state: authState === "authenticated" ? "LOADING" : "ANONYMOUS", guide: null });
 
   useEffect(() => {
@@ -200,18 +203,26 @@ export default function ConsumerRidingGuidePage({
       return undefined;
     }
     let cancelled = false;
-    setView({ state: "LOADING", guide: null });
+    const preserveFacts = manualRetryRef.current;
+    manualRetryRef.current = false;
+    if (!preserveFacts) setView({ state: "LOADING", guide: null });
     services.load(requestInput).then((result) => {
       if (!cancelled) setView({ state: result.accessState === "ACTIVE" ? "READY" : result.accessState, guide: result.guide });
     }).catch((error) => {
       if (cancelled) return;
+      if (preserveFacts) return;
       const state = error?.status === 401 || error?.code === "AUTH_REQUIRED" ? "ANONYMOUS" : error?.code === "PREMIUM_REQUIRED" ? "FREE" : "ERROR";
       setView({ state, guide: null });
-    });
+    }).finally(() => { if (!cancelled) setRetryingAi(false); });
     return () => { cancelled = true; };
   }, [authState, reloadKey, requestInput, services]);
 
   const guide = view.guide;
+  const retryAiSummary = () => {
+    manualRetryRef.current = true;
+    setRetryingAi(true);
+    setReloadKey((current) => current + 1);
+  };
 
   return (
     <ConsumerR2Theme className="cr22-guide">
@@ -224,7 +235,7 @@ export default function ConsumerRidingGuidePage({
             <FactualOverview guide={guide} />
             {guide.factualPartial ? <aside className="cr22-guide__partial" role="status"><ConsumerIcon name="info" size={19} /><p>일부 사실 정보를 확인하지 못했습니다. 확인 가능한 값만 표시합니다.</p></aside> : null}
             <div className="cr22-guide__layout">
-              <div className="cr22-guide__content"><AiSummary guide={guide} /><PlaceList guide={guide} /></div>
+              <div className="cr22-guide__content"><AiSummary guide={guide} onRetry={retryAiSummary} retrying={retryingAi} /><PlaceList guide={guide} /></div>
               <SchedulePanel guide={guide} journeyDecisionId={journeyDecisionId} onNavigate={onNavigate} />
             </div>
             <footer className="cr22-guide__footer"><ConsumerIcon name="info" size={20} /><p><strong>Premium AI 기반 라이딩 가이드입니다.</strong><span>AI가 확률·재고·날씨·장소·경로를 생성하지 않으며, 확인된 서버 근거와 설명을 분리해 보여드립니다.</span></p></footer>

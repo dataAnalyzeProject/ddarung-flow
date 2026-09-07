@@ -39,6 +39,7 @@
 .cr22-guide__truth-note p, .cr22-guide__ai-unavailable > p { margin: 0; }
 .cr22-guide__ai-unavailable { border-color: #ead5ad; background: #fffdf8; }
 .cr22-guide__ai-unavailable > p { margin-top: 1rem; color: #4e5e75; }
+.cr22-guide__ai-retry { width: auto; margin-top: 1rem; }
 
 .cr22-guide__places ol { margin: 1.05rem 0 0; padding: 0; display: grid; list-style: none; }
 .cr22-guide__places li { min-width: 0; padding: 1rem 0; display: grid; grid-template-columns: 2.4rem minmax(0, 1fr); gap: .8rem; border-top: 1px solid var(--cr22-color-line); }

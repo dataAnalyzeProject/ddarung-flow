@@ -237,7 +237,7 @@ export default function StationDetailPage({
             <div className="cr22-station__side-panels"><RhythmSummary rhythm={detail?.rhythm} state={detail?.rhythmState} /><NearbyPanel nearby={detail?.nearby || []} state={detail?.nearbyState} onNavigate={onNavigate} /></div>
           </section>
 
-          <section className="cr22-station__ride-cta" aria-label="라이딩 연결"><div><strong>이 대여소에서 바로 라이딩을 시작해 보세요</strong><span>현재 위치와 대여소 정보를 라이딩 화면으로 이어갑니다.</span></div><ConsumerButton onClick={() => onNavigate?.("ride", station?.stationId)}><ConsumerIcon name="ride" size={18} /> 이 대여소에서 라이딩 보기</ConsumerButton></section>
+          <section className="cr22-station__ride-cta cr22-station__ride-cta--compact" aria-label="라이딩 연결"><div><strong>라이딩 둘러보기</strong><span>이 대여소에서 출발하는 주변 경로를 확인합니다.</span></div><ConsumerButton variant="secondary" onClick={() => onNavigate?.("ride", station?.stationId)}><ConsumerIcon name="ride" size={18} /> 이 대여소에서 라이딩 보기</ConsumerButton></section>
           </> : null}
         </AsyncState>
       </ConsumerContainer>

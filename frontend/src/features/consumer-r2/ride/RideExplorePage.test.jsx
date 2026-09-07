@@ -62,6 +62,8 @@ test("requests a real bicycle route for the selected provider POI and all route 
   await waitFor(() => expect(adapter.loadRoute).toHaveBeenCalledWith(expect.objectContaining({ station, poi: pois[0], routeMode: "BIKE_ONLY" })));
   expect(await screen.findByText("약 13분")).toBeInTheDocument();
   expect(screen.getByText("자전거")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /Premium 라이딩 가이드/ })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "다른 장소 선택" })).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "접근성 우선" }));
   await waitFor(() => expect(adapter.loadRoute).toHaveBeenLastCalledWith(expect.objectContaining({ routeMode: "ACCESSIBLE" })));
   fireEvent.click(screen.getByRole("button", { name: "최단 거리" }));

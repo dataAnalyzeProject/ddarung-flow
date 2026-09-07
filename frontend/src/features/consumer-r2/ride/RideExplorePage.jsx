@@ -260,7 +260,6 @@ export default function RideExplorePage({
               </div>
             </section>
 
-            {selectedPoi && routeState === "success" ? <section className="cr22-ride__actions"><ConsumerButton variant="premium" onClick={() => onNavigate?.("guide", stationId)}><ConsumerIcon name="plan" /> Premium 라이딩 가이드</ConsumerButton><ConsumerButton variant="secondary" onClick={clearPoi}>다른 장소 선택</ConsumerButton></section> : null}
           </> : null}
         </AsyncState>
         {pageBusy ? <span className="cr22-sr-only">페이지 준비 중</span> : null}

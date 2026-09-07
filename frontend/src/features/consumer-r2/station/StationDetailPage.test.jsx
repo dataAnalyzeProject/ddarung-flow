@@ -81,7 +81,10 @@ describe("StationDetailPage", () => {
     const adapter = { load: jest.fn().mockResolvedValue(detail()), toggleFavorite: jest.fn() };
     render(<StationDetailPage adapter={adapter} stationId="37-2" onNavigate={onNavigate} />);
     await screen.findByRole("heading", { name: "서울역 2번 출구" });
-    fireEvent.click(screen.getByRole("button", { name: /이 대여소에서 라이딩 보기/ }));
+    const rideAction = screen.getByRole("button", { name: /이 대여소에서 라이딩 보기/ });
+    expect(rideAction).toHaveClass("cr22-button--secondary");
+    expect(rideAction.closest(".cr22-station__ride-cta")).toHaveClass("cr22-station__ride-cta--compact");
+    fireEvent.click(rideAction);
     expect(onNavigate).toHaveBeenCalledWith("ride", "37-2");
   });
 

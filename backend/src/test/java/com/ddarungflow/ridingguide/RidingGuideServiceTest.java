@@ -24,6 +24,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
@@ -41,6 +44,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
 class RidingGuideServiceTest {
@@ -120,6 +124,58 @@ class RidingGuideServiceTest {
         assertThat(response.evidence().weather()).containsKey("weather:ST-4");
         assertThat(response.evidence().airQuality()).containsKey("air-quality:ST-4");
         assertThat(response.evidence().pois()).containsKey("poi:POI-1");
+        verify(ai, times(2)).generate(any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"SUMMARY", "RATIONALE", "STOP_RATIONALE"})
+    void englishOnlyFreeTextRetriesOnceAndFailsAsInvalidSchema(String field) {
+        stubFactualEvidence();
+        when(ai.generate(any())).thenReturn(output(
+                field.equals("SUMMARY") ? "A grounded riding guide" : "근거를 확인한 안내입니다",
+                field.equals("RATIONALE") ? "This uses server evidence" : "서버 근거를 사용했습니다",
+                field.equals("STOP_RATIONALE") ? "A suitable place to rest" : "잠시 쉬기 좋은 장소입니다",
+                10));
+
+        RidingGuideDtos.Response response = service.generate(user, requestWithContext());
+
+        assertThat(response.status()).isEqualTo(RidingGuideDtos.Status.PARTIAL);
+        assertThat(response.aiStatus()).isEqualTo(RidingGuideDtos.AiStatus.UNAVAILABLE);
+        assertThat(response.aiCode()).isEqualTo("AI_OUTPUT_SCHEMA_INVALID");
+        assertThat(response.evidence().rentalCandidates()).containsKey("rental:ST-4");
+        verify(ai, times(2)).generate(any());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = JourneyAiErrorCode.class, names = {
+            "AI_PROVIDER_UNAVAILABLE",
+            "AI_PROVIDER_TIMEOUT",
+            "AI_RESPONSE_INCOMPLETE",
+            "AI_OUTPUT_SCHEMA_INVALID"
+    })
+    void retriableFailureThenKoreanOutputReturnsAvailable(JourneyAiErrorCode errorCode) {
+        stubFactualEvidence();
+        when(ai.generate(any()))
+                .thenThrow(new JourneyAiException(errorCode, "retryable"))
+                .thenReturn(output("근거를 확인한 안내입니다", "서버 근거를 사용했습니다", "잠시 쉬기 좋은 장소입니다", 10));
+
+        RidingGuideDtos.Response response = service.generate(user, requestWithContext());
+
+        assertThat(response.aiStatus()).isEqualTo(RidingGuideDtos.AiStatus.AVAILABLE);
+        assertThat(response.guideSummary()).contains("안내");
+        verify(ai, times(2)).generate(any());
+    }
+
+    @Test
+    void nonRetriableFailureCallsAiOnlyOnce() {
+        stubFactualEvidence();
+        when(ai.generate(any())).thenThrow(new JourneyAiException(
+                JourneyAiErrorCode.AI_PROVIDER_REFUSAL, "refused"));
+
+        RidingGuideDtos.Response response = service.generate(user, requestWithContext());
+
+        assertThat(response.aiCode()).isEqualTo("AI_PROVIDER_REFUSAL");
+        verify(ai).generate(any());
     }
 
     @Test

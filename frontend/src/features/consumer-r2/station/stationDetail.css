@@ -333,6 +333,25 @@
   padding: clamp(3px, 0.9vh, 20px) 26px;
 }
 
+.cr22-station__ride-cta--compact {
+  margin-top: clamp(0.25rem, 0.8vh, 0.6rem);
+  padding: clamp(0.45rem, 1vh, 0.75rem) 0;
+  border-top: 1px solid var(--cr22-color-line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--cr22-color-ink);
+}
+
+.cr22-station__ride-cta--compact strong {
+  font-size: 0.875rem;
+}
+
+.cr22-station__ride-cta--compact span {
+  margin-top: 0.2rem;
+  color: var(--cr22-color-muted);
+  font-size: 0.75rem;
+}
+
 .cr22-station__history-notice {
   margin: clamp(2px, 0.5vh, 16px) 0;
   padding: clamp(3px, 0.6vh, 11px) 16px;

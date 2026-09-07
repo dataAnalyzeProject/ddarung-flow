@@ -107,9 +107,7 @@ public class RidingGuideService {
         }
 
         try {
-            RidingGuideAiGateway.GuideOutput generated = aiGateway.generate(bundle);
-            validateGeneratedText(generated);
-            validateGeneratedRestrictions(generated);
+            RidingGuideAiGateway.GuideOutput generated = generateValidatedGuide(bundle);
             EvidenceSelectionValidator.ValidatedSelection validated = selectionValidator.validate(
                     bundle, generated.selection(), STAY_BOUNDS);
             List<RidingGuideDtos.ItineraryStop> preview = generated.stops().stream()
@@ -394,10 +392,39 @@ public class RidingGuideService {
                 || generated.rationale() == null || generated.rationale().isBlank()
                 || generated.stops().size() > 3
                 || generated.stops().stream().anyMatch(stop -> stop == null || stop.rationale() == null
-                || stop.rationale().isBlank())) {
+                || stop.rationale().isBlank())
+                || !containsHangulSyllable(generated.guideSummary())
+                || !containsHangulSyllable(generated.rationale())
+                || generated.stops().stream().anyMatch(stop -> !containsHangulSyllable(stop.rationale()))) {
             throw new JourneyAiException(JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID,
-                    "riding guide output text is missing");
+                    "riding guide output text must be non-empty Korean prose");
         }
+    }
+
+    private RidingGuideAiGateway.GuideOutput generateValidatedGuide(ConsumerAiEvidenceBundle bundle) {
+        for (int attempt = 0; attempt < 2; attempt++) {
+            try {
+                RidingGuideAiGateway.GuideOutput generated = aiGateway.generate(bundle);
+                validateGeneratedText(generated);
+                validateGeneratedRestrictions(generated);
+                return generated;
+            } catch (JourneyAiException exception) {
+                if (attempt == 0 && isRetriable(exception.code())) continue;
+                throw exception;
+            }
+        }
+        throw new IllegalStateException("riding guide retry loop exhausted");
+    }
+
+    private boolean isRetriable(JourneyAiErrorCode code) {
+        return code == JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE
+                || code == JourneyAiErrorCode.AI_PROVIDER_TIMEOUT
+                || code == JourneyAiErrorCode.AI_RESPONSE_INCOMPLETE
+                || code == JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID;
+    }
+
+    private boolean containsHangulSyllable(String text) {
+        return text != null && text.codePoints().anyMatch(codePoint -> codePoint >= 0xAC00 && codePoint <= 0xD7A3);
     }
 
     private void validateGeneratedRestrictions(RidingGuideAiGateway.GuideOutput generated) {
