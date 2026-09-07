@@ -184,6 +184,7 @@ export default function ConsumerRidingGuidePage({
   authState = "authenticated",
   guideContext = {},
   onNavigate,
+  returnRoute,
   services = consumerGuideAdapter,
   stationId,
   user,
@@ -218,7 +219,7 @@ export default function ConsumerRidingGuidePage({
       <main id="main-content" className="cr22-guide__main">
         <ConsumerContainer>
           {view.state !== "READY" || !guide ? <AccessState accessState={view.state} onNavigate={onNavigate} onRetry={() => setReloadKey((current) => current + 1)} /> : <>
-            <button className="cr22-guide__back" type="button" onClick={() => onNavigate?.("ride", stationId)}><ConsumerIcon name="arrowRight" size={17} /> 대여소로 돌아가기</button>
+            <button className="cr22-guide__back" type="button" onClick={() => returnRoute === "main" ? onNavigate?.("main") : onNavigate?.("ride", stationId)}><ConsumerIcon name="arrowRight" size={17} /> {returnRoute === "main" ? "검색 결과로 돌아가기" : "대여소로 돌아가기"}</button>
             <header className="cr22-guide__hero"><div><h1>Premium Riding Guide</h1><StatusBadge tone="premium">PREMIUM</StatusBadge></div><p>서버가 확인한 대여·날씨·대기질과 실제 장소 정보를 바탕으로 라이딩을 안내합니다.</p></header>
             <FactualOverview guide={guide} />
             {guide.factualPartial ? <aside className="cr22-guide__partial" role="status"><ConsumerIcon name="info" size={19} /><p>일부 사실 정보를 확인하지 못했습니다. 확인 가능한 값만 표시합니다.</p></aside> : null}

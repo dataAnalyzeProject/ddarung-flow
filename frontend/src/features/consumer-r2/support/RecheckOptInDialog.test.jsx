@@ -14,13 +14,15 @@ test("rounds the displayed minimum up so the browser does not offer an invalid m
   expect(screen.getByLabelText(/출발 시각/)).toHaveAttribute("min", "2026-09-03T10:16");
 });
 
-test("starts with an empty departure time instead of a silent default, and names the 15-minute alert lead", async () => {
+test("starts empty and explains the app-inbox recheck without promising external delivery", async () => {
   const onConfirm = jest.fn();
   render(<RecheckOptInDialog now={() => FIXED_NOW} onClose={jest.fn()} onConfirm={onConfirm} open />);
   const input = screen.getByLabelText(/출발 시각/);
   expect(input).toHaveValue("");
-  expect(screen.getByText(/직접 탈 예정인 출발 시각을 입력해 주세요/)).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "15분 전 알림 받기" }));
+  expect(screen.getByText(/앱 내 알림함/)).toHaveTextContent("현재 정보 다시 확인");
+  expect(screen.getByText(/앱 내 알림함/)).toHaveTextContent("푸시·메일·문자 알림은 제공하지 않습니다");
+  expect(screen.queryByText(/알림을 보내 드/)).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "재확인 예약하기" }));
   expect(screen.getByRole("alert")).toHaveTextContent("출발 시각을 입력해 주세요.");
   expect(onConfirm).not.toHaveBeenCalled();
 });
@@ -30,10 +32,10 @@ test("requests only departureAt and returns an ISO time", async () => {
   render(<RecheckOptInDialog now={() => FIXED_NOW} onClose={jest.fn()} onConfirm={onConfirm} open />);
   const input = screen.getByLabelText(/출발 시각/);
   fireEvent.change(input, { target: { value: "2026-09-03T10:14" } });
-  fireEvent.click(screen.getByRole("button", { name: "15분 전 알림 받기" }));
+  fireEvent.click(screen.getByRole("button", { name: "재확인 예약하기" }));
   expect(screen.getByRole("alert")).toHaveTextContent("15분 이후");
   fireEvent.change(input, { target: { value: "2026-09-03T10:30" } });
-  fireEvent.click(screen.getByRole("button", { name: "15분 전 알림 받기" }));
+  fireEvent.click(screen.getByRole("button", { name: "재확인 예약하기" }));
   expect(onConfirm).toHaveBeenCalledWith(new Date("2026-09-03T10:30").toISOString());
   expect(screen.queryByLabelText(/대여소|확률|재고|날씨|경로/)).not.toBeInTheDocument();
 });
@@ -50,7 +52,7 @@ test("traps focus, closes with Escape, and restores the opener", async () => {
   expect(document.body).toHaveStyle({ overflow: "hidden" });
   await waitFor(() => expect(screen.getByLabelText(/출발 시각/)).toHaveFocus());
   const close = screen.getByRole("button", { name: "재확인 신청 닫기" });
-  const submit = screen.getByRole("button", { name: "15분 전 알림 받기" });
+  const submit = screen.getByRole("button", { name: "재확인 예약하기" });
   submit.focus();
   fireEvent.keyDown(submit, { key: "Tab" });
   expect(close).toHaveFocus();

@@ -364,7 +364,7 @@ class KakaoMapClientTest {
     }
 
     @Test
-    void normalizesPublicTransitDetailsAndSelectsTheDeterministicBestRoute() {
+    void selectsTheDeterministicBestPublicTransitRouteWithoutTrustingLegacyDetailFields() {
         String jsonBody = """
             {
               "status": "OK",
@@ -399,10 +399,54 @@ class KakaoMapClientTest {
         assertThat(route.distanceMeters()).isEqualTo(4500);
         assertThat(route.durationSeconds()).isEqualTo(900);
         assertThat(route.transfers()).isEqualTo(1);
-        assertThat(route.fare()).isEqualTo(1450);
+        assertThat(route.fare()).isNull();
+        assertThat(route.steps()).extracting(MapApiDtos.RouteStepDto::type).containsExactly("TRANSIT", "TRANSIT");
+        assertThat(route.steps()).extracting(MapApiDtos.RouteStepDto::guidance).containsOnlyNulls();
+        assertThat(route.pathPoints()).hasSize(4);
+    }
+
+    @Test
+    void normalizesOfficialProviderShapedPublicTransitDetails() {
+        String jsonBody = """
+            {
+              "status": "OK",
+              "routes": [{
+                "properties": { "totalDistance": 4500, "totalTime": 900, "transfers": 1, "fare": { "value": 1350 } },
+                "steps": [
+                  {
+                    "properties": {
+                      "type": "WALKING", "guidance": "역까지 걸어가세요", "distance": 120, "time": 100,
+                      "stops": [{ "name": "출발" }], "vehicles": []
+                    },
+                    "path": { "points": [[126.9000, 37.5500], [126.9010, 37.5510]] }
+                  },
+                  {
+                    "properties": {
+                      "type": "SUBWAY", "guidance": "2호선을 이용하세요", "distance": 4380, "time": 800,
+                      "stops": [{ "name": "시청역" }, { "name": "성수역" }],
+                      "vehicles": [{ "name": "2호선", "type": "일반" }]
+                    },
+                    "path": { "points": [[126.9010, 37.5510], [126.9770, 37.5660]] }
+                  }
+                ]
+              }]
+            }
+            """;
+
+        MapApiDtos.RouteResultDto route = new KakaoMapClient("https://dapi.kakao.com", "test-key", request -> response(200, jsonBody))
+            .fetchRoute(new BigDecimal("37.5500"), new BigDecimal("126.9000"),
+                new BigDecimal("37.5660"), new BigDecimal("126.9770"), "PUBLIC_TRANSIT")
+            .orElseThrow();
+
+        assertThat(route.transfers()).isEqualTo(1);
+        assertThat(route.fare()).isEqualTo(1350);
         assertThat(route.steps()).extracting(MapApiDtos.RouteStepDto::type).containsExactly("WALKING", "SUBWAY");
+        assertThat(route.steps()).extracting(MapApiDtos.RouteStepDto::guidance).containsExactly("역까지 걸어가세요", "2호선을 이용하세요");
+        assertThat(route.steps()).extracting(MapApiDtos.RouteStepDto::distanceMeters).containsExactly(120, 4380);
+        assertThat(route.steps()).extracting(MapApiDtos.RouteStepDto::durationSeconds).containsExactly(100, 800);
         assertThat(route.steps().get(0).stops()).extracting(MapApiDtos.RouteStopDto::name).containsExactly("출발");
-        assertThat(route.steps().get(1).vehicles()).containsExactly(new MapApiDtos.RouteVehicleDto("2호선", "SUBWAY"));
+        assertThat(route.steps().get(1).stops()).extracting(MapApiDtos.RouteStopDto::name).containsExactly("시청역", "성수역");
+        assertThat(route.steps().get(1).vehicles()).containsExactly(new MapApiDtos.RouteVehicleDto("2호선", "일반"));
         assertThat(route.pathPoints()).hasSize(4);
     }
 
@@ -480,8 +524,8 @@ class KakaoMapClientTest {
         MapApiDtos.RouteResultDto route = new KakaoMapClient("https://dapi.kakao.com", "test-key",
             request -> response(200, """
                 { "status": "OK", "routes": [{
-                  "properties": { "totalDistance": 4200, "totalTime": 1080 },
-                  "steps": [{ "type": "BUS" }]
+                  "properties": { "totalDistance": 4200, "totalTime": 1080, "fare": { "min": 1350, "max": 2000 } },
+                  "steps": [{ "properties": {} }]
                 }] }
                 """))
             .fetchRoute(new BigDecimal("37.5500"), new BigDecimal("126.9000"),
@@ -491,6 +535,7 @@ class KakaoMapClientTest {
         assertThat(route.transfers()).isNull();
         assertThat(route.fare()).isNull();
         assertThat(route.steps()).singleElement().satisfies(step -> {
+            assertThat(step.type()).isEqualTo("TRANSIT");
             assertThat(step.guidance()).isNull();
             assertThat(step.distanceMeters()).isNull();
             assertThat(step.durationSeconds()).isNull();
@@ -499,6 +544,25 @@ class KakaoMapClientTest {
             assertThat(step.pathPoints()).isEmpty();
         });
         assertThat(route.pathPoints()).isEmpty();
+    }
+
+    @Test
+    void preservesUnknownProviderStepTypesInsteadOfDroppingOrRelabelingThemAsWalking() {
+        MapApiDtos.RouteResultDto route = new KakaoMapClient("https://dapi.kakao.com", "test-key",
+            request -> response(200, """
+                { "status": "OK", "routes": [{
+                  "properties": { "totalDistance": 1200, "totalTime": 600 },
+                  "steps": [{ "properties": { "type": "FUTURE_TRANSIT", "guidance": "새 교통수단 이용" } }]
+                }] }
+                """))
+            .fetchRoute(new BigDecimal("37.5500"), new BigDecimal("126.9000"),
+                new BigDecimal("37.5660"), new BigDecimal("126.9770"), "PUBLIC_TRANSIT")
+            .orElseThrow();
+
+        assertThat(route.steps()).singleElement().satisfies(step -> {
+            assertThat(step.type()).isEqualTo("FUTURE_TRANSIT");
+            assertThat(step.guidance()).isEqualTo("새 교통수단 이용");
+        });
     }
 
     @Test

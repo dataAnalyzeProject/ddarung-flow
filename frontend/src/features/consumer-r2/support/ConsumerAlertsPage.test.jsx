@@ -64,9 +64,9 @@ test("creates search and plan recheck opt-ins with only the selected departure t
   await screen.findByRole("heading", { name: "출발 전 재확인" });
   fireEvent.click(screen.getByRole("button", { name: "현재 검색 알림 받기" }));
   fireEvent.change(screen.getByLabelText(/출발 시각/), { target: { value: "2026-09-03T11:00" } });
-  fireEvent.click(screen.getByRole("button", { name: "15분 전 알림 받기" }));
+  fireEvent.click(screen.getByRole("button", { name: "재확인 예약하기" }));
   await waitFor(() => expect(api.createSearchRecheck).toHaveBeenCalledWith(searchInput, new Date(2026, 8, 3, 11, 0).toISOString()));
-  expect(await screen.findByText("출발 15분 전 재확인 알림을 신청했습니다.")).toBeInTheDocument();
+  expect(await screen.findByText("재확인 예약을 등록했습니다. 출발 전에 앱 내 알림함에서 재확인 안내를 확인하세요.")).toBeInTheDocument();
 
   fireEvent.click(screen.getByRole("button", { name: "저장한 계획 알림 받기" }));
   fireEvent.change(screen.getByLabelText(/출발 시각/), { target: { value: "2026-09-03T12:00" } });

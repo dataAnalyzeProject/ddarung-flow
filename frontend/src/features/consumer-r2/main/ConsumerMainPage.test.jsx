@@ -21,7 +21,7 @@ const routeDetail = {
   pathPoints: [{ latitude: 37.5547, longitude: 126.9707 }, { latitude: 37.5444, longitude: 127.0374 }],
   transfers: 1,
   fare: 1400,
-  steps: [{ type: "SUBWAY", guidance: "1호선에서 2호선으로 환승", distanceMeters: 2600, durationSeconds: 780, vehicles: [{ name: "2호선", type: "SUBWAY" }] }],
+  steps: [{ type: "SUBWAY", guidance: "1호선에서 2호선으로 환승", distanceMeters: 2600, durationSeconds: 780, stops: [{ name: "서울역" }, { name: "성수역" }], vehicles: [{ name: "2호선", type: "일반" }] }],
 };
 
 const candidates = [
@@ -301,15 +301,57 @@ test("drops a previous in-flight comparison when another search is restored", as
 });
 
 test("passes the selected candidate and current input conditions to destination routes", async () => {
+  const onOpenGuide = jest.fn();
   const onOpenRide = jest.fn();
   const onOpenStation = jest.fn();
-  render(<ConsumerMainPage services={createServices()} mapRenderer={PreviewMap} onOpenRide={onOpenRide} onOpenStation={onOpenStation} />);
+  render(<ConsumerMainPage services={createServices()} mapRenderer={PreviewMap} onOpenGuide={onOpenGuide} onOpenRide={onOpenRide} onOpenStation={onOpenStation} />);
   await waitFor(() => expect(screen.getByRole("button", { name: "대여 가능성 비교" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "대여 가능성 비교" }));
+  const guideButton = await screen.findByRole("button", { name: "라이딩 가이드" });
+  expect(guideButton).toHaveClass("cr22-button--premium");
+  fireEvent.click(guideButton);
   fireEvent.click(await screen.findByRole("button", { name: "라이딩 둘러보기" }));
   fireEvent.click(screen.getByRole("button", { name: "대여소 상세" }));
+  expect(onOpenGuide).toHaveBeenCalledWith(expect.objectContaining({ stationId: "ST-1", probability: 0.91 }), searchInput);
   expect(onOpenRide).toHaveBeenCalledWith(expect.objectContaining({ stationId: "ST-1", probability: 0.91 }), searchInput);
   expect(onOpenStation).toHaveBeenCalledWith(expect.objectContaining({ stationId: "ST-1" }), searchInput);
+});
+
+test("shows provider-supplied transit fare, vehicle subtype, and stop endpoints without inventing missing facts", async () => {
+  render(<ConsumerMainPage services={createServices()} mapRenderer={PreviewMap} />);
+  await waitFor(() => expect(screen.getByRole("button", { name: "대여 가능성 비교" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "대여 가능성 비교" }));
+  fireEvent.click(await screen.findByRole("button", { name: "대중교통 경로 상세" }));
+
+  expect(screen.getByText(/1,400원/)).toBeInTheDocument();
+  expect(screen.getByText("2호선 일반")).toBeInTheDocument();
+  expect(screen.getByText("서울역 → 성수역")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "경로 상세 닫기" }));
+  expect(await screen.findByRole("heading", { name: "추천 대여소" })).toBeInTheDocument();
+});
+
+test.each([
+  ["fare", { fare: null, transfers: null }, "요금 확인 불가", "환승 횟수 확인 불가"],
+  ["stops", { steps: [{ ...routeDetail.steps[0], stops: [] }] }, null, "서울역 → 성수역"],
+  ["vehicles", { steps: [{ ...routeDetail.steps[0], vehicles: [] }] }, null, "2호선 일반"],
+])("does not fabricate missing transit %s", async (_field, detailChanges, expected, absent) => {
+  const candidate = { ...candidates[0], routeDetail: { ...routeDetail, ...detailChanges } };
+  render(<ConsumerMainPage services={createServices({ fetchRouteCandidates: jest.fn().mockResolvedValue({ candidates: [candidate] }) })} mapRenderer={PreviewMap} />);
+  fireEvent.click(await screen.findByRole("button", { name: "대여 가능성 비교" }));
+  fireEvent.click(await screen.findByRole("button", { name: "대중교통 경로 상세" }));
+
+  if (expected) expect(screen.getByText(new RegExp(expected))).toBeInTheDocument();
+  expect(screen.queryByText(absent)).not.toBeInTheDocument();
+  if (_field === "fare") expect(screen.queryByText(/0원/)).not.toBeInTheDocument();
+});
+
+test("does not expose transit detail when the provider supplied no routeDetail", async () => {
+  const candidate = { ...candidates[0], routeDetail: null };
+  render(<ConsumerMainPage services={createServices({ fetchRouteCandidates: jest.fn().mockResolvedValue({ candidates: [candidate] }) })} mapRenderer={PreviewMap} />);
+  fireEvent.click(await screen.findByRole("button", { name: "대여 가능성 비교" }));
+
+  expect(await screen.findByRole("heading", { name: "추천 대여소" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "대중교통 경로 상세" })).not.toBeInTheDocument();
 });
 
 test("opens a browsed map station without changing the selected prediction candidate", async () => {
@@ -329,12 +371,14 @@ test("creates a search recheck only after the user confirms an explicit departur
   render(<ConsumerMainPage services={services} mapRenderer={PreviewMap} />);
   await waitFor(() => expect(screen.getByRole("button", { name: "대여 가능성 비교" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "대여 가능성 비교" }));
-  fireEvent.click(await screen.findByRole("button", { name: "알림 신청" }));
+  const recheckButton = await screen.findByRole("button", { name: "출발 전 재확인 예약" });
+  expect(recheckButton).toHaveClass("cr293-evidence__recheck");
+  fireEvent.click(recheckButton);
   expect(services.createSearchRecheck).not.toHaveBeenCalled();
   const departureAt = "2099-09-03T18:30";
   fireEvent.change(screen.getByLabelText(/출발 시각/), { target: { value: departureAt } });
-  fireEvent.click(screen.getByRole("button", { name: "15분 전 알림 받기" }));
-  expect(await screen.findByText("출발 15분 전 재확인 알림을 신청했습니다.")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "재확인 예약하기" }));
+  expect(await screen.findByText(/재확인 예약을 등록했습니다/)).toHaveTextContent("앱 내 알림함");
   expect(services.createSearchRecheck).toHaveBeenCalledWith(searchInput, new Date(departureAt).toISOString());
 });
 
@@ -348,10 +392,10 @@ test("keeps comparison results when optional recent-search storage or recheck cr
   fireEvent.click(screen.getByRole("button", { name: "대여 가능성 비교" }));
   expect(await screen.findByRole("heading", { name: "추천 대여소" })).toBeInTheDocument();
   expect(screen.getByText("비교 결과는 확인했지만 최근 검색을 저장하지 못했습니다.")).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "알림 신청" }));
+  fireEvent.click(screen.getByRole("button", { name: "출발 전 재확인 예약" }));
   fireEvent.change(screen.getByLabelText(/출발 시각/), { target: { value: "2099-09-03T18:30" } });
-  fireEvent.click(screen.getByRole("button", { name: "15분 전 알림 받기" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("재확인 알림을 신청하지 못했습니다.");
+  fireEvent.click(screen.getByRole("button", { name: "재확인 예약하기" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("재확인 예약을 등록하지 못했습니다.");
   expect(screen.getByRole("heading", { name: "추천 대여소" })).toBeInTheDocument();
 });
 
