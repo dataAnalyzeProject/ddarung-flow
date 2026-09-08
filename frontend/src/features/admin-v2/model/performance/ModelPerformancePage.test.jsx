@@ -115,6 +115,38 @@ describe('ModelPerformancePage', () => {
     expect(screen.getAllByText('표본 없음')).toHaveLength(2);
   });
 
+  test('paginates the diagnostics table instead of rendering every segment at once', async () => {
+    const segments = Array.from({ length: 120 }, (_, index) => ({
+      axis: 'STATION', segmentValue: `${1000 + index}`, status: 'NORMAL', sampleCount: 1200 + index,
+      brierScore: 0.0304, baselineBrierScore: 0.0501, skillScore: 0.39, shortageRecall: 0.61,
+    }));
+    renderPage({ load: jest.fn().mockResolvedValue({ base: base(), runtime: runtime(), diagnostics: { state: 'SUCCESS', data: { segments } } }) });
+    const table = await screen.findByRole('table', { name: 'segment별 성능 진단' });
+    expect(within(table).getAllByRole('row')).toHaveLength(51);
+    expect(screen.getByText('1000')).toBeInTheDocument();
+    expect(screen.queryByText('1050')).not.toBeInTheDocument();
+    expect(screen.getByText('1–50 / 전체 120건 · 1 / 3 페이지')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '이전' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: '다음' }));
+    expect(screen.getByText('1050')).toBeInTheDocument();
+    expect(screen.queryByText('1000')).not.toBeInTheDocument();
+    expect(screen.getByText('51–100 / 전체 120건 · 2 / 3 페이지')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '다음' }));
+    expect(within(screen.getByRole('table', { name: 'segment별 성능 진단' })).getAllByRole('row')).toHaveLength(21);
+    expect(screen.getByText('101–120 / 전체 120건 · 3 / 3 페이지')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '다음' })).toBeDisabled();
+  });
+
+  test('omits the diagnostics pager when every segment already fits one page', async () => {
+    const segments = Array.from({ length: 50 }, (_, index) => ({ axis: 'STATION', segmentValue: `${2000 + index}`, status: 'NORMAL', sampleCount: 1200 }));
+    renderPage({ load: jest.fn().mockResolvedValue({ base: base(), runtime: runtime(), diagnostics: { state: 'SUCCESS', data: { segments } } }) });
+    expect(await screen.findByRole('table', { name: 'segment별 성능 진단' })).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: '진단 목록 페이지' })).not.toBeInTheDocument();
+    expect(screen.getByText('50개')).toBeInTheDocument();
+  });
+
   test('retries a non-access base error without inventing score values', async () => {
     const load = jest.fn().mockRejectedValueOnce(Object.assign(new Error('server'), { status: 500, code: 'MODEL_PERFORMANCE_API_ERROR' })).mockResolvedValueOnce({ base: base(), runtime: runtime() });
     renderPage({ load });
