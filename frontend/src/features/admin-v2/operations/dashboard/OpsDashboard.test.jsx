@@ -41,6 +41,7 @@ describe('OpsDashboard', () => {
     expect(screen.getByText('CRITICAL 대여 부족')).toBeInTheDocument();
     expect(screen.getByText('HIGH 대여 부족')).toBeInTheDocument();
     expect(screen.getByText('WATCH 대여 부족')).toBeInTheDocument();
+    expect(screen.getByText(/LOW 111/)).toBeInTheDocument();
     expect(screen.getByText(/Coverage · active 120곳 · eligible 116곳 · evaluated 116곳 · normal 116곳/)).toBeInTheDocument();
     expect(screen.getAllByText('데이터 상태')).toHaveLength(2);
     expect(screen.getByRole('heading', { name: '수급 위험 지도' })).toBeInTheDocument();
