@@ -68,6 +68,8 @@ public class AdminExportsController {
     ResponseEntity<AdminExportDtos.ErrorResponse> fileNotFound(ExportFileService.ExportFileNotFoundException error) { return error(HttpStatus.NOT_FOUND, "EXPORT_FILE_NOT_FOUND", "내보내기 파일을 찾을 수 없습니다."); }
     @ExceptionHandler(ExportFileService.ExportExpiredException.class)
     ResponseEntity<AdminExportDtos.ErrorResponse> expired(ExportFileService.ExportExpiredException error) { return error(HttpStatus.GONE, "EXPORT_EXPIRED", "내보내기 파일이 만료되었습니다."); }
+    @ExceptionHandler(ExportFileService.ExportSourceUnavailableException.class)
+    ResponseEntity<AdminExportDtos.ErrorResponse> sourceUnavailable(ExportFileService.ExportSourceUnavailableException error) { return error(HttpStatus.UNPROCESSABLE_ENTITY, "EXPORT_SOURCE_UNAVAILABLE", "선택한 데이터 원본은 현재 내보내기를 지원하지 않습니다."); }
     @ExceptionHandler(ExportFileService.ExportGenerationException.class)
     ResponseEntity<AdminExportDtos.ErrorResponse> generationFailed(ExportFileService.ExportGenerationException error) { return error(HttpStatus.INTERNAL_SERVER_ERROR, "EXPORT_GENERATION_FAILED", "내보내기 파일 생성에 실패했습니다."); }
     private ResponseEntity<AdminExportDtos.ErrorResponse> error(HttpStatus status, String code, String message) { return ResponseEntity.status(status).body(new AdminExportDtos.ErrorResponse(code, message)); }

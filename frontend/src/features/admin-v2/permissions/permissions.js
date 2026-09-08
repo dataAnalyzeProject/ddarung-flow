@@ -22,7 +22,7 @@ const ROLE_BUNDLES = {
   SUPER_ADMIN: PERMISSIONS,
 };
 
-export const CONSOLE_ORDER = ['OPS', 'MODEL', 'SYSTEM'];
+export const CONSOLE_ORDER = ['OPS', 'DATA', 'MODEL', 'SYSTEM'];
 
 export function permissionsForRoles(roleIds) {
   return [...new Set((roleIds || []).flatMap((roleId) => ROLE_BUNDLES[roleId] || []))];

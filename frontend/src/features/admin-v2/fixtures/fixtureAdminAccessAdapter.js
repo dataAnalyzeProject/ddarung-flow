@@ -5,7 +5,7 @@ const READY_FIXTURES = {
   OPS_VIEWER: { adminRoles: ['OPS_VIEWER'], defaultConsole: 'OPS' },
   OPS_OPERATOR: { adminRoles: ['OPS_OPERATOR'], defaultConsole: 'OPS' },
   OPS_MANAGER: { adminRoles: ['OPS_MANAGER'], defaultConsole: 'OPS' },
-  DATA_ANALYST: { adminRoles: ['DATA_ANALYST'], defaultConsole: 'OPS' },
+  DATA_ANALYST: { adminRoles: ['DATA_ANALYST'], defaultConsole: 'DATA' },
   MODEL_ENGINEER: { adminRoles: ['MODEL_ENGINEER'], defaultConsole: 'MODEL' },
   MODEL_APPROVER: { adminRoles: ['MODEL_APPROVER'], defaultConsole: 'MODEL' },
   SUPPORT_OPERATOR: { adminRoles: ['SUPPORT_OPERATOR'], defaultConsole: 'SYSTEM' },

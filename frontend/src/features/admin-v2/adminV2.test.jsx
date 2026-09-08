@@ -67,9 +67,9 @@ afterEach(() => { setPreviewUrl('/'); window.matchMedia = originalMatchMedia; })
 
 describe('admin v2 fixture access and routes', () => {
   test.each([
-    ['OPS_VIEWER', ['OPS']], ['OPS_OPERATOR', ['OPS']], ['OPS_MANAGER', ['OPS']], ['DATA_ANALYST', ['OPS', 'MODEL']],
+    ['OPS_VIEWER', ['OPS', 'DATA']], ['OPS_OPERATOR', ['OPS', 'DATA']], ['OPS_MANAGER', ['OPS', 'DATA']], ['DATA_ANALYST', ['OPS', 'DATA', 'MODEL']],
     ['MODEL_ENGINEER', ['MODEL']], ['MODEL_APPROVER', ['MODEL']], ['SUPPORT_OPERATOR', ['SYSTEM']], ['AUDITOR', ['SYSTEM']],
-    ['ACCESS_ADMIN', ['SYSTEM']], ['SUPER_ADMIN', ['OPS', 'MODEL', 'SYSTEM']],
+    ['ACCESS_ADMIN', ['SYSTEM']], ['SUPER_ADMIN', ['OPS', 'DATA', 'MODEL', 'SYSTEM']],
   ])('%s exposes only permission-derived consoles', async (fixtureId, expectedConsoles) => {
     const access = await createFixtureAdminAccessAdapter({ fixtureId }).load();
     expect(visibleConsoles(access.permissions)).toEqual(expectedConsoles);
@@ -269,13 +269,15 @@ describe('admin v2 fixture access and routes', () => {
     expect(screen.queryByText('UI-MODEL-01')).not.toBeInTheDocument();
   });
 
-  test('route metadata exactly matches the approved 15-route canonical matrix', () => {
+  test('route metadata exactly matches the approved DATA completion canonical matrix', () => {
     expect(ROUTES.map(({ id, canonicalPath, previewPath, title, console, requiredPermission }) => ({ id, canonicalPath, previewPath, title, console, requiredPermission }))).toEqual([
       { id: 'UI-OPS-01', canonicalPath: '/admin/ops', previewPath: '/admin-v2-preview/ops', title: '운영 상황판', console: 'OPS', requiredPermission: 'OPS_DASHBOARD_READ' },
       { id: 'UI-OPS-02', canonicalPath: '/admin/ops/risk-map', previewPath: '/admin-v2-preview/ops/risk-map', title: '수급 위험 지도', console: 'OPS', requiredPermission: 'OPS_RISK_MAP_READ' },
       { id: 'UI-OPS-03', canonicalPath: '/admin/ops/candidates', previewPath: '/admin-v2-preview/ops/candidates', title: '집중관리 목록', console: 'OPS', requiredPermission: 'OPS_CANDIDATE_READ' },
       { id: 'UI-OPS-04', canonicalPath: '/admin/ops/analysis', previewPath: '/admin-v2-preview/ops/analysis', title: '반복 품절 패턴', console: 'OPS', requiredPermission: 'OPS_ANALYSIS_READ' },
-      { id: 'UI-OPS-05', canonicalPath: '/admin/ops/data', previewPath: '/admin-v2-preview/ops/data', title: '운영 데이터 상태', console: 'OPS', requiredPermission: 'DATA_STATUS_READ' },
+      { id: 'UI-DATA-01', canonicalPath: '/admin/data/status', previewPath: '/admin-v2-preview/data/status', title: '데이터 상태', console: 'DATA', requiredPermission: 'DATA_STATUS_READ' },
+      { id: 'UI-DATA-02', canonicalPath: '/admin/data/pipeline', previewPath: '/admin-v2-preview/data/pipeline', title: '수집·가공 파이프라인', console: 'DATA', requiredPermission: 'DATA_STATUS_READ' },
+      { id: 'UI-OPS-05', canonicalPath: '/admin/ops/data', previewPath: '/admin-v2-preview/ops/data', title: '데이터 상태 (이전 주소)', console: 'DATA', requiredPermission: 'DATA_STATUS_READ' },
       { id: 'UI-OPS-06', canonicalPath: '/admin/ops/reports', previewPath: '/admin-v2-preview/ops/reports', title: '운영 리포트', console: 'OPS', requiredPermission: 'OPS_REPORT_EXPORT' },
       { id: 'UI-OPS-07', canonicalPath: '/admin/ops/digital-twin', previewPath: '/admin-v2-preview/ops/digital-twin', title: '디지털 트윈', console: 'OPS', requiredPermission: 'OPS_SCENARIO_READ' },
       { id: 'UI-MODEL-01', canonicalPath: '/admin/models', previewPath: '/admin-v2-preview/models', title: '모델 운영 현황', console: 'MODEL', requiredPermission: 'MODEL_METRICS_READ' },
@@ -322,13 +324,15 @@ describe('admin v2 fixture access and routes', () => {
   });
 
   test('canonical production routes apply the release gate before permissions', () => {
-    expect(PRODUCTION_RELEASED_ROUTE_IDS).toEqual(['UI-OPS-01', 'UI-OPS-02', 'UI-OPS-03', 'UI-OPS-04', 'UI-OPS-05', 'UI-MODEL-01', 'UI-MODEL-02', 'UI-MODEL-04', 'UI-SYS-01', 'UI-SYS-02', 'UI-SYS-03']);
+    expect(PRODUCTION_RELEASED_ROUTE_IDS).toEqual(['UI-OPS-01', 'UI-OPS-02', 'UI-OPS-03', 'UI-OPS-04', 'UI-DATA-01', 'UI-DATA-02', 'UI-OPS-05', 'UI-MODEL-01', 'UI-MODEL-02', 'UI-MODEL-04', 'UI-SYS-01', 'UI-SYS-02', 'UI-SYS-03']);
     expect(resolveCanonicalRoute('/admin/ops', { permissions: ['OPS_DASHBOARD_READ'] })).toMatchObject({ type: 'ALLOW', route: { id: 'UI-OPS-01' } });
     expect(resolveCanonicalRoute('/admin/ops/risk-map', { permissions: [] })).toMatchObject({ type: 'FORBIDDEN', route: { requiredPermission: 'OPS_RISK_MAP_READ' } });
     expect(resolveCanonicalRoute('/admin/ops/candidates', { permissions: ['OPS_CANDIDATE_READ'] })).toMatchObject({ type: 'ALLOW', route: { id: 'UI-OPS-03' } });
     expect(resolveCanonicalRoute('/admin/ops/analysis', { permissions: ['OPS_ANALYSIS_READ'] })).toMatchObject({ type: 'ALLOW', route: { id: 'UI-OPS-04', canonicalPath: '/admin/ops/analysis', title: '반복 품절 패턴', requiredPermission: 'OPS_ANALYSIS_READ' } });
     expect(resolveCanonicalRoute('/admin/ops/analysis', { permissions: [] })).toMatchObject({ type: 'FORBIDDEN', route: { id: 'UI-OPS-04', requiredPermission: 'OPS_ANALYSIS_READ' } });
-    expect(resolveCanonicalRoute('/admin/ops/data', { permissions: ['DATA_STATUS_READ'] })).toMatchObject({ type: 'ALLOW', route: { id: 'UI-OPS-05', title: '운영 데이터 상태', requiredPermission: 'DATA_STATUS_READ' } });
+    expect(resolveCanonicalRoute('/admin/data/status', { permissions: ['DATA_STATUS_READ'] })).toMatchObject({ type: 'ALLOW', route: { id: 'UI-DATA-01', title: '데이터 상태', requiredPermission: 'DATA_STATUS_READ' } });
+    expect(resolveCanonicalRoute('/admin/data/pipeline', { permissions: ['DATA_STATUS_READ'] })).toMatchObject({ type: 'ALLOW', route: { id: 'UI-DATA-02', requiredPermission: 'DATA_STATUS_READ' } });
+    expect(resolveCanonicalRoute('/admin/ops/data', { permissions: ['DATA_STATUS_READ'] })).toMatchObject({ type: 'ALLOW', route: { id: 'UI-OPS-05', title: '데이터 상태 (이전 주소)', requiredPermission: 'DATA_STATUS_READ' } });
     expect(resolveCanonicalRoute('/admin/ops/data', { permissions: [] })).toMatchObject({ type: 'FORBIDDEN', route: { id: 'UI-OPS-05', requiredPermission: 'DATA_STATUS_READ' } });
     ['UI-OPS-06', 'UI-OPS-07', 'UI-SYS-04', 'UI-SYS-05'].forEach((id) => {
       const route = ROUTES.find((candidate) => candidate.id === id);
@@ -357,7 +361,8 @@ describe('admin v2 fixture access and routes', () => {
     expect(routesForConsole('MODEL', modelMetricsPermissions, PRODUCTION_RELEASED_ROUTE_IDS).map(({ id }) => id)).toEqual(['UI-MODEL-01', 'UI-MODEL-02']);
     expect(routesForConsole('MODEL', modelReleasePermissions, PRODUCTION_RELEASED_ROUTE_IDS).map(({ id }) => id)).toEqual(['UI-MODEL-04']);
     expect(routesForConsole('MODEL', modelPermissions, PRODUCTION_RELEASED_ROUTE_IDS).map(({ id }) => id)).toEqual(['UI-MODEL-01', 'UI-MODEL-02', 'UI-MODEL-04']);
-    expect(routesForConsole('OPS', ['DATA_STATUS_READ'], PRODUCTION_RELEASED_ROUTE_IDS).map(({ id }) => id)).toEqual(['UI-OPS-05']);
+    expect(routesForConsole('OPS', ['DATA_STATUS_READ'], PRODUCTION_RELEASED_ROUTE_IDS).map(({ id }) => id)).toEqual([]);
+    expect(routesForConsole('DATA', ['DATA_STATUS_READ'], PRODUCTION_RELEASED_ROUTE_IDS).map(({ id }) => id)).toEqual(['UI-DATA-01', 'UI-DATA-02']);
     expect(routesForConsole('SYSTEM', ['QNA_READ'], PRODUCTION_RELEASED_ROUTE_IDS).map(({ id }) => id)).toEqual(['UI-SYS-01']);
     expect(visibleConsoles(['QNA_READ'], PRODUCTION_RELEASED_ROUTE_IDS)).toEqual(['SYSTEM']);
     expect(visibleConsoles(['ACCESS_READ'], PRODUCTION_RELEASED_ROUTE_IDS)).toEqual(['SYSTEM']);

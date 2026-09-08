@@ -10,7 +10,7 @@ public final class AdminOpsDataStatusDtos {
 
     public record Response(OffsetDateTime referenceTime, OffsetDateTime generatedAt, String dataState,
                            Inventory inventory, Prediction prediction, RuntimeAnalysis runtimeAnalysis,
-                           Profile profile, List<String> limitations) { }
+                           Profile profile, GlobalRisk globalRisk, List<String> limitations) { }
 
     public record Inventory(String dataState, long expectedStationCount, long latestStationCount,
                             long missingStationCount, OffsetDateTime latestCollectedAt,
@@ -42,4 +42,12 @@ public final class AdminOpsDataStatusDtos {
     public record Profile(String dataState, long activePublicStationCount,
                           long profileAvailableStationCount, BigDecimal coverageRatio,
                           OffsetDateTime latestGeneratedAt) { }
+
+    public record GlobalRisk(String dataState, String resultId, OffsetDateTime referenceTime,
+                             OffsetDateTime publishedAt, OffsetDateTime freshUntil, OffsetDateTime expiresAt,
+                             Integer activePublicStationCount, Integer evaluatedStationCount,
+                             Integer normalInferenceCount, Integer inventoryMissingCount,
+                             Integer inventoryDelayedCount, Integer inventoryUnavailableCount,
+                             Integer inferenceInsufficientCount, Integer unevaluatedCount,
+                             Long generationDurationMs, String modelVersion) { }
 }

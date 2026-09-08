@@ -32,8 +32,15 @@ const dataStatus = {
   inventory: { dataState: 'NORMAL', expectedStationCount: 4, latestStationCount: 4, missingStationCount: 0, latestCollectedAt: '2026-08-31T08:58:00+09:00', p50DelayMinutes: 2, p95DelayMinutes: 4, inventoryStatusBreakdown: { NORMAL: 4, UNAVAILABLE: 0 } },
   prediction: { dataState: 'NORMAL', featureAsOf: '2026-08-31T08:00:00+09:00', generatedAt: '2026-08-31T08:01:00+09:00', publishedAt: '2026-08-31T08:02:00+09:00', expiresAt: '2026-08-31T10:00:00+09:00', predictedStationCount: 4, predictionRowCount: 4, coverageRatio: 1 },
   profile: { dataState: 'NORMAL', activePublicStationCount: 4, profileAvailableStationCount: 3, coverageRatio: 0.75, latestGeneratedAt: '2026-08-30T09:00:00+09:00' },
+  runtimeAnalysis: { dataState: 'INSUFFICIENT_DATA', hasRecentSnapshot: false, snapshotExpired: false },
+  globalRisk: { dataState: 'NORMAL', resultId: 'preview-global', referenceTime: REFERENCE_TIME, publishedAt: '2026-08-31T09:01:00+09:00', activePublicStationCount: 4, evaluatedStationCount: 4, normalInferenceCount: 4, inventoryMissingCount: 0 },
+  permissions: ['DATA_STATUS_READ', 'DATA_EXPORT_REQUEST', 'DATA_EXPORT_DOWNLOAD'],
   limitations: ['AFFECTED_SCOPE_NOT_SOURCE_BACKED'],
 };
+const pipelineStatus = { referenceTime: REFERENCE_TIME, generatedAt: REFERENCE_TIME, dataState: 'PARTIAL', stages: [
+  { stageId: 'SOURCE', label: '서울시·기상 원천', dataState: 'NOT_INSTRUMENTED', reasonCode: 'AIRFLOW_SOURCE_NOT_CONNECTED' },
+  { stageId: 'SERVING', label: 'Serving DB', dataState: 'NORMAL', lastSuccessAt: REFERENCE_TIME, lastAttemptAt: REFERENCE_TIME, processedCount: 4, passedCount: 4, failedCount: 0, sourceReference: 'station_inventory_current' },
+] };
 
 const previewModels = [{ id: 1, version: 'model-preview-5.2', state: 'VALIDATED', createdAt: '2026-08-31T00:00:00Z' }];
 const modelOverview = { runtime: { state: 'ERROR', error: { code: 'MODEL_RUNTIME_PREVIEW_UNAVAILABLE' } }, registry: { state: 'SUCCESS', data: previewModels }, models: previewModels, registryStateCounts: { DRAFT: 0, VALIDATED: 1, APPROVED: 0, ACTIVE: 0, RETIRED: 0 } };
@@ -48,7 +55,9 @@ export function createPreviewAdapterForRoute(routeId) {
   switch (routeId) {
     case 'UI-OPS-03': return () => ({ load: () => Promise.resolve(candidates) });
     case 'UI-OPS-04': return () => ({ load: ({ view }) => Promise.resolve(analysis(view)) });
-    case 'UI-OPS-05': return () => ({ load: () => Promise.resolve(dataStatus) });
+    case 'UI-DATA-01':
+    case 'UI-OPS-05': return () => ({ load: () => Promise.resolve(dataStatus), listExports: () => Promise.resolve({ items: [] }), createExport: () => Promise.reject({ code: 'PREVIEW_MUTATION_DISABLED' }), downloadExport: () => Promise.reject({ code: 'PREVIEW_MUTATION_DISABLED' }) });
+    case 'UI-DATA-02': return () => ({ load: () => Promise.resolve(pipelineStatus) });
     case 'UI-MODEL-01': return () => ({ load: () => Promise.resolve(modelOverview) });
     case 'UI-MODEL-02': return () => ({ loadBase: () => Promise.resolve(modelPerformance), loadDiagnostics: () => Promise.resolve({ segments: [] }) });
     case 'UI-MODEL-04': return () => ({ load: () => Promise.resolve(modelReleases), action: () => Promise.reject({ code: 'PREVIEW_MUTATION_DISABLED' }) });

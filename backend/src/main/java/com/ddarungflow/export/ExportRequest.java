@@ -41,6 +41,9 @@ public class ExportRequest {
     @Column(name = "row_count")
     private Long rowCount;
 
+    @Column(name = "requested_row_count")
+    private Long requestedRowCount;
+
     @Column(name = "requested_at", nullable = false)
     private OffsetDateTime requestedAt;
 
@@ -62,6 +65,7 @@ public class ExportRequest {
             String purpose,
             ExportStatus status,
             Long rowCount,
+            Long requestedRowCount,
             OffsetDateTime requestedAt,
             OffsetDateTime completedAt,
             OffsetDateTime expiresAt,
@@ -87,6 +91,7 @@ public class ExportRequest {
         this.purpose = purpose;
         this.status = status != null ? status : ExportStatus.PENDING;
         this.rowCount = rowCount;
+        this.requestedRowCount = requestedRowCount;
         this.requestedAt = requestedAt != null ? requestedAt : OffsetDateTime.now();
         this.completedAt = completedAt;
         this.expiresAt = expiresAt;

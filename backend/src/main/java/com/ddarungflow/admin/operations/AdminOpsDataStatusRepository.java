@@ -107,6 +107,26 @@ public class AdminOpsDataStatusRepository {
         return rows.isEmpty() ? null : rows.getFirst();
     }
 
+    public GlobalRiskRow currentGlobalRisk() {
+        List<GlobalRiskRow> rows = jdbc.query("""
+                SELECT r.result_id, r.reference_time, r.published_at, r.fresh_until, r.expires_at,
+                       r.active_public_station_count, r.evaluated_count, r.normal_inference_count,
+                       r.inventory_missing_count, r.inventory_delayed_count, r.inventory_unavailable_count,
+                       r.inference_insufficient_count, r.unevaluated_count, r.generation_duration_ms, r.model_version
+                FROM admin_ops_global_risk_control c
+                JOIN admin_ops_global_risk_results r ON r.result_id = c.current_result_id
+                WHERE c.control_key = 'GLOBAL'
+                """, (rs, row) -> new GlobalRiskRow(
+                rs.getObject("result_id", UUID.class), rs.getObject("reference_time", OffsetDateTime.class),
+                rs.getObject("published_at", OffsetDateTime.class), rs.getObject("fresh_until", OffsetDateTime.class),
+                rs.getObject("expires_at", OffsetDateTime.class), rs.getInt("active_public_station_count"),
+                rs.getInt("evaluated_count"), rs.getInt("normal_inference_count"),
+                rs.getInt("inventory_missing_count"), rs.getInt("inventory_delayed_count"),
+                rs.getInt("inventory_unavailable_count"), rs.getInt("inference_insufficient_count"),
+                rs.getInt("unevaluated_count"), rs.getLong("generation_duration_ms"), rs.getString("model_version")));
+        return rows.isEmpty() ? null : rows.getFirst();
+    }
+
     public record InventoryCounts(long expectedStationCount, long latestStationCount, OffsetDateTime latestCollectedAt) { }
     public record StatusCount(String status, long count) { }
     public record PredictionBatch(UUID batchId, OffsetDateTime featureAsOf, OffsetDateTime generatedAt,
@@ -117,4 +137,10 @@ public class AdminOpsDataStatusRepository {
     public record LatestRiskSnapshot(OffsetDateTime createdAt, OffsetDateTime expiresAt, OffsetDateTime referenceTime,
                                      int horizonMinutes, int requiredBikeCount, int eligibleStationCount,
                                      int evaluatedStationCount, int normalInferenceSuccessCount) { }
+    public record GlobalRiskRow(UUID resultId, OffsetDateTime referenceTime, OffsetDateTime publishedAt,
+                                OffsetDateTime freshUntil, OffsetDateTime expiresAt,
+                                int activePublicStationCount, int evaluatedStationCount,
+                                int normalInferenceCount, int inventoryMissingCount, int inventoryDelayedCount,
+                                int inventoryUnavailableCount, int inferenceInsufficientCount,
+                                int unevaluatedCount, long generationDurationMs, String modelVersion) { }
 }

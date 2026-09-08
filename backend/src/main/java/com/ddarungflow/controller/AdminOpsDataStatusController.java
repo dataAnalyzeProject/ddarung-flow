@@ -10,13 +10,21 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.OffsetDateTime;
 
 @RestController
-@RequestMapping("/api/v1/admin/ops/data-status")
+@RequestMapping("/api/v1/admin")
 public class AdminOpsDataStatusController {
     private final AdminOpsDataStatusService service;
 
     public AdminOpsDataStatusController(AdminOpsDataStatusService service) { this.service = service; }
 
-    @GetMapping
+    @GetMapping("/data/status")
     @PreAuthorize("hasAuthority('DATA_STATUS_READ')")
-    public AdminOpsDataStatusDtos.Response get() { return service.dataStatus(OffsetDateTime.now()); }
+    public AdminOpsDataStatusDtos.Response getDataStatus() {
+        return service.dataStatus(OffsetDateTime.now(), true);
+    }
+
+    @GetMapping("/ops/data-status")
+    @PreAuthorize("hasAuthority('DATA_STATUS_READ')")
+    public AdminOpsDataStatusDtos.Response getLegacyOpsDataStatus() {
+        return service.dataStatus(OffsetDateTime.now(), false);
+    }
 }

@@ -59,8 +59,18 @@ class ExportRequestServiceTest {
             assertThat(result.getFormat()).isEqualTo(ExportFormat.CSV);
             assertThat(result.getPurpose()).isEqualTo(purpose);
             assertThat(result.getStatus()).isEqualTo(ExportStatus.PENDING);
+            assertThat(result.getRequestedRowCount()).isNull();
             assertThat(result.getRequestedAt()).isEqualTo(BASE_TIME);
             verify(exportRequestRepository).save(any(ExportRequest.class));
+        }
+
+        @Test
+        void requestedRowCountIsPreservedSeparatelyFromOutputRowCount() {
+            given(exportRequestRepository.save(any(ExportRequest.class))).willAnswer(inv -> inv.getArgument(0));
+            ExportRequest result = exportRequestService.create(USER_A, ExportSource.CURATED, ExportFormat.CSV,
+                    "운영 확인", 123L, BASE_TIME);
+            assertThat(result.getRequestedRowCount()).isEqualTo(123L);
+            assertThat(result.getRowCount()).isNull();
         }
 
         @Test
