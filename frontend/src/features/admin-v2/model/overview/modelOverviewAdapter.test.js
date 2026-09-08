@@ -9,6 +9,12 @@ describe('modelOverviewAdapter', () => {
     expect(result.runtime.data).toEqual(runtime); expect(result.registryStateCounts).toEqual({ DRAFT: 0, VALIDATED: 0, APPROVED: 0, REJECTED: 0, ACTIVE: 1, RETIRED: 0 });
     expect(global.fetch).toHaveBeenCalledWith('http://localhost:8080/api/v1/admin/model-runtime', expect.objectContaining({ credentials: 'include' })); expect(global.fetch).toHaveBeenCalledWith('http://localhost:8080/api/v1/admin/models', expect.objectContaining({ credentials: 'include' }));
   });
+  test('accepts runtime-imported registry provenance as explicitly unavailable', async () => {
+    global.fetch = jest.fn().mockResolvedValueOnce(response(runtime)).mockResolvedValueOnce(response([{ id: 2, version: 'runtime-v1', state: 'ACTIVE', createdAt: '2026-09-01T00:00:00Z', artifactSha256: 'a'.repeat(64), codeCommit: null, featureSchemaVersion: null }]));
+    const result = await createLiveModelOverviewAdapter().load({});
+    expect(result.registry).toEqual(expect.objectContaining({ state: 'SUCCESS' }));
+    expect(result.registryStateCounts.ACTIVE).toBe(1);
+  });
   test('retains a successful registry when runtime readback fails', async () => {
     global.fetch = jest.fn().mockResolvedValueOnce(response({ code: 'MODEL_RUNTIME_UNAVAILABLE' }, 503)).mockResolvedValueOnce(response([]));
     const result = await createLiveModelOverviewAdapter().load({}); expect(result.runtime).toEqual(expect.objectContaining({ state: 'ERROR' })); expect(result.registry).toEqual({ state: 'SUCCESS', data: [] });

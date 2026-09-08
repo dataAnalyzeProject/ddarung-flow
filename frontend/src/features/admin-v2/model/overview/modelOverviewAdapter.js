@@ -35,8 +35,8 @@ function normalizeModels(models) {
     && REGISTRY_STATES.includes(model.state)
     && typeof model.createdAt === 'string'
     && /^[0-9a-f]{64}$/.test(model.artifactSha256 || '')
-    && typeof model.codeCommit === 'string' && model.codeCommit
-    && typeof model.featureSchemaVersion === 'string' && model.featureSchemaVersion)) {
+    && (model.codeCommit === null || (typeof model.codeCommit === 'string' && model.codeCommit))
+    && (model.featureSchemaVersion === null || (typeof model.featureSchemaVersion === 'string' && model.featureSchemaVersion)))) {
     throw new ModelOverviewApiError({ code: 'MODEL_REGISTRY_RESPONSE_INVALID' });
   }
   return models;
