@@ -33,7 +33,8 @@ function normalizeModels(payload) {
     && typeof model.version === 'string' && model.version
     && typeof model.state === 'string' && typeof model.createdAt === 'string'
     && SHA256_PATTERN.test(model.artifactSha256 || '')
-    && typeof model.codeCommit === 'string' && typeof model.featureSchemaVersion === 'string')) throw new ModelReleasesApiError({ code: 'MODEL_REGISTRY_RESPONSE_INVALID' });
+    && (model.codeCommit === null || typeof model.codeCommit === 'string')
+    && (model.featureSchemaVersion === null || typeof model.featureSchemaVersion === 'string'))) throw new ModelReleasesApiError({ code: 'MODEL_REGISTRY_RESPONSE_INVALID' });
   return payload;
 }
 function normalizeRuntime(payload) { if (!isObject(payload) || payload.status !== 'NORMAL' || typeof payload.modelVersion !== 'string' || !payload.modelVersion || !SHA256_PATTERN.test(payload.artifactSha256 || '') || typeof payload.modelSource !== 'string' || !payload.modelSource || typeof payload.loadedAt !== 'string' || JSON.stringify(payload.supportedHorizons) !== JSON.stringify([60, 120, 180, 240]) || JSON.stringify(payload.supportedQuantities) !== JSON.stringify([1, 2, 3, 4, 5])) throw new ModelReleasesApiError({ code: 'MODEL_RUNTIME_RESPONSE_INVALID' }); return payload; }
@@ -66,8 +67,16 @@ export async function sha256File(file) {
 function loadRuntime(signal, permissions) { return permissions.includes('MODEL_METRICS_READ') ? sourceResult(request('/api/v1/admin/model-runtime', { signal }), normalizeRuntime) : Promise.resolve(accessLimited('MODEL_METRICS_READ')); }
 function loadRegistry(signal, permissions) { return permissions.includes('MODEL_METRICS_READ') ? sourceResult(request('/api/v1/admin/models', { signal }), normalizeModels) : Promise.resolve(accessLimited('MODEL_METRICS_READ')); }
 function loadHistory(signal, permissions) { return permissions.includes('MODEL_RELEASE_READ') ? sourceResult(request('/api/v1/admin/models/history', { signal }), normalizeHistory) : Promise.resolve(accessLimited('MODEL_RELEASE_READ')); }
-function actionPath(type, id) { return type === 'ROLLBACK' ? '/api/v1/admin/models/rollback' : `/api/v1/admin/models/${id}/${type.toLowerCase()}`; }
+function actionPath(type, id) { if (type === 'ROLLBACK') return '/api/v1/admin/models/rollback'; if (type === 'RECONCILE') return '/api/v1/admin/models/reconcile-runtime'; return `/api/v1/admin/models/${id}/${type.toLowerCase()}`; }
 function pause(ms) { return ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve(); }
+function validEvaluation(row) {
+  return isObject(row)
+    && [60, 120, 180, 240].includes(row.horizonMinutes)
+    && [1, 2, 3, 4, 5].includes(row.requiredBikeCount)
+    && Number.isInteger(row.sampleCount) && row.sampleCount >= 0
+    && ['brierScore', 'shortageRecall', 'calibrationError', 'coverage'].every((field) => typeof row[field] === 'number' && Number.isFinite(row[field]) && row[field] >= 0 && row[field] <= 1)
+    && Number.isInteger(row.monotonicityViolations) && row.monotonicityViolations >= 0;
+}
 
 export function createLiveModelReleasesAdapter({ readbackAttempts = 4, readbackDelayMs = 250 } = {}) {
   async function csrf(signal) {
@@ -96,10 +105,14 @@ export function createLiveModelReleasesAdapter({ readbackAttempts = 4, readbackD
     async load({ signal }) { const permissions = normalizeAccess(await request('/api/v1/admin/access', { signal })); return { permissions, ...(await refreshSources(signal, permissions)) }; },
     async refresh({ signal, permissions }) { return refreshSources(signal, permissions); },
     async action({ type, id, signal }) { return mutate(actionPath(type, id), { signal }); },
-    async register({ artifactFile, manifestFile, metadata, signal }) {
+    async register({ artifactFile, manifestFile, evaluationsFile, metadata, signal }) {
+      let evaluations;
+      try { evaluations = JSON.parse(await evaluationsFile.text()); } catch (_) { throw new ModelReleasesApiError({ code: 'MODEL_EVALUATIONS_INVALID' }); }
+      const combinations = Array.isArray(evaluations) ? new Set(evaluations.map((row) => `${row?.horizonMinutes}:${row?.requiredBikeCount}`)) : new Set();
+      if (!Array.isArray(evaluations) || evaluations.length !== 20 || combinations.size !== 20 || !evaluations.every(validEvaluation)) throw new ModelReleasesApiError({ code: 'MODEL_EVALUATIONS_INVALID' });
       const artifact = await upload(artifactFile, signal);
       const manifest = await upload(manifestFile, signal);
-      return mutate('/api/v1/admin/models', { signal, body: { ...metadata, artifactUploadId: artifact.id, manifestUploadId: manifest.id }, jsonBody: true });
+      return mutate('/api/v1/admin/models', { signal, body: { ...metadata, artifactUploadId: artifact.id, manifestUploadId: manifest.id, evaluations }, jsonBody: true });
     },
     async verifyServing({ candidateModelId, permissions, signal }) {
       let latest = null;

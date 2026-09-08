@@ -15,6 +15,9 @@ import com.ddarungflow.modelops.ModelArtifactStorageGateway;
 import com.ddarungflow.modelops.ModelUpload;
 import com.ddarungflow.modelops.ModelUploadStatus;
 import com.ddarungflow.modelops.ModelUploadRepository;
+import com.ddarungflow.modelops.RuntimeModelSourceGateway;
+import com.ddarungflow.inference.InferenceClient;
+import com.ddarungflow.inference.InferenceDtos;
 import com.ddarungflow.repository.UsersRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -77,13 +80,88 @@ class ModelOpsControllerSecurityTest {
     @MockitoBean
     private ModelArtifactStorageGateway storageGateway;
 
+    @MockitoBean
+    private RuntimeModelSourceGateway runtimeModelSourceGateway;
+
+    @MockitoBean
+    private InferenceClient inferenceClient;
+
     @BeforeEach
     void clearData() {
-        org.mockito.Mockito.reset(storageGateway);
+        org.mockito.Mockito.reset(storageGateway, runtimeModelSourceGateway, inferenceClient);
         evaluationRepository.deleteAll();
         artifactRepository.deleteAll();
         uploadRepository.deleteAll();
         usersRepository.deleteAll();
+    }
+
+    @Test
+    void registrationPersistsTwentyEvaluationsSoValidationIsReachable() throws Exception {
+        UsernamePasswordAuthenticationToken engineer = authenticationForRoles(AdminRole.MODEL_ENGINEER);
+        String request = modelRequest("evaluated-model");
+        com.fasterxml.jackson.databind.node.ObjectNode body = (com.fasterxml.jackson.databind.node.ObjectNode) objectMapper.readTree(request);
+        var rows = objectMapper.createArrayNode();
+        for (int horizon : List.of(60, 120, 180, 240)) {
+            for (int bikes = 1; bikes <= 5; bikes++) {
+                rows.addObject().put("horizonMinutes", horizon).put("requiredBikeCount", bikes)
+                    .put("sampleCount", 10).put("brierScore", 0.1).put("shortageRecall", 0.2)
+                    .put("calibrationError", 0.1).put("coverage", 0.9).put("monotonicityViolations", 0);
+            }
+        }
+        body.set("evaluations", rows);
+        MvcResult created = mockMvc.perform(post("/api/v1/admin/models").with(csrf()).with(authentication(engineer))
+                .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsBytes(body)))
+            .andExpect(status().isCreated()).andReturn();
+        long modelId = objectMapper.readTree(created.getResponse().getContentAsString()).path("id").asLong();
+
+        mockMvc.perform(post("/api/v1/admin/models/{id}/validate", modelId).with(csrf()).with(authentication(engineer)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.state").value("VALIDATED"));
+        mockMvc.perform(get("/api/v1/admin/models/{id}/metrics", modelId).with(authentication(engineer)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.metrics.length()").value(20));
+    }
+
+    @Test
+    void registrationWithoutExactEvaluationsRollsBackArtifactAndMetrics() throws Exception {
+        UsernamePasswordAuthenticationToken engineer = authenticationForRoles(AdminRole.MODEL_ENGINEER);
+        com.fasterxml.jackson.databind.node.ObjectNode missing = (com.fasterxml.jackson.databind.node.ObjectNode)
+            objectMapper.readTree(modelRequest("missing-evaluations"));
+        missing.remove("evaluations");
+
+        mockMvc.perform(post("/api/v1/admin/models").with(csrf()).with(authentication(engineer))
+                .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsBytes(missing)))
+            .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        org.assertj.core.api.Assertions.assertThat(artifactRepository.count()).isZero();
+        org.assertj.core.api.Assertions.assertThat(evaluationRepository.count()).isZero();
+
+        com.fasterxml.jackson.databind.node.ObjectNode invalid = (com.fasterxml.jackson.databind.node.ObjectNode)
+            objectMapper.readTree(modelRequest("invalid-evaluations"));
+        ((com.fasterxml.jackson.databind.node.ArrayNode) invalid.path("evaluations")).set(
+            0, com.fasterxml.jackson.databind.node.NullNode.getInstance());
+        mockMvc.perform(post("/api/v1/admin/models").with(csrf()).with(authentication(engineer))
+                .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsBytes(invalid)))
+            .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        org.assertj.core.api.Assertions.assertThat(artifactRepository.count()).isZero();
+        org.assertj.core.api.Assertions.assertThat(evaluationRepository.count()).isZero();
+    }
+
+    @Test
+    void approverCanReconcileOnlyAStorageSourceThatMatchesRuntimeReadback() throws Exception {
+        String artifactSha = "d".repeat(64);
+        String manifestSha = "e".repeat(64);
+        OffsetDateTime loadedAt = OffsetDateTime.parse("2026-09-08T06:00:00Z");
+        org.mockito.Mockito.when(inferenceClient.runtimeModel()).thenReturn(new InferenceDtos.RuntimeModelResponse(
+            "NORMAL", "runtime-source", artifactSha, "verified_inactive_pointer", loadedAt,
+            List.of(60, 120, 180, 240), List.of(1, 2, 3, 4, 5)));
+        org.mockito.Mockito.when(runtimeModelSourceGateway.read()).thenReturn(new RuntimeModelSourceGateway.Source(
+            "runtime-source", "private-artifact", artifactSha, "private-manifest", manifestSha, "INACTIVE"));
+        UsernamePasswordAuthenticationToken approver = authenticationForRoles(AdminRole.MODEL_APPROVER);
+
+        mockMvc.perform(post("/api/v1/admin/models/reconcile-runtime").with(csrf()).with(authentication(approver)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.version").value("runtime-source"))
+            .andExpect(jsonPath("$.state").value("ACTIVE"))
+            .andExpect(jsonPath("$.artifactKey").doesNotExist())
+            .andExpect(jsonPath("$.codeCommit").isEmpty());
     }
 
     @Test
@@ -192,7 +270,6 @@ class ModelOpsControllerSecurityTest {
                 .andExpect(jsonPath("$.state").value("DRAFT"));
 
         ModelArtifact approved = artifactRepository.findAll().getFirst();
-        evaluationRepository.saveAll(evaluationsFor(approved.getId()));
 
         mockMvc.perform(post("/api/v1/admin/models/{id}/validate", approved.getId())
                         .with(csrf()).with(authentication(admin)))
@@ -237,7 +314,6 @@ class ModelOpsControllerSecurityTest {
                         .contentType(MediaType.APPLICATION_JSON).content(modelRequest("maker-checker-approve")))
                 .andExpect(status().isCreated());
         ModelArtifact approveCandidate = artifactRepository.findAll().getFirst();
-        evaluationRepository.saveAll(evaluationsFor(approveCandidate.getId()));
         mockMvc.perform(post("/api/v1/admin/models/{id}/validate", approveCandidate.getId())
                         .with(csrf()).with(authentication(maker))).andExpect(status().isOk());
         mockMvc.perform(post("/api/v1/admin/models/{id}/approve", approveCandidate.getId())
@@ -258,7 +334,6 @@ class ModelOpsControllerSecurityTest {
                 .andExpect(status().isCreated());
         ModelArtifact rejectCandidate = artifactRepository.findAll().stream()
                 .filter(model -> "maker-checker-reject".equals(model.getVersion())).findFirst().orElseThrow();
-        evaluationRepository.saveAll(evaluationsFor(rejectCandidate.getId()));
         mockMvc.perform(post("/api/v1/admin/models/{id}/validate", rejectCandidate.getId())
                         .with(csrf()).with(authentication(maker))).andExpect(status().isOk());
         mockMvc.perform(post("/api/v1/admin/models/{id}/reject", rejectCandidate.getId())
@@ -373,8 +448,20 @@ class ModelOpsControllerSecurityTest {
 
     private String modelRequest(String version, UUID artifactUploadId, UUID manifestUploadId) {
         return """
-            {"version":"%s","artifactUploadId":"%s","manifestUploadId":"%s","codeCommit":"abc123","dataManifestHash":"%s","configHash":"%s","featureSchemaVersion":"v1"}
-            """.formatted(version, artifactUploadId, manifestUploadId, "b".repeat(64), "c".repeat(64));
+            {"version":"%s","artifactUploadId":"%s","manifestUploadId":"%s","codeCommit":"abc123","dataManifestHash":"%s","configHash":"%s","featureSchemaVersion":"v1","evaluations":%s}
+            """.formatted(version, artifactUploadId, manifestUploadId, "b".repeat(64), "c".repeat(64), evaluationRequestJson());
+    }
+
+    private String evaluationRequestJson() {
+        List<String> rows = new ArrayList<>();
+        for (int horizon : List.of(60, 120, 180, 240)) {
+            for (int bikes = 1; bikes <= 5; bikes++) {
+                rows.add("""
+                    {"horizonMinutes":%d,"requiredBikeCount":%d,"sampleCount":10,"brierScore":0.1,"shortageRecall":0.2,"calibrationError":0.1,"coverage":0.9,"monotonicityViolations":0}
+                    """.formatted(horizon, bikes).trim());
+            }
+        }
+        return "[" + String.join(",", rows) + "]";
     }
 
     private ModelUpload completedUpload(byte[] content, String fileName) {

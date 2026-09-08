@@ -33,6 +33,7 @@ describe('modelReleasesAdapter', () => {
     ['VALIDATE', 1, '/api/v1/admin/models/1/validate'], ['APPROVE', 1, '/api/v1/admin/models/1/approve'],
     ['REJECT', 1, '/api/v1/admin/models/1/reject'], ['ACTIVATE', 1, '/api/v1/admin/models/1/activate'],
     ['ROLLBACK', undefined, '/api/v1/admin/models/rollback'],
+    ['RECONCILE', undefined, '/api/v1/admin/models/reconcile-runtime'],
   ])('maps %s with CSRF and no action body', async (type, id, path) => {
     global.fetch = jest.fn().mockResolvedValueOnce(response({ headerName: 'X-CSRF-TOKEN', token: 'test-csrf-token' })).mockResolvedValueOnce(response({}));
     await createLiveModelReleasesAdapter().action({ type, id });
@@ -43,7 +44,8 @@ describe('modelReleasesAdapter', () => {
   test('hashes and uploads artifact then manifest before registration without private object keys', async () => {
     const digest = new Uint8Array(32).fill(1).buffer;
     Object.defineProperty(globalThis, 'crypto', { configurable: true, value: { subtle: { digest: jest.fn().mockResolvedValue(digest) } } });
-    const files = [{ name: 'model.bin', size: 3, arrayBuffer: jest.fn().mockResolvedValue(new Uint8Array([1, 2, 3]).buffer) }, { name: 'manifest.json', size: 2, arrayBuffer: jest.fn().mockResolvedValue(new Uint8Array([4, 5]).buffer) }];
+    const evaluations = Array.from({ length: 20 }, (_, index) => ({ horizonMinutes: 60 * (Math.floor(index / 5) + 1), requiredBikeCount: (index % 5) + 1, sampleCount: 10, brierScore: 0.1, shortageRecall: 0.9, calibrationError: 0.1, coverage: 1, monotonicityViolations: 0 }));
+    const files = [{ name: 'model.bin', size: 3, arrayBuffer: jest.fn().mockResolvedValue(new Uint8Array([1, 2, 3]).buffer) }, { name: 'manifest.json', size: 2, arrayBuffer: jest.fn().mockResolvedValue(new Uint8Array([4, 5]).buffer) }, { name: 'evaluations.json', size: 2, text: jest.fn().mockResolvedValue(JSON.stringify(evaluations)) }];
     let uploads = 0;
     global.fetch = jest.fn(async (url, options) => {
       if (url.endsWith('/auth/csrf')) return response({ headerName: 'X-CSRF-TOKEN', token: 'csrf' });
@@ -54,13 +56,25 @@ describe('modelReleasesAdapter', () => {
       throw new Error(`unexpected ${url}`);
     });
     const metadata = { version: 'runtime-v1', codeCommit: 'abc123', dataManifestHash: 'd'.repeat(64), configHash: 'c'.repeat(64), featureSchemaVersion: 'v1' };
-    await createLiveModelReleasesAdapter().register({ artifactFile: files[0], manifestFile: files[1], metadata });
+    await createLiveModelReleasesAdapter().register({ artifactFile: files[0], manifestFile: files[1], evaluationsFile: files[2], metadata });
     const createBodies = global.fetch.mock.calls.filter(([url]) => url.endsWith('/model-uploads')).map(([, options]) => JSON.parse(options.body));
     expect(createBodies.map(({ fileName }) => fileName)).toEqual(['model.bin', 'manifest.json']);
     const registerCall = global.fetch.mock.calls.find(([url, options]) => url.endsWith('/models') && options.method === 'POST');
-    expect(JSON.parse(registerCall[1].body)).toEqual({ ...metadata, artifactUploadId: 'upload-1', manifestUploadId: 'upload-2' });
+    expect(JSON.parse(registerCall[1].body)).toEqual({ ...metadata, artifactUploadId: 'upload-1', manifestUploadId: 'upload-2', evaluations });
     expect(registerCall[1].body).not.toMatch(/objectKey|internal/);
     expect(await sha256File(files[0])).toBe('01'.repeat(32));
+  });
+
+  test('rejects invalid evaluations before creating any private upload', async () => {
+    global.fetch = jest.fn();
+    const file = { name: 'model.bin', size: 3, arrayBuffer: jest.fn() };
+    const invalidEvaluations = { name: 'evaluations.json', size: 2, text: jest.fn().mockResolvedValue('[]') };
+
+    await expect(createLiveModelReleasesAdapter().register({
+      artifactFile: file, manifestFile: file, evaluationsFile: invalidEvaluations, metadata: {},
+    })).rejects.toMatchObject({ code: 'MODEL_EVALUATIONS_INVALID' });
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(file.arrayBuffer).not.toHaveBeenCalled();
   });
 
   test.each([
