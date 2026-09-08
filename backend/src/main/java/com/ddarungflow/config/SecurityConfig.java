@@ -64,15 +64,8 @@ public class SecurityConfig {
         return source;
     }
 
-    private static final Pattern AIR_QUALITY_PATH = Pattern.compile("^/api/v1/stations/[^/]+/air-quality/?$");
     private static final Pattern ADMIN_API_PATH = Pattern.compile("^/api/v1/admin(?:/.*)?$");
-    private static final Pattern ROUTE_CANDIDATES_PATH = Pattern.compile("^/api/v1/routes/candidates/?$");
-    private static final Pattern PAYMENT_API_PATH = Pattern.compile("^/api/v1/(?:me/subscription|payments/checkout)/?$");
-    private static final Pattern QNA_API_PATH = Pattern.compile("^/api/v1/(admin/)?qna(?:/.*)?$");
     private static final Pattern RETENTION_API_PATH = Pattern.compile("^/api/v1/(?:favorites|saved-routes|prediction-histories|notification-rules|notifications)(?:/.*)?$");
-    private static final Pattern JOURNEY_API_PATH = Pattern.compile("^/api/v1/(?:journeys|saved-journeys)(?:/.*)?$");
-    private static final Pattern PREDICTION_RELIABILITY_PATH = Pattern.compile("^/api/v1/prediction-reliability/?$");
-    private static final Pattern RIDING_GUIDE_AI_PATH = Pattern.compile("^/api/v1/riding-guide/ai/?$");
 
     private void writeApiError(HttpServletResponse response, int status, String code, String message) throws IOException {
         response.setStatus(status);
@@ -82,27 +75,12 @@ public class SecurityConfig {
 
     private AuthenticationEntryPoint apiVsRedirectEntryPoint() {
         return (request, response, authException) -> {
-            if (AIR_QUALITY_PATH.matcher(request.getRequestURI()).matches()) {
-                // setStatus (not sendError) - sendError triggers a /error forward that Spring
-                // Security re-processes, invoking this entry point a second time for "/error"
-                // (which doesn't match), overwriting the 401 with the redirect branch below.
-                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                return;
-            }
-            if (ADMIN_API_PATH.matcher(request.getRequestURI()).matches()
-                    || QNA_API_PATH.matcher(request.getRequestURI()).matches()
-                    || RETENTION_API_PATH.matcher(request.getRequestURI()).matches()
-                    || JOURNEY_API_PATH.matcher(request.getRequestURI()).matches()
-                    || PREDICTION_RELIABILITY_PATH.matcher(request.getRequestURI()).matches()
-                    || RIDING_GUIDE_AI_PATH.matcher(request.getRequestURI()).matches()) {
-                writeApiError(response, HttpServletResponse.SC_UNAUTHORIZED, "AUTH_REQUIRED", "로그인이 필요합니다.");
-                return;
-            }
-            if (ROUTE_CANDIDATES_PATH.matcher(request.getRequestURI()).matches()) {
-                writeApiError(response, HttpServletResponse.SC_UNAUTHORIZED, "AUTH_REQUIRED", "로그인이 필요합니다.");
-                return;
-            }
-            if (PAYMENT_API_PATH.matcher(request.getRequestURI()).matches()) {
+            String requestUri = request.getRequestURI();
+            String contextPath = request.getContextPath();
+            String requestPath = !contextPath.isEmpty() && requestUri.startsWith(contextPath)
+                    ? requestUri.substring(contextPath.length())
+                    : requestUri;
+            if (requestPath.equals("/api/v1") || requestPath.startsWith("/api/v1/")) {
                 writeApiError(response, HttpServletResponse.SC_UNAUTHORIZED, "AUTH_REQUIRED", "로그인이 필요합니다.");
                 return;
             }
