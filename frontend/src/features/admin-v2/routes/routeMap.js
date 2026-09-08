@@ -18,7 +18,7 @@ import SystemJourneyOps from '../system/journey-ops/index.jsx';
 import { CONSOLE_ORDER, hasPermission, PERMISSIONS } from '../permissions/permissions.js';
 
 export const PREVIEW_PREFIX = '/admin-v2-preview';
-export const PRODUCTION_RELEASED_ROUTE_IDS = ['UI-OPS-01', 'UI-OPS-02', 'UI-OPS-03', 'UI-OPS-04', 'UI-DATA-01', 'UI-DATA-02', 'UI-OPS-05', 'UI-MODEL-01', 'UI-MODEL-02', 'UI-MODEL-04', 'UI-SYS-01', 'UI-SYS-02', 'UI-SYS-03'];
+export const PRODUCTION_RELEASED_ROUTE_IDS = ['UI-OPS-01', 'UI-OPS-02', 'UI-OPS-03', 'UI-OPS-04', 'UI-DATA-01', 'UI-DATA-02', 'UI-OPS-05', 'UI-MODEL-01', 'UI-MODEL-02', 'UI-MODEL-04', 'UI-SYS-01', 'UI-SYS-02', 'UI-SYS-03', 'UI-SYS-04'];
 export const ROUTES = [
   ['UI-OPS-01', 'OPS', '/admin/ops', '/ops', '운영 상황판', 'OPS_DASHBOARD_READ', OperationsOverview],
   ['UI-OPS-02', 'OPS', '/admin/ops/risk-map', '/ops/risk-map', '수급 위험 지도', 'OPS_RISK_MAP_READ', OperationsRiskMap],
@@ -35,7 +35,7 @@ export const ROUTES = [
   ['UI-SYS-01', 'SYSTEM', '/admin/system/support', '/system/support', '사용자 문의', 'QNA_READ', SystemSupport],
   ['UI-SYS-02', 'SYSTEM', '/admin/system/access', '/system/access', '관리자 역할·권한', 'ACCESS_READ', SystemAccess],
   ['UI-SYS-03', 'SYSTEM', '/admin/system/audit', '/system/audit', '관리자 변경 이력', 'AUDIT_READ', SystemAudit],
-  ['UI-SYS-04', 'SYSTEM', '/admin/system/health', '/system/health', '서비스 상태', 'SYSTEM_STATUS_READ', SystemHealth],
+  ['UI-SYS-04', 'SYSTEM', '/admin/system/health', '/system/health', '시스템 상태', 'SYSTEM_STATUS_READ', SystemHealth],
   ['UI-SYS-05', 'SYSTEM', '/admin/system/journey-ops', '/system/journey-ops', 'AI·도구 운영', 'AI_OPS_READ', SystemJourneyOps],
 ].map(([id, console, canonicalPath, previewSuffix, title, requiredPermission, Component, navigationVisible = true]) => ({ id, console, canonicalPath, previewPath: `${PREVIEW_PREFIX}${previewSuffix}`, title, requiredPermission, Component, navigationVisible }));
 

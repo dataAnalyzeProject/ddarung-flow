@@ -30,7 +30,22 @@ class AdminRoleMatrixTest {
     }
 
     @Test
-    void defaultConsoleUsesFirstAllowedRouteInOpsModelSystemOrder() {
+    void defaultConsoleUsesCanonicalOrderWithoutLosingTheDataRoleIntent() {
+        Map<AdminRole, AdminConsole> expected = Map.ofEntries(
+                Map.entry(AdminRole.OPS_VIEWER, AdminConsole.OPS),
+                Map.entry(AdminRole.OPS_OPERATOR, AdminConsole.OPS),
+                Map.entry(AdminRole.OPS_MANAGER, AdminConsole.OPS),
+                Map.entry(AdminRole.DATA_ANALYST, AdminConsole.DATA),
+                Map.entry(AdminRole.MODEL_ENGINEER, AdminConsole.MODEL),
+                Map.entry(AdminRole.MODEL_APPROVER, AdminConsole.MODEL),
+                Map.entry(AdminRole.SUPPORT_OPERATOR, AdminConsole.SYSTEM),
+                Map.entry(AdminRole.AUDITOR, AdminConsole.SYSTEM),
+                Map.entry(AdminRole.ACCESS_ADMIN, AdminConsole.SYSTEM),
+                Map.entry(AdminRole.SUPER_ADMIN, AdminConsole.OPS));
+
+        expected.forEach((role, console) -> assertThat(AdminAuthorityService.defaultConsole(role.permissions())).isEqualTo(console));
+        assertThat(AdminAuthorityService.defaultConsole(Set.of(DATA_STATUS_READ))).isEqualTo(AdminConsole.DATA);
+        assertThat(AdminAuthorityService.defaultConsole(Set.of(OPS_ANALYSIS_READ))).isEqualTo(AdminConsole.OPS);
         assertThat(AdminAuthorityService.defaultConsole(Set.of(ACCESS_READ))).isEqualTo(AdminConsole.SYSTEM);
         assertThat(AdminAuthorityService.defaultConsole(Set.of(MODEL_METRICS_READ, ACCESS_READ))).isEqualTo(AdminConsole.MODEL);
         assertThat(AdminAuthorityService.defaultConsole(Set.of(OPS_ANALYSIS_READ, MODEL_METRICS_READ, ACCESS_READ))).isEqualTo(AdminConsole.OPS);
