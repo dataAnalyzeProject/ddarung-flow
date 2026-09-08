@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import AdminV2ProductionApp from './AdminV2ProductionApp';
 import { publishAdminAuthRequired } from '../auth/adminSession.js';
@@ -32,6 +34,17 @@ afterEach(() => {
 });
 
 describe('AdminV2ProductionApp', () => {
+  test('keeps production access states as styled direct children of the app root', () => {
+    const { container } = render(<AdminV2ProductionApp pathname="/admin/ops" createAccessAdapter={() => ({ load: () => new Promise(() => {}) })} />);
+    const css = fs.readFileSync(path.join(process.cwd(), 'src/features/admin-v2/adminV2.css'), 'utf8');
+
+    expect(container.firstElementChild).toHaveClass('admin-v2-state-panel');
+    expect(css).toContain('#root:has(> .admin-v2-state-panel)');
+    expect(css).toMatch(/#root > \.admin-v2-state-panel \{[^}]*box-sizing: border-box/);
+    expect(css).toMatch(/\.admin-v2-state-panel button \{[^}]*min-height: 44px/);
+    expect(css).toMatch(/\.admin-v2-state-panel button:focus-visible \{[^}]*outline:/);
+  });
+
   test('starts in LOADING and then renders the released OPS overview', async () => {
     let resolve;
     const createAccessAdapter = () => ({ load: () => new Promise((done) => { resolve = done; }) });
