@@ -162,6 +162,28 @@ class MapPredictionServiceTest {
     }
 
     @Test
+    @DisplayName("Core strict validation 실패는 공개 예측값을 모두 비우고 UNAVAILABLE로 닫는다")
+    void strictValidationFailureIsFailClosed() {
+        org.mockito.Mockito.doThrow(new IllegalStateException("malformed Core response"))
+            .when(inferenceClient).predict(org.mockito.ArgumentMatchers.anyList());
+
+        PredictionApiDtos.CandidatePredictionResponseDto dto = mapPredictionService.buildRouteCandidates(
+            new BigDecimal("37.5500"), new BigDecimal("126.9000"),
+            new BigDecimal("37.5556488"), new BigDecimal("126.91062927"),
+            "WALK", 60, 1
+        ).getFirst();
+
+        assertThat(dto.predictionStatus()).isEqualTo(PredictionApiDtos.PredictionStatus.UNAVAILABLE);
+        assertThat(dto.predictionProbability()).isNull();
+        assertThat(dto.availabilityLevel()).isNull();
+        assertThat(dto.probabilities()).isNull();
+        assertThat(dto.horizonOutlook()).isNull();
+        assertThat(dto.modelVersion()).isNull();
+        assertThat(dto.generatedAt()).isNull();
+        assertThat(dto.featureAsOf()).isNull();
+    }
+
+    @Test
     @DisplayName("한 후보의 재고 조회 실패가 다른 후보 응답을 가리지 않는다")
     void inventoryFailureForOneCandidateKeepsOtherCandidate() {
         Station s2 = new Station(
