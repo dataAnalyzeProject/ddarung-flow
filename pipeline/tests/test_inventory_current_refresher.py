@@ -13,6 +13,7 @@ from pipeline.src.inventory_current_refresher import (
     next_cycle_delay,
     next_refresh_schedule,
     publish_snapshot,
+    refresh_once,
     refresh_cycle,
 )
 from pipeline.src.collectors.bike_inventory_collector import SeoulBikeTransportError
@@ -29,9 +30,19 @@ from pipeline.src.inventory_refresher_healthcheck import (
 )
 
 
-def collection(rows):
+def collection(rows, status="COMPLETE", reason=None, expected_row_count=None):
+    expected_row_count = len(rows) if expected_row_count is None else expected_row_count
     return {
         "collected_at": "2026-08-17T05:00:00+00:00",
+        "collection_evidence": {
+            "status": status,
+            "reason": reason,
+            "page_size": 1000,
+            "page_count": 1,
+            "expected_row_count": expected_row_count,
+            "row_count": len(rows),
+            "terminal_page_row_count": len(rows),
+        },
         "payload": {"rentBikeStatus": {"row": rows}},
     }
 
@@ -55,6 +66,43 @@ class SnapshotTests(unittest.TestCase):
                 {"stationId": "ST-1", "parkingBikeTotCnt": "1"},
                 {"stationId": "ST-1", "parkingBikeTotCnt": "2"},
             ]), minimum_rows=1)
+
+    def test_partial_pagination_is_rejected_even_when_first_page_meets_minimum(self):
+        first_page_rows = [
+            {"stationId": f"ST-{index}", "parkingBikeTotCnt": "1"}
+            for index in range(1000)
+        ]
+
+        with self.assertRaisesRegex(ValueError, "complete pagination evidence"):
+            build_snapshot_rows(
+                collection(
+                    first_page_rows,
+                    "PARTIAL",
+                    "EMPTY_FOLLOW_UP_PAGE",
+                    expected_row_count=2000,
+                )
+            )
+
+    def test_refresh_once_preserves_last_good_snapshot_when_collection_is_partial(self):
+        partial = collection(
+            [{"stationId": f"ST-{index}", "parkingBikeTotCnt": "1"} for index in range(1000)],
+            "PARTIAL",
+            "PAGE_CONTINUITY_BREAK",
+            expected_row_count=2000,
+        )
+
+        with patch(
+            "pipeline.src.inventory_current_refresher.SeoulBikeApiClient"
+        ), patch(
+            "pipeline.src.inventory_current_refresher.collect_bike_inventory",
+            return_value=partial,
+        ), patch(
+            "pipeline.src.inventory_current_refresher.publish_snapshot"
+        ) as publish:
+            with self.assertRaisesRegex(ValueError, "complete pagination evidence"):
+                refresh_once("key", "database")
+
+        publish.assert_not_called()
 
 
 class FakeCursor:

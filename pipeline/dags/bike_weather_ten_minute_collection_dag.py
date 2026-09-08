@@ -175,10 +175,14 @@ def bike_weather_ten_minute_collection():
             source=RAW_SOURCE_BIKE_INVENTORY,
             observed_at=collected_at,
             collected_at=collected_at,
-            payload={"pages": result["payloads"]},
+            payload={
+                "pages": result["payloads"],
+                "collection_evidence": result["collection_evidence"],
+            },
         )
         return {
             "payload": result["payload"],
+            "collection_evidence": result["collection_evidence"],
             "observed_at": collected_at.isoformat(),
             "collected_at": result["collected_at"],
             "request_attempts": len(result["payloads"]),
