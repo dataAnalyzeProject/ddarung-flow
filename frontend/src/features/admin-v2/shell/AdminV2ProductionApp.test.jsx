@@ -16,7 +16,7 @@ jest.mock('../system/access/index.jsx', () => () => <h1>LIVE SYSTEM ACCESS</h1>)
 jest.mock('../system/audit/index.jsx', () => () => <h1>LIVE SYSTEM AUDIT</h1>);
 
 const allPermissions = [
-  'OPS_DASHBOARD_READ', 'OPS_RISK_MAP_READ', 'OPS_CANDIDATE_READ', 'OPS_ANALYSIS_READ', 'DATA_STATUS_READ', 'MODEL_METRICS_READ', 'MODEL_RELEASE_READ', 'ACCESS_READ', 'AUDIT_READ', 'QNA_READ',
+  'OPS_DASHBOARD_READ', 'OPS_RISK_MAP_READ', 'OPS_CANDIDATE_READ', 'OPS_ANALYSIS_READ', 'DATA_STATUS_READ', 'MODEL_METRICS_READ', 'MODEL_RELEASE_READ', 'ACCESS_READ', 'AUDIT_READ', 'QNA_READ', 'SYSTEM_STATUS_READ',
 ];
 
 function readyAccess(permissions = ['OPS_DASHBOARD_READ', 'OPS_RISK_MAP_READ'], defaultConsole = 'OPS') {
@@ -155,6 +155,7 @@ describe('AdminV2ProductionApp', () => {
     expect(screen.getByRole('button', { name: '모델' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '시스템' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '데이터' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /^(운영|데이터|모델|시스템)$/ }).map((button) => button.textContent)).toEqual(['운영', '데이터', '모델', '시스템']);
     expect(screen.queryByRole('button', { name: '데이터 상태 (이전 주소)' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '운영 리포트' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '디지털 트윈' })).not.toBeInTheDocument();
@@ -229,6 +230,24 @@ describe('AdminV2ProductionApp', () => {
     expect(await screen.findByText('ADMIN_PERMISSION_DENIED')).toBeInTheDocument();
     expect(screen.getByText('필요 권한: QNA_READ')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'LIVE SYSTEM SUPPORT' })).not.toBeInTheDocument();
+  });
+
+  test('renders the released SYS04 factual unavailable state with SYSTEM_STATUS_READ', async () => {
+    render(<AdminV2ProductionApp pathname="/admin/system/health" createAccessAdapter={adapterFor(readyAccess(['SYSTEM_STATUS_READ'], 'SYSTEM'))} />);
+
+    expect(await screen.findByRole('heading', { name: '시스템 상태' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '시스템 상태' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: '현재 사용할 수 없음 상태' })).toBeInTheDocument();
+    expect(screen.getAllByText('NOT_INSTRUMENTED')).toHaveLength(4);
+    expect(screen.queryByText('RELEASE_NOT_AVAILABLE')).not.toBeInTheDocument();
+  });
+
+  test('forbids the SYS04 direct URL without SYSTEM_STATUS_READ', async () => {
+    render(<AdminV2ProductionApp pathname="/admin/system/health" createAccessAdapter={adapterFor(readyAccess(['AUDIT_READ'], 'SYSTEM'))} />);
+
+    expect(await screen.findByText('ADMIN_PERMISSION_DENIED')).toBeInTheDocument();
+    expect(screen.getByText('필요 권한: SYSTEM_STATUS_READ')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '시스템 상태' })).not.toBeInTheDocument();
   });
 
   test('rejects a released system route without its permission', async () => {

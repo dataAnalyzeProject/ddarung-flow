@@ -286,7 +286,7 @@ describe('admin v2 fixture access and routes', () => {
       { id: 'UI-SYS-01', canonicalPath: '/admin/system/support', previewPath: '/admin-v2-preview/system/support', title: '사용자 문의', console: 'SYSTEM', requiredPermission: 'QNA_READ' },
       { id: 'UI-SYS-02', canonicalPath: '/admin/system/access', previewPath: '/admin-v2-preview/system/access', title: '관리자 역할·권한', console: 'SYSTEM', requiredPermission: 'ACCESS_READ' },
       { id: 'UI-SYS-03', canonicalPath: '/admin/system/audit', previewPath: '/admin-v2-preview/system/audit', title: '관리자 변경 이력', console: 'SYSTEM', requiredPermission: 'AUDIT_READ' },
-      { id: 'UI-SYS-04', canonicalPath: '/admin/system/health', previewPath: '/admin-v2-preview/system/health', title: '서비스 상태', console: 'SYSTEM', requiredPermission: 'SYSTEM_STATUS_READ' },
+      { id: 'UI-SYS-04', canonicalPath: '/admin/system/health', previewPath: '/admin-v2-preview/system/health', title: '시스템 상태', console: 'SYSTEM', requiredPermission: 'SYSTEM_STATUS_READ' },
       { id: 'UI-SYS-05', canonicalPath: '/admin/system/journey-ops', previewPath: '/admin-v2-preview/system/journey-ops', title: 'AI·도구 운영', console: 'SYSTEM', requiredPermission: 'AI_OPS_READ' },
     ]);
     expect(validateRouteMetadata()).toBe(true);
@@ -324,7 +324,7 @@ describe('admin v2 fixture access and routes', () => {
   });
 
   test('canonical production routes apply the release gate before permissions', () => {
-    expect(PRODUCTION_RELEASED_ROUTE_IDS).toEqual(['UI-OPS-01', 'UI-OPS-02', 'UI-OPS-03', 'UI-OPS-04', 'UI-DATA-01', 'UI-DATA-02', 'UI-OPS-05', 'UI-MODEL-01', 'UI-MODEL-02', 'UI-MODEL-04', 'UI-SYS-01', 'UI-SYS-02', 'UI-SYS-03']);
+    expect(PRODUCTION_RELEASED_ROUTE_IDS).toEqual(['UI-OPS-01', 'UI-OPS-02', 'UI-OPS-03', 'UI-OPS-04', 'UI-DATA-01', 'UI-DATA-02', 'UI-OPS-05', 'UI-MODEL-01', 'UI-MODEL-02', 'UI-MODEL-04', 'UI-SYS-01', 'UI-SYS-02', 'UI-SYS-03', 'UI-SYS-04']);
     expect(resolveCanonicalRoute('/admin/ops', { permissions: ['OPS_DASHBOARD_READ'] })).toMatchObject({ type: 'ALLOW', route: { id: 'UI-OPS-01' } });
     expect(resolveCanonicalRoute('/admin/ops/risk-map', { permissions: [] })).toMatchObject({ type: 'FORBIDDEN', route: { requiredPermission: 'OPS_RISK_MAP_READ' } });
     expect(resolveCanonicalRoute('/admin/ops/candidates', { permissions: ['OPS_CANDIDATE_READ'] })).toMatchObject({ type: 'ALLOW', route: { id: 'UI-OPS-03' } });
@@ -334,7 +334,7 @@ describe('admin v2 fixture access and routes', () => {
     expect(resolveCanonicalRoute('/admin/data/pipeline', { permissions: ['DATA_STATUS_READ'] })).toMatchObject({ type: 'ALLOW', route: { id: 'UI-DATA-02', requiredPermission: 'DATA_STATUS_READ' } });
     expect(resolveCanonicalRoute('/admin/ops/data', { permissions: ['DATA_STATUS_READ'] })).toMatchObject({ type: 'ALLOW', route: { id: 'UI-OPS-05', title: '데이터 상태 (이전 주소)', requiredPermission: 'DATA_STATUS_READ' } });
     expect(resolveCanonicalRoute('/admin/ops/data', { permissions: [] })).toMatchObject({ type: 'FORBIDDEN', route: { id: 'UI-OPS-05', requiredPermission: 'DATA_STATUS_READ' } });
-    ['UI-OPS-06', 'UI-OPS-07', 'UI-SYS-04', 'UI-SYS-05'].forEach((id) => {
+    ['UI-OPS-06', 'UI-OPS-07', 'UI-SYS-05'].forEach((id) => {
       const route = ROUTES.find((candidate) => candidate.id === id);
       expect(resolveCanonicalRoute(route.canonicalPath, { permissions: [route.requiredPermission] })).toMatchObject({ type: 'RELEASE_NOT_AVAILABLE', route: { id } });
     });
@@ -349,6 +349,8 @@ describe('admin v2 fixture access and routes', () => {
     expect(resolveCanonicalRoute('/admin/system/support', { permissions: [] })).toMatchObject({ type: 'FORBIDDEN', route: { id: 'UI-SYS-01', requiredPermission: 'QNA_READ' } });
     expect(resolveCanonicalRoute('/admin/system/access', { permissions: ['ACCESS_READ'] })).toMatchObject({ type: 'ALLOW', route: { id: 'UI-SYS-02', title: '관리자 역할·권한' } });
     expect(resolveCanonicalRoute('/admin/system/audit', { permissions: ['AUDIT_READ'] })).toMatchObject({ type: 'ALLOW', route: { id: 'UI-SYS-03', title: '관리자 변경 이력' } });
+    expect(resolveCanonicalRoute('/admin/system/health', { permissions: ['SYSTEM_STATUS_READ'] })).toMatchObject({ type: 'ALLOW', route: { id: 'UI-SYS-04', title: '시스템 상태', requiredPermission: 'SYSTEM_STATUS_READ' } });
+    expect(resolveCanonicalRoute('/admin/system/health', { permissions: [] })).toMatchObject({ type: 'FORBIDDEN', route: { id: 'UI-SYS-04', requiredPermission: 'SYSTEM_STATUS_READ' } });
     expect(resolveCanonicalRoute('/admin/not-real', { permissions: [] }).type).toBe('NOT_FOUND');
     expect(isAdminV2ProductionPath('/admin')).toBe(true);
     expect(isAdminV2ProductionPath('/admin/ops')).toBe(true);
