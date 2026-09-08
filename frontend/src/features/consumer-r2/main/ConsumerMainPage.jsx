@@ -222,21 +222,24 @@ const CANDIDATE_SORTS = [
 
 function CandidateCard({ candidate, index, onSelect, selected }) {
   const tone = candidate.availabilityLevel === "HIGH" ? "success" : candidate.availabilityLevel === "MEDIUM" ? "warning" : "danger";
-  const unavailable = candidate.predictionStatus !== "NORMAL" || candidate.routeStatus !== "NORMAL";
+  const predictionTooSoon = candidate.predictionStatus === "TOO_SOON";
+  const predictionUnavailable = candidate.predictionStatus !== "NORMAL";
+  const routeUnavailable = candidate.routeStatus !== "NORMAL";
+  const unavailable = predictionUnavailable || routeUnavailable;
   const inventory = getInventoryPresentation(candidate);
   return (
     <button className="cr293-candidate" type="button" aria-pressed={selected} onClick={() => onSelect(candidate.stationId)}>
       <span className="cr293-candidate__rank">{index + 1}</span>
       <span className="cr293-candidate__body">
-        <span className="cr293-candidate__top"><strong>{candidate.stationName}</strong><small className="cr293-candidate__distance">{formatDistance(candidate.distanceMeters)}</small><StatusBadge tone={unavailable ? "neutral" : tone}>{unavailable ? "실시간" : candidate.availabilityLabel}</StatusBadge></span>
+        <span className="cr293-candidate__top"><strong>{candidate.stationName}</strong><small className="cr293-candidate__distance">{formatDistance(candidate.distanceMeters)}</small><StatusBadge tone={predictionUnavailable ? "neutral" : tone}>{predictionTooSoon ? "현재 재고" : predictionUnavailable ? "확인 불가" : candidate.availabilityLabel}</StatusBadge></span>
         <span className="cr293-candidate__facts">
-          <span className="cr293-candidate__fact cr293-candidate__fact--lead"><small>도착 시점 대여 가능성</small><b>{candidate.probability === null ? "실시간" : formatProbability(candidate.probability)}</b></span>
+          <span className="cr293-candidate__fact cr293-candidate__fact--lead"><small>도착 시점 대여 가능성</small><b>{predictionTooSoon ? "현재 재고 참고" : formatProbability(candidate.probability)}</b></span>
           <span className="cr293-candidate__fact"><small>현재 자전거</small><b>{inventory.value}</b></span>
           <span className="cr293-candidate__fact"><small>예상 도착</small><b>{formatArrival(candidate.arrivalAt)}</b></span>
           <span className="cr293-candidate__fact"><small>이동 시간</small><b>{formatMinutes(candidate.durationSeconds)}</b></span>
         </span>
         <span className="cr293-candidate__inventory">{inventory.detail}</span>
-        {unavailable ? <span className="cr293-candidate__unavailable">도착 15분 이내 단거리 경로로, 실시간 재고를 기준으로 안내합니다.</span> : null}
+        {predictionTooSoon ? <span className="cr293-candidate__unavailable">도착 시점이 가까워 미래 예측 대신 최신 현재 재고를 안내합니다.</span> : unavailable ? <span className="cr293-candidate__unavailable">예측 또는 경로 근거를 확인할 수 없습니다.</span> : null}
       </span>
     </button>
   );
@@ -268,25 +271,28 @@ function RouteDetail({ candidate }) {
 }
 
 function TransitWorkspace({ authState, candidate, destination, mapRenderer, onClose, onStationBrowse, origin, stationServices, transitHeadingRef }) {
-  const unavailable = candidate.predictionStatus !== "NORMAL" || candidate.routeStatus !== "NORMAL";
+  const predictionTooSoon = candidate.predictionStatus === "TOO_SOON";
+  const predictionUnavailable = candidate.predictionStatus !== "NORMAL";
+  const routeUnavailable = candidate.routeStatus !== "NORMAL";
+  const unavailable = predictionUnavailable || routeUnavailable;
   const inventory = getInventoryPresentation(candidate);
   const tone = candidate.availabilityLevel === "HIGH" ? "success" : candidate.availabilityLevel === "MEDIUM" ? "warning" : "danger";
   return (
     <section className="cr293-transit-view" aria-label="선택한 대여소의 대중교통 경로 상세">
       <aside className="cr293-transit-summary">
         <div className="cr293-transit-summary__title">
-          <StatusBadge tone={unavailable ? "neutral" : tone}>{unavailable ? "실시간" : "추천"}</StatusBadge>
+          <StatusBadge tone={unavailable ? "neutral" : tone}>{predictionTooSoon ? "현재 재고" : unavailable ? "확인 필요" : "추천"}</StatusBadge>
           <h2 ref={transitHeadingRef} tabIndex="-1">{candidate.stationName}</h2>
         </div>
         <div className="cr293-transit-summary__primary">
-          <span><small>도착 시점 대여 가능성</small>{candidate.probability === null ? <strong>실시간</strong> : <b>{formatProbability(candidate.probability)}</b>}</span>
+          <span><small>도착 시점 대여 가능성</small>{predictionTooSoon ? <strong>현재 재고 참고</strong> : candidate.probability === null ? <strong>확인 불가</strong> : <b>{formatProbability(candidate.probability)}</b>}</span>
           <span aria-label={inventory.inline}><small>현재 자전거</small><b>{inventory.value}</b><small className="cr293-transit-summary__meta">{inventory.detail}</small></span>
         </div>
         <div className="cr293-transit-summary__route">
           <span><small>예상 도착</small><b>{formatArrival(candidate.arrivalAt)}</b></span>
           <span><small>대중교통</small><b>{formatMinutes(candidate.durationSeconds)}</b></span>
         </div>
-        <p>{candidate.probability === null ? "도착 시각은 표시된 대중교통 경로 기준이며, 대여 가능성은 현재 확인하지 못했습니다." : "도착 시각과 대여 가능성은 표시된 동일 대중교통 경로를 기준으로 계산했습니다."}</p>
+        <p>{predictionTooSoon ? "도착 시점이 가까워 미래 예측 대신 최신 현재 재고를 안내합니다." : candidate.probability === null ? "도착 시각은 표시된 대중교통 경로 기준이며, 대여 가능성은 현재 확인하지 못했습니다." : "도착 시각과 대여 가능성은 표시된 동일 대중교통 경로를 기준으로 계산했습니다."}</p>
       </aside>
       <div className="cr293-transit-view__route">
         <ConsumerRouteMap authState={authState} candidate={candidate} destination={destination} fetchStationDetail={stationServices.fetchStationDetail} fetchStationLocations={stationServices.fetchStationLocations} mapRenderer={mapRenderer} onStationDetail={onStationBrowse} origin={origin} />
@@ -348,7 +354,7 @@ function ResultsWorkspace({ authState, input, mapRenderer, onOpenGuide, onOpenRi
           <section className="cr293-evidence">
             <div className="cr293-evidence__strip">
               <div className="cr293-evidence__selected"><h2>선택한 경로: {selected.stationName}</h2><small>{formatDistance(selected.distanceMeters)}</small></div>
-              <div className="cr293-evidence__numbers"><span><b>{formatProbability(selected.probability)}</b><small>대여 가능성</small></span><span><b>{getInventoryPresentation(selected).value}</b><small>현재 자전거</small></span><span><b>{formatArrival(selected.arrivalAt)}</b><small>예상 도착</small></span><span><b>{formatMinutes(selected.durationSeconds)}</b><small>예상 이동</small></span></div>
+              <div className="cr293-evidence__numbers"><span><b>{selected.predictionStatus === "TOO_SOON" ? "현재 재고 참고" : formatProbability(selected.probability)}</b><small>대여 가능성</small></span><span><b>{getInventoryPresentation(selected).value}</b><small>현재 자전거</small></span><span><b>{formatArrival(selected.arrivalAt)}</b><small>예상 도착</small></span><span><b>{formatMinutes(selected.durationSeconds)}</b><small>예상 이동</small></span></div>
             </div>
             <dl className="cr293-evidence__metadata">
               <div><dt>현재 재고</dt><dd>{formatInventory(selected)}</dd></div>
