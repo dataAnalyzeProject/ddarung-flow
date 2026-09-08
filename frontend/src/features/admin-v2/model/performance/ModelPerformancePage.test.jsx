@@ -71,6 +71,24 @@ describe('ModelPerformancePage', () => {
     expect(screen.getByText('model-5.2')).toBeInTheDocument();
   });
 
+  test('renders actual diagnostics fields without replacing null evidence', async () => {
+    const diagnostics = { state: 'SUCCESS', data: { segments: [{ axis: 'STATION', segmentValue: '1001', status: 'UNKNOWN_INSUFFICIENT_SAMPLES', sampleCount: 149, brierScore: null, baselineBrierScore: null, skillScore: null, shortageRecall: null }] } };
+    renderPage({ load: jest.fn().mockResolvedValue({ base: base(), runtime: runtime(), diagnostics }) });
+    expect(await screen.findByRole('heading', { name: '진단' })).toBeInTheDocument();
+    expect(screen.getByText('1001')).toBeInTheDocument();
+    expect(screen.getAllByText('UNKNOWN_INSUFFICIENT_SAMPLES')).toHaveLength(2);
+    expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(4);
+  });
+
+  test.each([
+    [{ state: 'ACCESS_LIMITED', permission: 'MODEL_DIAGNOSTICS_READ' }, /필요 권한: MODEL_DIAGNOSTICS_READ/],
+    [{ state: 'ERROR', error: { code: 'DIAGNOSTICS_SNAPSHOT_MISMATCH' } }, /DIAGNOSTICS_SNAPSHOT_MISMATCH/],
+  ])('preserves independent diagnostics states', async (diagnostics, expected) => {
+    renderPage({ load: jest.fn().mockResolvedValue({ base: base(), runtime: runtime(), diagnostics }) });
+    expect(await screen.findByText(expected)).toBeInTheDocument();
+    expect(screen.getByText('0.0304')).toBeInTheDocument();
+  });
+
   test('does not render uncontracted runtime fields such as a private path', async () => {
     renderPage({ load: jest.fn().mockResolvedValue({ base: base(), runtime: runtime({ privatePath: '/private/model/artifact' }) }) });
     expect(await screen.findByText('LIVE INFERENCE')).toBeInTheDocument();

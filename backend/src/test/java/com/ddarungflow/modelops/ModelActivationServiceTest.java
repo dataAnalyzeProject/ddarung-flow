@@ -32,7 +32,7 @@ class ModelActivationServiceTest {
 
     @org.junit.jupiter.api.BeforeEach
     void setUpTransactionManager() {
-        when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
+        lenient().when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
     }
 
     @Test
@@ -86,6 +86,32 @@ class ModelActivationServiceTest {
 
         verify(gateway).activate(protectedPrevious);
         verify(artifactRepository, never()).findFirstByStateOrderByIdDesc(ModelArtifactState.RETIRED);
+    }
+
+    @Test
+    void activationPreGateFailureIsAuditedOnceWithoutCallingGateway() {
+        when(artifactRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.activate(99L, 1L, UserRole.ADMIN))
+                .isInstanceOf(ModelActivationService.PromotionGateException.class);
+
+        verify(auditEventService).appendEvent(eq(1L), eq(UserRole.ADMIN), anyCollection(),
+                eq("MODEL_ACTIVATE"), eq("MODEL"), eq("MODEL_ID:99"), eq(AuditResult.FAILURE),
+                eq("MODEL_PROMOTION_GATE_FAILED"), isNull(), anyString(), any());
+        verifyNoInteractions(gateway, attemptService);
+    }
+
+    @Test
+    void rollbackPreGateFailureIsAuditedOnceWithoutCallingGateway() {
+        when(artifactRepository.findFirstByState(ModelArtifactState.ACTIVE)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.rollback(1L, UserRole.ADMIN))
+                .isInstanceOf(ModelActivationService.RollbackTargetUnavailableException.class);
+
+        verify(auditEventService).appendEvent(eq(1L), eq(UserRole.ADMIN), anyCollection(),
+                eq("MODEL_ROLLBACK"), eq("MODEL"), eq("ACTIVE_MODEL_UNAVAILABLE"), eq(AuditResult.FAILURE),
+                eq("ROLLBACK_TARGET_UNAVAILABLE"), isNull(), anyString(), any());
+        verifyNoInteractions(gateway, attemptService);
     }
 
     private ModelArtifact artifact(String version, ModelArtifactState state) {

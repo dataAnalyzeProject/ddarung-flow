@@ -1,6 +1,7 @@
 import { adminFetch } from '../../auth/adminSession.js';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080';
+const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 
 export class ModelReleasesApiError extends Error {
   constructor({ status, code, message, source = 'MODEL_RELEASES_API_ERROR' } = {}) {
@@ -10,18 +11,39 @@ export class ModelReleasesApiError extends Error {
 }
 
 function isObject(value) { return value !== null && typeof value === 'object'; }
-async function request(path, { signal, method = 'GET', body, headers } = {}) {
+async function request(path, { signal, method = 'GET', body, headers, jsonBody = false } = {}) {
+  const options = { method, credentials: 'include', signal, ...(headers ? { headers } : {}) };
+  if (body !== undefined) {
+    options.body = jsonBody ? JSON.stringify(body) : body;
+    if (jsonBody) options.headers = { 'Content-Type': 'application/json', ...(headers || {}) };
+  }
   let response;
-  try { response = await adminFetch(`${API_BASE_URL}${path}`, { method, credentials: 'include', signal, ...(body === undefined ? { ...(headers ? { headers } : {}) } : { headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) }) }); }
+  try { response = await adminFetch(`${API_BASE_URL}${path}`, options); }
   catch (error) { if (error?.name === 'AbortError') throw error; throw new ModelReleasesApiError(); }
   let payload = null;
-  try { payload = await response.json(); } catch (_) { /* error bodies are optional */ }
+  try { payload = await response.json(); } catch (_) { /* success may have no body */ }
   if (!response.ok) throw new ModelReleasesApiError({ status: response.status, code: payload?.code, message: payload?.message });
   return payload;
 }
+
 function normalizeAccess(payload) { if (!isObject(payload) || !Array.isArray(payload.permissions)) throw new ModelReleasesApiError({ code: 'ADMIN_ACCESS_UNAVAILABLE', source: 'ADMIN_ACCESS_UNAVAILABLE' }); return payload.permissions.filter((permission) => typeof permission === 'string'); }
-function normalizeModels(payload) { if (!Array.isArray(payload) || !payload.every((model) => isObject(model) && typeof model.id === 'number' && Number.isFinite(model.id) && typeof model.version === 'string' && typeof model.state === 'string' && typeof model.createdAt === 'string')) throw new ModelReleasesApiError({ code: 'MODEL_REGISTRY_RESPONSE_INVALID' }); return payload; }
-function normalizeRuntime(payload) { if (!isObject(payload) || payload.status !== 'NORMAL' || typeof payload.modelVersion !== 'string' || !payload.modelVersion || !/^[0-9a-f]{64}$/.test(payload.artifactSha256 || '') || typeof payload.modelSource !== 'string' || !payload.modelSource || typeof payload.loadedAt !== 'string' || JSON.stringify(payload.supportedHorizons) !== JSON.stringify([60, 120, 180, 240]) || JSON.stringify(payload.supportedQuantities) !== JSON.stringify([1, 2, 3, 4, 5])) throw new ModelReleasesApiError({ code: 'MODEL_RUNTIME_RESPONSE_INVALID' }); return payload; }
+function normalizeModels(payload) {
+  if (!Array.isArray(payload) || !payload.every((model) => isObject(model)
+    && typeof model.id === 'number' && Number.isFinite(model.id)
+    && typeof model.version === 'string' && model.version
+    && typeof model.state === 'string' && typeof model.createdAt === 'string'
+    && SHA256_PATTERN.test(model.artifactSha256 || '')
+    && typeof model.codeCommit === 'string' && typeof model.featureSchemaVersion === 'string')) throw new ModelReleasesApiError({ code: 'MODEL_REGISTRY_RESPONSE_INVALID' });
+  return payload;
+}
+function normalizeRuntime(payload) { if (!isObject(payload) || payload.status !== 'NORMAL' || typeof payload.modelVersion !== 'string' || !payload.modelVersion || !SHA256_PATTERN.test(payload.artifactSha256 || '') || typeof payload.modelSource !== 'string' || !payload.modelSource || typeof payload.loadedAt !== 'string' || JSON.stringify(payload.supportedHorizons) !== JSON.stringify([60, 120, 180, 240]) || JSON.stringify(payload.supportedQuantities) !== JSON.stringify([1, 2, 3, 4, 5])) throw new ModelReleasesApiError({ code: 'MODEL_RUNTIME_RESPONSE_INVALID' }); return payload; }
+function normalizeHistory(payload) {
+  if (!Array.isArray(payload) || !payload.every((item) => isObject(item) && typeof item.action === 'string'
+    && typeof item.resourceType === 'string' && typeof item.resourceVersion === 'string'
+    && typeof item.result === 'string' && (item.reasonCode === null || typeof item.reasonCode === 'string')
+    && typeof item.occurredAt === 'string')) throw new ModelReleasesApiError({ code: 'MODEL_HISTORY_RESPONSE_INVALID' });
+  return payload;
+}
 function sourceResult(promise, normalize) { return promise.then((data) => ({ state: 'SUCCESS', data: normalize(data) })).catch((error) => { if (error?.name === 'AbortError') throw error; return { state: error?.status === 401 || error?.status === 403 ? 'FORBIDDEN' : 'ERROR', error }; }); }
 function accessLimited(permission) { return { state: 'ACCESS_LIMITED', permission }; }
 
@@ -35,16 +57,60 @@ export function availableActions(model, permissions = []) {
   return actions;
 }
 
-function loadAccess(signal) { return request('/api/v1/admin/access', { signal }).then(normalizeAccess); }
+export async function sha256File(file) {
+  if (!file || typeof file.arrayBuffer !== 'function' || !window.crypto?.subtle) throw new ModelReleasesApiError({ code: 'FILE_HASH_UNAVAILABLE' });
+  const digest = await window.crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
 function loadRuntime(signal, permissions) { return permissions.includes('MODEL_METRICS_READ') ? sourceResult(request('/api/v1/admin/model-runtime', { signal }), normalizeRuntime) : Promise.resolve(accessLimited('MODEL_METRICS_READ')); }
 function loadRegistry(signal, permissions) { return permissions.includes('MODEL_METRICS_READ') ? sourceResult(request('/api/v1/admin/models', { signal }), normalizeModels) : Promise.resolve(accessLimited('MODEL_METRICS_READ')); }
-function loadHistory(_, permissions) { return Promise.resolve(permissions.includes('AUDIT_READ') ? { state: 'UNAVAILABLE', code: 'MODEL_LIFECYCLE_AUDIT_SCOPE_UNAVAILABLE' } : accessLimited('AUDIT_READ')); }
+function loadHistory(signal, permissions) { return permissions.includes('MODEL_RELEASE_READ') ? sourceResult(request('/api/v1/admin/models/history', { signal }), normalizeHistory) : Promise.resolve(accessLimited('MODEL_RELEASE_READ')); }
 function actionPath(type, id) { return type === 'ROLLBACK' ? '/api/v1/admin/models/rollback' : `/api/v1/admin/models/${id}/${type.toLowerCase()}`; }
+function pause(ms) { return ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve(); }
 
-export function createLiveModelReleasesAdapter() {
+export function createLiveModelReleasesAdapter({ readbackAttempts = 4, readbackDelayMs = 250 } = {}) {
+  async function csrf(signal) {
+    const value = await request('/api/v1/auth/csrf', { signal });
+    if (!isObject(value) || typeof value.headerName !== 'string' || typeof value.token !== 'string') throw new ModelReleasesApiError({ code: 'CSRF_RESPONSE_INVALID' });
+    return { [value.headerName]: value.token };
+  }
+  async function mutate(path, { signal, method = 'POST', body, headers, jsonBody = false } = {}) {
+    return request(path, { signal, method, body, jsonBody, headers: { ...(await csrf(signal)), ...(headers || {}) } });
+  }
+  async function refreshSources(signal, permissions) {
+    const current = permissions || [];
+    const [runtime, registry, history] = await Promise.all([loadRuntime(signal, current), loadRegistry(signal, current), loadHistory(signal, current)]);
+    return { runtime, registry, history };
+  }
+  async function upload(file, signal) {
+    const expectedSha256 = await sha256File(file);
+    const created = await mutate('/api/v1/admin/model-uploads', { signal, body: { fileName: file.name, expectedSha256, maxBytes: file.size, expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString() }, jsonBody: true });
+    if (!isObject(created) || typeof created.id !== 'string') throw new ModelReleasesApiError({ code: 'MODEL_UPLOAD_RESPONSE_INVALID' });
+    await mutate(`/api/v1/admin/model-uploads/${encodeURIComponent(created.id)}/content`, { signal, method: 'PUT', body: await file.arrayBuffer(), headers: { 'Content-Type': 'application/octet-stream' } });
+    const completed = await mutate(`/api/v1/admin/model-uploads/${encodeURIComponent(created.id)}/complete`, { signal });
+    if (!isObject(completed) || completed.status !== 'COMPLETED') throw new ModelReleasesApiError({ code: 'MODEL_UPLOAD_NOT_COMPLETED' });
+    return { id: created.id, expectedSha256 };
+  }
   return {
-    async load({ signal }) { const permissions = await loadAccess(signal); const [runtime, registry, history] = await Promise.all([loadRuntime(signal, permissions), loadRegistry(signal, permissions), loadHistory(signal, permissions)]); return { permissions, runtime, registry, history }; },
-    async refresh({ signal, permissions }) { const current = permissions || []; const [runtime, registry, history] = await Promise.all([loadRuntime(signal, current), loadRegistry(signal, current), loadHistory(signal, current)]); return { runtime, registry, history }; },
-    async action({ type, id, payload, signal }) { const csrf = await request('/api/v1/auth/csrf', { signal }); return request(actionPath(type, id), { signal, method: 'POST', headers: { [csrf.headerName]: csrf.token }, body: payload }); },
+    async load({ signal }) { const permissions = normalizeAccess(await request('/api/v1/admin/access', { signal })); return { permissions, ...(await refreshSources(signal, permissions)) }; },
+    async refresh({ signal, permissions }) { return refreshSources(signal, permissions); },
+    async action({ type, id, signal }) { return mutate(actionPath(type, id), { signal }); },
+    async register({ artifactFile, manifestFile, metadata, signal }) {
+      const artifact = await upload(artifactFile, signal);
+      const manifest = await upload(manifestFile, signal);
+      return mutate('/api/v1/admin/models', { signal, body: { ...metadata, artifactUploadId: artifact.id, manifestUploadId: manifest.id }, jsonBody: true });
+    },
+    async verifyServing({ candidateModelId, permissions, signal }) {
+      let latest = null;
+      for (let attempt = 0; attempt < readbackAttempts; attempt += 1) {
+        latest = await refreshSources(signal, permissions);
+        const expected = latest.registry?.state === 'SUCCESS' ? latest.registry.data.find((model) => model.id === candidateModelId) : null;
+        if (!expected) return { state: 'UNAVAILABLE', refreshed: latest };
+        if (latest.runtime?.state === 'SUCCESS' && latest.runtime.data.modelVersion === expected.version && latest.runtime.data.artifactSha256 === expected.artifactSha256) return { state: 'VERIFIED', expected, actual: latest.runtime.data, refreshed: latest };
+        if (attempt + 1 < readbackAttempts) await pause(readbackDelayMs);
+      }
+      return { state: latest?.runtime?.state === 'SUCCESS' ? 'MISMATCH' : 'UNAVAILABLE', refreshed: latest };
+    },
   };
 }

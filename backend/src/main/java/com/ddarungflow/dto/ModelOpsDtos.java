@@ -16,19 +16,17 @@ public final class ModelOpsDtos {
     private ModelOpsDtos() {
     }
 
-    public record CreateUploadRequest(String objectKey, String expectedSha256, Long maxBytes, OffsetDateTime expiresAt) {
+    public record CreateUploadRequest(String fileName, String expectedSha256, Long maxBytes, OffsetDateTime expiresAt) {
     }
 
     public record CreateModelRequest(
         String version,
-        String artifactKey,
-        String sha256,
+        UUID artifactUploadId,
+        UUID manifestUploadId,
         String codeCommit,
         String dataManifestHash,
         String configHash,
-        String featureSchemaVersion,
-        String manifestKey,
-        String manifestSha256
+        String featureSchemaVersion
     ) {
     }
 
@@ -36,29 +34,36 @@ public final class ModelOpsDtos {
         Long id,
         String version,
         ModelArtifactState state,
+        String artifactSha256,
+        String codeCommit,
+        String featureSchemaVersion,
         OffsetDateTime createdAt
     ) {
         public static ModelResponse from(ModelArtifact artifact) {
             return new ModelResponse(
-                artifact.getId(), artifact.getVersion(), artifact.getState(), artifact.getCreatedAt()
+                artifact.getId(), artifact.getVersion(), artifact.getState(), artifact.getSha256(),
+                artifact.getCodeCommit(), artifact.getFeatureSchemaVersion(), artifact.getCreatedAt()
             );
         }
     }
 
     public record UploadResponse(
         UUID id,
-        String objectKey,
         String expectedSha256,
         Long maxBytes,
         ModelUploadStatus status,
+        String observedSha256,
+        Long observedBytes,
+        OffsetDateTime storedAt,
         OffsetDateTime expiresAt,
         OffsetDateTime completedAt,
         OffsetDateTime createdAt
     ) {
         public static UploadResponse from(ModelUpload upload) {
             return new UploadResponse(
-                upload.getId(), upload.getObjectKey(), upload.getExpectedSha256(), upload.getMaxBytes(),
-                upload.getStatus(), upload.getExpiresAt(), upload.getCompletedAt(), upload.getCreatedAt()
+                upload.getId(), upload.getExpectedSha256(), upload.getMaxBytes(),
+                upload.getStatus(), upload.getObservedSha256(), upload.getObservedBytes(), upload.getStoredAt(),
+                upload.getExpiresAt(), upload.getCompletedAt(), upload.getCreatedAt()
             );
         }
     }
@@ -75,6 +80,9 @@ public final class ModelOpsDtos {
 
     public record ErrorResponse(String code, String message) {
     }
+
+    public record HistoryResponse(String action, String resourceType, String resourceVersion,
+                                  String result, String reasonCode, OffsetDateTime occurredAt) { }
 
     public record MetricResponse(
         Integer horizonMinutes,

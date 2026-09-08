@@ -4,9 +4,9 @@ const runtime = { status: 'NORMAL', modelVersion: 'runtime-v1', artifactSha256: 
 describe('modelOverviewAdapter', () => {
   afterEach(() => { global.fetch = undefined; });
   test('loads runtime and registry independently with credentials', async () => {
-    global.fetch = jest.fn().mockResolvedValueOnce(response(runtime)).mockResolvedValueOnce(response([{ id: 1, state: 'ACTIVE' }]));
+    global.fetch = jest.fn().mockResolvedValueOnce(response(runtime)).mockResolvedValueOnce(response([{ id: 1, version: 'runtime-v1', state: 'ACTIVE', createdAt: '2026-09-01T00:00:00Z', artifactSha256: 'a'.repeat(64), codeCommit: 'abc123', featureSchemaVersion: 'v1' }]));
     const result = await createLiveModelOverviewAdapter().load({});
-    expect(result.runtime.data).toEqual(runtime); expect(result.registryStateCounts).toEqual({ DRAFT: 0, VALIDATED: 0, APPROVED: 0, ACTIVE: 1, RETIRED: 0 });
+    expect(result.runtime.data).toEqual(runtime); expect(result.registryStateCounts).toEqual({ DRAFT: 0, VALIDATED: 0, APPROVED: 0, REJECTED: 0, ACTIVE: 1, RETIRED: 0 });
     expect(global.fetch).toHaveBeenCalledWith('http://localhost:8080/api/v1/admin/model-runtime', expect.objectContaining({ credentials: 'include' })); expect(global.fetch).toHaveBeenCalledWith('http://localhost:8080/api/v1/admin/models', expect.objectContaining({ credentials: 'include' }));
   });
   test('retains a successful registry when runtime readback fails', async () => {
@@ -23,5 +23,14 @@ describe('modelOverviewAdapter', () => {
     expect(result.registry).toEqual(expect.objectContaining({ state: 'ERROR', error: expect.objectContaining({ code: 'MODEL_REGISTRY_RESPONSE_INVALID' }) }));
     expect(result.registryStateCounts).toBeNull();
   });
-  test('derives lifecycle counts only from source rows', () => { expect(deriveRegistryStateCounts([{ state: 'DRAFT' }, { state: 'REJECTED' }])).toEqual({ DRAFT: 1, VALIDATED: 0, APPROVED: 0, ACTIVE: 0, RETIRED: 0 }); });
+  test('derives every backend lifecycle state including rejected', () => { expect(deriveRegistryStateCounts([{ state: 'DRAFT' }, { state: 'REJECTED' }])).toEqual({ DRAFT: 1, VALIDATED: 0, APPROVED: 0, REJECTED: 1, ACTIVE: 0, RETIRED: 0 }); });
+
+  test.each([
+    [[{ version: 'missing-id', state: 'DRAFT', createdAt: '2026-09-01T00:00:00Z' }]],
+    [[{ id: 1, version: 'bad-state', state: 'UNKNOWN', createdAt: '2026-09-01T00:00:00Z' }]],
+  ])('rejects malformed registry rows instead of treating them as lifecycle data', async (models) => {
+    global.fetch = jest.fn().mockResolvedValueOnce(response(runtime)).mockResolvedValueOnce(response(models));
+    const result = await createLiveModelOverviewAdapter().load({});
+    expect(result.registry).toEqual(expect.objectContaining({ state: 'ERROR', error: expect.objectContaining({ code: 'MODEL_REGISTRY_RESPONSE_INVALID' }) }));
+  });
 });

@@ -7,11 +7,12 @@ import com.ddarungflow.dto.PrincipalDetails;
 import com.ddarungflow.modelops.ModelArtifact;
 import com.ddarungflow.modelops.ModelArtifactState;
 import com.ddarungflow.modelops.ModelActivationService;
+import com.ddarungflow.modelops.ModelHistoryRepository;
 import com.ddarungflow.modelops.ModelRegistryService;
 import com.ddarungflow.modelops.ModelUpload;
 import com.ddarungflow.modelops.ModelUploadService;
-import com.ddarungflow.modelops.ModelUploadStatus;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -19,10 +20,12 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import jakarta.servlet.http.HttpServletRequest;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -36,13 +39,16 @@ public class ModelOpsController {
     private final ModelUploadService modelUploadService;
     private final ModelActivationService modelActivationService;
     private final AuditEventService auditEventService;
+    private final ModelHistoryRepository modelHistoryRepository;
 
     public ModelOpsController(ModelRegistryService modelRegistryService, ModelUploadService modelUploadService,
-                              ModelActivationService modelActivationService, AuditEventService auditEventService) {
+                              ModelActivationService modelActivationService, AuditEventService auditEventService,
+                              ModelHistoryRepository modelHistoryRepository) {
         this.modelRegistryService = modelRegistryService;
         this.modelUploadService = modelUploadService;
         this.modelActivationService = modelActivationService;
         this.auditEventService = auditEventService;
+        this.modelHistoryRepository = modelHistoryRepository;
     }
 
     @PostMapping("/model-uploads")
@@ -51,18 +57,48 @@ public class ModelOpsController {
         @RequestBody ModelOpsDtos.CreateUploadRequest request,
         @AuthenticationPrincipal PrincipalDetails principal
     ) {
-        OffsetDateTime now = OffsetDateTime.now();
-        ModelUpload upload = new ModelUpload(
-            UUID.randomUUID(), principal.getUsers().getId(), request.objectKey(), request.expectedSha256(),
-            request.maxBytes(), ModelUploadStatus.CREATED, request.expiresAt(), null, now
-        );
-        return ResponseEntity.status(HttpStatus.CREATED).body(ModelOpsDtos.UploadResponse.from(modelUploadService.createUpload(upload)));
+        UUID auditTarget = UUID.randomUUID();
+        try {
+            ModelUpload upload = modelUploadService.createUpload(principal.getUsers().getId(), request.fileName(),
+                    request.expectedSha256(), request.maxBytes(), request.expiresAt(), OffsetDateTime.now());
+            auditUpload(principal, "MODEL_UPLOAD_CREATE", upload.getId(), AuditResult.SUCCESS, null);
+            return ResponseEntity.status(HttpStatus.CREATED).body(ModelOpsDtos.UploadResponse.from(upload));
+        } catch (RuntimeException error) {
+            auditUpload(principal, "MODEL_UPLOAD_CREATE", auditTarget, AuditResult.FAILURE, uploadReason(error));
+            throw error;
+        }
+    }
+
+    @PutMapping(value = "/model-uploads/{id}/content", consumes = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+    @PreAuthorize("hasAuthority('MODEL_ARTIFACT_REGISTER')")
+    public ModelOpsDtos.UploadResponse uploadContent(@PathVariable UUID id, HttpServletRequest request,
+                                                      @AuthenticationPrincipal PrincipalDetails principal) {
+        try {
+            ModelUpload upload = modelUploadService.uploadContent(id, principal.getUsers().getId(),
+                    request.getInputStream(), OffsetDateTime.now());
+            auditUpload(principal, "MODEL_UPLOAD_CONTENT", id, AuditResult.SUCCESS, null);
+            return ModelOpsDtos.UploadResponse.from(upload);
+        } catch (RuntimeException error) {
+            auditUpload(principal, "MODEL_UPLOAD_CONTENT", id, AuditResult.FAILURE, uploadReason(error));
+            throw error;
+        } catch (java.io.IOException error) {
+            auditUpload(principal, "MODEL_UPLOAD_CONTENT", id, AuditResult.FAILURE, "MODEL_UPLOAD_STORAGE_UNAVAILABLE");
+            throw new ModelUploadService.StorageUnavailableException(error);
+        }
     }
 
     @PostMapping("/model-uploads/{id}/complete")
     @PreAuthorize("hasAuthority('MODEL_ARTIFACT_REGISTER')")
-    public ModelOpsDtos.UploadResponse completeUpload(@PathVariable UUID id) {
-        return ModelOpsDtos.UploadResponse.from(modelUploadService.complete(id, OffsetDateTime.now()));
+    public ModelOpsDtos.UploadResponse completeUpload(@PathVariable UUID id,
+                                                       @AuthenticationPrincipal PrincipalDetails principal) {
+        try {
+            ModelUpload upload = modelUploadService.complete(id, principal.getUsers().getId(), OffsetDateTime.now());
+            auditUpload(principal, "MODEL_UPLOAD_COMPLETE", id, AuditResult.SUCCESS, null);
+            return ModelOpsDtos.UploadResponse.from(upload);
+        } catch (RuntimeException error) {
+            auditUpload(principal, "MODEL_UPLOAD_COMPLETE", id, AuditResult.FAILURE, uploadReason(error));
+            throw error;
+        }
     }
 
     @PostMapping("/models")
@@ -71,17 +107,24 @@ public class ModelOpsController {
         @RequestBody ModelOpsDtos.CreateModelRequest request,
         @AuthenticationPrincipal PrincipalDetails principal
     ) {
-        ModelArtifact artifact = new ModelArtifact(
-            request.version(), principal.getUsers().getId(), request.artifactKey(), request.sha256(), request.codeCommit(),
-            request.dataManifestHash(), request.configHash(), request.featureSchemaVersion(), request.manifestKey(),
-            request.manifestSha256(), ModelArtifactState.DRAFT, OffsetDateTime.now()
-        );
         try {
+            if (request.artifactUploadId() == null || request.manifestUploadId() == null
+                    || request.artifactUploadId().equals(request.manifestUploadId())) {
+                throw new IllegalArgumentException("distinct artifactUploadId and manifestUploadId are required");
+            }
+            Long requesterUserId = principal.getUsers().getId();
+            ModelUpload artifactUpload = modelUploadService.requireCompleted(request.artifactUploadId(), requesterUserId);
+            ModelUpload manifestUpload = modelUploadService.requireCompleted(request.manifestUploadId(), requesterUserId);
+            ModelArtifact artifact = new ModelArtifact(
+                request.version(), requesterUserId, artifactUpload.getObjectKey(), artifactUpload.getObservedSha256(), request.codeCommit(),
+                request.dataManifestHash(), request.configHash(), request.featureSchemaVersion(), manifestUpload.getObjectKey(),
+                manifestUpload.getObservedSha256(), ModelArtifactState.DRAFT, OffsetDateTime.now()
+            );
             ModelArtifact saved = modelRegistryService.registerDraft(artifact);
             audit(principal, "MODEL_REGISTER", saved.getVersion(), AuditResult.SUCCESS, null);
             return ResponseEntity.status(HttpStatus.CREATED).body(ModelOpsDtos.ModelResponse.from(saved));
         } catch (RuntimeException error) {
-            audit(principal, "MODEL_REGISTER", safeTarget(request.version()), AuditResult.FAILURE, "VALIDATION_ERROR");
+            audit(principal, "MODEL_REGISTER", safeTarget(request.version()), AuditResult.FAILURE, uploadReason(error));
             throw error;
         }
     }
@@ -108,6 +151,12 @@ public class ModelOpsController {
     @PreAuthorize("hasAuthority('MODEL_METRICS_READ')")
     public List<ModelOpsDtos.ModelResponse> getModels() {
         return modelRegistryService.findAll().stream().map(ModelOpsDtos.ModelResponse::from).toList();
+    }
+
+    @GetMapping("/models/history")
+    @PreAuthorize("hasAuthority('MODEL_RELEASE_READ')")
+    public List<ModelOpsDtos.HistoryResponse> getHistory() {
+        return modelHistoryRepository.findRecent();
     }
 
     @GetMapping("/models/{id}/metrics")
@@ -145,6 +194,16 @@ public class ModelOpsController {
     ResponseEntity<ModelOpsDtos.ErrorResponse> activation(ModelActivationService.ActivationFailedException ignored) { return error(HttpStatus.SERVICE_UNAVAILABLE, "MODEL_ACTIVATION_FAILED", "모델 전환에 실패했습니다."); }
     @ExceptionHandler(ModelRegistryService.MakerCheckerViolationException.class)
     ResponseEntity<ModelOpsDtos.ErrorResponse> makerChecker(ModelRegistryService.MakerCheckerViolationException ignored) { return error(HttpStatus.CONFLICT, "MODEL_PROMOTION_GATE_FAILED", "등록·검증 담당자와 승인 담당자는 달라야 합니다."); }
+    @ExceptionHandler(ModelUploadService.UploadConflictException.class)
+    ResponseEntity<ModelOpsDtos.ErrorResponse> uploadConflict(ModelUploadService.UploadConflictException error) { return error(HttpStatus.CONFLICT, error.code(), "업로드 상태가 현재 요청과 맞지 않습니다."); }
+    @ExceptionHandler(ModelUploadService.UploadIntegrityException.class)
+    ResponseEntity<ModelOpsDtos.ErrorResponse> uploadIntegrity(ModelUploadService.UploadIntegrityException error) { return error(HttpStatus.UNPROCESSABLE_ENTITY, error.code(), "업로드 파일의 무결성을 확인할 수 없습니다."); }
+    @ExceptionHandler(ModelUploadService.StorageUnavailableException.class)
+    ResponseEntity<ModelOpsDtos.ErrorResponse> uploadStorage(ModelUploadService.StorageUnavailableException ignored) { return error(HttpStatus.SERVICE_UNAVAILABLE, "MODEL_UPLOAD_STORAGE_UNAVAILABLE", "모델 저장소를 사용할 수 없습니다."); }
+    @ExceptionHandler(ModelUploadService.UploadOwnershipException.class)
+    ResponseEntity<ModelOpsDtos.ErrorResponse> uploadOwnership(ModelUploadService.UploadOwnershipException ignored) { return error(HttpStatus.FORBIDDEN, "MODEL_UPLOAD_OWNER_MISMATCH", "다른 사용자의 업로드는 모델 등록에 사용할 수 없습니다."); }
+    @ExceptionHandler(IllegalStateException.class)
+    ResponseEntity<ModelOpsDtos.ErrorResponse> lifecycleConflict(IllegalStateException ignored) { return error(HttpStatus.CONFLICT, "MODEL_LIFECYCLE_CONFLICT", "현재 모델 상태에서는 요청을 수행할 수 없습니다."); }
     private ResponseEntity<ModelOpsDtos.ErrorResponse> error(HttpStatus status, String code, String message) { return ResponseEntity.status(status).body(new ModelOpsDtos.ErrorResponse(code, message)); }
 
     private ModelOpsDtos.ModelResponse transition(Long id, ModelArtifactState target, PrincipalDetails principal, String action) {
@@ -170,6 +229,20 @@ public class ModelOpsController {
     private void audit(PrincipalDetails principal, String action, String target, AuditResult result, String reasonCode) {
         auditEventService.appendEvent(principal.getUsers().getId(), principal.getUsers().getRole(), auditRoles(principal),
                 action, "MODEL", target, result, reasonCode, null, UUID.randomUUID().toString(), OffsetDateTime.now());
+    }
+
+    private void auditUpload(PrincipalDetails principal, String action, UUID uploadId, AuditResult result, String reasonCode) {
+        auditEventService.appendEvent(principal.getUsers().getId(), principal.getUsers().getRole(), auditRoles(principal),
+                action, "MODEL_UPLOAD", uploadId.toString(), result, reasonCode, null,
+                UUID.randomUUID().toString(), OffsetDateTime.now());
+    }
+
+    private String uploadReason(RuntimeException error) {
+        if (error instanceof ModelUploadService.UploadConflictException conflict) return conflict.code();
+        if (error instanceof ModelUploadService.UploadIntegrityException integrity) return integrity.code();
+        if (error instanceof ModelUploadService.StorageUnavailableException) return "MODEL_UPLOAD_STORAGE_UNAVAILABLE";
+        if (error instanceof ModelUploadService.UploadOwnershipException) return "MODEL_UPLOAD_OWNER_MISMATCH";
+        return "VALIDATION_ERROR";
     }
 
     private java.util.Collection<?> auditRoles(PrincipalDetails principal) {

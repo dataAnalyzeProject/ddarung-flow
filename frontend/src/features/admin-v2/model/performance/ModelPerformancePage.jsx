@@ -56,6 +56,21 @@ function RuntimeIdentity({ runtime, base }) {
   </section>;
 }
 
+function metricValue(segment, name, fallback) {
+  const value = segment?.[name] ?? (fallback ? segment?.[fallback] : null);
+  return value == null ? '—' : formatNumber(value, 4);
+}
+
+function Diagnostics({ source }) {
+  const heading = <div className="model-performance-section-heading"><div><h2 id="diagnostics-heading">진단</h2><p>동일 평가 snapshot의 segment·대여소 근거입니다.</p></div></div>;
+  if (source?.state === 'ACCESS_LIMITED') return <section className="model-performance-detail-card" aria-labelledby="diagnostics-heading">{heading}<p className="model-performance-note">진단 접근 제한 · 필요 권한: MODEL_DIAGNOSTICS_READ</p></section>;
+  if (source?.state === 'FORBIDDEN') return <section className="model-performance-detail-card" aria-labelledby="diagnostics-heading">{heading}<AsyncStatePanel state="FORBIDDEN" code={source.error?.code} requiredPermission="MODEL_DIAGNOSTICS_READ" /></section>;
+  if (source?.state === 'ERROR') return <section className="model-performance-detail-card" aria-labelledby="diagnostics-heading">{heading}<AsyncStatePanel state="ERROR" code={source.error?.code} /></section>;
+  const segments = source?.data?.segments || [];
+  if (!segments.length) return <section className="model-performance-detail-card" aria-labelledby="diagnostics-heading">{heading}<AsyncStatePanel state="EMPTY" /></section>;
+  return <section className="model-performance-detail-card model-performance-diagnostics" aria-labelledby="diagnostics-heading"><div className="model-performance-section-heading"><div><h2 id="diagnostics-heading">진단</h2><p>source가 제공한 segment·대여소 근거만 표시합니다.</p></div><span>{segments.length}개</span></div><div className="model-performance-table-wrap"><table><caption>segment별 성능 진단</caption><thead><tr><th scope="col">구분</th><th scope="col">대상</th><th scope="col">상태</th><th scope="col">표본</th><th scope="col">Brier</th><th scope="col">기준 Brier</th><th scope="col">Skill</th><th scope="col">품절 Recall</th></tr></thead><tbody>{segments.map((segment, index) => <tr key={`${segment.axis || segment.name || 'segment'}-${segment.segmentValue || index}`}><td>{segment.axis || segment.name || '확인 정보 없음'}</td><td>{segment.segmentValue ?? '—'}</td><td>{segment.status || segment.state || '확인 정보 없음'}</td><td>{formatCount(segment.sampleCount)}</td><td>{metricValue(segment, 'brierScore', 'brier')}</td><td>{metricValue(segment, 'baselineBrierScore')}</td><td>{metricValue(segment, 'skillScore')}</td><td>{metricValue(segment, 'shortageRecall')}</td></tr>)}</tbody></table></div><p className="model-performance-note">null 또는 표본 부족 값은 0으로 대체하지 않습니다.</p></section>;
+}
+
 export default function ModelPerformancePage({ createAdapter }) {
   const adapter = useMemo(() => createAdapter(), [createAdapter]);
   const [result, setResult] = useState(null);
@@ -69,7 +84,7 @@ export default function ModelPerformancePage({ createAdapter }) {
     setLoading(true); setError(null); setResult(null);
     const load = adapter.load
       ? adapter.load({ signal: controller.signal })
-      : adapter.loadBase({ signal: controller.signal }).then((base) => ({ base, runtime: { state: 'ERROR', error: { code: 'MODEL_RUNTIME_PREVIEW_UNAVAILABLE' } } }));
+      : adapter.loadBase({ signal: controller.signal }).then(async (base) => ({ base, runtime: { state: 'ERROR', error: { code: 'MODEL_RUNTIME_PREVIEW_UNAVAILABLE' } }, diagnostics: adapter.loadDiagnostics ? { state: 'SUCCESS', data: await adapter.loadDiagnostics(base, { signal: controller.signal }) } : { state: 'ACCESS_LIMITED', permission: 'MODEL_DIAGNOSTICS_READ' } }));
     load
       .then((nextResult) => { if (!controller.signal.aborted) setResult(nextResult); })
       .catch((nextError) => { if (!controller.signal.aborted && nextError?.name !== 'AbortError') setError(nextError); })
@@ -79,11 +94,12 @@ export default function ModelPerformancePage({ createAdapter }) {
 
   if (loading) return <main className="model-performance-page" aria-label="성능 · 신뢰도"><AsyncStatePanel state="LOADING" /></main>;
   if (error) return <BaseError error={error} onRetry={retry} />;
-  const { base, runtime } = result;
+  const { base, runtime, diagnostics } = result;
   return <main className="model-performance-page" aria-label="성능 · 신뢰도">
     <header className="model-performance-header"><div><h1>성능 · 신뢰도</h1><p>평가 snapshot의 성능과 보정 결과를 표시합니다.</p></div><span className="model-performance-source">Source: evaluation snapshot</span></header>
     <RuntimeIdentity runtime={runtime} base={base} />
     <Evidence base={base} />
     <div className="model-performance-detail-grid"><ReliabilityTable combinations={base.combinations} /><Calibration evaluation={base.evaluation} bins={base.calibrationBins} /></div>
+    <Diagnostics source={diagnostics} />
   </main>;
 }

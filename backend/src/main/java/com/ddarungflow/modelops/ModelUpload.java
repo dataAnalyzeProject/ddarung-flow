@@ -44,6 +44,15 @@ public class ModelUpload {
     @Column(name = "completed_at")
     private OffsetDateTime completedAt;
 
+    @Column(name = "observed_sha256", length = 64)
+    private String observedSha256;
+
+    @Column(name = "observed_bytes")
+    private Long observedBytes;
+
+    @Column(name = "stored_at")
+    private OffsetDateTime storedAt;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
@@ -94,7 +103,26 @@ public class ModelUpload {
         this.createdAt = createdAt;
     }
 
+    public void markUploaded(String observedSha256, long observedBytes, OffsetDateTime storedAt) {
+        if (this.status != ModelUploadStatus.CREATED) {
+            throw new IllegalStateException("Only CREATED upload sessions can receive content");
+        }
+        if (observedSha256 == null || !observedSha256.matches("^[0-9a-f]{64}$")) {
+            throw new IllegalArgumentException("observedSha256 must be a lowercase SHA-256");
+        }
+        if (observedBytes < 0 || storedAt == null) {
+            throw new IllegalArgumentException("observedBytes and storedAt are required");
+        }
+        this.status = ModelUploadStatus.UPLOADED;
+        this.observedSha256 = observedSha256;
+        this.observedBytes = observedBytes;
+        this.storedAt = storedAt;
+    }
+
     public void markCompleted(OffsetDateTime now) {
+        if (this.status != ModelUploadStatus.UPLOADED) {
+            throw new IllegalStateException("Only UPLOADED sessions can be completed");
+        }
         this.status = ModelUploadStatus.COMPLETED;
         this.completedAt = now;
     }

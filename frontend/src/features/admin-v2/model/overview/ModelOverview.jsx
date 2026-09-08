@@ -6,7 +6,7 @@ import './modelOverview.css';
 function isAccessError(error) { return error?.status === 401 || error?.status === 403; }
 function shortSha(value) { return value ? value.slice(0, 12) : ''; }
 function ServiceModelIcon() { return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9L12 3Z" fill="none" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.6" /><path d="M4 7.5 12 12l8-4.5M12 12v9" fill="none" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.6" /></svg>; }
-function RegistryCountCard({ state, count }) { return <article className="model-overview-count-card" aria-label={`레지스트리 ${state}`}><p>레지스트리 {state}</p><strong>{count}</strong></article>; }
+function RegistryCountCard({ state, count }) { return <article className="model-overview-count-card" aria-label={`레지스트리 ${state}`}><p>레지스트리 {state}</p><strong>{count ?? 0}</strong></article>; }
 function SourceState({ source, permission, label }) {
   if (source?.state === 'FORBIDDEN') return <AsyncStatePanel state="FORBIDDEN" code={source.error?.code} requiredPermission={permission} />;
   if (source?.state === 'ERROR') return <AsyncStatePanel state="ERROR" code={source.error?.code} />;
