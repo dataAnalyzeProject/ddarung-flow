@@ -15,6 +15,7 @@ test('keeps the route heading while loading and renders zero inventory without f
   render(<RiskMapPage createDataAdapter={adapter()} loadMapSdk={() => Promise.resolve({})} createMapAdapter={readyMap} />);
   expect(screen.getByRole('heading', { name: '수급 위험 지도' })).toBeInTheDocument();
   expect(await screen.findByText('현재 0대')).toBeInTheDocument();
+  expect(screen.getByText('현재 지도 범위 · MAP')).toBeInTheDocument();
   expect(screen.getByRole('combobox', { name: '예측 horizon' }).value).toBe('120');
 });
 
@@ -86,7 +87,7 @@ test('clears the selected station and snapshot context when the map viewport cha
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });
 
-test('hands a successful scope selection off to the ops dashboard via sessionStorage', async () => {
+test('keeps a successful MAP snapshot in legacy bounded sessionStorage without changing Global defaults', async () => {
   window.history.replaceState({}, '', '/admin-v2-preview/ops/risk-map?horizonMinutes=120&requiredBikeCount=3');
   let reportBounds;
   const loadList = jest.fn(() => Promise.resolve({ ...riskMapFixture(), snapshotId: 'snapshot-handoff' }));

@@ -13,11 +13,11 @@ describe('live candidates adapter', () => {
     expect(global.fetch).toHaveBeenCalledWith('http://localhost:8080/api/v1/admin/ops/candidates?horizonMinutes=120&requiredBikeCount=3&riskType=RENTAL&limit=25&cursor=opaque-cursor', { credentials: 'include', signal });
   });
 
-  test('appends the risk-map scope snapshot from sessionStorage on a fresh (uncursored) load', async () => {
+  test('ignores the risk-map snapshot in sessionStorage on a fresh Global load', async () => {
     window.sessionStorage.setItem('adminOpsRiskSnapshot:60:1', 'snapshot-1');
     global.fetch.mockResolvedValue(response({ items: [] }));
     await createLiveCandidatesAdapter().load({ horizonMinutes: 60, requiredBikeCount: 1, limit: 25 });
-    expect(global.fetch).toHaveBeenCalledWith('http://localhost:8080/api/v1/admin/ops/candidates?horizonMinutes=60&requiredBikeCount=1&riskType=RENTAL&limit=25&snapshotId=snapshot-1', expect.anything());
+    expect(global.fetch).toHaveBeenCalledWith('http://localhost:8080/api/v1/admin/ops/candidates?horizonMinutes=60&requiredBikeCount=1&riskType=RENTAL&limit=25', expect.anything());
   });
 
   test('does not append a stored snapshot alongside a cursor, which already carries its own', async () => {
@@ -27,16 +27,13 @@ describe('live candidates adapter', () => {
     expect(global.fetch).toHaveBeenCalledWith('http://localhost:8080/api/v1/admin/ops/candidates?horizonMinutes=60&requiredBikeCount=1&riskType=RENTAL&limit=25&cursor=opaque-cursor', expect.anything());
   });
 
-  test('clears an expired stored snapshot and retries the fresh load without it', async () => {
+  test('surfaces Global expiry without retrying or mutating MAP storage', async () => {
     window.sessionStorage.setItem('adminOpsRiskSnapshot:60:1', 'snapshot-1');
-    global.fetch
-      .mockResolvedValueOnce(response({ code: 'RISK_SNAPSHOT_EXPIRED', message: '만료' }, 409))
-      .mockResolvedValueOnce(response({ items: [], dataState: 'INSUFFICIENT_DATA' }));
+    global.fetch.mockResolvedValueOnce(response({ items: [], dataState: 'INSUFFICIENT_DATA', freshness: { state: 'EXPIRED' } }));
     const result = await createLiveCandidatesAdapter().load({ horizonMinutes: 60, requiredBikeCount: 1, limit: 25 });
-    expect(result).toMatchObject({ dataState: 'INSUFFICIENT_DATA', scopeExpired: true });
-    expect(global.fetch).toHaveBeenCalledTimes(2);
-    expect(global.fetch).toHaveBeenNthCalledWith(2, 'http://localhost:8080/api/v1/admin/ops/candidates?horizonMinutes=60&requiredBikeCount=1&riskType=RENTAL&limit=25', expect.anything());
-    expect(window.sessionStorage.getItem('adminOpsRiskSnapshot:60:1')).toBeNull();
+    expect(result.freshness.state).toBe('EXPIRED');
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(window.sessionStorage.getItem('adminOpsRiskSnapshot:60:1')).toBe('snapshot-1');
   });
 
   test('does not retry an expired cursor, whose own embedded snapshot id would expire again', async () => {

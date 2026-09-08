@@ -13,7 +13,14 @@ public final class AdminOpsDtos {
                                Capability nearbyAlternatives) { }
     public record Coverage(Long activeStationCount, Long inventoryAvailableCount, Long predictionAvailableCount,
                            Long profileAvailableCount, Integer eligibleStationCount, Integer evaluatedStationCount,
-                           Integer normalInferenceSuccessCount, Integer scopeCandidateCap) { }
+                           Integer normalInferenceSuccessCount, Integer scopeCandidateCap,
+                           Integer inventoryMissingCount, Integer inventoryDelayedCount, Integer inventoryUnavailableCount,
+                           Integer inferenceInsufficientCount, Integer unevaluatedCount) { }
+    public record Scope(String type, String sourceId) { }
+    public record Freshness(String state, OffsetDateTime freshUntil, OffsetDateTime expiresAt) { }
+    public record GlobalCoverage(Long activePublicStationCount, Long inventoryEligibleCount, Long evaluatedCount,
+                                 Long normalInferenceCount, Long inventoryMissingCount, Long inventoryDelayedCount,
+                                 Long inventoryUnavailableCount, Long inferenceInsufficientCount, Long unevaluatedCount) { }
     public record Coordinates(BigDecimal latitude, BigDecimal longitude) { }
     public record Probabilities(BigDecimal atLeast1Probability, BigDecimal atLeast2Probability,
                                 BigDecimal atLeast3Probability, BigDecimal atLeast4Probability,
@@ -25,21 +32,24 @@ public final class AdminOpsDtos {
                           Integer capacity) { }
     public record RiskStation(Station station, OffsetDateTime predictionTargetAt, String dataState,
                               String riskBand, Probabilities rentalRisk) { }
-    public record RentalRiskSummary(Integer selectedRequiredBikeCount, long validPredictionCount,
-                                    long criticalCount, long highCount, long watchCount, long lowCount,
+    public record RentalRiskSummary(Integer selectedRequiredBikeCount, Long validPredictionCount,
+                                    Long criticalCount, Long highCount, Long watchCount, Long lowCount,
                                     BigDecimal maxShortageProbability, BigDecimal averageShortageProbability) { }
-    public record InventoryStateSummary(long normal, long delayed, long missing, long unavailable) { }
+    public record InventoryStateSummary(Long normal, Long delayed, Long missing, Long unavailable) { }
     public record OverviewResponse(OffsetDateTime referenceTime, OffsetDateTime generatedAt, int horizonMinutes,
                                    Capabilities capabilities, String dataState, Coverage coverage,
                                    List<String> limitations, String ruleVersion, RentalRiskSummary rentalRiskSummary,
-                                   InventoryStateSummary inventoryStateSummary, Object returnRisk) { }
+                                   InventoryStateSummary inventoryStateSummary, Object returnRisk,
+                                   Scope scope, Freshness freshness, String generationState, String modelVersion,
+                                   String globalResultId, List<RiskStation> priorityStations,
+                                   OffsetDateTime publishedAt, GlobalCoverage globalCoverage) { }
     public record RiskStationListResponse(OffsetDateTime referenceTime, OffsetDateTime generatedAt, int horizonMinutes,
                                           Capabilities capabilities, String dataState, Coverage coverage,
                                           List<String> limitations, String ruleVersion, List<RiskStation> items,
-                                          String nextCursor, String snapshotId) { }
+                                          String nextCursor, String snapshotId, Scope scope) { }
     public record RiskStationDetailResponse(OffsetDateTime referenceTime, OffsetDateTime generatedAt, int horizonMinutes,
                                             Capabilities capabilities, String dataState, Coverage coverage,
                                             List<String> limitations, String ruleVersion, RiskStation station,
-                                            Object returnRisk, String snapshotId) { }
+                                            Object returnRisk, String snapshotId, Scope scope) { }
     public record ErrorResponse(String code, String message) { }
 }

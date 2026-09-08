@@ -27,17 +27,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * Current candidates are sourced from the same bounded {@code admin_ops_runtime_risk_snapshots}
- * (TASK-277) that OPS-02's risk map creates and OPS-01's dashboard already reuses — never from
- * {@code prediction_batches}/{@code station_predictions}. Tests build snapshots directly via
- * {@link #insertSnapshot} and pass the resulting id as {@code snapshotId}, the same handoff the
- * real risk-map page performs.
- */
+/** Default requests use Global results; explicit snapshot tests preserve bounded MAP behavior. */
 @SpringBootTest @AutoConfigureMockMvc @ActiveProfiles("test")
 class AdminOpsCandidatesControllerTest {
     @Autowired MockMvc mvc; @Autowired JdbcTemplate jdbc; @Autowired UsersRepository users;
     @BeforeEach void clear() {
+        jdbc.update("DELETE FROM admin_ops_global_risk_control");
+        jdbc.update("DELETE FROM admin_ops_global_risk_items");
+        jdbc.update("DELETE FROM admin_ops_global_risk_results");
         jdbc.update("DELETE FROM admin_ops_runtime_risk_snapshots");
         jdbc.update("DELETE FROM station_predictions"); jdbc.update("DELETE FROM prediction_batches");
         jdbc.update("DELETE FROM station_inventory_current"); jdbc.update("DELETE FROM station_rhythm_profiles");
@@ -61,21 +58,22 @@ class AdminOpsCandidatesControllerTest {
                 .andExpect(jsonPath("$.items.length()").value(0)).andExpect(jsonPath("$.ruleVersion").value("OPS_CANDIDATE_RENTAL_V1"));
     }
 
-    @Test void reportsAnalysisScopeRequiredBeforeAnyMapScopeHasBeenAnalyzed() throws Exception {
+    @Test void reportsGlobalResultNotGeneratedBeforeTheBackgroundProducerPublishes() throws Exception {
         // No admin_ops_runtime_risk_snapshots row and no legacy prediction_batches row either — the
         // regression case: this must not silently join a citywide legacy batch, and must not report
         // a confirmed zero for counts nobody has actually measured.
         var allowed = authentication(auth(UserRole.ADMIN, Set.of(AdminPermission.OPS_CANDIDATE_READ)));
         mvc.perform(get("/api/v1/admin/ops/candidates").with(allowed)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.dataState").value("INSUFFICIENT_DATA"))
-                .andExpect(jsonPath("$.limitations", org.hamcrest.Matchers.hasItem("ANALYSIS_SCOPE_REQUIRED")))
+                .andExpect(jsonPath("$.limitations", org.hamcrest.Matchers.hasItem("GLOBAL_RESULT_NOT_GENERATED")))
+                .andExpect(jsonPath("$.scope.type").value("GLOBAL"))
                 .andExpect(jsonPath("$.items.length()").value(0))
                 .andExpect(jsonPath("$.nextCursor").doesNotExist())
-                .andExpect(jsonPath("$.coverage.eligibleCandidateCount").value(0))
+                .andExpect(jsonPath("$.coverage.eligibleCandidateCount").doesNotExist())
                 .andExpect(jsonPath("$.coverage.analyzedStationCount").doesNotExist())
                 .andExpect(jsonPath("$.coverage.analysisNormalCount").doesNotExist())
                 .andExpect(jsonPath("$.coverage.profileAvailableCount").doesNotExist())
-                .andExpect(jsonPath("$.capabilities.rentalRisk.source").value("private_on_demand_inference"));
+                .andExpect(jsonPath("$.capabilities.rentalRisk.source").value("private_background_global_inference"));
     }
 
     @Test void expiredSnapshotIsReportedAsAnExpiredAnalysisNotAScopeRequiredState() throws Exception {

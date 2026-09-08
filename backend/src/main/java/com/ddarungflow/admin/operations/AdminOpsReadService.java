@@ -28,19 +28,21 @@ public class AdminOpsReadService {
     private final AdminOpsRiskPolicy policy;
     private final InferenceClient inferenceClient;
     private final AdminOpsRiskSnapshotService snapshots;
+    private final AdminOpsGlobalRiskReadService globalReadService;
+    private final AdminOpsGlobalRiskRepository globalRepository;
+    private final AdminOpsGlobalRiskGenerationService globalGenerationService;
     private final AtomicBoolean evaluating = new AtomicBoolean(false);
 
     public AdminOpsReadService(AdminOpsReadRepository repository, AdminOpsRiskPolicy policy, InferenceClient inferenceClient,
-                               AdminOpsRiskSnapshotService snapshots) {
+                               AdminOpsRiskSnapshotService snapshots, AdminOpsGlobalRiskReadService globalReadService,
+                               AdminOpsGlobalRiskRepository globalRepository, AdminOpsGlobalRiskGenerationService globalGenerationService) {
         this.repository = repository; this.policy = policy; this.inferenceClient = inferenceClient; this.snapshots = snapshots;
+        this.globalReadService = globalReadService; this.globalRepository = globalRepository; this.globalGenerationService = globalGenerationService;
     }
 
     public AdminOpsDtos.OverviewResponse overview(OffsetDateTime referenceTime, int horizon, int required, String snapshotId) {
         if (snapshotId == null || snapshotId.isBlank()) {
-            return new AdminOpsDtos.OverviewResponse(referenceTime, OffsetDateTime.now(), horizon, capabilities(), "INSUFFICIENT_DATA",
-                    coverage(null), List.of("ANALYSIS_SCOPE_REQUIRED"), AdminOpsRiskPolicy.RULE_VERSION,
-                    new AdminOpsDtos.RentalRiskSummary(required, 0, 0, 0, 0, 0, null, null),
-                    new AdminOpsDtos.InventoryStateSummary(0, 0, 0, 0), null);
+            return globalReadService.overview(referenceTime, horizon, required);
         }
         AdminOpsRiskSnapshotRepository.Header header = snapshots.header(UUID.fromString(snapshotId), OffsetDateTime.now());
         if (header.horizonMinutes() != horizon || header.requiredBikeCount() != required) throw new InvalidCursorException();
@@ -49,8 +51,10 @@ public class AdminOpsReadService {
         List<BigDecimal> shortages = stations.stream().map(value -> value.rentalRisk().selectedShortageProbability()).filter(java.util.Objects::nonNull).toList();
         return new AdminOpsDtos.OverviewResponse(header.referenceTime(), OffsetDateTime.now(), horizon, capabilities(), aggregate(stations), coverage(header),
                 List.of("RECENT_RISK_MAP_SCOPE"), AdminOpsRiskPolicy.RULE_VERSION,
-                new AdminOpsDtos.RentalRiskSummary(required, shortages.size(), count(stations, "CRITICAL"), count(stations, "HIGH"), count(stations, "WATCH"), count(stations, "LOW"),
-                        shortages.stream().max(BigDecimal::compareTo).orElse(null), average(shortages)), inventory(items), null);
+                new AdminOpsDtos.RentalRiskSummary(required, (long) shortages.size(), count(stations, "CRITICAL"), count(stations, "HIGH"), count(stations, "WATCH"), count(stations, "LOW"),
+                        shortages.stream().max(BigDecimal::compareTo).orElse(null), average(shortages)), inventory(items), null,
+                new AdminOpsDtos.Scope("MAP", header.snapshotId().toString()), new AdminOpsDtos.Freshness("FRESH", null, header.expiresAt()),
+                null, header.modelVersion(), null, List.of(), null, globalReadService.globalCoverage(null));
     }
     public AdminOpsDtos.OverviewResponse overview(OffsetDateTime referenceTime, int horizon, int required) { return overview(referenceTime, horizon, required, null); }
 
@@ -71,7 +75,11 @@ public class AdminOpsReadService {
         List<RowState> filtered = dataState == null ? scoped : scoped.stream().filter(row -> dataState.equals(row.dataState())).toList();
         if (filtered.size() > SCOPE_CAP) throw new ScopeTooLargeException();
         if (!evaluating.compareAndSet(false, true)) throw new InferenceOverloadedException();
+        boolean registered = false;
         try {
+            globalRepository.signalMapPriority();
+            globalGenerationService.mapStarted();
+            registered = true;
             List<RowState> evaluated = infer(filtered, referenceTime, horizon, required);
             evaluated = evaluated.stream().sorted(order()).toList();
             String modelVersion = evaluated.stream().map(RowState::modelVersion).filter(java.util.Objects::nonNull).findFirst().orElse("no_runtime_inference");
@@ -85,6 +93,7 @@ public class AdminOpsReadService {
             snapshots.save(header, snapshotItems);
             return response(header, snapshots.page(id, 0, limit), limit);
         } finally {
+            if (registered) globalGenerationService.mapFinished();
             evaluating.set(false);
         }
     }
@@ -100,13 +109,22 @@ public class AdminOpsReadService {
             AdminOpsRiskSnapshotRepository.Item item = snapshots.item(header.snapshotId(), stationNumber);
             if (item == null) throw new NotFoundException();
             return new AdminOpsDtos.RiskStationDetailResponse(header.referenceTime(), OffsetDateTime.now(), horizon, capabilities(), item.dataState(), coverage(header),
-                    List.of("RECENT_RISK_MAP_SCOPE"), AdminOpsRiskPolicy.RULE_VERSION, station(item, header.requiredBikeCount()), null, header.snapshotId().toString());
+                    List.of("RECENT_RISK_MAP_SCOPE"), AdminOpsRiskPolicy.RULE_VERSION, station(item, header.requiredBikeCount()), null, header.snapshotId().toString(),
+                    new AdminOpsDtos.Scope("MAP", header.snapshotId().toString()));
         }
         AdminOpsReadRepository.Row row = repository.findDetail(stationNumber);
         if (row == null) throw new NotFoundException();
-        RowState evaluated = infer(List.of(state(row, referenceTime, horizon, required)), referenceTime, horizon, required).getFirst();
-        return new AdminOpsDtos.RiskStationDetailResponse(referenceTime, OffsetDateTime.now(), horizon, capabilities(), evaluated.dataState(), coverage(null),
-                List.of("DIRECT_RUNTIME_INFERENCE"), AdminOpsRiskPolicy.RULE_VERSION, station(evaluated), null, null);
+        boolean registered = false;
+        try {
+            globalRepository.signalMapPriority();
+            globalGenerationService.mapStarted();
+            registered = true;
+            RowState evaluated = infer(List.of(state(row, referenceTime, horizon, required)), referenceTime, horizon, required).getFirst();
+            return new AdminOpsDtos.RiskStationDetailResponse(referenceTime, OffsetDateTime.now(), horizon, capabilities(), evaluated.dataState(), coverage(null),
+                    List.of("DIRECT_RUNTIME_INFERENCE"), AdminOpsRiskPolicy.RULE_VERSION, station(evaluated), null, null, new AdminOpsDtos.Scope("MAP", null));
+        } finally {
+            if (registered) globalGenerationService.mapFinished();
+        }
     }
     public AdminOpsDtos.RiskStationDetailResponse detail(OffsetDateTime referenceTime, int horizon, int required, String stationNumber) { return detail(referenceTime, horizon, required, stationNumber, null); }
 
@@ -128,7 +146,7 @@ public class AdminOpsReadService {
         String next = more ? encode(header.snapshotId(), page.getLast().ordinal()) : null;
         List<AdminOpsDtos.RiskStation> stations = page.stream().map(item -> station(item, header.requiredBikeCount())).toList();
         return new AdminOpsDtos.RiskStationListResponse(header.referenceTime(), OffsetDateTime.now(), header.horizonMinutes(), capabilities(), aggregate(stations), coverage(header),
-                limitations(stations.isEmpty()), AdminOpsRiskPolicy.RULE_VERSION, stations, next, header.snapshotId().toString());
+                limitations(stations.isEmpty()), AdminOpsRiskPolicy.RULE_VERSION, stations, next, header.snapshotId().toString(), new AdminOpsDtos.Scope("MAP", header.snapshotId().toString()));
     }
 
     private List<RowState> infer(List<RowState> input, OffsetDateTime reference, int horizon, int required) {
@@ -204,7 +222,7 @@ public class AdminOpsReadService {
         return new AdminOpsDtos.RiskStation(new AdminOpsDtos.Station(number, name, new AdminOpsDtos.Coordinates(lat, lng), bikes, null), target, dataState, band, probabilities);
     }
     private AdminOpsDtos.Capabilities capabilities() { return new AdminOpsDtos.Capabilities(new AdminOpsDtos.Capability(true, "private_on_demand_inference", null), new AdminOpsDtos.Capability(false, null, "RETURN_INFERENCE_NOT_APPROVED"), new AdminOpsDtos.Capability(false, null, "CAPACITY_SOURCE_MISSING"), new AdminOpsDtos.Capability(false, null, "DISTRICT_SOURCE_MISSING"), new AdminOpsDtos.Capability(true, "station_rhythm_profiles", null), new AdminOpsDtos.Capability(false, null, "USAGE_HISTORY_SOURCE_MISSING"), new AdminOpsDtos.Capability(false, null, "ALTERNATIVE_RULE_NOT_APPROVED")); }
-    private AdminOpsDtos.Coverage coverage(AdminOpsRiskSnapshotRepository.Header header) { var row = repository.coverage(); return new AdminOpsDtos.Coverage(row.activeStationCount(), row.inventoryAvailableCount(), null, row.profileAvailableCount(), header == null ? null : header.eligibleStationCount(), header == null ? null : header.evaluatedStationCount(), header == null ? null : header.normalInferenceSuccessCount(), SCOPE_CAP); }
+    private AdminOpsDtos.Coverage coverage(AdminOpsRiskSnapshotRepository.Header header) { var row = repository.coverage(); return new AdminOpsDtos.Coverage(row.activeStationCount(), row.inventoryAvailableCount(), null, row.profileAvailableCount(), header == null ? null : header.eligibleStationCount(), header == null ? null : header.evaluatedStationCount(), header == null ? null : header.normalInferenceSuccessCount(), SCOPE_CAP, null, null, null, null, null); }
     private List<String> limitations(boolean empty) { List<String> result = new ArrayList<>(); if (repository.activePublicStationCount() == 0) result.add("NO_ACTIVE_PUBLIC_STATIONS"); else if (empty) result.add("NO_MATCHING_STATIONS"); if (repository.activeStationsWithoutPublicNumber() > 0) result.add("STATION_NUMBER_MISSING"); return result; }
     private String aggregate(List<AdminOpsDtos.RiskStation> stations) { if (stations.stream().anyMatch(s -> "UNAVAILABLE".equals(s.dataState()))) return "UNAVAILABLE"; if (stations.stream().anyMatch(s -> "MISSING".equals(s.dataState()))) return "MISSING"; if (stations.stream().anyMatch(s -> "DELAYED".equals(s.dataState()))) return "DELAYED"; if (stations.stream().anyMatch(s -> "INSUFFICIENT_DATA".equals(s.dataState()))) return "INSUFFICIENT_DATA"; return "NORMAL"; }
     private long count(List<AdminOpsDtos.RiskStation> stations, String band) { return stations.stream().filter(item -> band.equals(item.riskBand())).count(); }
