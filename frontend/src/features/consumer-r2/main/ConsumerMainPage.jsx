@@ -228,15 +228,15 @@ function CandidateCard({ candidate, index, onSelect, selected }) {
     <button className="cr293-candidate" type="button" aria-pressed={selected} onClick={() => onSelect(candidate.stationId)}>
       <span className="cr293-candidate__rank">{index + 1}</span>
       <span className="cr293-candidate__body">
-        <span className="cr293-candidate__top"><strong>{candidate.stationName}</strong><small className="cr293-candidate__distance">{formatDistance(candidate.distanceMeters)}</small><StatusBadge tone={unavailable ? "neutral" : tone}>{candidate.availabilityLabel}</StatusBadge></span>
+        <span className="cr293-candidate__top"><strong>{candidate.stationName}</strong><small className="cr293-candidate__distance">{formatDistance(candidate.distanceMeters)}</small><StatusBadge tone={unavailable ? "neutral" : tone}>{unavailable ? "실시간" : candidate.availabilityLabel}</StatusBadge></span>
         <span className="cr293-candidate__facts">
-          <span className="cr293-candidate__fact cr293-candidate__fact--lead"><small>도착 시점 대여 가능성</small><b>{formatProbability(candidate.probability)}</b></span>
+          <span className="cr293-candidate__fact cr293-candidate__fact--lead"><small>도착 시점 대여 가능성</small><b>{candidate.probability === null ? "실시간" : formatProbability(candidate.probability)}</b></span>
           <span className="cr293-candidate__fact"><small>현재 자전거</small><b>{inventory.value}</b></span>
           <span className="cr293-candidate__fact"><small>예상 도착</small><b>{formatArrival(candidate.arrivalAt)}</b></span>
           <span className="cr293-candidate__fact"><small>이동 시간</small><b>{formatMinutes(candidate.durationSeconds)}</b></span>
         </span>
         <span className="cr293-candidate__inventory">{inventory.detail}</span>
-        {unavailable ? <span className="cr293-candidate__unavailable">예측 또는 경로 근거를 확인할 수 없습니다.</span> : null}
+        {unavailable ? <span className="cr293-candidate__unavailable">도착 15분 이내 단거리 경로로, 실시간 재고를 기준으로 안내합니다.</span> : null}
       </span>
     </button>
   );
@@ -275,11 +275,11 @@ function TransitWorkspace({ authState, candidate, destination, mapRenderer, onCl
     <section className="cr293-transit-view" aria-label="선택한 대여소의 대중교통 경로 상세">
       <aside className="cr293-transit-summary">
         <div className="cr293-transit-summary__title">
-          <StatusBadge tone={unavailable ? "neutral" : tone}>{unavailable ? "확인 불가" : "추천"}</StatusBadge>
+          <StatusBadge tone={unavailable ? "neutral" : tone}>{unavailable ? "실시간" : "추천"}</StatusBadge>
           <h2 ref={transitHeadingRef} tabIndex="-1">{candidate.stationName}</h2>
         </div>
         <div className="cr293-transit-summary__primary">
-          <span><small>도착 시점 대여 가능성</small>{candidate.probability === null ? <strong>확인 불가</strong> : <b>{formatProbability(candidate.probability)}</b>}</span>
+          <span><small>도착 시점 대여 가능성</small>{candidate.probability === null ? <strong>실시간</strong> : <b>{formatProbability(candidate.probability)}</b>}</span>
           <span aria-label={inventory.inline}><small>현재 자전거</small><b>{inventory.value}</b><small className="cr293-transit-summary__meta">{inventory.detail}</small></span>
         </div>
         <div className="cr293-transit-summary__route">
