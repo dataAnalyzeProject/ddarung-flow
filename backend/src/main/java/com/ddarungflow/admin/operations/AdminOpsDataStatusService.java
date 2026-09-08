@@ -24,21 +24,26 @@ public class AdminOpsDataStatusService {
     public AdminOpsDataStatusService(AdminOpsDataStatusRepository repository) { this.repository = repository; }
 
     public AdminOpsDataStatusDtos.Response dataStatus(OffsetDateTime referenceTime) {
+        return dataStatus(referenceTime, false);
+    }
+
+    public AdminOpsDataStatusDtos.Response dataStatus(OffsetDateTime referenceTime, boolean includeGlobalInRoot) {
         InventoryResult inventory = inventory(referenceTime);
         PredictionResult prediction = prediction(referenceTime);
         RuntimeAnalysisResult runtimeAnalysis = runtimeAnalysis();
         ProfileResult profile = profile();
+        AdminOpsDataStatusDtos.GlobalRisk globalRisk = globalRisk(referenceTime);
         List<String> limitations = new ArrayList<>(LIMITATIONS);
         if (runtimeAnalysis.limitation() != null) limitations.add(runtimeAnalysis.limitation());
-        // Only the two continuously maintained citywide sources drive the root. prediction is a
-        // historical record now (see AdminOpsDataStatusDtos.Prediction), so a stale/absent legacy
-        // batch can no longer force the root to MISSING. runtimeAnalysis is deliberately excluded
-        // too, in the other direction: it covers one operator-drawn bbox and expires after
-        // TTL_MINUTES, so it can neither certify citywide health nor flap the root every 2 minutes.
-        // It is reported as its own disclosed source instead.
-        return new AdminOpsDataStatusDtos.Response(referenceTime, OffsetDateTime.now(),
-                rootState(inventory.state(), profile.state()),
-                inventory.response(), prediction.response(), runtimeAnalysis.response(), profile.response(), limitations);
+        // The canonical DATA root also includes the persisted citywide Global result. The legacy
+        // OPS-05 alias preserves its approved inventory/profile headline. prediction remains a
+        // historical record and runtimeAnalysis covers one operator-drawn bbox, so neither drives
+        // either root.
+        String rootState = includeGlobalInRoot
+                ? rootState(inventory.state(), profile.state(), globalRisk.dataState())
+                : rootState(inventory.state(), profile.state());
+        return new AdminOpsDataStatusDtos.Response(referenceTime, OffsetDateTime.now(), rootState,
+                inventory.response(), prediction.response(), runtimeAnalysis.response(), profile.response(), globalRisk, limitations);
     }
 
     private InventoryResult inventory(OffsetDateTime referenceTime) {
@@ -116,6 +121,28 @@ public class AdminOpsDataStatusService {
                 counts.activePublicStationCount(), counts.profileAvailableStationCount(), coverage, counts.latestGeneratedAt()));
     }
 
+    private AdminOpsDataStatusDtos.GlobalRisk globalRisk(OffsetDateTime referenceTime) {
+        var row = repository.currentGlobalRisk();
+        if (row == null) return new AdminOpsDataStatusDtos.GlobalRisk("INSUFFICIENT_DATA", null,
+                null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+        String state = !row.expiresAt().isAfter(referenceTime) ? "UNAVAILABLE"
+                : !row.freshUntil().isAfter(referenceTime) ? "DELAYED"
+                : row.normalInferenceCount() == 0 ? "INSUFFICIENT_DATA"
+                : row.activePublicStationCount() > 0
+                && row.evaluatedStationCount() == row.activePublicStationCount()
+                && row.normalInferenceCount() == row.activePublicStationCount()
+                && row.inventoryMissingCount() == 0
+                && row.inventoryDelayedCount() == 0
+                && row.inventoryUnavailableCount() == 0
+                && row.inferenceInsufficientCount() == 0
+                && row.unevaluatedCount() == 0 ? "NORMAL" : "PARTIAL";
+        return new AdminOpsDataStatusDtos.GlobalRisk(state, row.resultId().toString(), row.referenceTime(),
+                row.publishedAt(), row.freshUntil(), row.expiresAt(), row.activePublicStationCount(),
+                row.evaluatedStationCount(), row.normalInferenceCount(), row.inventoryMissingCount(),
+                row.inventoryDelayedCount(), row.inventoryUnavailableCount(), row.inferenceInsufficientCount(),
+                row.unevaluatedCount(), row.generationDurationMs(), row.modelVersion());
+    }
+
     private Long percentile(List<Long> values, double percentile) {
         return values.isEmpty() ? null : values.get((int) Math.ceil(values.size() * percentile) - 1);
     }
@@ -126,7 +153,7 @@ public class AdminOpsDataStatusService {
     }
 
     private String rootState(String... states) {
-        List<String> precedence = List.of("MISSING", "DELAYED", "INSUFFICIENT_DATA", "PARTIAL", "NORMAL");
+        List<String> precedence = List.of("MISSING", "UNAVAILABLE", "DELAYED", "INSUFFICIENT_DATA", "PARTIAL", "NORMAL");
         for (String state : precedence) for (String candidate : states) if (state.equals(candidate)) return state;
         throw new IllegalStateException("unknown data state");
     }

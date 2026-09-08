@@ -3,6 +3,8 @@ import OperationsRiskMap from '../operations/risk-map/index.jsx';
 import OperationsCandidates from '../operations/candidates/index.jsx';
 import OperationsAnalysis from '../operations/analysis/index.jsx';
 import OperationsData from '../operations/data/index.jsx';
+import DataStatus from '../data/status/index.jsx';
+import DataPipeline from '../data/pipeline/index.jsx';
 import OperationsReports from '../operations/reports/index.jsx';
 import OperationsDigitalTwin from '../operations/digital-twin/index.jsx';
 import ModelOverview from '../model/overview/index.jsx';
@@ -16,13 +18,15 @@ import SystemJourneyOps from '../system/journey-ops/index.jsx';
 import { CONSOLE_ORDER, hasPermission, PERMISSIONS } from '../permissions/permissions.js';
 
 export const PREVIEW_PREFIX = '/admin-v2-preview';
-export const PRODUCTION_RELEASED_ROUTE_IDS = ['UI-OPS-01', 'UI-OPS-02', 'UI-OPS-03', 'UI-OPS-04', 'UI-OPS-05', 'UI-MODEL-01', 'UI-MODEL-02', 'UI-MODEL-04', 'UI-SYS-01', 'UI-SYS-02', 'UI-SYS-03'];
+export const PRODUCTION_RELEASED_ROUTE_IDS = ['UI-OPS-01', 'UI-OPS-02', 'UI-OPS-03', 'UI-OPS-04', 'UI-DATA-01', 'UI-DATA-02', 'UI-OPS-05', 'UI-MODEL-01', 'UI-MODEL-02', 'UI-MODEL-04', 'UI-SYS-01', 'UI-SYS-02', 'UI-SYS-03'];
 export const ROUTES = [
   ['UI-OPS-01', 'OPS', '/admin/ops', '/ops', '운영 상황판', 'OPS_DASHBOARD_READ', OperationsOverview],
   ['UI-OPS-02', 'OPS', '/admin/ops/risk-map', '/ops/risk-map', '수급 위험 지도', 'OPS_RISK_MAP_READ', OperationsRiskMap],
   ['UI-OPS-03', 'OPS', '/admin/ops/candidates', '/ops/candidates', '집중관리 목록', 'OPS_CANDIDATE_READ', OperationsCandidates],
   ['UI-OPS-04', 'OPS', '/admin/ops/analysis', '/ops/analysis', '반복 품절 패턴', 'OPS_ANALYSIS_READ', OperationsAnalysis],
-  ['UI-OPS-05', 'OPS', '/admin/ops/data', '/ops/data', '운영 데이터 상태', 'DATA_STATUS_READ', OperationsData],
+  ['UI-DATA-01', 'DATA', '/admin/data/status', '/data/status', '데이터 상태', 'DATA_STATUS_READ', DataStatus],
+  ['UI-DATA-02', 'DATA', '/admin/data/pipeline', '/data/pipeline', '수집·가공 파이프라인', 'DATA_STATUS_READ', DataPipeline],
+  ['UI-OPS-05', 'DATA', '/admin/ops/data', '/ops/data', '데이터 상태 (이전 주소)', 'DATA_STATUS_READ', OperationsData, false],
   ['UI-OPS-06', 'OPS', '/admin/ops/reports', '/ops/reports', '운영 리포트', 'OPS_REPORT_EXPORT', OperationsReports],
   ['UI-OPS-07', 'OPS', '/admin/ops/digital-twin', '/ops/digital-twin', '디지털 트윈', 'OPS_SCENARIO_READ', OperationsDigitalTwin],
   ['UI-MODEL-01', 'MODEL', '/admin/models', '/models', '모델 운영 현황', 'MODEL_METRICS_READ', ModelOverview],
@@ -33,7 +37,7 @@ export const ROUTES = [
   ['UI-SYS-03', 'SYSTEM', '/admin/system/audit', '/system/audit', '관리자 변경 이력', 'AUDIT_READ', SystemAudit],
   ['UI-SYS-04', 'SYSTEM', '/admin/system/health', '/system/health', '서비스 상태', 'SYSTEM_STATUS_READ', SystemHealth],
   ['UI-SYS-05', 'SYSTEM', '/admin/system/journey-ops', '/system/journey-ops', 'AI·도구 운영', 'AI_OPS_READ', SystemJourneyOps],
-].map(([id, console, canonicalPath, previewSuffix, title, requiredPermission, Component]) => ({ id, console, canonicalPath, previewPath: `${PREVIEW_PREFIX}${previewSuffix}`, title, requiredPermission, Component }));
+].map(([id, console, canonicalPath, previewSuffix, title, requiredPermission, Component, navigationVisible = true]) => ({ id, console, canonicalPath, previewPath: `${PREVIEW_PREFIX}${previewSuffix}`, title, requiredPermission, Component, navigationVisible }));
 
 export function validateRouteMetadata(routes = ROUTES) {
   const fields = ['id', 'canonicalPath', 'previewPath', 'title'];
@@ -43,6 +47,7 @@ export function validateRouteMetadata(routes = ROUTES) {
 
 export function routesForConsole(consoleId, permissions, allowedRouteIds = null) {
   return ROUTES.filter((route) => route.console === consoleId
+    && route.navigationVisible
     && (allowedRouteIds === null || allowedRouteIds.includes(route.id))
     && hasPermission(permissions, route.requiredPermission));
 }

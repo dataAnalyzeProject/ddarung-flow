@@ -6,6 +6,8 @@ jest.mock('../operations/overview/index.jsx', () => () => <h1>LIVE OPS</h1>);
 jest.mock('../operations/risk-map/index.jsx', () => () => <h1>LIVE RISK MAP</h1>);
 jest.mock('../operations/candidates/index.jsx', () => () => <main className="candidates-page"><h1>LIVE CANDIDATES</h1></main>);
 jest.mock('../operations/data/index.jsx', () => () => <h1>LIVE OPS DATA</h1>);
+jest.mock('../data/status/index.jsx', () => () => <h1>LIVE DATA STATUS</h1>);
+jest.mock('../data/pipeline/index.jsx', () => () => <h1>LIVE DATA PIPELINE</h1>);
 jest.mock('../model/overview/index.jsx', () => () => <h1>LIVE MODEL OVERVIEW</h1>);
 jest.mock('../model/performance/index.jsx', () => () => <h1>LIVE MODEL PERFORMANCE</h1>);
 jest.mock('../model/releases/index.jsx', () => () => <h1>LIVE MODEL RELEASES</h1>);
@@ -143,7 +145,7 @@ describe('AdminV2ProductionApp', () => {
     expect(container.querySelectorAll('main')).toHaveLength(1);
   });
 
-  test('shows OPS05 but no unreleased OPS item', async () => {
+  test('shows DATA console but keeps the legacy OPS route out of navigation', async () => {
     render(<AdminV2ProductionApp pathname="/admin/ops" createAccessAdapter={adapterFor(readyAccess(allPermissions))} />);
 
     expect(await screen.findByRole('button', { name: '운영 상황판' })).toBeInTheDocument();
@@ -152,7 +154,8 @@ describe('AdminV2ProductionApp', () => {
     expect(screen.getByRole('button', { name: '반복 품절 패턴' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '모델' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '시스템' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '운영 데이터 상태' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '데이터' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '데이터 상태 (이전 주소)' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '운영 리포트' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '디지털 트윈' })).not.toBeInTheDocument();
   });
@@ -177,17 +180,21 @@ describe('AdminV2ProductionApp', () => {
   });
 
   test.each([
-    ['/admin/ops/data', 'DATA_STATUS_READ', 'LIVE OPS DATA', '운영 데이터 상태'],
+    ['/admin/data/status', 'DATA_STATUS_READ', 'LIVE DATA STATUS', '데이터 상태'],
+    ['/admin/data/pipeline', 'DATA_STATUS_READ', 'LIVE DATA PIPELINE', '수집·가공 파이프라인'],
+    ['/admin/ops/data', 'DATA_STATUS_READ', 'LIVE OPS DATA', '데이터 상태'],
     ['/admin/models/performance', 'MODEL_METRICS_READ', 'LIVE MODEL PERFORMANCE', '모델 검증'],
     ['/admin/models/releases', 'MODEL_RELEASE_READ', 'LIVE MODEL RELEASES', '모델 버전 관리'],
   ])('renders %s only with its released-route permission', async (pathname, permission, heading, title) => {
-    render(<AdminV2ProductionApp pathname={pathname} createAccessAdapter={adapterFor(readyAccess([permission], pathname.includes('/models/') ? 'MODEL' : 'OPS'))} />);
+    render(<AdminV2ProductionApp pathname={pathname} createAccessAdapter={adapterFor(readyAccess([permission], pathname.includes('/models/') ? 'MODEL' : pathname.includes('/data/') || pathname === '/admin/ops/data' ? 'DATA' : 'OPS'))} />);
 
     expect(await screen.findByRole('heading', { name: heading })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: title })).toBeInTheDocument();
   });
 
   test.each([
+    ['/admin/data/status', 'DATA_STATUS_READ'],
+    ['/admin/data/pipeline', 'DATA_STATUS_READ'],
     ['/admin/ops/data', 'DATA_STATUS_READ'],
     ['/admin/models/performance', 'MODEL_METRICS_READ'],
     ['/admin/models/releases', 'MODEL_RELEASE_READ'],

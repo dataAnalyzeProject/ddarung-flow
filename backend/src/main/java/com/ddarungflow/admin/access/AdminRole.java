@@ -15,7 +15,7 @@ public enum AdminRole {
     OPS_MANAGER("운영 기준 관리", "운영 임계값·후보 정책 승인", AdminConsole.OPS,
             permissions(OPS_DASHBOARD_READ, OPS_RISK_MAP_READ, OPS_CANDIDATE_READ, OPS_ANALYSIS_READ,
                     DATA_STATUS_READ, OPS_CANDIDATE_MANAGE, OPS_REPORT_EXPORT, OPS_THRESHOLD_MANAGE, OPS_SCENARIO_READ)),
-    DATA_ANALYST("데이터 품질·분석", "데이터 상태·Export·모델 지표 읽기", AdminConsole.OPS,
+    DATA_ANALYST("데이터 품질·분석", "데이터 상태·Export·모델 지표 읽기", AdminConsole.DATA,
             permissions(DATA_STATUS_READ, DATA_EXPORT_REQUEST, DATA_EXPORT_DOWNLOAD, DATA_ISSUE_ACKNOWLEDGE,
                     OPS_ANALYSIS_READ, MODEL_METRICS_READ, MODEL_DIAGNOSTICS_READ)),
     MODEL_ENGINEER("모델 준비·검증", "artifact 등록·validate", AdminConsole.MODEL,

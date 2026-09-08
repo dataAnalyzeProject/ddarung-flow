@@ -47,6 +47,7 @@ class AdminExportsControllerTest {
         String response = mockMvc.perform(post("/api/v1/admin/exports").with(authentication(firstAdmin)).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON).content("{\"source\":\"CURATED\",\"format\":\"CSV\",\"purpose\":\"운영 검토\",\"rowCount\":10}"))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.exportId").exists()).andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.requestedRowCount").value(10)).andExpect(jsonPath("$.outputRowCount").isNumber())
                 .andExpect(jsonPath("$.requesterUserId").doesNotExist()).andReturn().getResponse().getContentAsString();
         Long exportId = Long.valueOf(response.replaceAll(".*\\\"exportId\\\":(\\d+).*", "$1"));
 
@@ -54,6 +55,19 @@ class AdminExportsControllerTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.items[0].exportId").value(exportId));
         mockMvc.perform(get("/api/v1/admin/exports/{id}/download", exportId).with(authentication(secondAdmin)))
                 .andExpect(status().isOk()).andExpect(header().string("Content-Disposition", org.hamcrest.Matchers.containsString("attachment")));
+    }
+
+    @Test void quarantineWithoutPersistedSourceFailsClosedAndRemainsVisible() throws Exception {
+        UsernamePasswordAuthenticationToken admin = auth("quarantine");
+        mockMvc.perform(post("/api/v1/admin/exports").with(authentication(admin)).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"source\":\"QUARANTINE_NORMALIZED\",\"format\":\"CSV\",\"rowCount\":10}"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("EXPORT_SOURCE_UNAVAILABLE"));
+        mockMvc.perform(get("/api/v1/admin/exports").with(authentication(admin)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items[0].status").value("FAILED"))
+                .andExpect(jsonPath("$.items[0].failureReasonCode").value("EXPORT_SOURCE_UNAVAILABLE"))
+                .andExpect(jsonPath("$.items[0].outputRowCount").isEmpty());
     }
 
     @Test void validatesCapAndRechecksExpiry() throws Exception {

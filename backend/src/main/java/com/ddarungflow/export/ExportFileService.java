@@ -45,6 +45,9 @@ public class ExportFileService {
             List<ExportRow> rows = readRows(generating);
             writeFile(generating, rows);
             return exportRequestService.completeForAdmin(generating.getId(), (long) rows.size(), now);
+        } catch (ExportSourceUnavailableException error) {
+            exportRequestService.failForAdmin(generating.getId(), "EXPORT_SOURCE_UNAVAILABLE", now);
+            throw error;
         } catch (RuntimeException | IOException error) {
             exportRequestService.failForAdmin(generating.getId(), "EXPORT_GENERATION_FAILED", now);
             throw new ExportGenerationException(error);
@@ -69,9 +72,11 @@ public class ExportFileService {
 
     private List<ExportRow> readRows(ExportRequest request) {
         if (request.getSource() == ExportSource.QUARANTINE_NORMALIZED) {
-            return List.of();
+            throw new ExportSourceUnavailableException();
         }
-        long limit = request.getRowCount() != null ? request.getRowCount() : ExportRequestService.MAX_CSV_ROW_COUNT;
+        long limit = request.getRequestedRowCount() != null ? request.getRequestedRowCount()
+                : request.getFormat() == ExportFormat.CSV
+                ? ExportRequestService.MAX_CSV_ROW_COUNT : ExportRequestService.MAX_PARQUET_ROW_COUNT;
         @SuppressWarnings("unchecked")
         List<Object[]> results = entityManager.createNativeQuery("""
                 select inventory.station_id, inventory.available_bike_count, inventory.inventory_status, inventory.collected_at
@@ -124,6 +129,7 @@ public class ExportFileService {
     public static class ExportGenerationException extends RuntimeException {
         public ExportGenerationException(Throwable cause) { super(cause); }
     }
+    public static class ExportSourceUnavailableException extends RuntimeException { }
     public static class ExportExpiredException extends RuntimeException { }
     public static class ExportFileNotFoundException extends RuntimeException { }
 }

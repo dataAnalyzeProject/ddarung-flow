@@ -17,6 +17,7 @@ import java.nio.file.Files;
 import java.time.OffsetDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -47,12 +48,16 @@ class ExportFileServiceTest {
         assertThat(csv).contains("stationId,availableBikeCount,inventoryStatus,collectedAt").doesNotContain("latitude", "longitude", "내부 대여소");
     }
 
-    @Test void createsReadableParquetAndAnEmptyQuarantineExport() throws Exception {
+    @Test void createsReadableParquetAndRejectsUnbackedQuarantineExport() throws Exception {
         ExportRequest parquet = exportRequestService.create(1L, ExportSource.CURATED, ExportFormat.PARQUET, "운영 검토", 10L, OffsetDateTime.now());
         ExportFileService.DownloadedFile parquetFile = exportFileService.openForDownload(exportFileService.createFile(parquet, OffsetDateTime.now()).getId(), OffsetDateTime.now());
         assertThat(Files.readAllBytes(parquetFile.path())).startsWith((byte) 'P', (byte) 'A', (byte) 'R', (byte) '1');
 
         ExportRequest quarantine = exportRequestService.create(1L, ExportSource.QUARANTINE_NORMALIZED, ExportFormat.CSV, "운영 검토", 10L, OffsetDateTime.now());
-        assertThat(exportFileService.createFile(quarantine, OffsetDateTime.now()).getRowCount()).isZero();
+        assertThatThrownBy(() -> exportFileService.createFile(quarantine, OffsetDateTime.now()))
+                .isInstanceOf(ExportFileService.ExportSourceUnavailableException.class);
+        ExportRequest failed = exportRequestRepository.findById(quarantine.getId()).orElseThrow();
+        assertThat(failed.getStatus()).isEqualTo(ExportStatus.FAILED);
+        assertThat(failed.getFailureReasonCode()).isEqualTo("EXPORT_SOURCE_UNAVAILABLE");
     }
 }

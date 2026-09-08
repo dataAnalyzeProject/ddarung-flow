@@ -1,0 +1,9 @@
+.data-export-panel { margin-top: 24px; padding: 24px; border: 1px solid var(--admin-v2-border); border-radius: 16px; background: var(--admin-v2-surface); }
+.data-export-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; gap: 12px; align-items: end; margin: 18px 0; }
+.data-export-form label { display: grid; gap: 6px; color: var(--admin-v2-muted); font-size: 13px; font-weight: 700; }
+.data-export-form input, .data-export-form select { min-height: 40px; border: 1px solid var(--admin-v2-border); border-radius: 8px; padding: 0 10px; background: var(--admin-v2-surface); color: var(--admin-v2-ink); }
+.data-export-form button, .data-export-panel table button { min-height: 40px; border: 0; border-radius: 8px; padding: 0 14px; background: var(--admin-v2-accent); color: white; font-weight: 800; cursor: pointer; }
+.data-export-panel table { width: 100%; border-collapse: collapse; }
+.data-export-panel th, .data-export-panel td { padding: 12px 10px; border-bottom: 1px solid var(--admin-v2-border); text-align: left; }
+.data-export-error { color: var(--admin-v2-critical); font-weight: 700; }
+@media (max-width: 960px) { .data-export-form { grid-template-columns: 1fr 1fr; } .data-export-panel { overflow-x: auto; } }

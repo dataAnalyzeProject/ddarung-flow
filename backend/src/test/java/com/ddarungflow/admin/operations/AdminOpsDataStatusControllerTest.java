@@ -40,6 +40,9 @@ class AdminOpsDataStatusControllerTest {
 
     @BeforeEach void clear() {
         jdbc.update("DELETE FROM admin_ops_runtime_risk_snapshots");
+        jdbc.update("DELETE FROM admin_ops_global_risk_control");
+        jdbc.update("DELETE FROM admin_ops_global_risk_items");
+        jdbc.update("DELETE FROM admin_ops_global_risk_results");
         jdbc.update("DELETE FROM station_predictions");
         jdbc.update("DELETE FROM prediction_batches");
         jdbc.update("DELETE FROM station_inventory_current");
@@ -57,6 +60,8 @@ class AdminOpsDataStatusControllerTest {
                 .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("ADMIN_PERMISSION_DENIED"));
         mvc.perform(get("/api/v1/admin/ops/data-status").with(allowed()))
                 .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/admin/data/status").with(allowed()))
+                .andExpect(status().isOk());
     }
 
     @Test void returnsOnlyTheExactContractAndLeavesLegacyDataQualityAvailable() throws Exception {
@@ -69,7 +74,7 @@ class AdminOpsDataStatusControllerTest {
 
         mvc.perform(get("/api/v1/admin/ops/data-status").with(allowed()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.*", hasSize(8)))
+                .andExpect(jsonPath("$.*", hasSize(9)))
                 .andExpect(jsonPath("$.inventory.*", hasSize(8)))
                 .andExpect(jsonPath("$.prediction.*", hasSize(8)))
                 // All 11 declared fields are always serialized as keys (this DTO has no
@@ -77,13 +82,14 @@ class AdminOpsDataStatusControllerTest {
                 .andExpect(jsonPath("$.runtimeAnalysis.*", hasSize(11)))
                 .andExpect(jsonPath("$.runtimeAnalysis.hasRecentSnapshot").value(false))
                 .andExpect(jsonPath("$.profile.*", hasSize(5)))
+                .andExpect(jsonPath("$.globalRisk.dataState").value("INSUFFICIENT_DATA"))
                 // Root reports the real inventory PARTIAL. Neither the legacy batch nor the
                 // absence of an on-demand analysis scope can override the citywide sources.
                 .andExpect(jsonPath("$.dataState").value("PARTIAL"))
                 .andExpect(jsonPath("$.inventory.inventoryStatusBreakdown.NORMAL").value(1))
                 .andExpect(jsonPath("$.inventory.inventoryStatusBreakdown.UNAVAILABLE").value(1))
                 .andExpect(jsonPath("$.limitations", contains("AFFECTED_SCOPE_NOT_SOURCE_BACKED", "LAST_NORMAL_REFRESH_NOT_SOURCE_BACKED", "REASON_LEDGER_NOT_SOURCE_BACKED", "ANALYSIS_SCOPE_REQUIRED")))
-                .andExpect(jsonPath("$..batchId").doesNotExist()).andExpect(jsonPath("$..modelVersion").doesNotExist())
+                .andExpect(jsonPath("$..batchId").doesNotExist())
                 .andExpect(jsonPath("$..modelId").doesNotExist()).andExpect(jsonPath("$..artifact").doesNotExist())
                 .andExpect(jsonPath("$..artifactPath").doesNotExist()).andExpect(jsonPath("$..sha").doesNotExist())
                 .andExpect(jsonPath("$..affectedScope").doesNotExist()).andExpect(jsonPath("$..affectedStations").doesNotExist())
@@ -92,8 +98,44 @@ class AdminOpsDataStatusControllerTest {
                 .andExpect(jsonPath("$..cpu").doesNotExist()).andExpect(jsonPath("$..ram").doesNotExist())
                 .andExpect(jsonPath("$..uptime").doesNotExist()).andExpect(jsonPath("$..slo").doesNotExist())
                 .andExpect(jsonPath("$..airflow").doesNotExist()).andExpect(jsonPath("$..oci").doesNotExist());
+        mvc.perform(get("/api/v1/admin/data/status").with(allowed()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.dataState").value("INSUFFICIENT_DATA"));
         mvc.perform(get("/api/v1/admin/data-quality").with(authentication(auth(UserRole.ADMIN, Set.of(AdminPermission.DATA_STATUS_READ)))))
                 .andExpect(status().isOk());
+    }
+
+    @Test void canonicalGlobalStatusRequiresFreshCompleteCitywideCoverage() throws Exception {
+        OffsetDateTime now = OffsetDateTime.now().withNano(0);
+        insertStation("A", "1001", true);
+        insertInventory("A", now.minusMinutes(1), "NORMAL");
+        insertProfile("A", now.minusHours(1));
+        UUID resultId = UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO admin_ops_global_risk_results
+                  (result_id, reference_time, generated_at, published_at, fresh_until, expires_at, model_version,
+                   active_public_station_count, inventory_eligible_count, evaluated_count, normal_inference_count,
+                   inventory_missing_count, inventory_delayed_count, inventory_unavailable_count,
+                   inference_insufficient_count, unevaluated_count, inference_call_count, generation_duration_ms)
+                VALUES (?, ?, ?, ?, ?, ?, 'model-v1', 2, 1, 1, 1, 1, 0, 0, 0, 0, 1, 25)
+                """, resultId, now, now, now, now.plusMinutes(20), now.plusMinutes(30));
+        jdbc.update("INSERT INTO admin_ops_global_risk_control(control_key, current_result_id) VALUES ('GLOBAL', ?)", resultId);
+
+        mvc.perform(get("/api/v1/admin/data/status").with(allowed()))
+                .andExpect(jsonPath("$.globalRisk.dataState").value("PARTIAL"))
+                .andExpect(jsonPath("$.dataState").value("PARTIAL"))
+                .andExpect(jsonPath("$.globalRisk.inventoryMissingCount").value(1))
+                .andExpect(jsonPath("$.globalRisk.generationDurationMs").value(25));
+
+        jdbc.update("UPDATE admin_ops_global_risk_results SET fresh_until = ? WHERE result_id = ?", now.minusSeconds(1), resultId);
+        mvc.perform(get("/api/v1/admin/data/status").with(allowed()))
+                .andExpect(jsonPath("$.globalRisk.dataState").value("DELAYED"))
+                .andExpect(jsonPath("$.dataState").value("DELAYED"));
+
+        jdbc.update("UPDATE admin_ops_global_risk_results SET expires_at = ? WHERE result_id = ?", now.minusSeconds(1), resultId);
+        mvc.perform(get("/api/v1/admin/data/status").with(allowed()))
+                .andExpect(jsonPath("$.globalRisk.dataState").value("UNAVAILABLE"))
+                .andExpect(jsonPath("$.dataState").value("UNAVAILABLE"));
     }
 
     @Test void inventoryStateUsesCoverageAndTheApprovedDelayBoundaries() throws Exception {

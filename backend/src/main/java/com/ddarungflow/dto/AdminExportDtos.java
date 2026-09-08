@@ -28,6 +28,8 @@ public final class AdminExportDtos {
             String purpose,
             ExportStatus status,
             Long rowCount,
+            Long requestedRowCount,
+            Long outputRowCount,
             OffsetDateTime requestedAt,
             OffsetDateTime completedAt,
             OffsetDateTime expiresAt,
@@ -35,7 +37,8 @@ public final class AdminExportDtos {
     ) {
         public static ExportResponse from(ExportRequest request) {
             return new ExportResponse(request.getId(), request.getSource(), request.getFormat(), request.getPurpose(),
-                    request.getStatus(), request.getRowCount(), request.getRequestedAt(), request.getCompletedAt(),
+                    request.getStatus(), request.getRowCount(), request.getRequestedRowCount(), request.getRowCount(),
+                    request.getRequestedAt(), request.getCompletedAt(),
                     request.getExpiresAt(), request.getFailureReasonCode());
         }
     }

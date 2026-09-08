@@ -65,7 +65,7 @@ public class ExportRequestService {
                 .format(format)
                 .purpose(purpose)
                 .status(ExportStatus.PENDING)
-                .rowCount(requestedRowCount)
+                .requestedRowCount(requestedRowCount)
                 .requestedAt(reqTime)
                 .build();
 
