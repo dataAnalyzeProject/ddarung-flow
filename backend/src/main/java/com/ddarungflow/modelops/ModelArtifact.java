@@ -27,7 +27,7 @@ public class ModelArtifact {
     @Column(nullable = false, unique = true, length = 100)
     private String version;
 
-    @Column(name = "trainer_user_id", nullable = false)
+    @Column(name = "trainer_user_id")
     private Long trainerUserId;
 
     @Column(name = "artifact_key", nullable = false, length = 512)
@@ -36,16 +36,16 @@ public class ModelArtifact {
     @Column(nullable = false, unique = true, length = 64)
     private String sha256;
 
-    @Column(name = "code_commit", nullable = false, length = 40)
+    @Column(name = "code_commit", length = 40)
     private String codeCommit;
 
-    @Column(name = "data_manifest_hash", nullable = false, length = 64)
+    @Column(name = "data_manifest_hash", length = 64)
     private String dataManifestHash;
 
-    @Column(name = "config_hash", nullable = false, length = 64)
+    @Column(name = "config_hash", length = 64)
     private String configHash;
 
-    @Column(name = "feature_schema_version", nullable = false, length = 64)
+    @Column(name = "feature_schema_version", length = 64)
     private String featureSchemaVersion;
 
     @Column(name = "manifest_key", length = 512)
@@ -56,6 +56,10 @@ public class ModelArtifact {
 
     @Column(name = "validated_by_user_id")
     private Long validatedByUserId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "source_origin", nullable = false, length = 20)
+    private ModelArtifactOrigin sourceOrigin;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -115,6 +119,7 @@ public class ModelArtifact {
         this.dataManifestHash = dataManifestHash;
         this.configHash = configHash;
         this.featureSchemaVersion = featureSchemaVersion;
+        this.sourceOrigin = ModelArtifactOrigin.REGISTERED;
         this.state = state;
         this.createdAt = createdAt;
     }
@@ -143,5 +148,21 @@ public class ModelArtifact {
     public void markValidatedBy(Long actorUserId) {
         if (actorUserId == null) throw new IllegalArgumentException("validator actor is required");
         this.validatedByUserId = actorUserId;
+    }
+
+    public static ModelArtifact importedRuntime(
+        String version, String artifactKey, String sha256, String manifestKey,
+        String manifestSha256, OffsetDateTime loadedAt
+    ) {
+        ModelArtifact artifact = new ModelArtifact();
+        artifact.version = version;
+        artifact.artifactKey = artifactKey;
+        artifact.sha256 = sha256;
+        artifact.manifestKey = manifestKey;
+        artifact.manifestSha256 = manifestSha256;
+        artifact.sourceOrigin = ModelArtifactOrigin.RUNTIME_IMPORTED;
+        artifact.state = ModelArtifactState.ACTIVE;
+        artifact.createdAt = loadedAt;
+        return artifact;
     }
 }

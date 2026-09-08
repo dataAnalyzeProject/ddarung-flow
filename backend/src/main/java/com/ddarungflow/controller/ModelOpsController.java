@@ -11,6 +11,7 @@ import com.ddarungflow.modelops.ModelHistoryRepository;
 import com.ddarungflow.modelops.ModelRegistryService;
 import com.ddarungflow.modelops.ModelUpload;
 import com.ddarungflow.modelops.ModelUploadService;
+import com.ddarungflow.modelops.RuntimeModelRegistryService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -40,15 +41,18 @@ public class ModelOpsController {
     private final ModelActivationService modelActivationService;
     private final AuditEventService auditEventService;
     private final ModelHistoryRepository modelHistoryRepository;
+    private final RuntimeModelRegistryService runtimeModelRegistryService;
 
     public ModelOpsController(ModelRegistryService modelRegistryService, ModelUploadService modelUploadService,
                               ModelActivationService modelActivationService, AuditEventService auditEventService,
-                              ModelHistoryRepository modelHistoryRepository) {
+                              ModelHistoryRepository modelHistoryRepository,
+                              RuntimeModelRegistryService runtimeModelRegistryService) {
         this.modelRegistryService = modelRegistryService;
         this.modelUploadService = modelUploadService;
         this.modelActivationService = modelActivationService;
         this.auditEventService = auditEventService;
         this.modelHistoryRepository = modelHistoryRepository;
+        this.runtimeModelRegistryService = runtimeModelRegistryService;
     }
 
     @PostMapping("/model-uploads")
@@ -120,11 +124,29 @@ public class ModelOpsController {
                 request.dataManifestHash(), request.configHash(), request.featureSchemaVersion(), manifestUpload.getObjectKey(),
                 manifestUpload.getObservedSha256(), ModelArtifactState.DRAFT, OffsetDateTime.now()
             );
-            ModelArtifact saved = modelRegistryService.registerDraft(artifact);
+            List<ModelRegistryService.EvaluationInput> evaluations = request.evaluations() == null ? null
+                : request.evaluations().stream().map(row -> row == null ? null : new ModelRegistryService.EvaluationInput(
+                    row.horizonMinutes(), row.requiredBikeCount(), row.sampleCount(), row.brierScore(),
+                    row.shortageRecall(), row.calibrationError(), row.coverage(), row.monotonicityViolations()
+                )).toList();
+            ModelArtifact saved = modelRegistryService.registerDraft(artifact, evaluations);
             audit(principal, "MODEL_REGISTER", saved.getVersion(), AuditResult.SUCCESS, null);
             return ResponseEntity.status(HttpStatus.CREATED).body(ModelOpsDtos.ModelResponse.from(saved));
         } catch (RuntimeException error) {
             audit(principal, "MODEL_REGISTER", safeTarget(request.version()), AuditResult.FAILURE, uploadReason(error));
+            throw error;
+        }
+    }
+
+    @PostMapping("/models/reconcile-runtime")
+    @PreAuthorize("hasAuthority('MODEL_ACTIVATE')")
+    public ModelOpsDtos.ModelResponse reconcileRuntime(@AuthenticationPrincipal PrincipalDetails principal) {
+        try {
+            ModelArtifact reconciled = runtimeModelRegistryService.reconcile();
+            audit(principal, "MODEL_RUNTIME_RECONCILE", reconciled.getVersion(), AuditResult.SUCCESS, null);
+            return ModelOpsDtos.ModelResponse.from(reconciled);
+        } catch (RuntimeException error) {
+            audit(principal, "MODEL_RUNTIME_RECONCILE", "RUNTIME_MODEL", AuditResult.FAILURE, "MODEL_RUNTIME_RECONCILE_FAILED");
             throw error;
         }
     }
@@ -194,6 +216,8 @@ public class ModelOpsController {
     ResponseEntity<ModelOpsDtos.ErrorResponse> activation(ModelActivationService.ActivationFailedException ignored) { return error(HttpStatus.SERVICE_UNAVAILABLE, "MODEL_ACTIVATION_FAILED", "모델 전환에 실패했습니다."); }
     @ExceptionHandler(ModelRegistryService.MakerCheckerViolationException.class)
     ResponseEntity<ModelOpsDtos.ErrorResponse> makerChecker(ModelRegistryService.MakerCheckerViolationException ignored) { return error(HttpStatus.CONFLICT, "MODEL_PROMOTION_GATE_FAILED", "등록·검증 담당자와 승인 담당자는 달라야 합니다."); }
+    @ExceptionHandler({RuntimeModelRegistryService.RuntimeMismatchException.class, com.ddarungflow.modelops.RuntimeModelSourceGateway.UnavailableException.class})
+    ResponseEntity<ModelOpsDtos.ErrorResponse> runtimeReconcile(RuntimeException ignored) { return error(HttpStatus.CONFLICT, "MODEL_RUNTIME_RECONCILE_FAILED", "현재 serving 모델을 registry와 안전하게 동기화할 수 없습니다."); }
     @ExceptionHandler(ModelUploadService.UploadConflictException.class)
     ResponseEntity<ModelOpsDtos.ErrorResponse> uploadConflict(ModelUploadService.UploadConflictException error) { return error(HttpStatus.CONFLICT, error.code(), "업로드 상태가 현재 요청과 맞지 않습니다."); }
     @ExceptionHandler(ModelUploadService.UploadIntegrityException.class)

@@ -28,6 +28,23 @@ public class ModelRegistryService {
     }
 
     public ModelArtifact registerDraft(ModelArtifact draft) {
+        return registerDraftOnly(draft);
+    }
+
+    public ModelArtifact registerDraft(ModelArtifact draft, List<EvaluationInput> evaluations) {
+        if (evaluations == null || evaluations.size() != 20) {
+            throw new IllegalArgumentException("Evaluations list must contain exactly 20 rows");
+        }
+        ModelArtifact saved = registerDraftOnly(draft);
+        saveEvaluations(saved.getId(), evaluations.stream().map(row -> row == null ? null : new ModelEvaluation(
+            saved.getId(), row.horizonMinutes(), row.requiredBikeCount(), row.sampleCount(),
+            row.brierScore(), row.shortageRecall(), row.calibrationError(), row.coverage(),
+            row.monotonicityViolations()
+        )).toList());
+        return saved;
+    }
+
+    private ModelArtifact registerDraftOnly(ModelArtifact draft) {
         if (draft == null) {
             throw new IllegalArgumentException("Draft artifact must not be null");
         }
@@ -205,4 +222,15 @@ public class ModelRegistryService {
     private static boolean isValidSha256(String hash) {
         return hash != null && hash.matches("^[0-9a-f]{64}$");
     }
+
+    public record EvaluationInput(
+        Integer horizonMinutes,
+        Integer requiredBikeCount,
+        Long sampleCount,
+        BigDecimal brierScore,
+        BigDecimal shortageRecall,
+        BigDecimal calibrationError,
+        BigDecimal coverage,
+        Integer monotonicityViolations
+    ) { }
 }

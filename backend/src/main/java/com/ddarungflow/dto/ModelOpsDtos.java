@@ -26,9 +26,21 @@ public final class ModelOpsDtos {
         String codeCommit,
         String dataManifestHash,
         String configHash,
-        String featureSchemaVersion
+        String featureSchemaVersion,
+        List<MetricInput> evaluations
     ) {
     }
+
+    public record MetricInput(
+        Integer horizonMinutes,
+        Integer requiredBikeCount,
+        Long sampleCount,
+        BigDecimal brierScore,
+        BigDecimal shortageRecall,
+        BigDecimal calibrationError,
+        BigDecimal coverage,
+        Integer monotonicityViolations
+    ) { }
 
     public record ModelResponse(
         Long id,

@@ -51,7 +51,7 @@ describe('ModelReleasesPage', () => {
     expect(verifyServing).toHaveBeenCalledWith({ candidateModelId: 1, permissions: expect.arrayContaining(['MODEL_ACTIVATE']) });
   });
 
-  test('submits two selected files and registration metadata only with register permission', async () => {
+  test('submits artifact, manifest, evaluations, and registration metadata only with register permission', async () => {
     const register = jest.fn().mockResolvedValue({}); const refresh = jest.fn().mockResolvedValue({ runtime, registry: base.registry, history: base.history });
     render(<ModelReleasesPage createAdapter={adapterFor({ ...base, permissions: [...base.permissions, 'MODEL_ARTIFACT_REGISTER'] }, undefined, refresh, { register })} />);
     await screen.findByRole('form', { name: '모델 업로드 및 등록' });
@@ -60,12 +60,21 @@ describe('ModelReleasesPage', () => {
     fireEvent.change(screen.getByLabelText('데이터 manifest hash'), { target: { value: 'd'.repeat(64) } });
     fireEvent.change(screen.getByLabelText('설정 hash'), { target: { value: 'c'.repeat(64) } });
     fireEvent.change(screen.getByLabelText('Feature schema'), { target: { value: 'v2' } });
-    const artifactFile = new File(['model'], 'model.bin'); const manifestFile = new File(['{}'], 'manifest.json');
+    const artifactFile = new File(['model'], 'model.bin'); const manifestFile = new File(['{}'], 'manifest.json'); const evaluationsFile = new File(['[]'], 'evaluations.json');
     fireEvent.change(screen.getByLabelText('모델 artifact'), { target: { files: [artifactFile] } });
     fireEvent.change(screen.getByLabelText('Manifest'), { target: { files: [manifestFile] } });
+    fireEvent.change(screen.getByLabelText('20조합 평가'), { target: { files: [evaluationsFile] } });
     fireEvent.click(screen.getByRole('button', { name: '업로드 및 등록' }));
-    await waitFor(() => expect(register).toHaveBeenCalledWith(expect.objectContaining({ artifactFile, manifestFile, metadata: expect.objectContaining({ version: 'model-v2', featureSchemaVersion: 'v2' }) })));
+    await waitFor(() => expect(register).toHaveBeenCalledWith(expect.objectContaining({ artifactFile, manifestFile, evaluationsFile, metadata: expect.objectContaining({ version: 'model-v2', featureSchemaVersion: 'v2' }) })));
     expect(refresh).toHaveBeenCalled();
+  });
+
+  test('offers factual runtime reconciliation only when no ACTIVE registry model exists', async () => {
+    const action = jest.fn().mockResolvedValue({}); const refresh = jest.fn().mockResolvedValue({ runtime, registry: { state: 'SUCCESS', data: [{ ...model, state: 'ACTIVE' }] }, history: base.history });
+    render(<ModelReleasesPage createAdapter={adapterFor({ ...base, permissions: [...base.permissions, 'MODEL_ACTIVATE'] }, action, refresh)} />);
+    fireEvent.click(await screen.findByRole('button', { name: '현재 serving 동기화' }));
+    await waitFor(() => expect(action).toHaveBeenCalledWith({ type: 'RECONCILE', id: undefined }));
+    await waitFor(() => expect(screen.queryByRole('button', { name: '현재 serving 동기화' })).not.toBeInTheDocument());
   });
 
   test('renders safe lifecycle history fields', async () => {
