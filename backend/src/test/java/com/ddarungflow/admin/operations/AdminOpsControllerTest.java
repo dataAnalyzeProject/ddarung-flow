@@ -46,10 +46,14 @@ class AdminOpsControllerTest {
     @Autowired private JdbcTemplate jdbc;
     @Autowired private UsersRepository users;
     @Autowired private AdminOpsReadService service;
+    @Autowired private AdminOpsGlobalRiskGenerationService globalGenerationService;
     @MockBean private InferenceClient inferenceClient;
 
     @BeforeEach
     void clearAndStubRuntime() {
+        jdbc.update("DELETE FROM admin_ops_global_risk_control");
+        jdbc.update("DELETE FROM admin_ops_global_risk_items");
+        jdbc.update("DELETE FROM admin_ops_global_risk_results");
         jdbc.update("DELETE FROM admin_ops_runtime_risk_snapshot_items");
         jdbc.update("DELETE FROM admin_ops_runtime_risk_snapshots");
         jdbc.update("DELETE FROM station_inventory_current");
@@ -60,6 +64,71 @@ class AdminOpsControllerTest {
             return new InferenceDtos.PredictResponse("NORMAL", null, "runtime-test-v1", OffsetDateTime.now(), candidates.stream()
                     .map(candidate -> new InferenceDtos.CandidatePrediction(candidate.stationId(), "NORMAL", rows())).toList());
         });
+    }
+
+    @Test
+    void servesCitywideGlobalOverviewWithoutAMapVisitAndKeepsActualZero() throws Exception {
+        insert("ST-1", "1001", 0);
+        insert("ST-2", "1002", 4);
+        when(inferenceClient.predictAdminChunk(anyList())).thenAnswer(invocation -> {
+            List<InferenceDtos.CandidateRequest> candidates = invocation.getArgument(0);
+            return new InferenceDtos.PredictResponse("NORMAL", null, "runtime-global-v1", OffsetDateTime.now(), candidates.stream()
+                    .map(candidate -> new InferenceDtos.CandidatePrediction(candidate.stationId(), "NORMAL", rows(BigDecimal.ONE))).toList());
+        });
+        org.junit.jupiter.api.Assertions.assertEquals("SUCCESS", globalGenerationService.generate().state());
+        MvcResult overview = mvc.perform(get("/api/v1/admin/ops/overview")
+                        .with(authentication(auth(UserRole.ADMIN, Set.of(AdminPermission.OPS_DASHBOARD_READ)))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.scope.type").value("GLOBAL"))
+                .andExpect(jsonPath("$.globalResultId").isNotEmpty()).andExpect(jsonPath("$.freshness.state").value("FRESH"))
+                .andExpect(jsonPath("$.capabilities.rentalRisk.source").value("private_background_global_inference"))
+                .andExpect(jsonPath("$.coverage.activeStationCount").value(2)).andExpect(jsonPath("$.coverage.evaluatedStationCount").value(2))
+                .andExpect(jsonPath("$.rentalRiskSummary.criticalCount").value(0))
+                .andExpect(jsonPath("$.rentalRiskSummary.lowCount").value(2))
+                .andExpect(jsonPath("$.priorityStations.length()").value(2)).andReturn();
+        String resultId = JsonPath.read(overview.getResponse().getContentAsString(), "$.globalResultId");
+        String referenceTime = JsonPath.read(overview.getResponse().getContentAsString(), "$.referenceTime");
+        String publishedAt = JsonPath.read(overview.getResponse().getContentAsString(), "$.publishedAt");
+        mvc.perform(get("/api/v1/admin/ops/candidates")
+                        .with(authentication(auth(UserRole.ADMIN, Set.of(AdminPermission.OPS_CANDIDATE_READ)))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.scope.type").value("GLOBAL"))
+                .andExpect(jsonPath("$.globalResultId").value(resultId))
+                .andExpect(jsonPath("$.referenceTime").value(referenceTime))
+                .andExpect(jsonPath("$.publishedAt").value(publishedAt))
+                .andExpect(jsonPath("$.modelVersion").value("runtime-global-v1"))
+                .andExpect(jsonPath("$.globalCoverage.activePublicStationCount").value(2))
+                .andExpect(jsonPath("$.globalCoverage.inventoryEligibleCount").value(2))
+                .andExpect(jsonPath("$.globalCoverage.evaluatedCount").value(2))
+                .andExpect(jsonPath("$.globalCoverage.normalInferenceCount").value(2))
+                .andExpect(jsonPath("$.capabilities.rentalRisk.source").value("private_background_global_inference"))
+                .andExpect(jsonPath("$.items.length()").value(2));
+
+        jdbc.update("UPDATE admin_ops_global_risk_results SET fresh_until = CURRENT_TIMESTAMP - INTERVAL '2' SECOND, expires_at = CURRENT_TIMESTAMP - INTERVAL '1' SECOND WHERE result_id = ?", UUID.fromString(resultId));
+        mvc.perform(get("/api/v1/admin/ops/overview")
+                        .with(authentication(auth(UserRole.ADMIN, Set.of(AdminPermission.OPS_DASHBOARD_READ)))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.freshness.state").value("EXPIRED"))
+                .andExpect(jsonPath("$.globalResultId").value(resultId)).andExpect(jsonPath("$.publishedAt").value(publishedAt))
+                .andExpect(jsonPath("$.rentalRiskSummary.criticalCount").doesNotExist())
+                .andExpect(jsonPath("$.globalCoverage.activePublicStationCount").doesNotExist());
+        mvc.perform(get("/api/v1/admin/ops/candidates")
+                        .with(authentication(auth(UserRole.ADMIN, Set.of(AdminPermission.OPS_CANDIDATE_READ)))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.freshness.state").value("EXPIRED"))
+                .andExpect(jsonPath("$.globalResultId").value(resultId)).andExpect(jsonPath("$.publishedAt").value(publishedAt))
+                .andExpect(jsonPath("$.items.length()").value(0))
+                .andExpect(jsonPath("$.globalCoverage.activePublicStationCount").doesNotExist());
+    }
+
+    @Test
+    void globalOverviewWithoutPublishedResultKeepsUnknownValuesNull() throws Exception {
+        mvc.perform(get("/api/v1/admin/ops/overview")
+                        .with(authentication(auth(UserRole.ADMIN, Set.of(AdminPermission.OPS_DASHBOARD_READ)))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.limitations", org.hamcrest.Matchers.hasItem("GLOBAL_RESULT_NOT_GENERATED")))
+                .andExpect(jsonPath("$.generatedAt").doesNotExist())
+                .andExpect(jsonPath("$.publishedAt").doesNotExist())
+                .andExpect(jsonPath("$.rentalRiskSummary.criticalCount").doesNotExist())
+                .andExpect(jsonPath("$.inventoryStateSummary.normal").doesNotExist())
+                .andExpect(jsonPath("$.inventoryStateSummary.missing").doesNotExist())
+                .andExpect(jsonPath("$.globalCoverage.activePublicStationCount").doesNotExist());
     }
 
     @Test

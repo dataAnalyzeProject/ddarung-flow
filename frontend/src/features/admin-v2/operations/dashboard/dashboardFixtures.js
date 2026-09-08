@@ -1,5 +1,5 @@
 const capabilities = {
-  rentalRisk: { available: true, source: 'station_predictions + prediction_batches', reasonCode: null },
+  rentalRisk: { available: true, source: 'private_background_global_inference', reasonCode: null },
   returnRisk: { available: false, source: null, reasonCode: 'RETURN_INFERENCE_NOT_APPROVED' },
   stationCapacity: { available: false, source: null, reasonCode: 'CAPACITY_SOURCE_MISSING' },
   districtMetadata: { available: false, source: null, reasonCode: 'DISTRICT_SOURCE_MISSING' },
@@ -22,11 +22,15 @@ function items(dataState = 'NORMAL') {
 
 function overview(dataState = 'NORMAL', overrides = {}) {
   return {
-    referenceTime: '2026-08-30T09:00:00+09:00', generatedAt: '2026-08-30T09:01:00+09:00', horizonMinutes: 60,
+    referenceTime: '2026-08-30T09:00:00+09:00', generatedAt: '2026-08-30T09:01:00+09:00', publishedAt: '2026-08-30T09:01:00+09:00', horizonMinutes: 60,
     capabilities, dataState, coverage: { activeStationCount: 120, inventoryAvailableCount: 118, predictionAvailableCount: 116, profileAvailableCount: 0 },
     limitations: [], ruleVersion: 'OPS_RENTAL_RISK_V1',
     rentalRiskSummary: { selectedRequiredBikeCount: 1, validPredictionCount: 116, criticalCount: 1, highCount: 2, watchCount: 2, lowCount: 111, maxShortageProbability: 0.82, averageShortageProbability: 0.42 },
     inventoryStateSummary: { normal: 110, delayed: 5, missing: 3, unavailable: 2 }, returnRisk: null,
+    scope: { type: 'GLOBAL', sourceId: 'global-result-1' }, globalResultId: 'global-result-1', modelVersion: 'runtime-v1',
+    globalCoverage: { activePublicStationCount: 120, inventoryEligibleCount: 116, evaluatedCount: 116, normalInferenceCount: 116, inventoryMissingCount: 2, inventoryDelayedCount: 1, inventoryUnavailableCount: 1, inferenceInsufficientCount: 0, unevaluatedCount: 0 },
+    freshness: { state: 'FRESH', freshUntil: '2026-08-30T09:21:00+09:00', expiresAt: '2026-08-30T09:31:00+09:00' }, generationState: 'SUCCESS',
+    priorityStations: items(dataState),
     ...overrides,
   };
 }

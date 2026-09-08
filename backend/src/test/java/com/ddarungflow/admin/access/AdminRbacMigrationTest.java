@@ -62,7 +62,7 @@ class AdminRbacMigrationTest {
                 """);
 
         Flyway flyway = Flyway.configure().dataSource(dataSource).locations("classpath:db/migration")
-                .baselineOnMigrate(true).baselineVersion(MigrationVersion.fromVersion("10")).load();
+                .baselineOnMigrate(true).baselineVersion(MigrationVersion.fromVersion("10")).target("13").load();
         flyway.migrate();
 
         assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("13");

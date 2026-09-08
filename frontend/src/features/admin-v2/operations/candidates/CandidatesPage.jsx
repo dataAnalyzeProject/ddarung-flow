@@ -11,15 +11,21 @@ const ROOT_DATA_STATE_CLASS = {
 };
 const COVERAGE_FIELDS = [
   ['activePublicStationCount', '활성 공개 대여소 (전체)'],
-  ['analyzedStationCount', '분석한 대여소 (분석 범위)'],
-  ['analysisNormalCount', '정상 추론 (분석 범위)'],
-  ['profileAvailableCount', '반복 근거 확인 가능 (분석 범위)'],
-  ['eligibleCandidateCount', '집중관리 후보 (분석 범위)'],
+  ['inventoryEligibleCount', '재고 적격 대여소 (서울 전체)'],
+  ['evaluatedCount', '평가 완료 대여소 (서울 전체)'],
+  ['normalInferenceCount', '정상 추론 (서울 전체)'],
+  ['inventoryMissingCount', '재고 MISSING'],
+  ['inventoryDelayedCount', '재고 DELAYED'],
+  ['inventoryUnavailableCount', '재고 UNAVAILABLE'],
+  ['inferenceInsufficientCount', '추론 정보 부족'],
+  ['unevaluatedCount', '미평가'],
+  ['eligibleCandidateCount', '집중관리 후보 (서울 전체)'],
 ];
 
 function formatTime(value) { return value ? new Date(value).toLocaleString('ko-KR') : '확인 정보 없음'; }
 function formatPercent(value) { return typeof value === 'number' ? `${(value * 100).toFixed(1)}%` : '확인 정보 없음'; }
 function formatBikes(value) { return value === null || value === undefined ? '재고 확인 필요' : `${value}대`; }
+function coverageValue(result, globalCoverage, field) { return field === 'eligibleCandidateCount' ? result?.coverage?.eligibleCandidateCount : globalCoverage[field]; }
 function isAccessError(error) { return error?.status === 401 || error?.status === 403; }
 
 function RecurrenceEvidence({ recurrence }) {
@@ -90,15 +96,15 @@ export default function CandidatesPage({ createAdapter }) {
   const items = result?.items || [];
   const rootDataState = result?.dataState || 'UNAVAILABLE';
   const rootUiState = DATA_STATE_TO_UI[result?.dataState] || (!items.length ? 'EMPTY' : 'SUCCESS');
-  const scopeRequired = result?.limitations?.some((code) => code === 'ANALYSIS_SCOPE_REQUIRED');
-  const scopeLimitation = scopeRequired ? (result?.scopeExpired ? 'ANALYSIS_SNAPSHOT_EXPIRED' : 'ANALYSIS_SCOPE_REQUIRED') : null;
+  const unavailableGlobal = result?.limitations?.some((code) => code === 'GLOBAL_RESULT_NOT_GENERATED' || code === 'GLOBAL_RESULT_EXPIRED');
+  const globalCoverage = result?.globalCoverage || {};
   const selectedCandidate = items.find((candidate) => candidate.station?.stationNumber === selectedStationNumber) || items[0] || null;
   return <main className="candidates-page" aria-label="집중관리 목록">
     <header className="candidates-header">
       <div>
         <p className="candidates-eyebrow">UI-OPS-03</p>
         <h1>집중관리 목록</h1>
-        <p>미래 대여 부족 확률과 반복 품절 근거를 기준으로 우선 확인 대여소를 정렬합니다.</p>
+        <p>서울 전체 Global result의 미래 대여 부족 확률을 기준으로 우선 확인 대여소를 정렬합니다.</p>
       </div>
       <div className="candidates-reference-time">
         <span>기준 시각</span>
@@ -112,7 +118,9 @@ export default function CandidatesPage({ createAdapter }) {
         <label>필요 자전거 수<select value={requiredBikeCount} onChange={(event) => { resetLoadMore(); setRequiredBikeCount(Number(event.target.value)); }}>{[1, 2, 3, 4, 5].map((value) => <option key={value} value={value}>{value}대</option>)}</select></label>
       </div>
       <div className="candidates-context" aria-label="목록 기준">
-        <span><b>생성 시각</b>{formatTime(result?.generatedAt)}</span>
+        <span><b>발행 시각</b>{formatTime(result?.publishedAt)}</span>
+        <span><b>범위</b>서울 전체 · {result?.scope?.type || 'GLOBAL'}</span>
+        <span><b>Freshness</b>{result?.freshness?.state || 'NOT_GENERATED'}</span>
         <span><b>데이터 상태</b><mark className={`candidates-root-state ${ROOT_DATA_STATE_CLASS[rootDataState] || 'candidates-root-state--unknown'}`}>{rootDataState}</mark></span>
         <span><b>위험 유형</b>{result?.riskType || 'RENTAL'}</span>
       </div>
@@ -124,15 +132,15 @@ export default function CandidatesPage({ createAdapter }) {
         <nav aria-label="운영 화면 이동"><a href="/admin/ops/risk-map">대여 부족 위험 지도</a><a href="/admin/ops/analysis">반복 품절 패턴</a></nav>
       </div>
       {rootUiState !== 'SUCCESS' ? <div className="candidates-state-panel">
-        <AsyncStatePanel state={rootUiState} code={scopeLimitation || (result?.dataState === 'MISSING' ? 'MISSING' : undefined)} />
-        {scopeLimitation ? <p className="candidates-scope-guidance">{scopeLimitation === 'ANALYSIS_SNAPSHOT_EXPIRED' ? '이전 분석이 만료됐습니다. ' : '아직 분석한 범위가 없습니다. '}<a href="/admin/ops/risk-map">수급 위험 지도에서 범위를 분석해 주세요.</a></p> : null}
+        <AsyncStatePanel state={rootUiState} code={unavailableGlobal ? 'GLOBAL_RESULT_UNAVAILABLE' : (result?.dataState === 'MISSING' ? 'MISSING' : undefined)} />
+        {unavailableGlobal ? <p className="candidates-scope-guidance">서울 전체 위험 결과가 없거나 만료되어 현재 ranking을 표시하지 않습니다.</p> : null}
       </div> : null}
-      {items.length ? <div className="candidates-table-wrap"><table><caption>집중관리 후보 목록</caption><thead><tr><th scope="col">순위</th><th scope="col">대여소</th><th scope="col">대여 부족 확률</th><th scope="col">예상 시점</th><th scope="col">현재 재고</th><th scope="col">후보 데이터 상태</th><th scope="col">반복 품절 근거</th></tr></thead><tbody>{items.map((candidate) => { const selected = candidate.station?.stationNumber === selectedCandidate?.station?.stationNumber; return <tr key={`${candidate.rank}-${candidate.station?.stationNumber}`} className={selected ? 'is-selected' : undefined}><td className="candidates-rank"><strong>{candidate.rank}</strong></td><td className="candidates-station"><button type="button" onClick={() => setSelectedStationNumber(candidate.station?.stationNumber)} aria-pressed={selected}><strong>{candidate.station?.name || '이름 확인 필요'}</strong><small>{candidate.station?.stationNumber || '번호 확인 필요'}</small></button></td><td className="candidates-probability">{formatPercent(candidate.prediction?.selectedShortageProbability)}</td><td className="candidates-target-time">{formatTime(candidate.prediction?.predictionTargetAt)}</td><td>{formatBikes(candidate.station?.currentBikes)}</td><td><span className="candidates-data-state">{candidate.dataState || '확인 정보 없음'}</span></td><td><RecurrenceEvidence recurrence={candidate.recurrence} /></td></tr>; })}</tbody></table></div> : <p className="candidates-empty">현재 조건에서 표시할 집중관리 후보가 없습니다.</p>}
+      {items.length ? <div className="candidates-table-wrap"><table><caption>집중관리 후보 목록</caption><thead><tr><th scope="col">순위</th><th scope="col">대여소</th><th scope="col">대여 부족 확률</th><th scope="col">예상 시점</th><th scope="col">현재 재고</th><th scope="col">후보 데이터 상태</th><th scope="col">반복 품절 근거</th></tr></thead><tbody>{items.map((candidate) => { const selected = candidate.station?.stationNumber === selectedCandidate?.station?.stationNumber; return <tr key={`${candidate.rank}-${candidate.station?.stationNumber}`} className={selected ? 'is-selected' : undefined}><td className="candidates-rank"><strong>{candidate.rank}</strong></td><td className="candidates-station"><button type="button" onClick={() => setSelectedStationNumber(candidate.station?.stationNumber)} aria-pressed={selected}><strong>{candidate.station?.name || '이름 확인 필요'}</strong><small>{candidate.station?.stationNumber || '번호 확인 필요'}</small></button></td><td className="candidates-probability">{formatPercent(candidate.prediction?.selectedShortageProbability)}</td><td className="candidates-target-time">{formatTime(candidate.prediction?.predictionTargetAt)}</td><td>{formatBikes(candidate.station?.currentBikes)}</td><td><span className="candidates-data-state">{candidate.dataState || '확인 정보 없음'}</span></td><td><RecurrenceEvidence recurrence={candidate.recurrence} /></td></tr>; })}</tbody></table></div> : rootUiState === 'SUCCESS' ? <p className="candidates-empty">현재 조건에서 표시할 집중관리 후보가 없습니다.</p> : null}
       {result?.nextCursor ? <button type="button" onClick={loadMore} disabled={loadingMore}>{loadingMore ? '추가 항목을 불러오는 중' : '더 보기'}</button> : null}
       {loadMoreError ? <p role="status" className="candidates-load-more-error">추가 항목을 불러오지 못했습니다. <button type="button" onClick={loadMore}>재시도</button></p> : null}
     </section>
     {selectedCandidate ? <aside className="candidates-detail" aria-label="선택된 후보 상세"><div><p className="candidates-detail-kicker">선택된 후보 상세</p><h2>선택된 후보: {selectedCandidate.station?.name || '이름 확인 필요'}</h2><span className="candidates-station-number">{selectedCandidate.station?.stationNumber || '번호 확인 필요'}</span></div><dl><div><dt>현재 재고</dt><dd>{formatBikes(selectedCandidate.station?.currentBikes)}</dd></div><div><dt>예측 목표 시각</dt><dd>{formatTime(selectedCandidate.prediction?.predictionTargetAt)}</dd></div><div><dt>대여 부족 확률</dt><dd className="candidates-detail-probability">{formatPercent(selectedCandidate.prediction?.selectedShortageProbability)}</dd></div><div><dt>데이터 상태</dt><dd><span className="candidates-data-state">{selectedCandidate.dataState || '확인 정보 없음'}</span></dd></div></dl><a className="candidates-map-link" href="/admin/ops/risk-map">수급 위험 지도에서 보기</a></aside> : null}
     </div>
-    <section className="candidates-coverage" aria-label="데이터 범위"><div className="candidates-coverage-heading"><h2>데이터 범위</h2>{result?.limitations?.length ? <p>제한 사항: {result.limitations.join(', ')}</p> : null}</div><div className="candidates-coverage-values">{COVERAGE_FIELDS.map(([field, label]) => <span key={field}><b>{label}</b>{result?.coverage?.[field] ?? '확인 정보 없음'}</span>)}</div></section>
+    <section className="candidates-coverage" aria-label="데이터 범위"><div className="candidates-coverage-heading"><h2>서울 전체 데이터 범위</h2>{result?.limitations?.length ? <p>제한 사항: {result.limitations.join(', ')}</p> : null}</div><div className="candidates-coverage-values">{COVERAGE_FIELDS.map(([field, label]) => <span key={field}><b>{label}</b>{coverageValue(result, globalCoverage, field) ?? '확인 정보 없음'}</span>)}</div></section>
   </main>;
 }

@@ -1,5 +1,4 @@
 import { adminFetch } from '../../auth/adminSession.js';
-import { clearOpsRiskSnapshotId, readOpsRiskSnapshotId } from '../opsRiskSnapshotStorage.js';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080';
 
@@ -30,27 +29,14 @@ function queryString({ horizonMinutes, requiredBikeCount, limit, snapshotId }) {
 export function createLiveOpsDashboardAdapter() {
   return {
     async load({ horizonMinutes, requiredBikeCount, signal }) {
-      const snapshotId = readOpsRiskSnapshotId(horizonMinutes, requiredBikeCount);
-      if (!snapshotId) {
-        const overview = await request(`/api/v1/admin/ops/overview?${queryString({ horizonMinutes, requiredBikeCount })}`, signal);
-        return { overview, risk: null, riskError: null };
-      }
-      try {
-        const overview = await request(`/api/v1/admin/ops/overview?${queryString({ horizonMinutes, requiredBikeCount, snapshotId })}`, signal);
-        try {
-          const risk = await request(`/api/v1/admin/ops/risk-stations?${queryString({ horizonMinutes, requiredBikeCount, limit: 5, snapshotId })}`, signal);
-          return { overview, risk, riskError: null };
-        } catch (error) {
-          if (error.name === 'AbortError') throw error;
-          if (error.code !== 'RISK_SNAPSHOT_EXPIRED') return { overview, risk: null, riskError: error };
-          throw error;
-        }
-      } catch (error) {
-        if (error.code !== 'RISK_SNAPSHOT_EXPIRED') throw error;
-        clearOpsRiskSnapshotId(horizonMinutes, requiredBikeCount);
-        const overview = await request(`/api/v1/admin/ops/overview?${queryString({ horizonMinutes, requiredBikeCount })}`, signal);
-        return { overview, risk: null, riskError: null };
-      }
+      const overview = await request(`/api/v1/admin/ops/overview?${queryString({ horizonMinutes, requiredBikeCount })}`, signal);
+      const risk = overview.priorityStations?.length ? {
+        referenceTime: overview.referenceTime,
+        dataState: overview.dataState,
+        items: overview.priorityStations,
+        scope: overview.scope,
+      } : null;
+      return { overview, risk, riskError: null };
     },
   };
 }

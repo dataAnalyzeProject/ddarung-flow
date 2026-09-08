@@ -15,7 +15,7 @@ describe('OpsDashboard', () => {
   test('keeps the SUCCESS fixture aligned with D5 source truth without fabricated capacity UI', () => {
     const fixture = dashboardFixture('SUCCESS');
     expect(fixture.overview.capabilities).toMatchObject({
-      rentalRisk: { available: true, source: 'station_predictions + prediction_batches', reasonCode: null },
+      rentalRisk: { available: true, source: 'private_background_global_inference', reasonCode: null },
       returnRisk: { available: false, source: null, reasonCode: 'RETURN_INFERENCE_NOT_APPROVED' },
       stationCapacity: { available: false, source: null, reasonCode: 'CAPACITY_SOURCE_MISSING' },
       districtMetadata: { available: false, source: null, reasonCode: 'DISTRICT_SOURCE_MISSING' },
@@ -41,6 +41,7 @@ describe('OpsDashboard', () => {
     expect(screen.getByText('CRITICAL 대여 부족')).toBeInTheDocument();
     expect(screen.getByText('HIGH 대여 부족')).toBeInTheDocument();
     expect(screen.getByText('WATCH 대여 부족')).toBeInTheDocument();
+    expect(screen.getByText(/Coverage · active 120곳 · eligible 116곳 · evaluated 116곳 · normal 116곳/)).toBeInTheDocument();
     expect(screen.getAllByText('데이터 상태')).toHaveLength(2);
     expect(screen.getByRole('heading', { name: '수급 위험 지도' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '우선 확인 Top 5' })).toBeInTheDocument();

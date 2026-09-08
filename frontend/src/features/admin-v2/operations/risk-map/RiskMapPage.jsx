@@ -42,10 +42,8 @@ export default function RiskMapPage({ createDataAdapter, loadMapSdk = loadKakaoM
   const snapshotRef = useRef(null);
   useEffect(() => {
     snapshotRef.current = result?.snapshotId || null;
-    // Hand a successful scope selection off to the ops dashboard, keyed by
-    // the same horizon/required-bikes pair it reads on load — without this
-    // write, the dashboard's "우선 확인 Top 5" and risk map panels have no
-    // way to learn that a scope was ever chosen here.
+    // Preserve the MAP snapshot key only for legacy bounded MAP compatibility.
+    // OPS-01/03 default Global adapters deliberately do not read it.
     if (result?.snapshotId) writeOpsRiskSnapshotId(filters.horizonMinutes, filters.requiredBikeCount, result.snapshotId);
   }, [result?.snapshotId, filters.horizonMinutes, filters.requiredBikeCount]);
 
@@ -208,7 +206,7 @@ export default function RiskMapPage({ createDataAdapter, loadMapSdk = loadKakaoM
       <label>필요 자전거 수<select value={filters.requiredBikeCount} onChange={(event) => setManagedFilters({ requiredBikeCount: Number(event.target.value) })}>{[1, 2, 3, 4, 5].map((value) => <option key={value} value={value}>{value}대</option>)}</select></label>
       <label>데이터 상태<select value={filters.dataState || ''} onChange={(event) => setManagedFilters({ dataState: event.target.value || null })}><option value="">전체</option>{['NORMAL', 'DELAYED', 'MISSING', 'INSUFFICIENT_DATA', 'UNAVAILABLE'].map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
     </div></header>
-    <section className="risk-context" aria-label="목록 기준"><span><b>목록 기준시각</b>{formatTime(result?.referenceTime)}</span><span><b>예측 horizon</b>{filters.horizonMinutes}분</span><span><b>필요 자전거 수</b>{filters.requiredBikeCount}대</span><span><b>데이터 상태</b>{result?.dataState || '불러오는 중'}</span><span><b>현재 표시</b>{displayedItems.length}곳</span></section>
+    <section className="risk-context" aria-label="목록 기준"><span><b>범위</b>현재 지도 범위 · {result?.scope?.type || 'MAP'}</span><span><b>목록 기준시각</b>{formatTime(result?.referenceTime)}</span><span><b>예측 horizon</b>{filters.horizonMinutes}분</span><span><b>필요 자전거 수</b>{filters.requiredBikeCount}대</span><span><b>데이터 상태</b>{result?.dataState || '불러오는 중'}</span><span><b>현재 표시</b>{displayedItems.length}곳</span></section>
     {loading ? <AsyncStatePanel state="LOADING" /> : null}
     {!loading && showBlockingError ? <AsyncStatePanel state={uiState} code={error.code} requiredPermission={uiState === 'FORBIDDEN' ? 'OPS_RISK_MAP_READ' : undefined} /> : null}
     {!showBlockingError ? <>
