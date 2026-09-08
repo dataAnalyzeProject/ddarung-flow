@@ -11,6 +11,9 @@ import com.ddarungflow.modelops.ModelArtifactState;
 import com.ddarungflow.modelops.ModelEvaluation;
 import com.ddarungflow.modelops.ModelEvaluationRepository;
 import com.ddarungflow.modelops.ModelRegistryService;
+import com.ddarungflow.modelops.ModelArtifactStorageGateway;
+import com.ddarungflow.modelops.ModelUpload;
+import com.ddarungflow.modelops.ModelUploadStatus;
 import com.ddarungflow.modelops.ModelUploadRepository;
 import com.ddarungflow.repository.UsersRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -22,11 +25,13 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -37,6 +42,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -68,8 +74,12 @@ class ModelOpsControllerSecurityTest {
     @Autowired
     private ModelRegistryService modelRegistryService;
 
+    @MockitoBean
+    private ModelArtifactStorageGateway storageGateway;
+
     @BeforeEach
     void clearData() {
+        org.mockito.Mockito.reset(storageGateway);
         evaluationRepository.deleteAll();
         artifactRepository.deleteAll();
         uploadRepository.deleteAll();
@@ -142,26 +152,42 @@ class ModelOpsControllerSecurityTest {
         UsernamePasswordAuthenticationToken admin = authenticationFor(UserRole.ADMIN);
         UsernamePasswordAuthenticationToken approver = authenticationFor(UserRole.ADMIN);
 
+        byte[] artifactContent = "approved-model-artifact".getBytes(StandardCharsets.UTF_8);
+        String artifactSha = sha256(artifactContent);
         MvcResult uploadResult = mockMvc.perform(post("/api/v1/admin/model-uploads")
                         .with(csrf()).with(authentication(admin))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                            {"objectKey":"models/test.joblib","expectedSha256":"%s","maxBytes":1024,"expiresAt":"2099-01-01T00:00:00+09:00"}
-                            """.formatted(HASH)))
+                            {"fileName":"test.joblib","expectedSha256":"%s","maxBytes":1024,"expiresAt":"2099-01-01T00:00:00+09:00"}
+                            """.formatted(artifactSha)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("CREATED"))
                 .andReturn();
         String uploadId = objectMapper.readTree(uploadResult.getResponse().getContentAsString()).get("id").asText();
+        String objectKey = uploadRepository.findById(UUID.fromString(uploadId)).orElseThrow().getObjectKey();
+        org.assertj.core.api.Assertions.assertThat(
+                objectMapper.readTree(uploadResult.getResponse().getContentAsString()).has("objectKey")).isFalse();
+        org.mockito.Mockito.when(storageGateway.inspect(objectKey))
+                .thenReturn(new ModelArtifactStorageGateway.Inspection(artifactContent.length, artifactSha));
+
+        mockMvc.perform(put("/api/v1/admin/model-uploads/{id}/content", uploadId)
+                        .with(csrf()).with(authentication(admin))
+                        .contentType(MediaType.APPLICATION_OCTET_STREAM).content(artifactContent))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UPLOADED"))
+                .andExpect(jsonPath("$.observedSha256").value(artifactSha));
 
         mockMvc.perform(post("/api/v1/admin/model-uploads/{id}/complete", uploadId)
                         .with(csrf()).with(authentication(admin)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("COMPLETED"));
 
+        ModelUpload manifestUpload = completedUpload("approved-model-manifest".getBytes(StandardCharsets.UTF_8), "manifest.json");
+
         mockMvc.perform(post("/api/v1/admin/models")
                         .with(csrf()).with(authentication(admin))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(modelRequest("approved-model")))
+                        .content(modelRequest("approved-model", UUID.fromString(uploadId), manifestUpload.getId())))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.state").value("DRAFT"));
 
@@ -245,6 +271,73 @@ class ModelOpsControllerSecurityTest {
                 .andExpect(jsonPath("$.state").value("REJECTED"));
     }
 
+    @Test
+    void modelReleaseReaderSeesOnlySafeModelHistoryProjection() throws Exception {
+        UsernamePasswordAuthenticationToken engineer = authenticationForRoles(AdminRole.MODEL_ENGINEER);
+
+        mockMvc.perform(post("/api/v1/admin/model-uploads").with(csrf()).with(authentication(engineer))
+                        .contentType(MediaType.APPLICATION_JSON).content("""
+                            {"fileName":"history.joblib","expectedSha256":"%s","maxBytes":1024,"expiresAt":"2099-01-01T00:00:00+09:00"}
+                            """.formatted(HASH)))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/api/v1/admin/models/history").with(authentication(engineer)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].action").value("MODEL_UPLOAD_CREATE"))
+                .andExpect(jsonPath("$[0].resourceType").value("MODEL_UPLOAD"))
+                .andExpect(jsonPath("$[0].resourceVersion").isNotEmpty())
+                .andExpect(jsonPath("$[0].result").value("SUCCESS"))
+                .andExpect(jsonPath("$[0].correlationId").doesNotExist())
+                .andExpect(jsonPath("$[0].actorUserId").doesNotExist());
+
+        mockMvc.perform(get("/api/v1/admin/models/history")
+                        .with(authentication(authenticationForRoles(AdminRole.DATA_ANALYST))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ADMIN_PERMISSION_DENIED"));
+    }
+
+    @Test
+    void uploadContentAndCompleteRejectDifferentModelEngineer() throws Exception {
+        UsernamePasswordAuthenticationToken owner = authenticationForRoles(AdminRole.MODEL_ENGINEER);
+        UsernamePasswordAuthenticationToken other = authenticationForRoles(AdminRole.MODEL_ENGINEER);
+        MvcResult created = mockMvc.perform(post("/api/v1/admin/model-uploads")
+                        .with(csrf()).with(authentication(owner)).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                            {"fileName":"private.joblib","expectedSha256":"%s","maxBytes":1024,"expiresAt":"2099-01-01T00:00:00+09:00"}
+                            """.formatted(HASH)))
+                .andExpect(status().isCreated()).andReturn();
+        String uploadId = objectMapper.readTree(created.getResponse().getContentAsString()).get("id").asText();
+
+        mockMvc.perform(put("/api/v1/admin/model-uploads/{id}/content", uploadId)
+                        .with(csrf()).with(authentication(other)).contentType(MediaType.APPLICATION_OCTET_STREAM)
+                        .content(new byte[] {1, 2, 3}))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("MODEL_UPLOAD_OWNER_MISMATCH"));
+        mockMvc.perform(post("/api/v1/admin/model-uploads/{id}/complete", uploadId)
+                        .with(csrf()).with(authentication(other)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("MODEL_UPLOAD_OWNER_MISMATCH"));
+    }
+
+    @Test
+    void activationAndRollbackPreGateFailuresAppearInModelHistory() throws Exception {
+        UsernamePasswordAuthenticationToken approver = authenticationForRoles(AdminRole.MODEL_APPROVER);
+
+        mockMvc.perform(post("/api/v1/admin/models/{id}/activate", 999L)
+                        .with(csrf()).with(authentication(approver)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("MODEL_PROMOTION_GATE_FAILED"));
+        mockMvc.perform(post("/api/v1/admin/models/rollback")
+                        .with(csrf()).with(authentication(approver)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ROLLBACK_TARGET_UNAVAILABLE"));
+
+        mockMvc.perform(get("/api/v1/admin/models/history").with(authentication(approver)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.action == 'MODEL_ACTIVATE' && @.reasonCode == 'MODEL_PROMOTION_GATE_FAILED')]").isNotEmpty())
+                .andExpect(jsonPath("$[?(@.action == 'MODEL_ROLLBACK' && @.reasonCode == 'ROLLBACK_TARGET_UNAVAILABLE')]").isNotEmpty());
+    }
+
     private UsernamePasswordAuthenticationToken authenticationFor(UserRole role) {
         Users user = usersRepository.save(Users.builder()
                 .provider("google")
@@ -273,9 +366,38 @@ class ModelOpsControllerSecurityTest {
     }
 
     private String modelRequest(String version, String sha256) {
+        ModelUpload artifact = completedUpload(("artifact-" + version + sha256).getBytes(StandardCharsets.UTF_8), version + ".joblib");
+        ModelUpload manifest = completedUpload(("manifest-" + version + sha256).getBytes(StandardCharsets.UTF_8), version + ".json");
+        return modelRequest(version, artifact.getId(), manifest.getId());
+    }
+
+    private String modelRequest(String version, UUID artifactUploadId, UUID manifestUploadId) {
         return """
-            {"version":"%s","artifactKey":"models/%s.joblib","sha256":"%s","codeCommit":"abc123","dataManifestHash":"%s","configHash":"%s","featureSchemaVersion":"v1","manifestKey":"models/%s.json","manifestSha256":"%s"}
-            """.formatted(version, version, sha256, "b".repeat(64), "c".repeat(64), version, "d".repeat(64));
+            {"version":"%s","artifactUploadId":"%s","manifestUploadId":"%s","codeCommit":"abc123","dataManifestHash":"%s","configHash":"%s","featureSchemaVersion":"v1"}
+            """.formatted(version, artifactUploadId, manifestUploadId, "b".repeat(64), "c".repeat(64));
+    }
+
+    private ModelUpload completedUpload(byte[] content, String fileName) {
+        UUID id = UUID.randomUUID();
+        String hash = sha256(content);
+        OffsetDateTime now = OffsetDateTime.now();
+        ModelUpload upload = new ModelUpload(id, usersRepository.findAll().getFirst().getId(),
+                "models/uploads/" + id + "/" + fileName, hash, 4096L, ModelUploadStatus.CREATED,
+                now.plusHours(1), null, now.minusMinutes(1));
+        upload.markUploaded(hash, content.length, now);
+        upload.markCompleted(now.plusSeconds(1));
+        uploadRepository.save(upload);
+        org.mockito.Mockito.when(storageGateway.inspect(upload.getObjectKey()))
+                .thenReturn(new ModelArtifactStorageGateway.Inspection(content.length, hash));
+        return upload;
+    }
+
+    private String sha256(byte[] content) {
+        try {
+            return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(content));
+        } catch (Exception exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 
     private List<ModelEvaluation> evaluationsFor(Long modelId) {

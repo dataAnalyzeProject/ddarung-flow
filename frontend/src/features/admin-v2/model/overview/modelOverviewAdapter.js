@@ -2,7 +2,7 @@ import { adminFetch } from '../../auth/adminSession.js';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080';
 
-export const REGISTRY_STATES = ['DRAFT', 'VALIDATED', 'APPROVED', 'ACTIVE', 'RETIRED'];
+export const REGISTRY_STATES = ['DRAFT', 'VALIDATED', 'APPROVED', 'REJECTED', 'ACTIVE', 'RETIRED'];
 
 export class ModelOverviewApiError extends Error {
   constructor({ status, code, message } = {}) {
@@ -29,7 +29,16 @@ async function request(path, signal) {
 }
 
 function normalizeModels(models) {
-  if (!Array.isArray(models)) throw new ModelOverviewApiError({ code: 'MODEL_REGISTRY_RESPONSE_INVALID' });
+  if (!Array.isArray(models) || !models.every((model) => model && typeof model === 'object'
+    && typeof model.id === 'number' && Number.isFinite(model.id)
+    && typeof model.version === 'string' && model.version
+    && REGISTRY_STATES.includes(model.state)
+    && typeof model.createdAt === 'string'
+    && /^[0-9a-f]{64}$/.test(model.artifactSha256 || '')
+    && typeof model.codeCommit === 'string' && model.codeCommit
+    && typeof model.featureSchemaVersion === 'string' && model.featureSchemaVersion)) {
+    throw new ModelOverviewApiError({ code: 'MODEL_REGISTRY_RESPONSE_INVALID' });
+  }
   return models;
 }
 

@@ -37,11 +37,23 @@ public class ModelActivationService {
     }
 
     public ActivationResult activate(Long candidateId, Long actorUserId, UserRole actorRole, Collection<?> actorRoleCodes) {
-        ModelArtifact candidate = artifactRepository.findById(candidateId).orElseThrow(PromotionGateException::new);
-        if (candidate.getState() != ModelArtifactState.APPROVED || candidate.getManifestKey() == null || candidate.getManifestSha256() == null) {
+        ModelArtifact candidate = artifactRepository.findById(candidateId).orElse(null);
+        if (candidate == null) {
+            auditPreGateFailure(actorUserId, actorRole, actorRoleCodes, "MODEL_ACTIVATE",
+                    "MODEL_ID:" + candidateId, "MODEL_PROMOTION_GATE_FAILED");
             throw new PromotionGateException();
         }
-        ModelArtifact previous = artifactRepository.findFirstByState(ModelArtifactState.ACTIVE).orElseThrow(PromotionGateException::new);
+        if (candidate.getState() != ModelArtifactState.APPROVED || candidate.getManifestKey() == null || candidate.getManifestSha256() == null) {
+            auditPreGateFailure(actorUserId, actorRole, actorRoleCodes, "MODEL_ACTIVATE",
+                    candidate.getVersion(), "MODEL_PROMOTION_GATE_FAILED");
+            throw new PromotionGateException();
+        }
+        ModelArtifact previous = artifactRepository.findFirstByState(ModelArtifactState.ACTIVE).orElse(null);
+        if (previous == null) {
+            auditPreGateFailure(actorUserId, actorRole, actorRoleCodes, "MODEL_ACTIVATE",
+                    candidate.getVersion(), "MODEL_PROMOTION_GATE_FAILED");
+            throw new PromotionGateException();
+        }
         return switchTo(candidate, previous, actorUserId, actorRole, actorRoleCodes, "MODEL_ACTIVATE");
     }
 
@@ -50,14 +62,29 @@ public class ModelActivationService {
     }
 
     public ActivationResult rollback(Long actorUserId, UserRole actorRole, Collection<?> actorRoleCodes) {
-        ModelArtifact current = artifactRepository.findFirstByState(ModelArtifactState.ACTIVE).orElseThrow(RollbackTargetUnavailableException::new);
-        ActivationAttempt activation = attemptRepository.findFirstByCandidateModelIdAndStatusOrderByIdDesc(current.getId(), ActivationAttemptStatus.SUCCEEDED)
-            .orElseThrow(RollbackTargetUnavailableException::new);
-        if (activation.getPreviousModelId() == null) {
+        ModelArtifact current = artifactRepository.findFirstByState(ModelArtifactState.ACTIVE).orElse(null);
+        if (current == null) {
+            auditPreGateFailure(actorUserId, actorRole, actorRoleCodes, "MODEL_ROLLBACK",
+                    "ACTIVE_MODEL_UNAVAILABLE", "ROLLBACK_TARGET_UNAVAILABLE");
             throw new RollbackTargetUnavailableException();
         }
-        ModelArtifact previous = artifactRepository.findById(activation.getPreviousModelId()).orElseThrow(RollbackTargetUnavailableException::new);
-        if (previous.getState() != ModelArtifactState.RETIRED || previous.getManifestKey() == null || previous.getManifestSha256() == null) {
+        ActivationAttempt activation = attemptRepository.findFirstByCandidateModelIdAndStatusOrderByIdDesc(current.getId(), ActivationAttemptStatus.SUCCEEDED)
+            .orElse(null);
+        if (activation == null) {
+            auditPreGateFailure(actorUserId, actorRole, actorRoleCodes, "MODEL_ROLLBACK",
+                    current.getVersion(), "ROLLBACK_TARGET_UNAVAILABLE");
+            throw new RollbackTargetUnavailableException();
+        }
+        if (activation.getPreviousModelId() == null) {
+            auditPreGateFailure(actorUserId, actorRole, actorRoleCodes, "MODEL_ROLLBACK",
+                    current.getVersion(), "ROLLBACK_TARGET_UNAVAILABLE");
+            throw new RollbackTargetUnavailableException();
+        }
+        ModelArtifact previous = artifactRepository.findById(activation.getPreviousModelId()).orElse(null);
+        if (previous == null || previous.getState() != ModelArtifactState.RETIRED
+                || previous.getManifestKey() == null || previous.getManifestSha256() == null) {
+            auditPreGateFailure(actorUserId, actorRole, actorRoleCodes, "MODEL_ROLLBACK",
+                    current.getVersion(), "ROLLBACK_TARGET_UNAVAILABLE");
             throw new RollbackTargetUnavailableException();
         }
         return switchTo(previous, current, actorUserId, actorRole, actorRoleCodes, "MODEL_ROLLBACK");
@@ -96,6 +123,12 @@ public class ModelActivationService {
                 throw new CompensationFailedException();
             }
         }
+    }
+
+    private void auditPreGateFailure(Long actorUserId, UserRole actorRole, Collection<?> actorRoleCodes,
+                                     String action, String target, String reasonCode) {
+        auditEventService.appendEvent(actorUserId, actorRole, actorRoleCodes, action, "MODEL", target,
+                AuditResult.FAILURE, reasonCode, null, UUID.randomUUID().toString(), OffsetDateTime.now());
     }
 
     public record ActivationResult(Long activationAttemptId, Long candidateModelId, Long previousActiveModelId, ModelArtifactState finalState) { }

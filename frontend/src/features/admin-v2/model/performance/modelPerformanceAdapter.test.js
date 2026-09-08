@@ -16,11 +16,20 @@ describe('model performance adapter', () => {
   afterEach(() => jest.restoreAllMocks());
 
   test('loads evaluation and the separately validated runtime identity together', async () => {
-    global.fetch = jest.fn().mockResolvedValueOnce(response(200, base)).mockResolvedValueOnce(response(200, runtime));
+    global.fetch = jest.fn().mockResolvedValueOnce(response(200, { permissions: ['MODEL_METRICS_READ'] })).mockResolvedValueOnce(response(200, base)).mockResolvedValueOnce(response(200, runtime));
     const result = await createLiveModelPerformanceAdapter().load({});
-    expect(result).toEqual({ base, runtime: { state: 'SUCCESS', data: runtime } });
-    expect(global.fetch).toHaveBeenNthCalledWith(1, 'http://localhost:8080/api/v1/admin/model-performance', { credentials: 'include', signal: undefined });
-    expect(global.fetch).toHaveBeenNthCalledWith(2, 'http://localhost:8080/api/v1/admin/model-runtime', { credentials: 'include', signal: undefined });
+    expect(result).toEqual({ base, runtime: { state: 'SUCCESS', data: runtime }, diagnostics: { state: 'ACCESS_LIMITED', permission: 'MODEL_DIAGNOSTICS_READ' }, permissions: ['MODEL_METRICS_READ'] });
+    expect(global.fetch).toHaveBeenNthCalledWith(1, 'http://localhost:8080/api/v1/admin/access', { credentials: 'include', signal: undefined });
+    expect(global.fetch).toHaveBeenNthCalledWith(2, 'http://localhost:8080/api/v1/admin/model-performance', { credentials: 'include', signal: undefined });
+    expect(global.fetch).toHaveBeenNthCalledWith(3, 'http://localhost:8080/api/v1/admin/model-runtime', { credentials: 'include', signal: undefined });
+  });
+
+  test('loads correlated diagnostics only when the independent permission is present', async () => {
+    const diagnostics = { ...base, segments: [{ axis: 'STATION', segmentValue: '1001', sampleCount: 1200, status: 'OK', brierScore: 0.02 }] };
+    global.fetch = jest.fn().mockResolvedValueOnce(response(200, { permissions: ['MODEL_METRICS_READ', 'MODEL_DIAGNOSTICS_READ'] })).mockResolvedValueOnce(response(200, base)).mockResolvedValueOnce(response(200, runtime)).mockResolvedValueOnce(response(200, diagnostics));
+    const result = await createLiveModelPerformanceAdapter().load({});
+    expect(result.diagnostics).toEqual({ state: 'SUCCESS', data: { segments: diagnostics.segments } });
+    expect(global.fetch).toHaveBeenNthCalledWith(4, `http://localhost:8080/api/v1/admin/model-performance/diagnostics?artifactSha256=${'a'.repeat(64)}`, { credentials: 'include', signal: undefined });
   });
 
   test.each([
@@ -29,14 +38,14 @@ describe('model performance adapter', () => {
     [{ ...runtime, supportedHorizons: [60, 120] }, 'ERROR'],
     [null, 'ERROR'],
   ])('keeps malformed runtime response unavailable (%p)', async (runtimeBody, state) => {
-    global.fetch = jest.fn().mockResolvedValueOnce(response(200, base)).mockResolvedValueOnce(response(200, runtimeBody));
+    global.fetch = jest.fn().mockResolvedValueOnce(response(200, { permissions: ['MODEL_METRICS_READ'] })).mockResolvedValueOnce(response(200, base)).mockResolvedValueOnce(response(200, runtimeBody));
     const result = await createLiveModelPerformanceAdapter().load({});
     expect(result.base).toEqual(base);
     expect(result.runtime).toMatchObject({ state, error: { code: 'MODEL_RUNTIME_RESPONSE_INVALID' } });
   });
 
   test('keeps runtime HTTP errors non-fatal to the evaluation snapshot', async () => {
-    global.fetch = jest.fn().mockResolvedValueOnce(response(200, base)).mockResolvedValueOnce(response(403, { code: 'ADMIN_PERMISSION_DENIED' }));
+    global.fetch = jest.fn().mockResolvedValueOnce(response(200, { permissions: ['MODEL_METRICS_READ'] })).mockResolvedValueOnce(response(200, base)).mockResolvedValueOnce(response(403, { code: 'ADMIN_PERMISSION_DENIED' }));
     const result = await createLiveModelPerformanceAdapter().load({});
     expect(result.base).toEqual(base);
     expect(result.runtime).toMatchObject({ state: 'FORBIDDEN', error: { status: 403, code: 'ADMIN_PERMISSION_DENIED' } });

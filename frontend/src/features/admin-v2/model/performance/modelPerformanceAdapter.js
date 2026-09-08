@@ -13,6 +13,10 @@ export class ModelPerformanceApiError extends Error {
 
 function requiredString(value) { return typeof value === 'string' && value.trim() ? value : null; }
 function requiredArray(value) { return Array.isArray(value) ? value : null; }
+function normalizeAccess(body) {
+  if (!body || typeof body !== 'object' || !Array.isArray(body.permissions)) throw new ModelPerformanceApiError({ code: 'ADMIN_ACCESS_UNAVAILABLE' });
+  return body.permissions.filter((permission) => typeof permission === 'string');
+}
 
 function baseProjection(body) {
   if (!body || typeof body !== 'object' || Object.prototype.hasOwnProperty.call(body, 'segments')) {
@@ -30,7 +34,7 @@ function baseProjection(body) {
 }
 
 function diagnosticsProjection(body, base) {
-  if (!body || typeof body !== 'object' || !Array.isArray(body.segments)
+  if (!body || typeof body !== 'object' || !Array.isArray(body.segments) || !body.segments.every((segment) => segment && typeof segment === 'object')
     || body.artifactSha256 !== base.artifactSha256 || body.modelVersion !== base.modelVersion || body.generatedAt !== base.generatedAt) {
     throw new ModelPerformanceApiError({ code: 'DIAGNOSTICS_SNAPSHOT_MISMATCH' });
   }
@@ -68,14 +72,25 @@ function runtimeResult(promise) {
   });
 }
 
+function diagnosticsResult(promise) {
+  return promise.then((data) => ({ state: 'SUCCESS', data })).catch((error) => {
+    if (error?.name === 'AbortError') throw error;
+    return { state: error?.status === 401 || error?.status === 403 ? 'FORBIDDEN' : 'ERROR', error };
+  });
+}
+
 export function createLiveModelPerformanceAdapter() {
   return {
     async load({ signal }) {
+      const permissions = normalizeAccess(await request('/api/v1/admin/access', signal));
       const [base, runtime] = await Promise.all([
         request('/api/v1/admin/model-performance', signal).then(baseProjection),
         runtimeResult(request('/api/v1/admin/model-runtime', signal)),
       ]);
-      return { base, runtime };
+      const diagnostics = permissions.includes('MODEL_DIAGNOSTICS_READ')
+        ? await diagnosticsResult(this.loadDiagnostics(base, { signal }))
+        : { state: 'ACCESS_LIMITED', permission: 'MODEL_DIAGNOSTICS_READ' };
+      return { base, runtime, diagnostics, permissions };
     },
     async loadBase({ signal }) {
       return baseProjection(await request('/api/v1/admin/model-performance', signal));
