@@ -60,12 +60,24 @@ public class DefaultJourneyAiGateway implements JourneyAiGateway {
 
     @Override
     public ScheduleResult selectSchedule(ConsumerAiEvidenceBundle evidence, ScheduleConstraints constraints) {
+        return selectSchedule(evidence, constraints, null);
+    }
+
+    @Override
+    public ScheduleResult selectSchedule(ConsumerAiEvidenceBundle evidence, ScheduleConstraints constraints,
+                                         ScheduleCorrection correction) {
         if (!properties.enabled()) return ScheduleResult.unavailable(JourneyAiErrorCode.AI_DISABLED);
         if (!properties.providerConfigured()) return ScheduleResult.unavailable(JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE);
+        return requestSchedule(scheduleInput(evidence, constraints, correction));
+    }
+
+    ObjectNode scheduleInput(ConsumerAiEvidenceBundle evidence, ScheduleConstraints constraints,
+                             ScheduleCorrection correction) {
         ObjectNode input = objectMapper.createObjectNode();
         input.set("evidence", objectMapper.valueToTree(scheduleEvidence(evidence)));
         input.set("constraints", objectMapper.valueToTree(constraints));
-        return requestWithSingleOutputTextRetry(() -> requestSchedule(input));
+        if (correction != null) input.set("correction", objectMapper.valueToTree(correction));
+        return input;
     }
 
     private <T> T requestWithSingleOutputTextRetry(Supplier<T> request) {
@@ -99,6 +111,9 @@ public class DefaultJourneyAiGateway implements JourneyAiGateway {
                 The evidence bundle is authoritative. Select only existing rental, POI, route, weather,
                 and air-quality evidence IDs. The supplied route evidence contains only usable bicycle
                 routes; route IDs must form the exact ordered bicycle chain for the selected POI stops.
+                When correction is present, the previous selection was rejected by server validation.
+                Create a different corrected selection that resolves failureStage and stays within
+                availableMinutes. Never repeat the rejected selection unchanged.
                 Never invent or rewrite probability, inventory, distance, duration, timestamps, route
                 geometry, weather, or air-quality facts. Keep stay minutes and stop count within the
                 supplied constraints. Numeric facts may only be copied exactly through factRefs and

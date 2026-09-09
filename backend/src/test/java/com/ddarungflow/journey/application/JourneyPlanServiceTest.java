@@ -649,7 +649,8 @@ class JourneyPlanServiceTest {
 
         JourneyPlanService.Decision decision = planAndConfirm(unifiedService(new InMemoryPersistence(), ai, new CountingReturnPort(), completeEvidence()),
                 unifiedInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE, "서울숲 카페 여정"));
-        assertServerBuiltSchedule(decision, "CANDIDATE_ACCESS_ROUTE");
+        assertRejectedSchedule(decision);
+        assertThat(decision.warnings()).contains("AI_SCHEDULE_STAGE_CANDIDATE_ACCESS_ROUTE");
         assertThat(decision.unifiedPlan().evidence().rentalCandidates()).containsOnlyKeys("rental:station-1");
         assertThat(decision.unifiedPlan().selectedRentalCandidateId()).isEqualTo("rental:station-1");
     }
@@ -742,15 +743,19 @@ class JourneyPlanServiceTest {
     }
 
     @Test
-    void invalidScheduleSchemaFallsBackToARealScheduleAndRetainsTheCompiledDraft() {
+    void invalidScheduleSchemaStaysUnavailableAndRetainsTheCompiledDraft() {
         JourneyPlanService.Decision decision = planAndConfirm(unifiedService(new InMemoryPersistence(), schemaInvalidScheduleAi(),
                 new CountingReturnPort(), completeEvidence()), unifiedInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE, "서울숲 카페 여정"));
 
-        assertServerBuiltSchedule(decision, "SELECT_SCHEDULE_SCHEMA");
+        assertThat(decision.status()).isEqualTo(JourneyStatus.UNAVAILABLE);
+        assertThat(decision.unifiedPlan().segments()).extracting(UnifiedJourneyPlan.Segment::type)
+                .containsExactly(UnifiedJourneyPlan.SegmentType.ACCESS, UnifiedJourneyPlan.SegmentType.RENT);
+        assertThat(decision.unifiedPlan().rationale()).isNull();
+        assertThat(decision.warnings()).contains("AI_OUTPUT_SCHEMA_INVALID", "AI_SCHEDULE_STAGE_SELECT_SCHEDULE_SCHEMA");
         assertThat(decision.normalizedIntent().path("aiIntent").isObject()).isTrue();
         assertThat(decision.normalizedIntent().toString()).doesNotContain("sensitive provider payload");
         assertThat(decision.unifiedPlan().segments()).extracting(UnifiedJourneyPlan.Segment::type)
-                .contains(UnifiedJourneyPlan.SegmentType.VISIT);
+                .doesNotContain(UnifiedJourneyPlan.SegmentType.VISIT);
     }
 
     @Test
@@ -764,7 +769,8 @@ class JourneyPlanServiceTest {
         JourneyPlanService.Decision decision = planAndConfirm(longAccessService(schemaInvalidScheduleAi()), initial);
 
         assertThat(decision.status()).isEqualTo(JourneyStatus.UNAVAILABLE);
-        assertThat(decision.warnings()).contains("AI_TOOL_VALUE_MISMATCH").doesNotContain("AI_SCHEDULE_FALLBACK");
+        assertThat(decision.warnings()).contains("AI_OUTPUT_SCHEMA_INVALID", "AI_SCHEDULE_STAGE_SELECT_SCHEDULE_SCHEMA")
+                .doesNotContain("AI_SCHEDULE_FALLBACK");
         assertThat(decision.unifiedPlan().segments()).extracting(UnifiedJourneyPlan.Segment::type)
                 .doesNotContain(UnifiedJourneyPlan.SegmentType.VISIT);
     }
@@ -831,15 +837,37 @@ class JourneyPlanServiceTest {
     }
 
     @Test
-    void aRejectedAiScheduleStillFallsBackToARealScheduleAcrossALongAccessWalk() {
-        // The same staging case with AI scheduling on: the rejected AI selection must be rebuilt from
-        // real evidence into PARTIAL + AI_SCHEDULE_FALLBACK instead of collapsing to UNAVAILABLE.
-        JourneyPlanService.Decision decision = planAndConfirm(longAccessService(rejectedScheduleAi()),
+    void anOverlongAiScheduleIsCorrectedOnceWithoutChargingTheAccessWalk() {
+        AtomicInteger scheduleCalls = new AtomicInteger();
+        JourneyAiGateway ai = new JourneyAiGateway() {
+            @Override public IntentResult compileIntent(String input) { return new IntentResult(validIntent(), null); }
+            @Override public List<com.ddarungflow.journey.ai.ToolCallRequest> validateToolPlan(
+                    List<com.ddarungflow.journey.ai.ToolCallRequest> requests) { return requests; }
+            @Override public ScheduleResult selectSchedule(ConsumerAiEvidenceBundle evidence, ScheduleConstraints constraints) {
+                scheduleCalls.incrementAndGet();
+                EvidenceSelectionValidator.Selection selection = validSelection();
+                return new ScheduleResult(new EvidenceSelectionValidator.Selection(selection.rentalCandidateId(),
+                        List.of(new EvidenceSelectionValidator.StopSelection(selection.stops().getFirst().poiId(), 120)),
+                        selection.routeEvidenceIds(), selection.weatherEvidenceIds(), selection.airQualityEvidenceIds(),
+                        selection.factRefs(), selection.factValues(), selection.rationale(), selection.rationaleTags()), null);
+            }
+            @Override public ScheduleResult selectSchedule(ConsumerAiEvidenceBundle evidence, ScheduleConstraints constraints,
+                                                           ScheduleCorrection correction) {
+                scheduleCalls.incrementAndGet();
+                assertThat(correction.failureStage()).isEqualTo("DURATION_EXCEEDED");
+                assertThat(correction.availableMinutes()).isEqualTo(120);
+                assertThat(correction.observedDurationSeconds()).isEqualTo(7500L);
+                assertThat(correction.rejectedSelection()).isNotNull();
+                return new ScheduleResult(validSelection(), null);
+            }
+        };
+        JourneyPlanService.Decision decision = planAndConfirm(longAccessService(ai),
                 unifiedInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE, "서울숲 카페 여정"));
 
-        assertServerBuiltSchedule(decision, "VALIDATE_SELECTION");
-        assertThat(decision.status()).isEqualTo(JourneyStatus.PARTIAL);
-        assertThat(decision.warnings()).doesNotContain("AI_TOOL_VALUE_MISMATCH", "JOURNEY_DURATION_EXCEEDED");
+        assertThat(scheduleCalls).hasValue(2);
+        assertThat(decision.status()).isEqualTo(JourneyStatus.READY);
+        assertThat(decision.warnings()).doesNotContain("AI_TOOL_VALUE_MISMATCH", "JOURNEY_DURATION_EXCEEDED",
+                "AI_SCHEDULE_FALLBACK");
         assertThat(decision.unifiedPlan().segments()).extracting(UnifiedJourneyPlan.Segment::type)
                 .contains(UnifiedJourneyPlan.SegmentType.VISIT);
         assertThat(rideMinutes(decision)).isLessThanOrEqualTo(120);
@@ -953,8 +981,9 @@ class JourneyPlanServiceTest {
                 new JourneyPlanService.PlanConstraints(120, List.of(), null, "BIKE_ONLY")));
 
         assertThat(scheduleCalls).hasValue(0);
-        assertThat(decision.status()).isEqualTo(JourneyStatus.PARTIAL);
-        assertThat(decision.warnings()).contains("POI_THEME_MISSING").doesNotContain("AI_TOOL_VALUE_MISMATCH");
+        assertThat(decision.status()).isEqualTo(JourneyStatus.UNAVAILABLE);
+        assertThat(decision.warnings()).contains("POI_THEME_MISSING", "AI_SCHEDULE_EVIDENCE_UNAVAILABLE")
+                .doesNotContain("AI_TOOL_VALUE_MISMATCH");
         assertThat(decision.unifiedPlan().evidence().pois()).isEmpty();
         assertThat(decision.unifiedPlan().segments()).extracting(UnifiedJourneyPlan.Segment::type)
                 .containsExactly(UnifiedJourneyPlan.SegmentType.ACCESS, UnifiedJourneyPlan.SegmentType.RENT);
@@ -1060,9 +1089,10 @@ class JourneyPlanServiceTest {
 
         JourneyPlanService.Decision decision = planAndConfirm(service,
                 unifiedInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE, "서울숲 카페 여정"));
-        assertServerBuiltSchedule(decision, "VALIDATE_SELECTION");
+        assertRejectedSchedule(decision);
+        assertThat(decision.warnings()).contains("AI_SCHEDULE_STAGE_VALIDATE_SELECTION");
         assertThat(decision.unifiedPlan().evidence().rentalCandidates()).containsOnlyKeys("rental:station-1", "rental:station-2");
-        assertThat(decision.unifiedPlan().selectedRentalCandidateId()).isEqualTo("rental:station-1");
+        assertThat(decision.unifiedPlan().selectedRentalCandidateId()).isEqualTo("rental:station-2");
     }
 
     @Test
@@ -1102,8 +1132,10 @@ class JourneyPlanServiceTest {
                 if (invalidEvidence) {
                     assertThat(messages.getFirst()).contains("stage=CANDIDATE_ACCESS_ROUTE", "code=AI_TOOL_VALUE_MISMATCH")
                             .doesNotContain("outcome=SUCCESS");
-                    assertThat(messages.getLast()).contains("outcome=DETERMINISTIC_FALLBACK", "stage=CANDIDATE_ACCESS_ROUTE");
-                    assertServerBuiltSchedule(decision, "CANDIDATE_ACCESS_ROUTE");
+                    assertThat(messages.getLast()).contains("outcome=FAILURE", "stage=CANDIDATE_ACCESS_ROUTE")
+                            .doesNotContain("outcome=DETERMINISTIC_FALLBACK");
+                    assertRejectedSchedule(decision);
+                    assertThat(decision.warnings()).contains("AI_SCHEDULE_STAGE_CANDIDATE_ACCESS_ROUTE");
                 } else {
                     assertThat(decision.status()).isEqualTo(JourneyStatus.READY);
                 }
@@ -1308,17 +1340,6 @@ class JourneyPlanServiceTest {
                 List.of("route:rental:station-1->poi:station-1:poi-1"), List.of("weather:station-1"),
                 List.of("air-quality:station-1"), List.of(), List.of(), "근거 기반 카페 경유",
                 List.of("EVIDENCE_ONLY"));
-    }
-
-    private void assertServerBuiltSchedule(JourneyPlanService.Decision decision, String stage) {
-        assertThat(decision.status()).isEqualTo(JourneyStatus.PARTIAL);
-        assertThat(decision.warnings()).contains("AI_SCHEDULE_FALLBACK", "AI_SCHEDULE_STAGE_" + stage)
-                .doesNotContain("AI_TOOL_VALUE_MISMATCH");
-        assertThat(decision.normalizedIntent().path("aiIntent").isObject()).isTrue();
-        // The rejected AI selection is discarded: the schedule is rebuilt from collected evidence only.
-        assertThat(decision.unifiedPlan().rationale()).isEqualTo("STRUCTURED_SERVER_SELECTION");
-        assertThat(decision.unifiedPlan().segments()).extracting(UnifiedJourneyPlan.Segment::type)
-                .startsWith(UnifiedJourneyPlan.SegmentType.ACCESS, UnifiedJourneyPlan.SegmentType.RENT);
     }
 
     private void assertRejectedSchedule(JourneyPlanService.Decision decision) {

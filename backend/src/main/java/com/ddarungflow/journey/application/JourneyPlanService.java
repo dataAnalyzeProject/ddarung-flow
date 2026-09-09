@@ -326,39 +326,20 @@ public class JourneyPlanService {
             // theme came back empty/unavailable), so there is no meaningful schedule decision
             // left to make. Skip the AI round-trip entirely rather than asking it to choose among
             // zero POIs, which only produced timeouts or AI_TOOL_VALUE_MISMATCH.
-            if (useAiSchedule) requireAiEntitlement.run();
+            if (useAiSchedule) {
+                requireAiEntitlement.run();
+                JourneyCandidate factual = factualCandidate(candidates, coreCandidates, null);
+                appendWarnings(warnings, candidateWarnings.get(rentalId(factual.stationId())));
+                return unavailableWithFactualSegments(input, factual, findCoreCandidate(coreCandidates, factual),
+                        bundle, warnings, "AI_SCHEDULE_EVIDENCE_UNAVAILABLE");
+            }
             JourneyCandidate fallback = candidates.getFirst();
             selection = deterministicSelection(rentalId(fallback.stationId()), constraints, fallback,
                     pois, routeData, weather, airQuality);
         } else if (useAiSchedule) {
             requireAiEntitlement.run();
-            JourneyAiGateway.ScheduleResult result;
-            try {
-                result = aiGateway.selectSchedule(bundle, new JourneyAiGateway.ScheduleConstraints(
-                        constraints.stopCount(), STAY_BOUNDS.minimum(), STAY_BOUNDS.maximum(), constraints.availableMinutes()));
-            } catch (JourneyAiException exception) {
-                if (exception.code() == JourneyAiErrorCode.AI_TOOL_VALUE_MISMATCH
-                        || exception.code() == JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID) {
-                    String stage = exception.code() == JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID
-                            ? "SELECT_SCHEDULE_SCHEMA" : "SELECT_SCHEDULE";
-                    return invalidAiSchedule(input, candidates, coreCandidates, bundle, warnings, scheduleContext,
-                            stage, "selectSchedule rejected code=" + exception.code()
-                                    + " failureStage=" + exception.failureStage());
-                }
-                addWarning(warnings, safeAiCode(exception.code()));
-                JourneyCandidate fallback = candidates.getFirst();
-                appendWarnings(warnings, candidateWarnings.get(rentalId(fallback.stationId())));
-                return unavailableWithFactualSegments(input, fallback, findCoreCandidate(coreCandidates, fallback), bundle, warnings,
-                        safeAiCode(exception.code()));
-            }
-            if (result == null || !result.available()) {
-                String code = safeAiCode(result == null ? JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE : result.unavailableCode());
-                addWarning(warnings, code);
-                JourneyCandidate fallback = candidates.getFirst();
-                appendWarnings(warnings, candidateWarnings.get(rentalId(fallback.stationId())));
-                return unavailableWithFactualSegments(input, fallback, findCoreCandidate(coreCandidates, fallback), bundle, warnings, code);
-            }
-            selection = result.selection();
+            return buildAiGeneratedPlan(input, candidates, coreCandidates, bundle, warnings, scheduleContext,
+                    candidateWarnings);
         } else {
             JourneyCandidate fallback = candidates.getFirst();
             selection = deterministicSelection(rentalId(fallback.stationId()), constraints, fallback,
@@ -371,9 +352,6 @@ public class JourneyPlanService {
         JourneyRentalPredictionPort.RentalCandidate selectedCore = findCoreCandidate(coreCandidates, selected);
         if (selected == null || selectedCore == null || selectedCore.accessRoute() == null
                 || !"NORMAL".equals(selectedCore.routeStatus())) {
-            if (useAiSchedule) return invalidAiSchedule(input, candidates, coreCandidates, bundle, warnings, scheduleContext,
-                    "CANDIDATE_ACCESS_ROUTE",
-                    "selected candidate '" + selection.rentalCandidateId() + "' has no NORMAL access route");
             addWarning(warnings, "ACCESS_ROUTE_UNAVAILABLE");
             return new UnifiedJourneyPlan(UnifiedJourneyPlan.Status.UNAVAILABLE, selection.rentalCandidateId(),
                     bundle, List.of(), null, List.of(), List.copyOf(warnings));
@@ -385,15 +363,8 @@ public class JourneyPlanService {
             validated = selectionValidator.validate(bundle, selection, STAY_BOUNDS);
             validateSelection(selection, validated, constraints, selected, poiData, routeData);
         } catch (JourneyAiException exception) {
-            if (useAiSchedule) {
-                return invalidAiSchedule(input, candidates, coreCandidates, bundle, warnings, scheduleContext,
-                        "VALIDATE_SELECTION", "validateSelection: " + exception.getMessage());
-            }
             throw new AiToolValueMismatch(exception.getMessage());
         } catch (RuntimeException exception) {
-            if (useAiSchedule) return invalidAiSchedule(input, candidates, coreCandidates, bundle, warnings, scheduleContext,
-                    "VALIDATE_SELECTION_ERROR",
-                    "validateSelection threw " + exception.getClass().getSimpleName() + ": " + exception.getMessage());
             addWarning(warnings, "JOURNEY_ROUTE_CHAIN_UNAVAILABLE");
             return unavailableWithFactualSegments(input, selected, selectedCore, bundle, warnings,
                     "JOURNEY_ROUTE_CHAIN_UNAVAILABLE");
@@ -403,22 +374,14 @@ public class JourneyPlanService {
         try {
             segments = buildTimeline(input, selected, selectedCore, selection, routeData);
         } catch (RuntimeException exception) {
-            if (useAiSchedule) return invalidAiSchedule(input, candidates, coreCandidates, bundle, warnings, scheduleContext,
-                    "BUILD_TIMELINE",
-                    "buildTimeline threw " + exception.getClass().getSimpleName() + ": " + exception.getMessage());
             throw exception;
         }
         long elapsedSeconds = rideSeconds(selected, segments);
         if (elapsedSeconds > constraints.availableMinutes() * 60L) {
-            if (useAiSchedule) return invalidAiSchedule(input, candidates, coreCandidates, bundle, warnings, scheduleContext,
-                    "DURATION_EXCEEDED",
-                    "elapsed " + elapsedSeconds + "s exceeds available " + (constraints.availableMinutes() * 60L) + "s");
             addWarning(warnings, "JOURNEY_DURATION_EXCEEDED");
             return unavailableWithFactualSegments(input, selected, selectedCore, bundle, warnings,
                     "JOURNEY_DURATION_EXCEEDED");
         }
-        if (useAiSchedule) log.info("event=journey_ai_provider_result kind=SCHEDULE_SELECTION outcome=SUCCESS correlation_id={}",
-                MDC.get("journeyAiCorrelationId"));
         if (selection.stops().size() < constraints.stopCount()) addWarning(warnings, "VISIT_PARTIAL");
         UnifiedJourneyPlan.Status status = warnings.isEmpty() && selection.stops().size() == constraints.stopCount()
                 ? UnifiedJourneyPlan.Status.READY : UnifiedJourneyPlan.Status.PARTIAL;
@@ -465,70 +428,155 @@ public class JourneyPlanService {
                 bundle, segments, null, List.of(), List.copyOf(warnings));
     }
 
-    private UnifiedJourneyPlan invalidAiSchedule(
+    private UnifiedJourneyPlan buildAiGeneratedPlan(
             PlanInput input,
             List<JourneyCandidate> candidates,
             List<JourneyRentalPredictionPort.RentalCandidate> coreCandidates,
             ConsumerAiEvidenceBundle bundle,
             List<String> warnings,
             ScheduleContext context,
-            String stage,
-            String reason
+            Map<String, List<String>> candidateWarnings
     ) {
-        logEvidenceFailure(stage, reason);
-        JourneyCandidate fallback = candidates.stream().filter(candidate -> {
+        JourneyAiGateway.ScheduleConstraints aiConstraints = new JourneyAiGateway.ScheduleConstraints(
+                context.constraints().stopCount(), STAY_BOUNDS.minimum(), STAY_BOUNDS.maximum(),
+                context.constraints().availableMinutes());
+        JourneyAiGateway.ScheduleCorrection correction = null;
+        for (int attempt = 0; attempt < 2; attempt++) {
+            JourneyAiGateway.ScheduleResult result;
+            try {
+                result = correction == null
+                        ? aiGateway.selectSchedule(bundle, aiConstraints)
+                        : aiGateway.selectSchedule(bundle, aiConstraints, correction);
+            } catch (JourneyAiException exception) {
+                String stage = exception.code() == JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID
+                        ? "SELECT_SCHEDULE_SCHEMA" : "SELECT_SCHEDULE";
+                logEvidenceFailure(stage, "selectSchedule rejected code=" + exception.code()
+                        + " failureStage=" + exception.failureStage());
+                if (attempt == 0 && correctableScheduleFailure(exception.code())) {
+                    correction = new JourneyAiGateway.ScheduleCorrection(stage,
+                            context.constraints().availableMinutes(), null, null);
+                    continue;
+                }
+                addWarning(warnings, "AI_SCHEDULE_STAGE_" + stage);
+                return unavailableAiSelection(input, candidates, coreCandidates, bundle, warnings,
+                        candidateWarnings, null, safeAiCode(exception.code()));
+            }
+            if (result == null || !result.available()) {
+                String code = safeAiCode(result == null
+                        ? JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE : result.unavailableCode());
+                return unavailableAiSelection(input, candidates, coreCandidates, bundle, warnings,
+                        candidateWarnings, null, code);
+            }
+            try {
+                return validateAndBuildAiPlan(input, candidates, coreCandidates, bundle, warnings, context,
+                        candidateWarnings, result.selection());
+            } catch (ScheduleSelectionFailure failure) {
+                logEvidenceFailure(failure.stage(), failure.getMessage());
+                if (attempt == 0) {
+                    correction = new JourneyAiGateway.ScheduleCorrection(failure.stage(),
+                            context.constraints().availableMinutes(), failure.observedDurationSeconds(),
+                            result.selection());
+                    continue;
+                }
+                addWarning(warnings, "AI_SCHEDULE_STAGE_" + failure.stage());
+                return unavailableAiSelection(input, candidates, coreCandidates, bundle, warnings,
+                        candidateWarnings, result.selection(), "AI_TOOL_VALUE_MISMATCH");
+            }
+        }
+        throw new IllegalStateException("AI schedule attempt loop exhausted");
+    }
+
+    private UnifiedJourneyPlan validateAndBuildAiPlan(
+            PlanInput input,
+            List<JourneyCandidate> candidates,
+            List<JourneyRentalPredictionPort.RentalCandidate> coreCandidates,
+            ConsumerAiEvidenceBundle bundle,
+            List<String> warnings,
+            ScheduleContext context,
+            Map<String, List<String>> candidateWarnings,
+            EvidenceSelectionValidator.Selection selection
+    ) {
+        JourneyCandidate selected = candidates.stream()
+                .filter(candidate -> rentalId(candidate.stationId()).equals(selection.rentalCandidateId()))
+                .findFirst().orElse(null);
+        JourneyRentalPredictionPort.RentalCandidate selectedCore = findCoreCandidate(coreCandidates, selected);
+        if (selected == null || selectedCore == null || selectedCore.accessRoute() == null
+                || !"NORMAL".equals(selectedCore.routeStatus())) {
+            throw new ScheduleSelectionFailure("CANDIDATE_ACCESS_ROUTE", null,
+                    "AI selected a candidate without a normal access route");
+        }
+        EvidenceSelectionValidator.ValidatedSelection validated;
+        try {
+            validated = selectionValidator.validate(bundle, selection, STAY_BOUNDS);
+            validateSelection(selection, validated, context.constraints(), selected, context.poiData(),
+                    context.routeData());
+        } catch (JourneyAiException exception) {
+            throw new ScheduleSelectionFailure("VALIDATE_SELECTION", null,
+                    "AI selection did not match retrieved evidence");
+        } catch (RuntimeException exception) {
+            throw new ScheduleSelectionFailure("VALIDATE_SELECTION_ERROR", null,
+                    "AI selection validation failed");
+        }
+        List<UnifiedJourneyPlan.Segment> segments;
+        try {
+            segments = buildTimeline(input, selected, selectedCore, selection, context.routeData());
+        } catch (RuntimeException exception) {
+            throw new ScheduleSelectionFailure("BUILD_TIMELINE", null, "AI timeline could not be built");
+        }
+        long elapsedSeconds = rideSeconds(selected, segments);
+        if (elapsedSeconds > context.constraints().availableMinutes() * 60L) {
+            throw new ScheduleSelectionFailure("DURATION_EXCEEDED", elapsedSeconds,
+                    "AI schedule exceeded the available duration");
+        }
+        appendWarnings(warnings, candidateWarnings.get(selection.rentalCandidateId()));
+        log.info("event=journey_ai_provider_result kind=SCHEDULE_SELECTION outcome=SUCCESS correlation_id={} attempt=VALIDATED",
+                MDC.get("journeyAiCorrelationId"));
+        if (selection.stops().size() < context.constraints().stopCount()) addWarning(warnings, "VISIT_PARTIAL");
+        UnifiedJourneyPlan.Status status = warnings.isEmpty() && selection.stops().size() == context.constraints().stopCount()
+                ? UnifiedJourneyPlan.Status.READY : UnifiedJourneyPlan.Status.PARTIAL;
+        return new UnifiedJourneyPlan(status, selection.rentalCandidateId(), bundle, segments,
+                validated.rationale(), validated.rationaleTags(), List.copyOf(warnings));
+    }
+
+    private boolean correctableScheduleFailure(JourneyAiErrorCode code) {
+        return code == JourneyAiErrorCode.AI_TOOL_VALUE_MISMATCH
+                || code == JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID;
+    }
+
+    private UnifiedJourneyPlan unavailableAiSelection(
+            PlanInput input,
+            List<JourneyCandidate> candidates,
+            List<JourneyRentalPredictionPort.RentalCandidate> coreCandidates,
+            ConsumerAiEvidenceBundle bundle,
+            List<String> warnings,
+            Map<String, List<String>> candidateWarnings,
+            EvidenceSelectionValidator.Selection rejectedSelection,
+            String code
+    ) {
+        JourneyCandidate factual = factualCandidate(candidates, coreCandidates, rejectedSelection);
+        appendWarnings(warnings, candidateWarnings.get(rentalId(factual.stationId())));
+        return unavailableWithFactualSegments(input, factual, findCoreCandidate(coreCandidates, factual), bundle,
+                warnings, code);
+    }
+
+    private JourneyCandidate factualCandidate(
+            List<JourneyCandidate> candidates,
+            List<JourneyRentalPredictionPort.RentalCandidate> coreCandidates,
+            EvidenceSelectionValidator.Selection selection
+    ) {
+        if (selection != null) {
+            JourneyCandidate selected = candidates.stream()
+                    .filter(candidate -> rentalId(candidate.stationId()).equals(selection.rentalCandidateId()))
+                    .findFirst().orElse(null);
+            JourneyRentalPredictionPort.RentalCandidate core = findCoreCandidate(coreCandidates, selected);
+            if (selected != null && core != null && core.accessRoute() != null && "NORMAL".equals(core.routeStatus())) {
+                return selected;
+            }
+        }
+        return candidates.stream().filter(candidate -> {
             JourneyRentalPredictionPort.RentalCandidate core = findCoreCandidate(coreCandidates, candidate);
             return core != null && core.accessRoute() != null && "NORMAL".equals(core.routeStatus());
         }).findFirst().orElse(candidates.getFirst());
-        JourneyRentalPredictionPort.RentalCandidate fallbackCore = findCoreCandidate(coreCandidates, fallback);
-        // The AI schedule was rejected, but the evidence we already collected is real: prefer a
-        // server-built schedule over telling the rider that nothing could be planned at all.
-        UnifiedJourneyPlan deterministic = deterministicFallbackPlan(input, fallback, fallbackCore, bundle,
-                context, warnings, stage);
-        if (deterministic != null) return deterministic;
-        return unavailableWithFactualSegments(input, fallback, fallbackCore, bundle, warnings, "AI_TOOL_VALUE_MISMATCH");
-    }
-
-    private UnifiedJourneyPlan deterministicFallbackPlan(
-            PlanInput input,
-            JourneyCandidate selected,
-            JourneyRentalPredictionPort.RentalCandidate selectedCore,
-            ConsumerAiEvidenceBundle bundle,
-            ScheduleContext context,
-            List<String> warnings,
-            String stage
-    ) {
-        if (context == null || selected == null || selectedCore == null || selectedCore.accessRoute() == null
-                || !"NORMAL".equals(selectedCore.routeStatus())) return null;
-        try {
-            EvidenceSelectionValidator.Selection selection = deterministicSelection(rentalId(selected.stationId()),
-                    context.constraints(), selected, context.pois(), context.routeData(), context.weather(),
-                    context.airQuality());
-            if (selection.stops().isEmpty()) return null;
-            EvidenceSelectionValidator.ValidatedSelection validated =
-                    selectionValidator.validate(bundle, selection, STAY_BOUNDS);
-            validateSelection(selection, validated, context.constraints(), selected, context.poiData(),
-                    context.routeData());
-            List<UnifiedJourneyPlan.Segment> segments =
-                    buildTimeline(input, selected, selectedCore, selection, context.routeData());
-            long elapsedSeconds = rideSeconds(selected, segments);
-            if (elapsedSeconds > context.constraints().availableMinutes() * 60L) return null;
-            // Only record the fallback once every risky step above has succeeded, so a failed
-            // attempt leaves the caller's warnings untouched for the unavailable path.
-            addWarning(warnings, "AI_SCHEDULE_FALLBACK");
-            addWarning(warnings, "AI_SCHEDULE_STAGE_" + stage);
-            if (selection.stops().size() < context.constraints().stopCount()) addWarning(warnings, "VISIT_PARTIAL");
-            log.info("event=journey_ai_provider_result kind=SCHEDULE_SELECTION outcome=DETERMINISTIC_FALLBACK "
-                    + "correlation_id={} stage={} stops={}", MDC.get("journeyAiCorrelationId"), stage,
-                    selection.stops().size());
-            return new UnifiedJourneyPlan(UnifiedJourneyPlan.Status.PARTIAL, selection.rentalCandidateId(), bundle,
-                    segments, validated.rationale(), validated.rationaleTags(), List.copyOf(warnings));
-        } catch (RuntimeException exception) {
-            log.warn("event=journey_ai_provider_result kind=SCHEDULE_SELECTION outcome=FALLBACK_FAILURE "
-                    + "correlation_id={} stage={} reason={}", MDC.get("journeyAiCorrelationId"), stage,
-                    exception.getClass().getSimpleName());
-            return null;
-        }
     }
 
     private void collectPois(
@@ -1303,6 +1351,20 @@ public class JourneyPlanService {
     public record Counterfactual(String status, List<String> unavailableFields) { }
     private record PlannerContext(boolean useAiSchedule, JourneyIntent aiIntent) { }
     private record ResolvedConstraints(List<String> themes, int stopCount, int availableMinutes, String routeMode) { }
+
+    private static final class ScheduleSelectionFailure extends RuntimeException {
+        private final String stage;
+        private final Long observedDurationSeconds;
+
+        private ScheduleSelectionFailure(String stage, Long observedDurationSeconds, String message) {
+            super(message);
+            this.stage = stage;
+            this.observedDurationSeconds = observedDurationSeconds;
+        }
+
+        private String stage() { return stage; }
+        private Long observedDurationSeconds() { return observedDurationSeconds; }
+    }
 
     private record ScheduleContext(
             ResolvedConstraints constraints,

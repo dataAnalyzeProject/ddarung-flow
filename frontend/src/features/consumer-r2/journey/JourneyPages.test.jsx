@@ -382,6 +382,21 @@ test("result preserves factual backend segments when the unified plan is unavail
   expect(screen.getAllByText("RENT").length).toBeGreaterThan(0);
 });
 
+test("an unavailable AI schedule is labelled as an AI failure and exposes only retained facts", () => {
+  const unavailable = decision("UNAVAILABLE");
+  unavailable.warnings = ["AI_TOOL_VALUE_MISMATCH", "AI_SCHEDULE_STAGE_VALIDATE_SELECTION"];
+  unavailable.unifiedPlan.segments = unavailable.unifiedPlan.segments.slice(0, 2);
+  unavailable.unifiedPlan.rationale = null;
+  render(<ConsumerJourneyPlanResultPage initialDecision={unavailable} />);
+
+  expect(screen.getByRole("status")).toHaveTextContent("AI 일정 실패");
+  expect(screen.getByRole("status")).toHaveTextContent("확인된 실제 근거만 표시합니다");
+  expect(screen.queryByText("AI 미적용")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "확인된 근거" }));
+  expect(screen.getByRole("heading", { name: "확인된 실제 근거" })).toBeInTheDocument();
+  expect(screen.getByText("추천 이유가 제공되지 않았습니다.")).toBeInTheDocument();
+});
+
 test("result keeps structured replan and current-condition save as separate actions", async () => {
   const current = decision();
   const adapter = { replan: jest.fn().mockResolvedValue(current), saveCurrentConditions: jest.fn().mockResolvedValue({ savedJourneyId: "saved-1" }) };
