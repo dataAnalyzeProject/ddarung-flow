@@ -3,6 +3,7 @@
 .data-pipeline-header p { margin: 0 0 8px; color: #2563eb; font-weight: 800; font-size: 12px; letter-spacing: .08em; }
 .data-pipeline-header h1 { margin: 0 0 8px; font-size: 30px; }
 .data-pipeline-header > div:last-child { display: grid; justify-items: end; gap: 8px; }
+.data-pipeline-scope-note { margin: 0; border: 1px solid #dbe3ee; border-radius: 12px; padding: 11px 14px; background: #f8fafc; color: #475569; }
 .data-pipeline-flow { display: grid; gap: clamp(8px, 1.2vh, 14px); grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); margin: 0; padding: 0; list-style: none; }
 .data-pipeline-flow details { border: 1px solid #dbe3ee; border-radius: 14px; padding: clamp(11px, 1.6vh, 18px); background: #fff; }.data-pipeline-flow > li { display: grid; min-width: 0; }.data-pipeline-flow summary { cursor: pointer; list-style: none; }.data-pipeline-flow summary::-webkit-details-marker { display: none; }.data-pipeline-flow summary::after { border-bottom: 2px solid #94a3b8; border-right: 2px solid #94a3b8; content: ''; height: 7px; rotate: 45deg; transition: rotate 120ms ease; width: 7px; }.data-pipeline-flow details[open] > summary::after { rotate: 225deg; }.data-pipeline-flow summary:focus-visible { border-radius: 8px; outline: 2px solid #1d4ed8; outline-offset: 3px; }
 .data-pipeline-stage-heading { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 12px; align-items: center; }

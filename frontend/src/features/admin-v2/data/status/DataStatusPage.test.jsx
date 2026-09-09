@@ -23,6 +23,8 @@ test('separates Global, MAP, history, and factual missing counts', async () => {
   expect(screen.getByText('model-v1')).toBeInTheDocument();
   expect(screen.getByText('아직 분석한 범위 없음')).toBeInTheDocument();
   expect(screen.getByRole('heading', { name: '예측 배치 (이력 전용)' })).toBeInTheDocument();
+  expect(screen.queryByText(/0대는 정상 관측값이며/)).not.toBeInTheDocument();
+  expect(screen.getAllByText('운영 중 · 일부 데이터 제외').length).toBeGreaterThan(0);
   await waitFor(() => expect(adapter.listExports).not.toHaveBeenCalled());
 });
 
@@ -41,7 +43,7 @@ test('collapses every block by default and keeps each block state visible while 
 
   // the collapsed summaries still carry every block's data state, so nothing factual is hidden by folding
   const summaryStates = details.slice(0, 5).map((block) => within(block.querySelector('summary')).getByRole('mark').textContent);
-  expect(summaryStates).toEqual(['일부 사용 가능', '일부 사용 가능', '판단 정보 부족', '일부 사용 가능', '확인 정보 없음']);
+  expect(summaryStates).toEqual(['운영 중 · 일부 데이터 제외', '운영 중 · 일부 데이터 제외', '판단 정보 부족', '운영 중 · 일부 데이터 제외', '확인 정보 없음']);
 });
 
 test('expands a block on click without changing what it reports', async () => {
