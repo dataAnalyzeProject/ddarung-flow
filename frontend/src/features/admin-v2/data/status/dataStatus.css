@@ -7,3 +7,6 @@
 .data-export-panel th, .data-export-panel td { padding: 12px 10px; border-bottom: 1px solid var(--admin-v2-border); text-align: left; }
 .data-export-error { color: var(--admin-v2-critical); font-weight: 700; }
 @media (max-width: 960px) { .data-export-form { grid-template-columns: 1fr 1fr; } .data-export-panel { overflow-x: auto; } }
+.operations-data-export-details .data-export-panel { background: none; border: 0; border-radius: 0; margin-top: 0; padding: 0; }
+.operations-data-export-details .data-export-panel > .operations-data-section-heading { display: none; }
+.operations-data-export-details .data-export-form { margin: 0 0 14px; }
