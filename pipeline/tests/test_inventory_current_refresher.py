@@ -125,7 +125,7 @@ class SnapshotTests(unittest.TestCase):
             "pipeline.src.inventory_current_refresher.publish_snapshot",
             return_value={"published_count": 3, "normal_count": 2, "missing_count": 1},
         ) as publish:
-            self.assertEqual(refresh_once("key", "database", minimum_rows=2), 3)
+            self.assertEqual(refresh_once("key", "database", minimum_rows=2), 2)
 
         self.assertEqual(publish.call_args.kwargs["source_count"], 2)
         self.assertIsNotNone(publish.call_args.kwargs["run_id"])

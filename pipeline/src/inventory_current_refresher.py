@@ -273,7 +273,7 @@ def refresh_once(api_key, database_url, now=None, minimum_rows=1000):
         raise
 
     try:
-        summary = publish_snapshot(
+        publish_snapshot(
             database_url,
             rows,
             run_id=run_id,
@@ -292,7 +292,7 @@ def refresh_once(api_key, database_url, now=None, minimum_rows=1000):
             validated_count=len(rows),
         )
         raise
-    return summary["published_count"]
+    return len(rows)
 
 
 def refresh_cycle(api_key, database_url, refresh=refresh_once):
