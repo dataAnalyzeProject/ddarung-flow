@@ -98,7 +98,8 @@ public class AirKoreaClient {
             String url = properties.baseUrl() + "/MsrstnInfoInqireSvc/getMsrstnList"
                     + "?serviceKey=" + properties.serviceKey()
                     + "&returnType=json&numOfRows=" + properties.catalogNumOfRows() + "&pageNo=1";
-            HttpRequest request = HttpRequest.newBuilder().uri(URI.create(url)).GET().build();
+            HttpRequest request = HttpRequest.newBuilder().uri(URI.create(url))
+                    .timeout(Duration.ofSeconds(3)).GET().build();
             HttpResponse<String> response = httpTransport.apply(request);
             if (response == null || response.statusCode() != 200) {
                 log.warn("event=air_korea_catalog_fetch_failed reason=http_status status={}",
@@ -167,7 +168,8 @@ public class AirKoreaClient {
                     + "&returnType=json&numOfRows=1&pageNo=1"
                     + "&stationName=" + URLEncoder.encode(stationName, StandardCharsets.UTF_8)
                     + "&dataTerm=DAILY&ver=1.3";
-            HttpRequest request = HttpRequest.newBuilder().uri(URI.create(url)).GET().build();
+            HttpRequest request = HttpRequest.newBuilder().uri(URI.create(url))
+                    .timeout(Duration.ofSeconds(3)).GET().build();
             HttpResponse<String> response = httpTransport.apply(request);
             if (response == null || response.statusCode() != 200) {
                 log.warn("event=air_korea_measurement_fetch_failed reason=http_status station={} status={}",

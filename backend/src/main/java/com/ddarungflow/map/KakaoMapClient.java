@@ -59,6 +59,7 @@ public class KakaoMapClient {
 
             HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
+                .timeout(Duration.ofSeconds(3))
                 .header("Authorization", "KakaoAK " + apiKey)
                 .GET()
                 .build();
@@ -159,6 +160,7 @@ public class KakaoMapClient {
                 + "&radius=5000&sort=distance&size=" + limit;
             HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
+                .timeout(Duration.ofSeconds(3))
                 .header("Authorization", "KakaoAK " + apiKey)
                 .GET()
                 .build();
@@ -261,6 +263,7 @@ public class KakaoMapClient {
 
             HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
+                .timeout(Duration.ofSeconds(3))
                 .header("Authorization", "KakaoAK " + apiKey)
                 .GET()
                 .build();

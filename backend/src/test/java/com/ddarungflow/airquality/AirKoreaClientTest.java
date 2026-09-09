@@ -7,8 +7,10 @@ import org.mockito.Mockito;
 import java.math.BigDecimal;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -118,8 +120,10 @@ class AirKoreaClientTest {
     @DisplayName("catalog 24시간 캐시: 두 번째 호출은 실제 HTTP 호출 없이 캐시된 목록 반환")
     void fetchStationCatalogUsesCacheWithinTtl() {
         AtomicInteger callCount = new AtomicInteger(0);
+        AtomicReference<HttpRequest> requestReference = new AtomicReference<>();
         AirKoreaClient client = new AirKoreaClient(properties(), req -> {
             callCount.incrementAndGet();
+            requestReference.set(req);
             return mockResponse(200, CATALOG_FIXTURE);
         });
 
@@ -129,6 +133,7 @@ class AirKoreaClientTest {
         assertEquals(1, callCount.get());
         assertEquals(2, first.size());
         assertEquals(first, second);
+        assertEquals(Duration.ofSeconds(3), requestReference.get().timeout().orElseThrow());
     }
 
     @Test
@@ -151,8 +156,10 @@ class AirKoreaClientTest {
     @DisplayName("측정값 30분 캐시: TTL 이내 두 번째 호출은 실제 HTTP 호출 없이 캐시 반환, latestFetchFailed=false")
     void fetchMeasurementUsesCacheWithinTtl() {
         AtomicInteger callCount = new AtomicInteger(0);
+        AtomicReference<HttpRequest> requestReference = new AtomicReference<>();
         AirKoreaClient client = new AirKoreaClient(properties(), req -> {
             callCount.incrementAndGet();
+            requestReference.set(req);
             return mockResponse(200, MEASUREMENT_FIXTURE);
         });
 
@@ -163,6 +170,7 @@ class AirKoreaClientTest {
         assertFalse(first.latestFetchFailed());
         assertFalse(second.latestFetchFailed());
         assertEquals(MEASUREMENT_FIXTURE, second.latestJson());
+        assertEquals(Duration.ofSeconds(3), requestReference.get().timeout().orElseThrow());
     }
 
     @Test
