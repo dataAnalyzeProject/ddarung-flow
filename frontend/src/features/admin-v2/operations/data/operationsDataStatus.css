@@ -10,6 +10,7 @@
 .operations-data-page > .operations-data-header,
 .operations-data-page > .operations-data-safety-notice,
 .operations-data-page > .operations-data-scope-guidance,
+.operations-data-page > .operations-data-export-details,
 .operations-data-page > .data-export-panel {
   grid-column: 1 / -1;
 }
