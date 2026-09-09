@@ -295,9 +295,13 @@ public class JourneyPlanService {
                 result = aiGateway.selectSchedule(bundle, new JourneyAiGateway.ScheduleConstraints(
                         constraints.stopCount(), STAY_BOUNDS.minimum(), STAY_BOUNDS.maximum(), constraints.availableMinutes()));
             } catch (JourneyAiException exception) {
-                if (exception.code() == JourneyAiErrorCode.AI_TOOL_VALUE_MISMATCH) {
+                if (exception.code() == JourneyAiErrorCode.AI_TOOL_VALUE_MISMATCH
+                        || exception.code() == JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID) {
+                    String stage = exception.code() == JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID
+                            ? "SELECT_SCHEDULE_SCHEMA" : "SELECT_SCHEDULE";
                     return invalidAiSchedule(input, candidates, coreCandidates, bundle, warnings, scheduleContext,
-                            "SELECT_SCHEDULE", "selectSchedule: " + exception.getMessage());
+                            stage, "selectSchedule rejected code=" + exception.code()
+                                    + " failureStage=" + exception.failureStage());
                 }
                 addWarning(warnings, safeAiCode(exception.code()));
                 JourneyCandidate fallback = candidates.getFirst();
