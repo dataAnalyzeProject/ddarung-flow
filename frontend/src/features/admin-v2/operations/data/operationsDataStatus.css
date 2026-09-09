@@ -1,8 +1,17 @@
 .operations-data-page {
+  align-content: start;
+  align-items: start;
   color: var(--admin-v2-ink);
   display: grid;
-  gap: clamp(12px, 1.7vh, 20px);
-  max-width: 1280px;
+  gap: clamp(10px, 1.5vh, 18px);
+  grid-template-columns: repeat(auto-fit, minmax(470px, 1fr));
+  min-width: 0;
+}
+.operations-data-page > .operations-data-header,
+.operations-data-page > .operations-data-safety-notice,
+.operations-data-page > .operations-data-scope-guidance,
+.operations-data-page > .data-export-panel {
+  grid-column: 1 / -1;
 }
 .operations-data-page h1,
 .operations-data-page h2,
@@ -186,8 +195,8 @@
 }
 .operations-data-metrics {
   display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
 }
 .operations-data-metrics .operations-data-metric {
   background: #f8faf9;
@@ -227,7 +236,8 @@
 .operations-data-supporting {
   display: grid;
   gap: 14px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  min-width: 0;
 }
 .operations-data-absence {
   background: #f8faf9;

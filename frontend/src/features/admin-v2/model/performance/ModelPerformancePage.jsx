@@ -56,19 +56,26 @@ function RuntimeIdentity({ runtime, base }) {
   </section>;
 }
 
+const DIAGNOSTICS_PAGE_SIZE = 50;
+
 function metricValue(segment, name, fallback) {
   const value = segment?.[name] ?? (fallback ? segment?.[fallback] : null);
   return value == null ? '—' : formatNumber(value, 4);
 }
 
 function Diagnostics({ source }) {
+  const [page, setPage] = useState(0);
   const heading = <div className="model-performance-section-heading"><div><h2 id="diagnostics-heading">진단</h2><p>동일 평가 snapshot의 segment·대여소 근거입니다.</p></div></div>;
   if (source?.state === 'ACCESS_LIMITED') return <section className="model-performance-detail-card" aria-labelledby="diagnostics-heading">{heading}<p className="model-performance-note">진단 접근 제한 · 필요 권한: MODEL_DIAGNOSTICS_READ</p></section>;
   if (source?.state === 'FORBIDDEN') return <section className="model-performance-detail-card" aria-labelledby="diagnostics-heading">{heading}<AsyncStatePanel state="FORBIDDEN" code={source.error?.code} requiredPermission="MODEL_DIAGNOSTICS_READ" /></section>;
   if (source?.state === 'ERROR') return <section className="model-performance-detail-card" aria-labelledby="diagnostics-heading">{heading}<AsyncStatePanel state="ERROR" code={source.error?.code} /></section>;
   const segments = source?.data?.segments || [];
   if (!segments.length) return <section className="model-performance-detail-card" aria-labelledby="diagnostics-heading">{heading}<AsyncStatePanel state="EMPTY" /></section>;
-  return <section className="model-performance-detail-card model-performance-diagnostics" aria-labelledby="diagnostics-heading"><div className="model-performance-section-heading"><div><h2 id="diagnostics-heading">진단</h2><p>source가 제공한 segment·대여소 근거만 표시합니다.</p></div><span>{segments.length}개</span></div><div className="model-performance-table-wrap"><table><caption>segment별 성능 진단</caption><thead><tr><th scope="col">구분</th><th scope="col">대상</th><th scope="col">상태</th><th scope="col">표본</th><th scope="col">Brier</th><th scope="col">기준 Brier</th><th scope="col">Skill</th><th scope="col">품절 Recall</th></tr></thead><tbody>{segments.map((segment, index) => <tr key={`${segment.axis || segment.name || 'segment'}-${segment.segmentValue || index}`}><td>{segment.axis || segment.name || '확인 정보 없음'}</td><td>{segment.segmentValue ?? '—'}</td><td>{segment.status || segment.state || '확인 정보 없음'}</td><td>{formatCount(segment.sampleCount)}</td><td>{metricValue(segment, 'brierScore', 'brier')}</td><td>{metricValue(segment, 'baselineBrierScore')}</td><td>{metricValue(segment, 'skillScore')}</td><td>{metricValue(segment, 'shortageRecall')}</td></tr>)}</tbody></table></div><p className="model-performance-note">null 또는 표본 부족 값은 0으로 대체하지 않습니다.</p></section>;
+  const totalPages = Math.ceil(segments.length / DIAGNOSTICS_PAGE_SIZE);
+  const currentPage = Math.min(Math.max(page, 0), totalPages - 1);
+  const start = currentPage * DIAGNOSTICS_PAGE_SIZE;
+  const visible = segments.slice(start, start + DIAGNOSTICS_PAGE_SIZE);
+  return <section className="model-performance-detail-card model-performance-diagnostics" aria-labelledby="diagnostics-heading"><div className="model-performance-section-heading"><div><h2 id="diagnostics-heading">진단</h2><p>source가 제공한 segment·대여소 근거만 표시합니다.</p></div><span>{formatCount(segments.length)}개</span></div><div className="model-performance-table-wrap"><table><caption>segment별 성능 진단</caption><thead><tr><th scope="col">구분</th><th scope="col">대상</th><th scope="col">상태</th><th scope="col">표본</th><th scope="col">Brier</th><th scope="col">기준 Brier</th><th scope="col">Skill</th><th scope="col">품절 Recall</th></tr></thead><tbody>{visible.map((segment, index) => <tr key={`${segment.axis || segment.name || 'segment'}-${segment.segmentValue || start + index}`}><td>{segment.axis || segment.name || '확인 정보 없음'}</td><td>{segment.segmentValue ?? '—'}</td><td>{segment.status || segment.state || '확인 정보 없음'}</td><td>{formatCount(segment.sampleCount)}</td><td>{metricValue(segment, 'brierScore', 'brier')}</td><td>{metricValue(segment, 'baselineBrierScore')}</td><td>{metricValue(segment, 'skillScore')}</td><td>{metricValue(segment, 'shortageRecall')}</td></tr>)}</tbody></table></div>{totalPages > 1 ? <nav className="model-performance-pagination" aria-label="진단 목록 페이지"><button type="button" disabled={currentPage <= 0} onClick={() => setPage(currentPage - 1)}>이전</button><span>{formatCount(start + 1)}–{formatCount(start + visible.length)} / 전체 {formatCount(segments.length)}건 · {currentPage + 1} / {totalPages} 페이지</span><button type="button" disabled={currentPage >= totalPages - 1} onClick={() => setPage(currentPage + 1)}>다음</button></nav> : null}<p className="model-performance-note">null 또는 표본 부족 값은 0으로 대체하지 않습니다. 전체 {formatCount(segments.length)}건을 한 페이지에 최대 {DIAGNOSTICS_PAGE_SIZE}건씩 표시합니다.</p></section>;
 }
 
 export default function ModelPerformancePage({ createAdapter }) {
