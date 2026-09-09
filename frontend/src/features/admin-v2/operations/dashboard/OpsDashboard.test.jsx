@@ -45,7 +45,8 @@ describe('OpsDashboard', () => {
     expect(screen.getByText(/Coverage · active 120곳 · eligible 116곳 · evaluated 116곳 · normal 116곳/)).toBeInTheDocument();
     expect(screen.getAllByText('데이터 상태')).toHaveLength(2);
     expect(screen.getByRole('heading', { name: '수급 위험 지도' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '우선 확인 Top 5' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '대여 부족 확률 상위 5곳' })).toBeInTheDocument();
+    expect(screen.getByText('서울 전체 NORMAL 대여소 중 60분 후 1대 이상을 확보하지 못할 확률이 높은 5곳입니다. 동률은 대여소 번호순입니다.')).toBeInTheDocument();
     expect(screen.getByText(/반납 위험은 현재 지원되지 않음/)).toBeInTheDocument();
     expect(screen.queryByText(/반납 위험 0건|문제 없음|안정/)).not.toBeInTheDocument();
   });
@@ -58,6 +59,7 @@ describe('OpsDashboard', () => {
     await waitFor(() => expect(adapter.load).toHaveBeenLastCalledWith(expect.objectContaining({ horizonMinutes: 120, requiredBikeCount: 1 })));
     fireEvent.change(screen.getByLabelText('필요 자전거 수'), { target: { value: '3' } });
     await waitFor(() => expect(adapter.load).toHaveBeenLastCalledWith(expect.objectContaining({ horizonMinutes: 120, requiredBikeCount: 3 })));
+    expect(screen.getByText('서울 전체 NORMAL 대여소 중 120분 후 3대 이상을 확보하지 못할 확률이 높은 5곳입니다. 동률은 대여소 번호순입니다.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /2 시청역 7번 출구/ }));
     expect(screen.getByRole('button', { name: /시청역 7번 출구.*1002/ })).toHaveAttribute('aria-current', 'true');
     expect(container.querySelector('.ops-map-marker')).not.toBeInTheDocument();
@@ -77,7 +79,7 @@ describe('OpsDashboard', () => {
     render(<OpsDashboard createAdapter={adapterFor(dashboardFixture(fixture))} />);
     await waitFor(() => expect(screen.getByText('CRITICAL 대여 부족')).toBeInTheDocument());
     expect(screen.getByRole('heading', { name: '수급 위험 지도' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '우선 확인 Top 5' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '대여 부족 확률 상위 5곳' })).toBeInTheDocument();
     expect(screen.getAllByText(notice)).toHaveLength(2);
   });
 

@@ -58,33 +58,28 @@ test('selects a public station number and opens detail drawer', async () => {
   expect(screen.getByText('대여소 번호')).toBeInTheDocument();
 });
 
-test('clears the selected station and snapshot context when the map viewport changes', async () => {
+test('keeps the selected station drawer open through focus pan and bbox snapshot refresh', async () => {
   let reportBounds;
-  let selectStation;
-  const map = { setStations: jest.fn(), focusStation: jest.fn(), destroy: jest.fn() };
-  const loadList = jest.fn(() => Promise.resolve({ ...riskMapFixture(), snapshotId: 'snapshot-a' }));
+  const map = { setStations: jest.fn(), focusStation: jest.fn(() => reportBounds('bbox-after-pan')), destroy: jest.fn() };
+  const loadList = jest.fn(({ bbox }) => Promise.resolve({
+    ...riskMapFixture(),
+    snapshotId: bbox === 'bbox-after-pan' ? 'snapshot-b' : 'snapshot-a',
+  }));
   const loadDetail = jest.fn((number) => Promise.resolve(detailFixture(number)));
   render(<RiskMapPage
     createDataAdapter={() => ({ loadList, loadDetail })}
     loadMapSdk={() => Promise.resolve({})}
-    createMapAdapter={(node, maps, callbacks) => { reportBounds = callbacks.onViewportChange; selectStation = callbacks.onStationSelect; reportBounds('bbox-initial'); return map; }}
+    createMapAdapter={(node, maps, callbacks) => { reportBounds = callbacks.onViewportChange; reportBounds('bbox-initial'); return map; }}
   />);
 
   await waitFor(() => expect(reportBounds).toBeDefined());
   fireEvent.click(await screen.findByRole('button', { name: /광화문역 1번 출구/ }));
-  await screen.findByRole('dialog');
-  await waitFor(() => expect(loadDetail).toHaveBeenCalledWith('1001', expect.objectContaining({ snapshotId: 'snapshot-a' })));
-  act(() => reportBounds('bbox-after-pan'));
-  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-  expect(loadDetail).toHaveBeenCalledTimes(1);
   await waitFor(() => expect(loadList).toHaveBeenCalledWith(expect.objectContaining({ bbox: 'bbox-after-pan' })));
+  await waitFor(() => expect(loadDetail).toHaveBeenCalledWith('1001', expect.objectContaining({ snapshotId: 'snapshot-b' })));
   expect(map.focusStation).toHaveBeenCalledWith(expect.objectContaining({ station: expect.objectContaining({ stationNumber: '1001' }) }));
-
-  act(() => selectStation('1002'));
-  await screen.findByRole('heading', { name: '시청역 7번 출구' });
-  act(() => reportBounds('bbox-after-marker'));
-  await waitFor(() => expect(loadList).toHaveBeenCalledWith(expect.objectContaining({ bbox: 'bbox-after-marker' })));
-  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(screen.getByRole('dialog')).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: '광화문역 1번 출구' })).toBeInTheDocument();
+  expect(screen.getAllByRole('button', { name: /광화문역 1번 출구/ }).find((button) => button.getAttribute('aria-current') === 'true')).toBeInTheDocument();
 });
 
 test('keeps a successful MAP snapshot in legacy bounded sessionStorage without changing Global defaults', async () => {

@@ -5,9 +5,9 @@ function stateNotice(state, dataState) {
   return state !== 'SUCCESS' && labels[state] ? `${labels[state]} · ${dataState}` : null;
 }
 
-export default function PriorityStationList({ items, selectedStationNumber, onSelect, state, dataState }) {
+export default function PriorityStationList({ items, selectedStationNumber, onSelect, state, dataState, horizonMinutes, requiredBikeCount }) {
   return <section className="ops-dashboard-panel ops-priority-panel" aria-labelledby="priority-title">
-    <div className="ops-panel-heading"><div><h2 id="priority-title">우선 확인 Top 5</h2><p>API 응답 순서를 그대로 표시합니다.</p>{stateNotice(state, dataState) ? <p className="ops-risk-state-notice" role="status">{stateNotice(state, dataState)}</p> : null}</div></div>
+    <div className="ops-panel-heading"><div><h2 id="priority-title">대여 부족 확률 상위 5곳</h2><p>서울 전체 NORMAL 대여소 중 {horizonMinutes}분 후 {requiredBikeCount}대 이상을 확보하지 못할 확률이 높은 5곳입니다. 동률은 대여소 번호순입니다.</p>{stateNotice(state, dataState) ? <p className="ops-risk-state-notice" role="status">{stateNotice(state, dataState)}</p> : null}</div></div>
     <ol className="ops-priority-list">
       {items.map((item, index) => {
         const number = item.station.stationNumber;
