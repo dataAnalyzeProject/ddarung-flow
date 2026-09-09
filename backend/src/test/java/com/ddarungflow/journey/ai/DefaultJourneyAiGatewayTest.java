@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 
 import java.math.BigDecimal;
+import java.net.http.HttpTimeoutException;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -122,6 +123,93 @@ class DefaultJourneyAiGatewayTest {
 
         assertThat(result.available()).isTrue();
         assertThat(attempts).hasValue(2);
+    }
+
+    @Test
+    void retriesIntentOnceWhenOutputTextIsNotJson() throws Exception {
+        AtomicInteger attempts = new AtomicInteger();
+        JourneyAiProperties properties = new JourneyAiProperties(true, null, "test-key", "test-model", Duration.ofSeconds(1));
+        ResponsesApiClient client = new ResponsesApiClient(properties, mapper, request ->
+                new ResponsesApiClient.TransportResponse(200, attempts.incrementAndGet() == 1
+                        ? completedResponse("not-json")
+                        : completedResponse(validIntent())));
+        DefaultJourneyAiGateway gateway = new DefaultJourneyAiGateway(properties, mapper, JourneyAiSchemas.intent(mapper), client);
+
+        JourneyAiGateway.IntentResult result = gateway.compileIntent("성수에서 출발");
+
+        assertThat(result.available()).isTrue();
+        assertThat(result.intent().origin().displayName()).isEqualTo("성수역");
+        assertThat(attempts).hasValue(2);
+    }
+
+    @Test
+    void stopsIntentAfterSecondOutputTextJsonFailureAndDoesNotRetryOtherFailures() throws Exception {
+        JourneyAiProperties properties = new JourneyAiProperties(true, null, "test-key", "test-model", Duration.ofSeconds(1));
+        AtomicInteger malformedAttempts = new AtomicInteger();
+        DefaultJourneyAiGateway malformedGateway = new DefaultJourneyAiGateway(properties, mapper, JourneyAiSchemas.intent(mapper),
+                new ResponsesApiClient(properties, mapper, request -> {
+                    malformedAttempts.incrementAndGet();
+                    return new ResponsesApiClient.TransportResponse(200, completedResponse("not-json"));
+                }));
+
+        assertThatThrownBy(() -> malformedGateway.compileIntent("성수에서 출발"))
+                .satisfies(exception -> {
+                    JourneyAiException failure = (JourneyAiException) exception;
+                    assertThat(failure.code()).isEqualTo(JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID);
+                    assertThat(failure.failureStage()).isEqualTo(JourneyAiFailureStage.OUTPUT_TEXT_JSON);
+                });
+        assertThat(malformedAttempts).hasValue(2);
+
+        AtomicInteger canonicalAttempts = new AtomicInteger();
+        DefaultJourneyAiGateway canonicalGateway = new DefaultJourneyAiGateway(properties, mapper, JourneyAiSchemas.intent(mapper),
+                new ResponsesApiClient(properties, mapper, request -> {
+                    canonicalAttempts.incrementAndGet();
+                    return new ResponsesApiClient.TransportResponse(200, completedResponse("{}"));
+                }));
+        assertThatThrownBy(() -> canonicalGateway.compileIntent("성수에서 출발"))
+                .extracting(exception -> ((JourneyAiException) exception).failureStage())
+                .isEqualTo(JourneyAiFailureStage.CANONICAL_SCHEMA);
+        assertThat(canonicalAttempts).hasValue(1);
+
+        AtomicInteger semanticAttempts = new AtomicInteger();
+        DefaultJourneyAiGateway semanticGateway = new DefaultJourneyAiGateway(properties, mapper, JourneyAiSchemas.intent(mapper),
+                new ResponsesApiClient(properties, mapper, request -> {
+                    semanticAttempts.incrementAndGet();
+                    return new ResponsesApiClient.TransportResponse(200, completedResponse(incompleteIntentWithoutClarification()));
+                }));
+        assertThatThrownBy(() -> semanticGateway.compileIntent("성수에서 출발"))
+                .extracting(exception -> ((JourneyAiException) exception).failureStage())
+                .isEqualTo(JourneyAiFailureStage.SEMANTIC_INTENT);
+        assertThat(semanticAttempts).hasValue(1);
+
+        AtomicInteger envelopeAttempts = new AtomicInteger();
+        DefaultJourneyAiGateway envelopeGateway = new DefaultJourneyAiGateway(properties, mapper, JourneyAiSchemas.intent(mapper),
+                new ResponsesApiClient(properties, mapper, request -> {
+                    envelopeAttempts.incrementAndGet();
+                    return new ResponsesApiClient.TransportResponse(200, "not-json");
+                }));
+        assertThatThrownBy(() -> envelopeGateway.compileIntent("성수에서 출발"))
+                .extracting(exception -> ((JourneyAiException) exception).failureStage())
+                .isEqualTo(JourneyAiFailureStage.RESPONSE_ENVELOPE);
+        assertThat(envelopeAttempts).hasValue(1);
+
+        assertIntentProviderResponseNotRetried(503, "{}", JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE);
+        assertIntentProviderResponseNotRetried(200,
+                "{\"status\":\"incomplete\",\"output\":[]}", JourneyAiErrorCode.AI_RESPONSE_INCOMPLETE);
+        assertIntentProviderResponseNotRetried(200,
+                "{\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"refusal\",\"refusal\":\"no\"}]}]}",
+                JourneyAiErrorCode.AI_PROVIDER_REFUSAL);
+
+        AtomicInteger timeoutAttempts = new AtomicInteger();
+        DefaultJourneyAiGateway timeoutGateway = new DefaultJourneyAiGateway(properties, mapper, JourneyAiSchemas.intent(mapper),
+                new ResponsesApiClient(properties, mapper, request -> {
+                    timeoutAttempts.incrementAndGet();
+                    throw new HttpTimeoutException("timeout");
+                }));
+        assertThatThrownBy(() -> timeoutGateway.compileIntent("성수에서 출발"))
+                .extracting(exception -> ((JourneyAiException) exception).code())
+                .isEqualTo(JourneyAiErrorCode.AI_PROVIDER_TIMEOUT);
+        assertThat(timeoutAttempts).hasValue(1);
     }
 
     @Test
@@ -251,6 +339,37 @@ class DefaultJourneyAiGatewayTest {
                  "weatherEvidenceIds":[],"airQualityEvidenceIds":[],"factRefs":[],"factValues":[],
                  "rationale":"근거 선택","rationaleTags":[]}
                 """;
+    }
+
+    private String validIntent() {
+        return """
+                {"origin":{"displayName":"성수역","placeId":""},"destination":null,"startAt":"2026-09-09T13:30:00+09:00","totalMinutes":120,"requiredBikeCount":1,"preferences":{"stability":3,"lowSlope":3,"bikeLane":3,"scenery":3,"culture":3,"cafe":3,"avoidCrowds":3},"hardConstraints":{"maxWalkMinutes":null,"avoidRain":null,"returnBy":null},"missingFields":[],"needsClarification":false}
+                """;
+    }
+
+    private String incompleteIntentWithoutClarification() {
+        return """
+                {"origin":null,"destination":null,"startAt":null,"totalMinutes":null,"requiredBikeCount":null,"preferences":{"stability":3,"lowSlope":3,"bikeLane":3,"scenery":3,"culture":3,"cafe":3,"avoidCrowds":3},"hardConstraints":{"maxWalkMinutes":null,"avoidRain":null,"returnBy":null},"missingFields":[],"needsClarification":false}
+                """;
+    }
+
+    private void assertIntentProviderResponseNotRetried(
+            int status,
+            String body,
+            JourneyAiErrorCode expectedCode
+    ) throws Exception {
+        AtomicInteger attempts = new AtomicInteger();
+        JourneyAiProperties properties = new JourneyAiProperties(true, null, "test-key", "test-model", Duration.ofSeconds(1));
+        DefaultJourneyAiGateway gateway = new DefaultJourneyAiGateway(properties, mapper, JourneyAiSchemas.intent(mapper),
+                new ResponsesApiClient(properties, mapper, request -> {
+                    attempts.incrementAndGet();
+                    return new ResponsesApiClient.TransportResponse(status, body);
+                }));
+
+        assertThatThrownBy(() -> gateway.compileIntent("성수에서 출발"))
+                .extracting(exception -> ((JourneyAiException) exception).code())
+                .isEqualTo(expectedCode);
+        assertThat(attempts).hasValue(1);
     }
 
     private ConsumerAiEvidenceBundle.Evidence evidence(

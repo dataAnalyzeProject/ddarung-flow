@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 /**
  * E0 may instantiate and wire this adapter. D0 keeps it independent from JourneyPlanService.
@@ -48,8 +49,8 @@ public class DefaultJourneyAiGateway implements JourneyAiGateway {
         if (!properties.enabled()) return IntentResult.unavailable(JourneyAiErrorCode.AI_DISABLED);
         if (!properties.providerConfigured()) return IntentResult.unavailable(JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE);
         piiBoundaryValidator.rejectSensitiveInput(request.naturalLanguageText());
-        return client.requestStructuredOutput(request, "journey_intent", wireIntentSchema,
-                output -> new IntentResult(intentCompiler.compile(output.toString()), null));
+        return requestWithSingleOutputTextRetry(() -> client.requestStructuredOutput(request, "journey_intent", wireIntentSchema,
+                output -> new IntentResult(intentCompiler.compile(output.toString()), null)));
     }
 
     @Override
@@ -64,9 +65,13 @@ public class DefaultJourneyAiGateway implements JourneyAiGateway {
         ObjectNode input = objectMapper.createObjectNode();
         input.set("evidence", objectMapper.valueToTree(scheduleEvidence(evidence)));
         input.set("constraints", objectMapper.valueToTree(constraints));
+        return requestWithSingleOutputTextRetry(() -> requestSchedule(input));
+    }
+
+    private <T> T requestWithSingleOutputTextRetry(Supplier<T> request) {
         for (int attempt = 0; ; attempt++) {
             try {
-                return requestSchedule(input);
+                return request.get();
             } catch (JourneyAiException exception) {
                 if (attempt > 0 || exception.code() != JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID
                         || exception.failureStage() != JourneyAiFailureStage.OUTPUT_TEXT_JSON) {
