@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import ModelReleasesPage from './ModelReleasesPage';
 
 const runtime = { state: 'SUCCESS', data: { status: 'NORMAL', modelVersion: 'runtime-v1', artifactSha256: 'a'.repeat(64), modelSource: 'verified_active_pointer', loadedAt: '2026-09-01T00:00:00Z', supportedHorizons: [60, 120, 180, 240], supportedQuantities: [1, 2, 3, 4, 5] } };
@@ -75,6 +75,29 @@ describe('ModelReleasesPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: '현재 serving 동기화' }));
     await waitFor(() => expect(action).toHaveBeenCalledWith({ type: 'RECONCILE', id: undefined }));
     await waitFor(() => expect(screen.queryByRole('button', { name: '현재 serving 동기화' })).not.toBeInTheDocument());
+  });
+
+  test('folds the registry, register, and history blocks by default and keeps the lifecycle counts visible', async () => {
+    const history = { state: 'SUCCESS', data: [{ action: 'MODEL_APPROVE', resourceType: 'MODEL', resourceVersion: 'safe-v1', result: 'SUCCESS', reasonCode: null, occurredAt: '2026-09-01T00:00:00Z' }] };
+    render(<ModelReleasesPage createAdapter={adapterFor({ ...base, permissions: [...base.permissions, 'MODEL_ARTIFACT_REGISTER'], history })} />);
+    const registry = (await screen.findByRole('heading', { name: '모델 레지스트리' })).closest('details');
+    const register = screen.getByRole('heading', { name: '모델 업로드 · 등록' }).closest('details');
+    const changes = screen.getByRole('heading', { name: '변경 이력' }).closest('details');
+    [registry, register, changes].forEach((block) => expect(block.open).toBe(false));
+
+    // folded summaries still carry the lifecycle counts, so the fold hides no fact
+    expect(within(registry.querySelector('summary')).getByText('총 1개')).toBeVisible();
+    expect(within(registry.querySelector('summary')).getByText('DRAFT 1')).toBeVisible();
+    expect(within(changes.querySelector('summary')).getByText('1건')).toBeVisible();
+  });
+
+  test('expands the registry on click and exposes its table and lifecycle actions', async () => {
+    render(<ModelReleasesPage createAdapter={adapterFor({ ...base, permissions: [...base.permissions, 'MODEL_VALIDATE'] })} />);
+    const registry = (await screen.findByRole('heading', { name: '모델 레지스트리' })).closest('details');
+    fireEvent.click(registry.querySelector('summary'));
+    expect(registry.open).toBe(true);
+    expect(within(registry).getByText('safe-v1')).toBeVisible();
+    expect(within(registry).getByRole('button', { name: 'safe-v1 검증' })).toBeVisible();
   });
 
   test('renders safe lifecycle history fields', async () => {
