@@ -113,6 +113,7 @@ export default function CandidatesPage({ createAdapter }) {
     && typeof activeStationCount === 'number' && activeStationCount > 0
     && typeof normalInferenceCount === 'number' && normalInferenceCount > 0
     && typeof inventoryMissingCount === 'number' && inventoryMissingCount > 0;
+  const hasUsableMeasuredRanking = hasMeasuredInventoryGap && items.length > 0;
   const selectedCandidate = items.find((candidate) => candidate.station?.stationNumber === selectedStationNumber) || items[0] || null;
   return <main className="candidates-page" aria-label="집중관리 목록">
     <header className="candidates-header">
@@ -135,7 +136,7 @@ export default function CandidatesPage({ createAdapter }) {
       <div className="candidates-context" aria-label="목록 기준">
         <span><b>발행 시각</b>{formatTime(result?.publishedAt)}</span>
         <span><b>범위</b>서울 전체 · {result?.scope?.type || 'GLOBAL'}</span>
-        <span><b>데이터 상태</b><mark className={`candidates-root-state ${ROOT_DATA_STATE_CLASS[rootDataState] || 'candidates-root-state--unknown'}`}>{ROOT_DATA_STATE_LABEL[rootDataState] || '확인 필요'}</mark>{hasMeasuredInventoryGap ? <small className="candidates-context-summary">{formatCount(normalInferenceCount)}곳 정상 평가 · {formatCount(inventoryMissingCount)}곳 재고 확인 불가</small> : null}</span>
+        <span><b>데이터 상태</b><mark className={`candidates-root-state ${hasUsableMeasuredRanking ? ROOT_DATA_STATE_CLASS.NORMAL : (ROOT_DATA_STATE_CLASS[rootDataState] || 'candidates-root-state--unknown')}`}>{hasUsableMeasuredRanking ? '정상 평가' : (ROOT_DATA_STATE_LABEL[rootDataState] || '확인 필요')}</mark>{hasMeasuredInventoryGap ? <small className="candidates-context-summary">{hasUsableMeasuredRanking ? `${formatCount(normalInferenceCount)}곳 평가 · ${formatCount(inventoryMissingCount)}곳 제외` : `${formatCount(normalInferenceCount)}곳 정상 평가 · ${formatCount(inventoryMissingCount)}곳 재고 확인 불가`}</small> : null}</span>
         <span><b>위험 유형</b>{result?.riskType || 'RENTAL'}</span>
       </div>
     </section>
@@ -145,7 +146,7 @@ export default function CandidatesPage({ createAdapter }) {
         <div><h2 id="candidates-heading">우선 확인 후보</h2><p>API가 제공한 순서를 그대로 표시합니다.</p></div>
         <nav aria-label="운영 화면 이동"><a href="/admin/ops/risk-map">대여 부족 위험 지도</a><a href="/admin/ops/analysis">반복 품절 패턴</a></nav>
       </div>
-      {rootUiState !== 'SUCCESS' ? <div className="candidates-state-panel">
+      {rootUiState !== 'SUCCESS' && !hasUsableMeasuredRanking ? <div className="candidates-state-panel">
         {rootDataState === 'MISSING' ? <section className="candidates-partial-summary" role="status" aria-label="부분 결측 안내">
           <strong>{hasMeasuredInventoryGap ? '일부 데이터 확인 필요' : '데이터 확인 필요'}</strong>
           <p>{hasMeasuredInventoryGap

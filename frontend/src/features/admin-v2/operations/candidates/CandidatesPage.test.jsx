@@ -65,7 +65,7 @@ describe('CandidatesPage', () => {
     expect(within(screen.getByLabelText('목록 기준')).getByText(badgeLabel)).toHaveClass('candidates-root-state', stateClass);
   });
 
-  test('summarizes measured inventory gaps without exposing the raw root state in the primary message', async () => {
+  test('keeps measured inventory gaps in details while showing the usable ranking immediately', async () => {
     const partial = {
       ...first,
       dataState: 'MISSING',
@@ -80,11 +80,12 @@ describe('CandidatesPage', () => {
     };
     render(<CandidatesPage createAdapter={adapterFor(() => Promise.resolve(partial))} />);
 
-    expect(await screen.findByText('일부 데이터 확인 필요')).toBeInTheDocument();
-    expect(screen.getByText('서울 전체 2,735곳 중 2,719곳은 정상적으로 평가되었습니다. 최신 재고를 확인할 수 없는 16곳은 이번 후보 산정에서 제외되었습니다.')).toBeInTheDocument();
+    expect(await screen.findByRole('table', { name: '집중관리 후보 목록' })).toBeInTheDocument();
+    expect(screen.queryByText('일부 데이터 확인 필요')).not.toBeInTheDocument();
+    expect(screen.queryByText('서울 전체 2,735곳 중 2,719곳은 정상적으로 평가되었습니다. 최신 재고를 확인할 수 없는 16곳은 이번 후보 산정에서 제외되었습니다.')).not.toBeInTheDocument();
     const context = screen.getByLabelText('목록 기준');
-    expect(within(context).getByText('일부 데이터 결측')).toHaveClass('candidates-root-state', 'candidates-root-state--missing');
-    expect(context).toHaveTextContent('2,719곳 정상 평가 · 16곳 재고 확인 불가');
+    expect(within(context).getByText('정상 평가')).toHaveClass('candidates-root-state', 'candidates-root-state--normal');
+    expect(context).toHaveTextContent('2,719곳 평가 · 16곳 제외');
     expect(within(context).queryByText('MISSING')).not.toBeInTheDocument();
     expect(screen.queryByText('일부 정보만 사용 가능')).not.toBeInTheDocument();
     fireEvent.click(screen.getByText('상세 상태 보기'));
