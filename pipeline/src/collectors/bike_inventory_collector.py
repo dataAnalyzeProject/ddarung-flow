@@ -103,13 +103,80 @@ def _inventory_node(response):
     return None
 
 
+def _provider_total_count(value):
+    if type(value) is int:
+        return value if value >= 0 else None
+    if isinstance(value, str) and value and value.isascii() and value.isdigit():
+        return int(value)
+    return None
+
+
+def has_complete_pagination_evidence(evidence, actual_row_count):
+    """완료된 모든 페이지와 실제 병합 행 수가 일치할 때만 참을 반환한다."""
+    if not isinstance(evidence, dict):
+        return False
+    integer_fields = (
+        "page_size",
+        "page_count",
+        "expected_row_count",
+        "row_count",
+        "terminal_page_row_count",
+    )
+    if any(type(evidence.get(field)) is not int for field in integer_fields):
+        return False
+
+    page_size = evidence["page_size"]
+    page_count = evidence["page_count"]
+    expected_count = evidence["expected_row_count"]
+    row_count = evidence["row_count"]
+    terminal_count = evidence["terminal_page_row_count"]
+    if page_size <= 0 or page_count <= 0 or expected_count < 0:
+        return False
+    expected_page_count = max(1, (expected_count + page_size - 1) // page_size)
+    expected_terminal_count = expected_count - (page_count - 1) * page_size
+    return (
+        evidence.get("status") == "COMPLETE"
+        and evidence.get("reason") is None
+        and page_count == expected_page_count
+        and terminal_count == expected_terminal_count
+        and 0 <= terminal_count <= page_size
+        and expected_count == actual_row_count
+        and row_count == actual_row_count
+    )
+
+
+def _collection_result(collected_at, payloads, merged_rows, first_result, evidence):
+    total_count = evidence.get("expected_row_count")
+    payload = {
+        "rentBikeStatus": {
+            "list_total_count": (
+                total_count if isinstance(total_count, int) else len(merged_rows)
+            ),
+            "RESULT": first_result or {},
+            "row": merged_rows,
+        },
+        "collection_evidence": evidence,
+    }
+    return {
+        "source": "bike_inventory",
+        "collected_at": _to_iso(collected_at),
+        "payloads": payloads,
+        "collection_evidence": evidence,
+        "payload": payload,
+    }
+
+
 def collect_bike_inventory(client, collected_at, page_size=1000, sleep=time.sleep, random_source=random.uniform):
     """마지막 페이지까지 조회하고 원본 페이지와 통합 응답을 반환한다."""
     page_size = _as_positive_int(page_size, "page_size")
     payloads = []
     merged_rows = []
+    seen_station_ids = set()
     first_result = None
+    expected_row_count = None
     start_index = 1
+    terminal_page_row_count = None
+    failure_reason = None
 
     while True:
         end_index = start_index + page_size - 1
@@ -131,28 +198,73 @@ def collect_bike_inventory(client, collected_at, page_size=1000, sleep=time.slee
 
         node = _inventory_node(response)
         if not isinstance(node, dict):
+            failure_reason = "MALFORMED_PAGE"
             break
         if first_result is None:
             first_result = node.get("RESULT")
-        rows = node.get("row") or []
-        if not isinstance(rows, list):
+        result = node.get("RESULT")
+        if not isinstance(result, dict) or result.get("CODE") != "INFO-000":
+            failure_reason = "API_ERROR"
             break
-        merged_rows.extend(rows)
+        rows = node.get("row")
+        if not isinstance(rows, list):
+            failure_reason = "MALFORMED_PAGE"
+            break
 
-        # 실제 API는 list_total_count를 페이지 건수로 반환하므로 행 수로 끝을 찾는다.
-        if len(rows) < page_size:
+        declared_page_count = _provider_total_count(node.get("list_total_count"))
+        if declared_page_count is None:
+            failure_reason = "PAGE_CONTINUITY_BREAK"
+            break
+        if expected_row_count is None:
+            expected_row_count = declared_page_count
+        elif declared_page_count != expected_row_count:
+            failure_reason = "PAGE_CONTINUITY_BREAK"
+            break
+
+        remaining_count = expected_row_count - len(merged_rows)
+        expected_page_row_count = min(page_size, remaining_count)
+        if remaining_count < 0 or len(rows) != expected_page_row_count:
+            if payloads[:-1] and not rows and remaining_count > 0:
+                failure_reason = "EMPTY_FOLLOW_UP_PAGE"
+            else:
+                failure_reason = "PAGE_CONTINUITY_BREAK"
+            terminal_page_row_count = len(rows)
+            break
+        page_station_ids = []
+        for row in rows:
+            if not isinstance(row, dict):
+                failure_reason = "MALFORMED_ROW"
+                break
+            station_id = str(row.get("stationId") or "").strip()
+            if not station_id:
+                failure_reason = "MALFORMED_ROW"
+                break
+            if station_id in seen_station_ids or station_id in page_station_ids:
+                failure_reason = "DUPLICATE_STATION"
+                break
+            page_station_ids.append(station_id)
+        if failure_reason:
+            terminal_page_row_count = len(rows)
+            break
+
+        merged_rows.extend(rows)
+        seen_station_ids.update(page_station_ids)
+        terminal_page_row_count = len(rows)
+
+        # provider의 전체 행 수와 지금까지 받은 행 수가 일치해야 cycle이 끝난다.
+        if len(merged_rows) == expected_row_count:
             break
         start_index += page_size
 
-    return {
-        "source": "bike_inventory",
-        "collected_at": _to_iso(collected_at),
-        "payloads": payloads,
-        "payload": {
-            "rentBikeStatus": {
-                "list_total_count": len(merged_rows),
-                "RESULT": first_result or {},
-                "row": merged_rows,
-            }
-        },
+    evidence = {
+        "status": "PARTIAL" if failure_reason else "COMPLETE",
+        "reason": failure_reason,
+        "page_size": page_size,
+        "page_count": len(payloads),
+        "expected_row_count": expected_row_count,
+        "row_count": len(merged_rows),
+        "terminal_page_row_count": terminal_page_row_count,
     }
+    return _collection_result(
+        collected_at, payloads, merged_rows, first_result, evidence
+    )

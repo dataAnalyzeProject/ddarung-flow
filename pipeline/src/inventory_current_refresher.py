@@ -14,6 +14,7 @@ from pipeline.src.collectors.bike_inventory_collector import (
     SeoulBikeApiClient,
     SeoulBikeTransportError,
     collect_bike_inventory,
+    has_complete_pagination_evidence,
 )
 
 
@@ -25,6 +26,11 @@ DEGRADED_RECOVERY_JITTER_SECONDS = 10
 def build_snapshot_rows(collection_result, minimum_rows=1000):
     node = collection_result.get("payload", {}).get("rentBikeStatus", {})
     source_rows = node.get("row")
+    evidence = collection_result.get("collection_evidence")
+    if not isinstance(source_rows, list) or not has_complete_pagination_evidence(
+        evidence, len(source_rows) if isinstance(source_rows, list) else -1
+    ):
+        raise ValueError("bike inventory snapshot lacks complete pagination evidence")
     if not isinstance(source_rows, list) or len(source_rows) < minimum_rows:
         raise ValueError("bike inventory snapshot is incomplete")
 

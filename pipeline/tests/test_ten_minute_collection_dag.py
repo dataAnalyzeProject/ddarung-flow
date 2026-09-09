@@ -186,6 +186,18 @@ def test_quality_failure_blocks_downstream_tasks(tree):
     assert ast.literal_eval(_decorator_kwargs(quality_function, "task")["retries"]) == 0
 
 
+def test_inventory_completion_evidence_is_preserved_for_raw_and_quality(tree):
+    collect_function = next(
+        function
+        for function in _task_functions(_dag_function(tree))
+        if _task_id(function) == "collect_bike_inventory"
+    )
+    body = ast.unparse(collect_function)
+
+    assert "'collection_evidence': result['collection_evidence']" in body
+    assert "'payload': result['payload']" in body
+
+
 def test_hourly_aggregation_reuses_curated_snapshot_without_averaging(tree, source):
     """DEC-010/DEC-013: 정각 cycle의 curated 스냅샷을 그대로 재사용하고,
     평균·중앙값 등 별도 계산이나 별도 저장은 하지 않는다."""

@@ -1,5 +1,9 @@
 """Curated 처리 전에 Raw 응답을 통과·차단하는 품질 게이트."""
 
+from pipeline.src.collectors.bike_inventory_collector import (
+    has_complete_pagination_evidence,
+)
+
 
 LEAKAGE_FIELDS = {
     # 예측시점에 알 수 없는 정답·미래값은 Raw 단계에서 탐지한다.
@@ -31,6 +35,8 @@ def _bike_quality(payload):
         "zero_bike_count": 0,
         "negative_bike_count": 0,
         "missing_required_count": 0,
+        "pagination_status": None,
+        "pagination_page_count": None,
     }
 
     bike_list = None
@@ -51,6 +57,17 @@ def _bike_quality(payload):
         return reasons, metrics
 
     metrics["row_count"] = len(rows)
+    evidence = payload.get("collection_evidence")
+    if isinstance(evidence, dict):
+        metrics["pagination_status"] = evidence.get("status")
+        metrics["pagination_page_count"] = evidence.get("page_count")
+        if evidence.get("status") != "COMPLETE":
+            reasons.append("incomplete_pagination")
+        elif not has_complete_pagination_evidence(evidence, len(rows)):
+            reasons.append("invalid_collection_evidence")
+    else:
+        reasons.append("missing_collection_evidence")
+
     for row in rows:
         if not isinstance(row, dict):
             metrics["missing_required_count"] += 1
