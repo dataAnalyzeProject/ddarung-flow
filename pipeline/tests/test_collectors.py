@@ -275,6 +275,8 @@ def test_collect_bike_inventory_keeps_empty_response_for_quality_check():
     result = collect_bike_inventory(FakeBikeClient([response]), COLLECTED_AT)
 
     assert result["payloads"] == [response]
+    assert result["collection_evidence"]["status"] == "PARTIAL"
+    assert result["collection_evidence"]["reason"] == "EMPTY_INITIAL_PAGE"
 
 
 def test_collect_bike_inventory_propagates_client_failure():

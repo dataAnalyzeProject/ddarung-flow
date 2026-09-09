@@ -216,8 +216,10 @@ def collect_bike_inventory(client, collected_at, page_size=1000, sleep=time.slee
             failure_reason = "PAGE_CONTINUITY_BREAK"
             break
 
-        if payloads[:-1] and not rows:
-            failure_reason = "EMPTY_FOLLOW_UP_PAGE"
+        if not rows:
+            failure_reason = (
+                "EMPTY_FOLLOW_UP_PAGE" if payloads[:-1] else "EMPTY_INITIAL_PAGE"
+            )
             terminal_page_row_count = len(rows)
             break
         page_station_ids = []
