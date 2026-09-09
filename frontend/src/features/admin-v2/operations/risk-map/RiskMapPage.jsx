@@ -66,7 +66,7 @@ export default function RiskMapPage({ createDataAdapter, loadMapSdk = loadKakaoM
     listController.current = controller;
     const current = ++generation.current;
     if (append) { setLoadingMore(true); setLoadMoreError(null); }
-    else { setLoading(true); setResult(null); setError(null); setLoadMoreError(null); setSnapshotExpired(false); }
+    else { setLoading(true); setError(null); setLoadMoreError(null); setSnapshotExpired(false); }
     adapter.loadList({ ...filters, bbox, limit: 100, cursor, snapshotId: append ? snapshotRef.current : null, signal: controller.signal })
       .then((next) => {
         if (controller.signal.aborted || generation.current !== current) return;
@@ -108,10 +108,6 @@ export default function RiskMapPage({ createDataAdapter, loadMapSdk = loadKakaoM
 
   useEffect(() => {
     if (bbox === null) return;
-    setSelectedStationNumber(null);
-    detailController.current?.abort();
-    setDetail(null);
-    setDetailError(null);
     setLoadMoreError(null);
     setSnapshotExpired(false);
   }, [bbox]);
@@ -142,11 +138,6 @@ export default function RiskMapPage({ createDataAdapter, loadMapSdk = loadKakaoM
           window.clearTimeout(bboxTimer.current);
           listController.current?.abort();
           generation.current += 1;
-          setSelectedStationNumber(null);
-          detailController.current?.abort();
-          setDetail(null);
-          setDetailError(null);
-          setResult(null);
           setError(null);
           setLoadMoreError(null);
           setSnapshotExpired(false);
