@@ -9,9 +9,12 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 
+import java.math.BigDecimal;
 import java.time.Duration;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -74,6 +77,98 @@ class DefaultJourneyAiGatewayTest {
 
         assertThat(result.selection().rentalCandidateId()).isEqualTo("rental:station-1");
         assertThat(result.selection().rationaleTags()).containsExactly("EVIDENCE_ONLY");
+    }
+
+    @Test
+    void excludesAccessRoutesFromScheduleInputAndKeepsRentalAccessFacts() throws Exception {
+        JourneyAiProperties properties = new JourneyAiProperties(true, null, "test-key", "test-model", Duration.ofSeconds(1));
+        DefaultJourneyAiGateway gateway = new DefaultJourneyAiGateway(
+                properties, mapper, JourneyAiSchemas.intent(mapper), new ResponsesApiClient(properties, mapper, request -> null));
+        ConsumerAiEvidenceBundle.Evidence rental = evidence("rental:station-1", Map.of(),
+                Map.of("accessDistanceMeters", BigDecimal.valueOf(673), "accessDurationSeconds", BigDecimal.valueOf(660)));
+        ConsumerAiEvidenceBundle.Evidence access = evidence("route:access:station-1",
+                Map.of("segmentType", "ACCESS", "travelMode", "WALK"), Map.of());
+        ConsumerAiEvidenceBundle.Evidence bicycle = evidence("route:rental:station-1:poi-1",
+                Map.of("fromEvidenceId", "rental:station-1", "toEvidenceId", "poi-1", "travelMode", "BICYCLE"), Map.of());
+        ConsumerAiEvidenceBundle.Evidence unavailable = new ConsumerAiEvidenceBundle.Evidence(
+                "route:unavailable", "kakao-bicycle", ConsumerAiEvidenceBundle.EvidenceStatus.UNAVAILABLE,
+                OffsetDateTime.parse("2026-09-09T12:00:00+09:00"),
+                Map.of("fromEvidenceId", "rental:station-1", "toEvidenceId", "poi-2", "routeMode", "BIKE_ONLY"), Map.of());
+
+        ConsumerAiEvidenceBundle filtered = gateway.scheduleEvidence(new ConsumerAiEvidenceBundle(
+                Map.of(rental.evidenceId(), rental), Map.of(),
+                Map.of(access.evidenceId(), access, bicycle.evidenceId(), bicycle, unavailable.evidenceId(), unavailable),
+                Map.of(), Map.of()));
+
+        assertThat(filtered.routes()).containsOnlyKeys(bicycle.evidenceId());
+        assertThat(filtered.rentalCandidates().get(rental.evidenceId()).numericFacts())
+                .containsEntry("accessDistanceMeters", BigDecimal.valueOf(673))
+                .containsEntry("accessDurationSeconds", BigDecimal.valueOf(660));
+    }
+
+    @Test
+    void retriesScheduleOnceWhenOutputTextIsNotJson() throws Exception {
+        AtomicInteger attempts = new AtomicInteger();
+        JourneyAiProperties properties = new JourneyAiProperties(true, null, "test-key", "test-model", Duration.ofSeconds(1));
+        ResponsesApiClient client = new ResponsesApiClient(properties, mapper, request ->
+                new ResponsesApiClient.TransportResponse(200, attempts.incrementAndGet() == 1
+                        ? completedResponse("not-json")
+                        : completedResponse(validSchedule())));
+        DefaultJourneyAiGateway gateway = new DefaultJourneyAiGateway(properties, mapper, JourneyAiSchemas.intent(mapper), client);
+
+        JourneyAiGateway.ScheduleResult result = gateway.selectSchedule(
+                new ConsumerAiEvidenceBundle(Map.of(), Map.of(), Map.of(), Map.of(), Map.of()),
+                new JourneyAiGateway.ScheduleConstraints(1, 10, 120, 60));
+
+        assertThat(result.available()).isTrue();
+        assertThat(attempts).hasValue(2);
+    }
+
+    @Test
+    void stopsAfterSecondOutputTextJsonFailureAndDoesNotRetryOtherFailures() throws Exception {
+        AtomicInteger malformedAttempts = new AtomicInteger();
+        JourneyAiProperties properties = new JourneyAiProperties(true, null, "test-key", "test-model", Duration.ofSeconds(1));
+        DefaultJourneyAiGateway malformedGateway = new DefaultJourneyAiGateway(properties, mapper, JourneyAiSchemas.intent(mapper),
+                new ResponsesApiClient(properties, mapper, request -> {
+                    malformedAttempts.incrementAndGet();
+                    return new ResponsesApiClient.TransportResponse(200, completedResponse("not-json"));
+                }));
+
+        assertThatThrownBy(() -> malformedGateway.selectSchedule(
+                new ConsumerAiEvidenceBundle(Map.of(), Map.of(), Map.of(), Map.of(), Map.of()),
+                new JourneyAiGateway.ScheduleConstraints(1, 10, 120, 60)))
+                .satisfies(exception -> {
+                    JourneyAiException failure = (JourneyAiException) exception;
+                    assertThat(failure.code()).isEqualTo(JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID);
+                    assertThat(failure.failureStage()).isEqualTo(JourneyAiFailureStage.OUTPUT_TEXT_JSON);
+                });
+        assertThat(malformedAttempts).hasValue(2);
+
+        AtomicInteger canonicalAttempts = new AtomicInteger();
+        DefaultJourneyAiGateway canonicalGateway = new DefaultJourneyAiGateway(properties, mapper, JourneyAiSchemas.intent(mapper),
+                new ResponsesApiClient(properties, mapper, request -> {
+                    canonicalAttempts.incrementAndGet();
+                    return new ResponsesApiClient.TransportResponse(200, completedResponse("{}"));
+                }));
+        assertThatThrownBy(() -> canonicalGateway.selectSchedule(
+                new ConsumerAiEvidenceBundle(Map.of(), Map.of(), Map.of(), Map.of(), Map.of()),
+                new JourneyAiGateway.ScheduleConstraints(1, 10, 120, 60)))
+                .extracting(exception -> ((JourneyAiException) exception).failureStage())
+                .isEqualTo(JourneyAiFailureStage.CANONICAL_SCHEMA);
+        assertThat(canonicalAttempts).hasValue(1);
+
+        AtomicInteger providerAttempts = new AtomicInteger();
+        DefaultJourneyAiGateway unavailableGateway = new DefaultJourneyAiGateway(properties, mapper, JourneyAiSchemas.intent(mapper),
+                new ResponsesApiClient(properties, mapper, request -> {
+                    providerAttempts.incrementAndGet();
+                    return new ResponsesApiClient.TransportResponse(503, "{}");
+                }));
+        assertThatThrownBy(() -> unavailableGateway.selectSchedule(
+                new ConsumerAiEvidenceBundle(Map.of(), Map.of(), Map.of(), Map.of(), Map.of()),
+                new JourneyAiGateway.ScheduleConstraints(1, 10, 120, 60)))
+                .extracting(exception -> ((JourneyAiException) exception).code())
+                .isEqualTo(JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE);
+        assertThat(providerAttempts).hasValue(1);
     }
 
     @Test
@@ -149,4 +244,22 @@ class DefaultJourneyAiGatewayTest {
                 {"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":%s}]}]}
                 """.formatted(mapper.writeValueAsString(output));
     }
+
+    private String validSchedule() {
+        return """
+                {"rentalCandidateId":"rental:station-1","stops":[],"routeEvidenceIds":[],
+                 "weatherEvidenceIds":[],"airQualityEvidenceIds":[],"factRefs":[],"factValues":[],
+                 "rationale":"근거 선택","rationaleTags":[]}
+                """;
+    }
+
+    private ConsumerAiEvidenceBundle.Evidence evidence(
+            String id,
+            Map<String, String> textFacts,
+            Map<String, BigDecimal> numericFacts
+    ) {
+        return new ConsumerAiEvidenceBundle.Evidence(id, "test-source", ConsumerAiEvidenceBundle.EvidenceStatus.NORMAL,
+                OffsetDateTime.parse("2026-09-09T12:00:00+09:00"), textFacts, numericFacts);
+    }
+
 }
