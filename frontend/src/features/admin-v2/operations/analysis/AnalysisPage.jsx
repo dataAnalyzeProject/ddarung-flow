@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStatePanel from '../../components/AsyncStatePanel';
 
 const DAYS = ['월', '화', '수', '목', '금', '토', '일'];
+const VIEW = 'WEEKDAY';
 const DATA_STATES = { EMPTY: 'EMPTY', DELAYED: 'DELAYED', MISSING: 'EMPTY', INSUFFICIENT_DATA: 'INSUFFICIENT_DATA', UNAVAILABLE: 'UNAVAILABLE' };
 const COVERAGE = [
   ['selectedWindowProfileCount', 'Selected Window Profiles', count],
@@ -45,7 +46,6 @@ function Heatmap({ cells }) {
 }
 
 function Buckets({ result }) {
-  const hourly = result.view === 'HOUR';
   const observedRates = (result.buckets || []).map((bucket) => bucket.observedStockoutRate).filter((rate) => rate != null);
   const maxObservedRate = observedRates.length ? Math.max(...observedRates) : null;
   // This next display tick is only a relative-comparison scale; the percentage text remains the source value.
@@ -55,15 +55,14 @@ function Buckets({ result }) {
     if (rate <= 0 || comparisonCeiling == null) return '0%';
     return `${Math.min(100, (rate / comparisonCeiling) * 100)}%`;
   };
-  return <section className="analysis-buckets" aria-labelledby="analysis-buckets-heading"><div className="analysis-section-heading"><div><h2 id="analysis-buckets-heading">{hourly ? '시간대별' : '요일별'} 관측 요약</h2><p>{hourly ? '시간대별로 합산한 과거 품절 관측률입니다.' : '요일별로 합산한 과거 품절 관측률입니다.'}</p></div></div><div className="analysis-bucket-grid">{(result.buckets || []).map((bucket) => {
-    const label = hourly ? `${bucket.key}시` : `${DAYS[bucket.key - 1]}요일`;
+  return <section className="analysis-buckets" aria-labelledby="analysis-buckets-heading"><div className="analysis-section-heading"><div><h2 id="analysis-buckets-heading">요일별 관측 요약</h2><p>요일별로 합산한 과거 품절 관측률입니다.</p></div></div><div className="analysis-bucket-grid">{(result.buckets || []).map((bucket) => {
+    const label = `${DAYS[bucket.key - 1]}요일`;
     const fill = comparisonFill(bucket.observedStockoutRate);
     return <article key={bucket.key} className="analysis-bucket"><span>{label}</span><div className="analysis-bucket-track" role="img" aria-label={`${label} 비교 막대 · 실제 품절 관측률 ${percent(bucket.observedStockoutRate)} · ${fill == null ? '관측 정보 없음' : `시각 비교용 길이 ${fill} (실제 값 아님)`}`}>{fill == null ? null : <i className="analysis-bucket-fill" style={{ '--comparison-fill': fill }} />}</div><strong>{percent(bucket.observedStockoutRate)}</strong><small>표본 {count(bucket.sampleCount)}건 · 기여 {count(bucket.contributingStationCount)}곳</small></article>;
   })}</div></section>;
 }
 
 export default function AnalysisPage({ createAdapter }) {
-  const [view, setView] = useState('WEEKDAY');
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -75,7 +74,7 @@ export default function AnalysisPage({ createAdapter }) {
     const controller = new AbortController();
     const current = ++generation.current;
     setLoading(true); setError(null);
-    adapter.load({ view, signal: controller.signal }).then((next) => {
+    adapter.load({ view: VIEW, signal: controller.signal }).then((next) => {
       if (!controller.signal.aborted && generation.current === current) setResult(next);
     }).catch((nextError) => {
       if (!controller.signal.aborted && nextError?.name !== 'AbortError' && generation.current === current) setError(nextError);
@@ -83,22 +82,22 @@ export default function AnalysisPage({ createAdapter }) {
       if (!controller.signal.aborted && generation.current === current) setLoading(false);
     });
     return () => controller.abort();
-  }, [adapter, view, retryVersion]);
+  }, [adapter, retryVersion]);
 
   if (loading && !result) return <AsyncStatePanel state="LOADING" />;
 
-  const currentResult = !loading && !error && result?.view === view ? result : null;
+  const currentResult = !loading && !error && result?.view === VIEW ? result : null;
   const uiState = currentResult?.dataState === 'NORMAL' ? 'SUCCESS' : (DATA_STATES[currentResult?.dataState] || 'UNAVAILABLE');
   const showData = ['NORMAL', 'DELAYED', 'INSUFFICIENT_DATA'].includes(currentResult?.dataState);
   const waitingForView = !currentResult && !error;
   const coverage = currentResult?.coverage || {};
   return <main className="analysis-page" aria-label="반복 품절 패턴">
     <header className="analysis-header"><div><p className="analysis-eyebrow">UI-OPS-04 · OBSERVED_STOCKOUT_RATE</p><h1>반복 품절 패턴</h1><p>미래 예측이 아닌 과거 실제 관측을 요일·시간대별로 확인합니다.</p></div><dl><div><dt>기준 시각</dt><dd>{time(currentResult?.referenceTime)}</dd></div><div><dt>생성 시각</dt><dd>{time(currentResult?.generatedAt)}</dd></div></dl></header>
-    <section className="analysis-context" aria-label="분석 조건과 데이터 상태"><div className="analysis-tabs" aria-label="분석 보기"><button type="button" aria-pressed={view === 'WEEKDAY'} onClick={() => setView('WEEKDAY')}>요일별</button><button type="button" aria-pressed={view === 'HOUR'} onClick={() => setView('HOUR')}>시간대별</button></div><div><b>risk type</b><span>{currentResult?.riskType || '확인 정보 없음'}</span></div>{loading ? <p className="analysis-refreshing" role="status">선택한 보기를 불러오는 중입니다.</p> : null}</section>
+    <section className="analysis-context" aria-label="분석 조건과 데이터 상태"><div><b>표시 기준</b><span>요일 요약 · 시간대 상세</span></div><div><b>risk type</b><span>{currentResult?.riskType || '확인 정보 없음'}</span></div>{loading ? <p className="analysis-refreshing" role="status">분석을 다시 불러오는 중입니다.</p> : null}</section>
     {waitingForView ? <AsyncStatePanel state="LOADING" /> : error ? <RequestErrorPanel error={error} onRetry={() => setRetryVersion((version) => version + 1)} /> : <>{uiState !== 'SUCCESS' ? <DataStatePanel dataState={currentResult?.dataState} referenceTime={currentResult?.referenceTime} /> : null}
     {showData ? <><section className="analysis-meta-grid" aria-label="관측 창과 분석 근거"><div><b>선택된 관측 창</b><strong>{currentResult?.selectedWindowStart && currentResult?.selectedWindowEnd ? `${currentResult.selectedWindowStart} ~ ${currentResult.selectedWindowEnd}` : '확인 정보 없음'}</strong></div><div><b>data state</b><mark className={`analysis-state analysis-state--${String(currentResult?.dataState || 'unknown').toLowerCase()}`}>{currentResult?.dataState || 'UNAVAILABLE'}</mark></div><div><b>metric</b><strong>{currentResult?.metric || '확인 정보 없음'}</strong></div><div><b>rule version</b><strong>{currentResult?.ruleVersion || '확인 정보 없음'}</strong></div><div><b>window rule version</b><strong>{currentResult?.windowRuleVersion || '확인 정보 없음'}</strong></div></section>
     <section className="analysis-coverage" aria-label="커버리지 요약">{COVERAGE.map(([key, label, formatter]) => <div key={key}><b>{label}</b><span>{formatter(coverage[key], coverage)}</span></div>)}</section>
-    <div className="analysis-main-grid"><Buckets result={currentResult || { view, buckets: [] }} /><Heatmap cells={currentResult?.weekdayHourCells} /></div>
+    <div className="analysis-main-grid"><Buckets result={currentResult || { view: VIEW, buckets: [] }} /><Heatmap cells={currentResult?.weekdayHourCells} /></div>
     <section className="analysis-evidence" aria-labelledby="analysis-evidence-heading"><h2 id="analysis-evidence-heading">해석 및 데이터 의미</h2><dl><div><dt>metric</dt><dd>{currentResult?.metric || '확인 정보 없음'}</dd></div><div><dt>dimensions</dt><dd>WEEKDAY/HOUR · weekdayHourCells 168 cells</dd></div><div><dt>관측 창</dt><dd>선택 프로필 {count(currentResult?.selectedWindowProfileCount)}개 · 다른 창 제외 {count(currentResult?.excludedDifferentWindowProfileCount)}개</dd></div><div><dt>제한 사항</dt><dd>{currentResult?.limitations?.length ? currentResult.limitations.join(', ') : '확인 정보 없음'}</dd></div></dl></section></> : null}</>}
   </main>;
 }

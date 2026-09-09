@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import AnalysisPage from './AnalysisPage';
 
 function payload(view = 'WEEKDAY') {
@@ -64,38 +64,16 @@ describe('AnalysisPage', () => {
     expect(evidence).toHaveTextContent('확인 정보 없음');
   });
 
-  test('switches only the approved view and ignores a stale request', async () => {
-    let resolveHour;
-    const hour = new Promise((resolve) => { resolveHour = resolve; });
-    let weekdayCalls = 0;
-    const load = jest.fn(({ view }) => {
-      if (view === 'HOUR') return hour;
-      weekdayCalls += 1;
-      return Promise.resolve(payload('WEEKDAY'));
-    });
+  test('renders one unified view without an HOUR request or view toggle', async () => {
+    const load = jest.fn().mockResolvedValue(payload('WEEKDAY'));
     render(<AnalysisPage createAdapter={() => ({ load })} />);
     await screen.findByText('요일별 관측 요약');
-    fireEvent.click(screen.getByRole('button', { name: '시간대별' }));
-    expect(screen.getByText('불러오는 중')).toBeInTheDocument();
-    expect(screen.queryByText('현재 사용할 수 없음')).not.toBeInTheDocument();
-    expect(screen.queryByText('요일별 관측 요약')).not.toBeInTheDocument();
-    expect(screen.queryByText('OPS_ANALYSIS_STOCKOUT_V1')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '요일별' }));
-    await screen.findByText('요일별 관측 요약');
-    resolveHour(payload('HOUR'));
-    await Promise.resolve();
-    await waitFor(() => expect(screen.queryByText('시간대별 관측 요약')).not.toBeInTheDocument());
-    expect(weekdayCalls).toBe(2);
-    expect(load).toHaveBeenLastCalledWith(expect.objectContaining({ view: 'WEEKDAY' }));
-  });
-
-  test('requests and renders the HOUR view only after its tab is selected', async () => {
-    const load = jest.fn(({ view }) => Promise.resolve(payload(view)));
-    render(<AnalysisPage createAdapter={() => ({ load })} />);
-    await screen.findByText('요일별 관측 요약');
-    fireEvent.click(screen.getByRole('button', { name: '시간대별' }));
-    expect(await screen.findByText('시간대별 관측 요약')).toBeInTheDocument();
-    expect(load).toHaveBeenLastCalledWith(expect.objectContaining({ view: 'HOUR' }));
+    expect(screen.getByText('요일 요약 · 시간대 상세')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '요일 × 시간대 168 cells' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '요일별' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '시간대별' })).not.toBeInTheDocument();
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(load).toHaveBeenCalledWith(expect.objectContaining({ view: 'WEEKDAY' }));
   });
 
   test('renders normalized bucket comparison tracks without changing actual rates or context', async () => {
@@ -117,20 +95,6 @@ describe('AnalysisPage', () => {
     expect(screen.getByText('0.0%')).toBeInTheDocument();
     expect(screen.getByText('표본 10건 · 기여 2곳')).toBeInTheDocument();
     expect(screen.getByText('표본 20건 · 기여 4곳')).toBeInTheDocument();
-  });
-
-  test('keeps bucket comparison semantics after switching to HOUR', async () => {
-    const weekday = payload('WEEKDAY');
-    const hour = payload('HOUR');
-    hour.buckets[0].observedStockoutRate = .05;
-    hour.buckets[1].observedStockoutRate = .2;
-    render(<AnalysisPage createAdapter={() => ({ load: jest.fn(({ view }) => Promise.resolve(view === 'HOUR' ? hour : weekday)) })} />);
-    await screen.findByText('요일별 관측 요약');
-    fireEvent.click(screen.getByRole('button', { name: '시간대별' }));
-    const zeroHour = await screen.findByRole('img', { name: /0시 비교 막대 .* 실제 품절 관측률 5.0%/ });
-    const oneHour = screen.getByRole('img', { name: /1시 비교 막대 .* 실제 품절 관측률 20.0%/ });
-    expect(zeroHour.querySelector('.analysis-bucket-fill')).toHaveStyle({ '--comparison-fill': '20%' });
-    expect(oneHour.querySelector('.analysis-bucket-fill')).toHaveStyle({ '--comparison-fill': '80%' });
   });
 
   test('keeps every numeric zero at a zero comparison fill without treating it as missing', async () => {
@@ -191,7 +155,8 @@ describe('AnalysisPage', () => {
     expect(await screen.findByText('표시할 항목 없음')).toBeInTheDocument();
     expect(screen.queryByText('현재 사용할 수 없음')).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: '요일별 관측 요약' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '요일별' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('button', { name: '요일별' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '시간대별' })).not.toBeInTheDocument();
   });
 
   test('renders MISSING as data absence rather than generic partial data', async () => {
@@ -204,42 +169,30 @@ describe('AnalysisPage', () => {
     expect(screen.queryByText('현재 사용할 수 없음')).not.toBeInTheDocument();
   });
 
-  test('keeps the HOUR tab and retry after a transient HOUR failure', async () => {
-    let hourAttempts = 0;
+  test('retries the unified WEEKDAY source after a transient failure', async () => {
+    let attempts = 0;
     const transient = Object.assign(new Error('temporary'), { status: 503, code: 'OPS_ANALYSIS_TEMPORARY' });
-    const hourPayload = payload('HOUR');
-    hourPayload.ruleVersion = 'OPS_ANALYSIS_HOUR_TEST_V1';
-    hourPayload.windowRuleVersion = 'OPS_ANALYSIS_HOUR_WINDOW_TEST_V1';
-    const load = jest.fn(({ view }) => {
-      if (view === 'WEEKDAY') return Promise.resolve(payload('WEEKDAY'));
-      hourAttempts += 1;
-      return hourAttempts === 1 ? Promise.reject(transient) : Promise.resolve(hourPayload);
+    const load = jest.fn(() => {
+      attempts += 1;
+      return attempts === 1 ? Promise.reject(transient) : Promise.resolve(payload('WEEKDAY'));
     });
     render(<AnalysisPage createAdapter={() => ({ load })} />);
-    await screen.findByText('요일별 관측 요약');
-    fireEvent.click(screen.getByRole('button', { name: '시간대별' }));
     expect(await screen.findByText('오류가 발생했습니다')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '시간대별' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.queryByText('요일별 관측 요약')).not.toBeInTheDocument();
-    expect(screen.queryByText('OPS_ANALYSIS_STOCKOUT_V1')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '다시 시도' }));
-    expect(await screen.findByText('시간대별 관측 요약')).toBeInTheDocument();
-    expect(screen.getByText('OPS_ANALYSIS_HOUR_TEST_V1')).toBeInTheDocument();
-    expect(screen.getByText('OPS_ANALYSIS_HOUR_WINDOW_TEST_V1')).toBeInTheDocument();
-    expect(load).toHaveBeenLastCalledWith(expect.objectContaining({ view: 'HOUR' }));
+    expect(await screen.findByText('요일별 관측 요약')).toBeInTheDocument();
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(load).toHaveBeenLastCalledWith(expect.objectContaining({ view: 'WEEKDAY' }));
   });
 
-  test.each([[401, 'AUTH_REQUIRED'], [403, 'ADMIN_PERMISSION_DENIED']])('fails closed for %s access errors without retrying or showing prior view context', async (status, code) => {
+  test.each([[401, 'AUTH_REQUIRED'], [403, 'ADMIN_PERMISSION_DENIED']])('fails closed for %s access errors without retrying or showing analysis data', async (status, code) => {
     const error = Object.assign(new Error('denied'), { status, code });
-    const load = jest.fn(({ view }) => view === 'WEEKDAY' ? Promise.resolve(payload('WEEKDAY')) : Promise.reject(error));
+    const load = jest.fn().mockRejectedValue(error);
     render(<AnalysisPage createAdapter={() => ({ load })} />);
-    await screen.findByText('요일별 관측 요약');
-    fireEvent.click(screen.getByRole('button', { name: '시간대별' }));
     expect(await screen.findByText('필요 권한: OPS_ANALYSIS_READ')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '다시 시도' })).not.toBeInTheDocument();
     expect(screen.queryByText('요일별 관측 요약')).not.toBeInTheDocument();
     expect(screen.queryByText('OPS_ANALYSIS_STOCKOUT_V1')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '시간대별' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   test('fails closed for an unknown data state', async () => {
