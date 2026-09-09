@@ -18,15 +18,21 @@ import com.ddarungflow.journey.returnprediction.ReturnPredictionPort;
 import com.ddarungflow.journey.returnprediction.ReturnPredictionResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -77,6 +83,134 @@ class JourneyPlanServiceTest {
         assertThat(persistence.decisions).hasSize(2);
         assertThatThrownBy(() -> service.replan(10L, first.decisionId(), replanInput(1)))
                 .isInstanceOf(JourneyPlanService.RevisionConflict.class);
+    }
+
+    @Test
+    void duplicateRevisionPersistenceFailureUsesExistingConflictContract() {
+        InMemoryPersistence persistence = new InMemoryPersistence();
+        JourneyPlanService service = new JourneyPlanService(persistence, disabledAi(), new CountingReturnPort(),
+                request -> List.of(), new ObjectMapper().findAndRegisterModules());
+        JourneyPlanService.Decision initial = service.plan(10L, formInput());
+        persistence.concurrentRevisionOnRejectedWrite = true;
+
+        assertThatThrownBy(() -> service.replan(10L, initial.decisionId(), replanInput(1)))
+                .isInstanceOf(JourneyPlanService.RevisionConflict.class);
+    }
+
+    @Test
+    void unrelatedReplanIntegrityFailureIsNotReportedAsRevisionConflict() {
+        InMemoryPersistence persistence = new InMemoryPersistence();
+        JourneyPlanService service = new JourneyPlanService(persistence, disabledAi(), new CountingReturnPort(),
+                request -> List.of(), new ObjectMapper().findAndRegisterModules());
+        JourneyPlanService.Decision initial = service.plan(10L, formInput());
+        persistence.rejectWrites = true;
+
+        assertThatThrownBy(() -> service.replan(10L, initial.decisionId(), replanInput(1)))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .isNotInstanceOf(JourneyPlanService.RevisionConflict.class);
+    }
+
+    @Test
+    void candidateEvidenceCollectionOverlapsButMergesInRankOrder() {
+        CyclicBarrier barrier = new CyclicBarrier(3);
+        AtomicBoolean overlapped = new AtomicBoolean();
+        JourneyEvidencePort evidence = new JourneyEvidencePort() {
+            @Override public List<PoiEvidence> findNearby(String stationId, String theme, int limit) { return List.of(); }
+            @Override public List<PoiEvidence> findNearbyAt(BigDecimal latitude, BigDecimal longitude, String theme, int limit) {
+                try {
+                    barrier.await(2, TimeUnit.SECONDS);
+                    overlapped.set(true);
+                } catch (Exception exception) {
+                    throw new IllegalStateException("candidate evidence did not overlap", exception);
+                }
+                return List.of(new PoiEvidence("poi-1", "서울숲 카페", "서울 성동구", "카페",
+                        new BigDecimal("37.551"), new BigDecimal("127.041"), 700));
+            }
+            @Override public Optional<RouteEvidence> bicycleRoute(BigDecimal originLatitude, BigDecimal originLongitude,
+                    BigDecimal destinationLatitude, BigDecimal destinationLongitude, String routeMode) {
+                return Optional.of(new RouteEvidence(900, 300, "BICYCLE", routeMode, List.of(
+                        new RoutePoint(originLatitude, originLongitude), new RoutePoint(destinationLatitude, destinationLongitude))));
+            }
+            @Override public EnvironmentEvidence weather(BigDecimal latitude, BigDecimal longitude, OffsetDateTime arrivalAt) {
+                return new EnvironmentEvidence("kma-short-forecast", "NORMAL", arrivalAt.minusMinutes(10), Map.of(), Map.of());
+            }
+            @Override public EnvironmentEvidence airQuality(String stationId) {
+                return new EnvironmentEvidence("air-korea", "NORMAL", OffsetDateTime.parse("2030-09-02T09:30:00+09:00"),
+                        Map.of(), Map.of());
+            }
+        };
+        JourneyRentalPredictionPort rentals = request -> List.of(
+                rentalWithAccess(request, "station-3", "37.553", "127.053", "0.61"),
+                rentalWithAccess(request, "station-1", "37.551", "127.051", "0.91"),
+                rentalWithAccess(request, "station-2", "37.552", "127.052", "0.81"));
+        JourneyPlanService service = new JourneyPlanService(new InMemoryPersistence(), disabledAi(),
+                new CountingReturnPort(), rentals, evidence, new ObjectMapper().findAndRegisterModules());
+
+        JourneyPlanService.Decision decision = service.plan(10L, unifiedInput(JourneyPlanService.RequestMode.FORM, null));
+
+        assertThat(overlapped).isTrue();
+        assertThat(decision.unifiedPlan().evidence().rentalCandidates().keySet())
+                .containsExactly("rental:station-1", "rental:station-2", "rental:station-3");
+        assertThat(decision.unifiedPlan().evidence().pois().keySet())
+                .containsExactly("poi:station-1:poi-1", "poi:station-2:poi-1", "poi:station-3:poi-1");
+        assertThat(decision.unifiedPlan().evidence().routes().keySet())
+                .containsExactly(
+                        "route:access:station-1", "route:rental:station-1->poi:station-1:poi-1",
+                        "route:access:station-2", "route:rental:station-2->poi:station-2:poi-1",
+                        "route:access:station-3", "route:rental:station-3->poi:station-3:poi-1");
+        assertThat(decision.unifiedPlan().evidence().weather().keySet())
+                .containsExactly("weather:station-1", "weather:station-2", "weather:station-3");
+        assertThat(decision.unifiedPlan().evidence().airQuality().keySet())
+                .containsExactly("air-quality:station-1", "air-quality:station-2", "air-quality:station-3");
+    }
+
+    @Test
+    void candidateEvidenceGroupDeadlineReturnsUnavailableWithoutWaitingForSlowProvider() {
+        JourneyEvidencePort slowEvidence = new JourneyEvidencePort() {
+            @Override public List<PoiEvidence> findNearby(String stationId, String theme, int limit) { return List.of(); }
+            @Override public List<PoiEvidence> findNearbyAt(BigDecimal latitude, BigDecimal longitude, String theme, int limit) {
+                try {
+                    Thread.sleep(5_000);
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("interrupted", exception);
+                }
+                return List.of();
+            }
+            @Override public Optional<RouteEvidence> bicycleRoute(BigDecimal originLatitude, BigDecimal originLongitude,
+                    BigDecimal destinationLatitude, BigDecimal destinationLongitude, String routeMode) {
+                return Optional.empty();
+            }
+            @Override public EnvironmentEvidence weather(BigDecimal latitude, BigDecimal longitude, OffsetDateTime arrivalAt) {
+                throw new AssertionError("deadline must stop later evidence calls");
+            }
+            @Override public EnvironmentEvidence airQuality(String stationId) {
+                throw new AssertionError("deadline must stop later evidence calls");
+            }
+        };
+        JourneyPlanService service = new JourneyPlanService(new InMemoryPersistence(), disabledAi(),
+                new CountingReturnPort(), request -> List.of(rentalWithAccess(request, "station-1", "37.551", "127.051", "0.91")),
+                slowEvidence, new ObjectMapper().findAndRegisterModules(), Duration.ofMillis(50));
+
+        long startedAt = System.nanoTime();
+        JourneyPlanService.Decision decision = service.plan(10L, unifiedInput(JourneyPlanService.RequestMode.FORM, null));
+
+        assertThat(Duration.ofNanos(System.nanoTime() - startedAt)).isLessThan(Duration.ofSeconds(1));
+        assertThat(decision.warnings()).contains("JOURNEY_EVIDENCE_COLLECTION_DEADLINE");
+        assertThat(decision.unifiedPlan().evidence().routes().get("route:access:station-1").status())
+                .isEqualTo(ConsumerAiEvidenceBundle.EvidenceStatus.NORMAL);
+    }
+
+    @Test
+    void candidateFailureIsNotMisreportedAsDeadlineWhenAnotherCandidateTimesOut() {
+        CompletableFuture<Void> failed = CompletableFuture.failedFuture(new IllegalStateException("provider failed"));
+        CompletableFuture<Void> timedOut = new CompletableFuture<>();
+        timedOut.cancel(true);
+
+        assertThat(JourneyPlanService.candidateEvidenceFailureWarning(failed, true))
+                .isEqualTo("JOURNEY_EVIDENCE_COLLECTION_UNAVAILABLE");
+        assertThat(JourneyPlanService.candidateEvidenceFailureWarning(timedOut, true))
+                .isEqualTo("JOURNEY_EVIDENCE_COLLECTION_DEADLINE");
     }
 
     @Test
@@ -1293,8 +1427,18 @@ class JourneyPlanServiceTest {
 
     private static final class InMemoryPersistence implements JourneyDecisionPersistencePort {
         private final List<StoredDecision> decisions = new ArrayList<>();
+        private boolean rejectWrites;
+        private boolean concurrentRevisionOnRejectedWrite;
 
         @Override public StoredDecision save(DecisionToStore decision) {
+            if (rejectWrites || concurrentRevisionOnRejectedWrite) {
+                if (concurrentRevisionOnRejectedWrite) {
+                    decisions.add(new StoredDecision(decision.decisionId(), decision.userId(), decision.revision(),
+                            decision.status(), decision.normalizedIntentJson(), decision.contractVersions(),
+                            decision.generatedAt(), decision.expiresAt(), List.of()));
+                }
+                throw new DataIntegrityViolationException("rejected write");
+            }
             StoredDecision stored = new StoredDecision(decision.decisionId(), decision.userId(), decision.revision(), decision.status(),
                     decision.normalizedIntentJson(), decision.contractVersions(), decision.generatedAt(), decision.expiresAt(),
                     decision.candidates().stream().map(candidate -> new StoredCandidate(candidate.candidateKey(), candidate.archetype(),

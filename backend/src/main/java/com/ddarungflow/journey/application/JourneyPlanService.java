@@ -22,6 +22,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -38,6 +39,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.IntStream;
 
 @Service
@@ -46,6 +53,7 @@ public class JourneyPlanService {
     private static final String CONTRACT_VERSIONS = "{\"api\":\"journey-api-r2.2\",\"ai\":\"consumer-ai-r2.2\",\"return\":\"disabled-user-facing\"}";
     private static final Set<String> THEMES = Set.of("PARK", "RIVER", "CAFE", "ATTRACTION", "CULTURE", "FOOD");
     private static final Set<String> ROUTE_MODES = Set.of("BIKE_ONLY", "ACCESSIBLE", "SHORTEST");
+    private static final Duration CANDIDATE_EVIDENCE_TIMEOUT = Duration.ofSeconds(15);
     private static final EvidenceSelectionValidator.StayMinutesBounds STAY_BOUNDS =
             new EvidenceSelectionValidator.StayMinutesBounds(10, 120);
 
@@ -56,6 +64,7 @@ public class JourneyPlanService {
     private final JourneyRentalPredictionPort rentalPredictionPort;
     private final JourneyEvidencePort evidencePort;
     private final ObjectMapper objectMapper;
+    private final Duration candidateEvidenceTimeout;
     private final EvidenceSelectionValidator selectionValidator = new EvidenceSelectionValidator();
 
     @Autowired
@@ -67,12 +76,26 @@ public class JourneyPlanService {
             JourneyEvidencePort evidencePort,
             ObjectMapper objectMapper
     ) {
+        this(persistence, aiGateway, returnPredictionPort, rentalPredictionPort, evidencePort, objectMapper,
+                CANDIDATE_EVIDENCE_TIMEOUT);
+    }
+
+    JourneyPlanService(
+            JourneyDecisionPersistencePort persistence,
+            JourneyAiGateway aiGateway,
+            ReturnPredictionPort returnPredictionPort,
+            JourneyRentalPredictionPort rentalPredictionPort,
+            JourneyEvidencePort evidencePort,
+            ObjectMapper objectMapper,
+            Duration candidateEvidenceTimeout
+    ) {
         this.persistence = persistence;
         this.aiGateway = aiGateway;
         this.returnPredictionPort = returnPredictionPort;
         this.rentalPredictionPort = rentalPredictionPort;
         this.evidencePort = evidencePort;
         this.objectMapper = objectMapper;
+        this.candidateEvidenceTimeout = candidateEvidenceTimeout;
     }
 
     JourneyPlanService(JourneyDecisionPersistencePort persistence, JourneyAiGateway aiGateway,
@@ -256,24 +279,43 @@ public class JourneyPlanService {
         Map<String, RouteLink> routeData = new LinkedHashMap<>();
         Map<String, List<String>> candidateWarnings = new LinkedHashMap<>();
 
-        for (JourneyCandidate candidate : candidates) {
-            String candidateId = rentalId(candidate.stationId());
-            rental.put(candidateId, rentalEvidence(candidate));
-            List<String> localWarnings = new ArrayList<>();
-            candidateWarnings.put(candidateId, localWarnings);
-            JourneyRentalPredictionPort.RentalCandidate coreCandidate = findCoreCandidate(coreCandidates, candidate);
-            JourneyRentalPredictionPort.RouteEvidence accessRoute = coreCandidate == null ? null : coreCandidate.accessRoute();
-            if (accessRoute == null || !"NORMAL".equals(coreCandidate.routeStatus())) {
-                addWarning(localWarnings, "ACCESS_ROUTE_UNAVAILABLE");
-                routes.put(accessRouteId(candidate.stationId()), unavailableAccessRouteEvidence(candidate));
-                continue;
+        ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+        List<CompletableFuture<CandidateEvidence>> futures = candidates.stream()
+                .map(candidate -> CompletableFuture.supplyAsync(
+                        () -> collectCandidateEvidence(input, candidate, coreCandidates, constraints), executor))
+                .toList();
+        boolean deadlineExceeded = false;
+        try {
+            CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new))
+                    .get(candidateEvidenceTimeout.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (TimeoutException exception) {
+            deadlineExceeded = true;
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            deadlineExceeded = true;
+        } catch (ExecutionException exception) {
+            // Individual failures are converted to factual unavailable evidence below.
+        } finally {
+            futures.stream().filter(future -> !future.isDone()).forEach(future -> future.cancel(true));
+            executor.shutdownNow();
+        }
+        for (int index = 0; index < candidates.size(); index++) {
+            CompletableFuture<CandidateEvidence> future = futures.get(index);
+            CandidateEvidence collected;
+            if (!future.isCancelled() && !future.isCompletedExceptionally()) {
+                collected = future.join();
+            } else {
+                String warning = candidateEvidenceFailureWarning(future, deadlineExceeded);
+                collected = unavailableCandidateEvidence(candidates.get(index), coreCandidates, warning);
             }
-            routes.put(accessRouteId(candidate.stationId()), accessRouteEvidence(candidate, accessRoute));
-            Map<String, JourneyEvidencePort.PoiEvidence> candidatePoiData = new LinkedHashMap<>();
-            collectPois(input, candidate, constraints, pois, candidatePoiData, localWarnings);
-            poiData.putAll(candidatePoiData);
-            collectRoutes(candidate, constraints.routeMode(), candidatePoiData, routes, routeData, localWarnings);
-            collectEnvironment(candidate, weather, airQuality, localWarnings);
+            rental.putAll(collected.rental());
+            pois.putAll(collected.pois());
+            routes.putAll(collected.routes());
+            weather.putAll(collected.weather());
+            airQuality.putAll(collected.airQuality());
+            poiData.putAll(collected.poiData());
+            routeData.putAll(collected.routeData());
+            candidateWarnings.put(collected.candidateId(), collected.warnings());
         }
         ConsumerAiEvidenceBundle bundle = new ConsumerAiEvidenceBundle(rental, pois, routes, weather, airQuality);
         ScheduleContext scheduleContext = new ScheduleContext(constraints, pois, poiData, routeData, weather, airQuality);
@@ -344,7 +386,6 @@ public class JourneyPlanService {
             validateSelection(selection, validated, constraints, selected, poiData, routeData);
         } catch (JourneyAiException exception) {
             if (useAiSchedule) {
-                logAiSelectionPayload(selection);
                 return invalidAiSchedule(input, candidates, coreCandidates, bundle, warnings, scheduleContext,
                         "VALIDATE_SELECTION", "validateSelection: " + exception.getMessage());
             }
@@ -527,6 +568,58 @@ public class JourneyPlanService {
                 if (data.size() >= constraints.stopCount()) return;
             }
         }
+    }
+
+    static String candidateEvidenceFailureWarning(CompletableFuture<?> future, boolean deadlineExceeded) {
+        return future.isCancelled() && deadlineExceeded ? "JOURNEY_EVIDENCE_COLLECTION_DEADLINE"
+                : "JOURNEY_EVIDENCE_COLLECTION_UNAVAILABLE";
+    }
+
+    private CandidateEvidence collectCandidateEvidence(
+            PlanInput input,
+            JourneyCandidate candidate,
+            List<JourneyRentalPredictionPort.RentalCandidate> coreCandidates,
+            ResolvedConstraints constraints
+    ) {
+        String candidateId = rentalId(candidate.stationId());
+        Map<String, ConsumerAiEvidenceBundle.Evidence> rental = new LinkedHashMap<>();
+        Map<String, ConsumerAiEvidenceBundle.Evidence> pois = new LinkedHashMap<>();
+        Map<String, ConsumerAiEvidenceBundle.Evidence> routes = new LinkedHashMap<>();
+        Map<String, ConsumerAiEvidenceBundle.Evidence> weather = new LinkedHashMap<>();
+        Map<String, ConsumerAiEvidenceBundle.Evidence> airQuality = new LinkedHashMap<>();
+        Map<String, JourneyEvidencePort.PoiEvidence> poiData = new LinkedHashMap<>();
+        Map<String, RouteLink> routeData = new LinkedHashMap<>();
+        List<String> warnings = new ArrayList<>();
+        rental.put(candidateId, rentalEvidence(candidate));
+        JourneyRentalPredictionPort.RentalCandidate coreCandidate = findCoreCandidate(coreCandidates, candidate);
+        JourneyRentalPredictionPort.RouteEvidence accessRoute = coreCandidate == null ? null : coreCandidate.accessRoute();
+        if (accessRoute == null || !"NORMAL".equals(coreCandidate.routeStatus())) {
+            addWarning(warnings, "ACCESS_ROUTE_UNAVAILABLE");
+            routes.put(accessRouteId(candidate.stationId()), unavailableAccessRouteEvidence(candidate));
+        } else {
+            routes.put(accessRouteId(candidate.stationId()), accessRouteEvidence(candidate, accessRoute));
+            collectPois(input, candidate, constraints, pois, poiData, warnings);
+            collectRoutes(candidate, constraints.routeMode(), poiData, routes, routeData, warnings);
+            collectEnvironment(candidate, weather, airQuality, warnings);
+        }
+        return new CandidateEvidence(candidateId, rental, pois, routes, weather, airQuality,
+                poiData, routeData, List.copyOf(warnings));
+    }
+
+    private CandidateEvidence unavailableCandidateEvidence(
+            JourneyCandidate candidate,
+            List<JourneyRentalPredictionPort.RentalCandidate> coreCandidates,
+            String warning
+    ) {
+        String candidateId = rentalId(candidate.stationId());
+        JourneyRentalPredictionPort.RentalCandidate coreCandidate = findCoreCandidate(coreCandidates, candidate);
+        JourneyRentalPredictionPort.RouteEvidence accessRoute = coreCandidate == null ? null : coreCandidate.accessRoute();
+        ConsumerAiEvidenceBundle.Evidence accessEvidence = accessRoute != null && "NORMAL".equals(coreCandidate.routeStatus())
+                ? accessRouteEvidence(candidate, accessRoute)
+                : unavailableAccessRouteEvidence(candidate);
+        return new CandidateEvidence(candidateId, Map.of(candidateId, rentalEvidence(candidate)), Map.of(),
+                Map.of(accessRouteId(candidate.stationId()), accessEvidence), Map.of(), Map.of(),
+                Map.of(), Map.of(), List.of(warning));
     }
 
     private void collectRoutes(
@@ -862,9 +955,19 @@ public class JourneyPlanService {
             List<String> warnings
     ) {
         OffsetDateTime generatedAt = OffsetDateTime.now();
-        JourneyDecisionPersistencePort.StoredDecision stored = persistence.save(new JourneyDecisionPersistencePort.DecisionToStore(
-                decisionId, userId, revision, status.name(), normalizedIntent(input, useAiSchedule, aiIntent, unifiedPlan, warnings),
-                CONTRACT_VERSIONS, generatedAt, candidates.stream().map(this::candidateToStore).toList()));
+        JourneyDecisionPersistencePort.StoredDecision stored;
+        try {
+            stored = persistence.save(new JourneyDecisionPersistencePort.DecisionToStore(
+                    decisionId, userId, revision, status.name(), normalizedIntent(input, useAiSchedule, aiIntent, unifiedPlan, warnings),
+                    CONTRACT_VERSIONS, generatedAt, candidates.stream().map(this::candidateToStore).toList()));
+        } catch (DataIntegrityViolationException exception) {
+            boolean concurrentRevisionExists = revision > 1
+                    && persistence.findActiveDecision(decisionId, userId, OffsetDateTime.now())
+                    .filter(current -> current.revision() >= revision)
+                    .isPresent();
+            if (concurrentRevisionExists) throw new RevisionConflict();
+            throw exception;
+        }
         return toDecision(stored, warnings);
     }
 
@@ -1054,19 +1157,6 @@ public class JourneyPlanService {
         return code.name();
     }
 
-    // Temporary diagnostic: dumps the AI's full parsed schedule selection so a
-    // validateSelection/EvidenceSelectionValidator failure is diagnosable from the payload
-    // in one shot, instead of one log-and-redeploy cycle per newly-discovered mismatch cause.
-    private void logAiSelectionPayload(EvidenceSelectionValidator.Selection selection) {
-        try {
-            log.warn("event=journey_ai_selection_payload correlation_id={} payload={}",
-                    MDC.get("journeyAiCorrelationId"), objectMapper.writeValueAsString(selection));
-        } catch (Exception exception) {
-            log.warn("event=journey_ai_selection_payload correlation_id={} payload=<unserializable>",
-                    MDC.get("journeyAiCorrelationId"));
-        }
-    }
-
     private void logEvidenceFailure(String stage, String reason) {
         log.warn("event=journey_ai_provider_result kind=SCHEDULE_SELECTION outcome=FAILURE correlation_id={} stage={} code=AI_TOOL_VALUE_MISMATCH reason={}",
                 MDC.get("journeyAiCorrelationId"), stage, reason);
@@ -1223,6 +1313,17 @@ public class JourneyPlanService {
             Map<String, ConsumerAiEvidenceBundle.Evidence> airQuality
     ) { }
     private record RouteLink(String fromEvidenceId, String toEvidenceId, JourneyEvidencePort.RouteEvidence route) { }
+    private record CandidateEvidence(
+            String candidateId,
+            Map<String, ConsumerAiEvidenceBundle.Evidence> rental,
+            Map<String, ConsumerAiEvidenceBundle.Evidence> pois,
+            Map<String, ConsumerAiEvidenceBundle.Evidence> routes,
+            Map<String, ConsumerAiEvidenceBundle.Evidence> weather,
+            Map<String, ConsumerAiEvidenceBundle.Evidence> airQuality,
+            Map<String, JourneyEvidencePort.PoiEvidence> poiData,
+            Map<String, RouteLink> routeData,
+            List<String> warnings
+    ) { }
 
     public static class InvalidJourneyInput extends RuntimeException { }
     public static class DecisionMissing extends RuntimeException { }

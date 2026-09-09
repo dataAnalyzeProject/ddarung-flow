@@ -12,6 +12,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -55,7 +56,10 @@ public class KmaShortForecastClient implements WeatherForecastProvider {
                 + "&base_date=" + baseAt.toLocalDate().toString().replace("-", "")
                 + "&base_time=" + String.format("%02d00", baseAt.getHour())
                 + "&nx=" + nx + "&ny=" + ny;
-            HttpRequest request = HttpRequest.newBuilder(URI.create(ENDPOINT + "?" + query)).GET().build();
+            HttpRequest request = HttpRequest.newBuilder(URI.create(ENDPOINT + "?" + query))
+                    .timeout(Duration.ofSeconds(3))
+                    .GET()
+                    .build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() != 200) throw new WeatherProviderException("KMA returned HTTP " + response.statusCode());
             return parse(response.body(), baseAt);

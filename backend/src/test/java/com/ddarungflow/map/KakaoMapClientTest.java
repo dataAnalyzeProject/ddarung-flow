@@ -1,13 +1,18 @@
 package com.ddarungflow.map;
 
+import com.sun.net.httpserver.HttpServer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.net.InetSocketAddress;
 import java.math.BigDecimal;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -15,6 +20,36 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class KakaoMapClientTest {
+
+    @Test
+    void delayedProviderIsStoppedByWholeRequestTimeout() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+        server.setExecutor(executor);
+        server.createContext("/v2/local/search/keyword.json", exchange -> {
+            try {
+                Thread.sleep(10_000);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+            } finally {
+                exchange.close();
+            }
+        });
+        server.start();
+        KakaoMapClient client = new KakaoMapClient("http://127.0.0.1:" + server.getAddress().getPort(), "test-key");
+
+        long startedAt = System.nanoTime();
+        try {
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> client.searchPlaces("서울숲"))
+                    .isInstanceOf(KakaoMapClient.ProviderException.class)
+                    .hasMessage("PLACE_PROVIDER_ERROR");
+            assertThat(Duration.ofNanos(System.nanoTime() - startedAt))
+                    .isBetween(Duration.ofSeconds(2), Duration.ofSeconds(5));
+        } finally {
+            server.stop(0);
+            executor.shutdownNow();
+        }
+    }
 
     @Test
     void nearbyCategoryUsesAuthoritativeCoordinatesRadiusDistanceSortAndLimit() {
@@ -33,6 +68,7 @@ class KakaoMapClientTest {
         );
         assertThat(requestReference.get().headers().firstValue("Authorization"))
             .contains("KakaoAK test-key");
+        assertThat(requestReference.get().timeout()).contains(Duration.ofSeconds(3));
     }
 
     @Test
@@ -100,7 +136,11 @@ class KakaoMapClientTest {
         when(mockResponse.statusCode()).thenReturn(200);
         when(mockResponse.body()).thenReturn(jsonBody);
 
-        KakaoMapClient client = new KakaoMapClient("https://dapi.kakao.com", "test-key", req -> mockResponse);
+        AtomicReference<HttpRequest> requestReference = new AtomicReference<>();
+        KakaoMapClient client = new KakaoMapClient("https://dapi.kakao.com", "test-key", req -> {
+            requestReference.set(req);
+            return mockResponse;
+        });
         List<MapApiDtos.PlaceSearchResponseDto> results = client.searchPlaces("서울역");
 
         assertThat(results).hasSize(1);
@@ -109,6 +149,7 @@ class KakaoMapClientTest {
         assertThat(results.get(0).address()).isEqualTo("서울 용산구 한강대로 405");
         assertThat(results.get(0).latitude()).isEqualTo(new BigDecimal("37.5547"));
         assertThat(results.get(0).longitude()).isEqualTo(new BigDecimal("126.9707"));
+        assertThat(requestReference.get().timeout()).contains(Duration.ofSeconds(3));
     }
 
     @Test
@@ -246,6 +287,7 @@ class KakaoMapClientTest {
             .doesNotContain("\"transfers\"", "\"fare\"", "\"steps\"");
         assertThat(requestReference.get().uri().toString())
             .contains("/v2/routing/walk?start_x=126.9000&start_y=37.5500&end_x=126.9106&end_y=37.5556");
+        assertThat(requestReference.get().timeout()).contains(Duration.ofSeconds(3));
     }
 
     @Test
