@@ -41,12 +41,12 @@ describe('OpsDashboard', () => {
     expect(screen.getByText('CRITICAL 대여 부족')).toBeInTheDocument();
     expect(screen.getByText('HIGH 대여 부족')).toBeInTheDocument();
     expect(screen.getByText('WATCH 대여 부족')).toBeInTheDocument();
-    expect(screen.getByText(/LOW 111/)).toBeInTheDocument();
+    expect(screen.getAllByText(/LOW 111/).length).toBeGreaterThan(0);
     expect(screen.getByText(/Coverage · active 120곳 · eligible 116곳 · evaluated 116곳 · normal 116곳/)).toBeInTheDocument();
     expect(screen.getAllByText('데이터 상태')).toHaveLength(2);
     expect(screen.getByRole('heading', { name: '수급 위험 지도' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '대여 부족 확률 상위 5곳' })).toBeInTheDocument();
-    expect(screen.getByText('서울 전체 NORMAL 대여소 중 60분 후 1대 이상을 확보하지 못할 확률이 높은 5곳입니다. 동률은 대여소 번호순입니다.')).toBeInTheDocument();
+    expect(screen.getByText('서울 전체 정상 평가 대여소 중 60분 후 1대 이상을 확보하지 못할 확률이 높은 5곳입니다. 동률은 대여소 번호순입니다.')).toBeInTheDocument();
     expect(screen.getByText(/반납 위험은 현재 지원되지 않음/)).toBeInTheDocument();
     expect(screen.queryByText(/반납 위험 0건|문제 없음|안정/)).not.toBeInTheDocument();
   });
@@ -59,7 +59,7 @@ describe('OpsDashboard', () => {
     await waitFor(() => expect(adapter.load).toHaveBeenLastCalledWith(expect.objectContaining({ horizonMinutes: 120, requiredBikeCount: 1 })));
     fireEvent.change(screen.getByLabelText('필요 자전거 수'), { target: { value: '3' } });
     await waitFor(() => expect(adapter.load).toHaveBeenLastCalledWith(expect.objectContaining({ horizonMinutes: 120, requiredBikeCount: 3 })));
-    expect(screen.getByText('서울 전체 NORMAL 대여소 중 120분 후 3대 이상을 확보하지 못할 확률이 높은 5곳입니다. 동률은 대여소 번호순입니다.')).toBeInTheDocument();
+    expect(screen.getByText('서울 전체 정상 평가 대여소 중 120분 후 3대 이상을 확보하지 못할 확률이 높은 5곳입니다. 동률은 대여소 번호순입니다.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /2 시청역 7번 출구/ }));
     expect(screen.getByRole('button', { name: /시청역 7번 출구.*1002/ })).toHaveAttribute('aria-current', 'true');
     expect(container.querySelector('.ops-map-marker')).not.toBeInTheDocument();
@@ -73,14 +73,15 @@ describe('OpsDashboard', () => {
   });
 
   test.each([
-    ['RISK_DELAYED', '정보 갱신 지연 · DELAYED'],
-    ['RISK_MISSING', '일부 데이터 누락 · MISSING'],
+    ['RISK_DELAYED', '정보 갱신 지연 · 갱신 지연'],
+    ['RISK_MISSING', '일부 데이터 누락 · 재고 일부 확인 불가'],
   ])('keeps valid risk items visible for independent %s risk data states', async (fixture, notice) => {
-    render(<OpsDashboard createAdapter={adapterFor(dashboardFixture(fixture))} />);
+    const { container } = render(<OpsDashboard createAdapter={adapterFor(dashboardFixture(fixture))} />);
     await waitFor(() => expect(screen.getByText('CRITICAL 대여 부족')).toBeInTheDocument());
     expect(screen.getByRole('heading', { name: '수급 위험 지도' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '대여 부족 확률 상위 5곳' })).toBeInTheDocument();
     expect(screen.getAllByText(notice)).toHaveLength(2);
+    expect(container.querySelector('.ops-priority-panel')).not.toHaveTextContent(/\b(?:NORMAL|MISSING|DELAYED)\b/);
   });
 
   test.each([
@@ -105,16 +106,65 @@ describe('OpsDashboard', () => {
     expect(container.querySelector(`time[datetime="${target}"]`)).toHaveTextContent('예측 대상');
   });
 
+  test('summarizes partial inventory coverage in operator-friendly Korean and keeps raw evidence in details', async () => {
+    const fixture = dashboardFixture('MISSING');
+    fixture.overview.globalCoverage = { ...fixture.overview.globalCoverage, activePublicStationCount: 2735, inventoryEligibleCount: 2718, evaluatedCount: 2718, normalInferenceCount: 2718, inventoryMissingCount: 17 };
+    fixture.overview.inventoryStateSummary = { normal: 2718, delayed: 0, missing: 17, unavailable: 0 };
+    const { container } = render(<OpsDashboard createAdapter={adapterFor(fixture)} />);
+    await waitFor(() => expect(screen.getByText('일부 데이터 확인 필요')).toBeInTheDocument());
+    expect(screen.getAllByText('일부 데이터 결측')).toHaveLength(2);
+    expect(screen.getByText('서울 전체 2,735곳 중 2,718곳은 정상적으로 평가되었습니다. 최신 재고를 확인할 수 없는 17곳은 이번 위험 계산에서 제외되었습니다.')).toBeInTheDocument();
+    expect(screen.getByText('2,718곳 정상 평가 · 17곳 재고 확인 불가')).toBeInTheDocument();
+    expect(container.querySelector('.ops-status-summary')).not.toHaveTextContent(/PARTIAL|MISSING|Global result|FRESH|generation|Coverage/);
+    const details = screen.getByText('상세 상태 보기').closest('details');
+    expect(details).toHaveTextContent('현재 화면 상태: PARTIAL (MISSING)');
+    expect(details).toHaveTextContent('MISSING 17곳');
+    expect(details).toHaveTextContent('FRESH');
+    expect(details).toHaveTextContent('generation SUCCESS');
+  });
+
+  test('shows normal without an unnecessary missing warning when all source counts are normal', async () => {
+    const fixture = dashboardFixture('SUCCESS');
+    fixture.overview.inventoryStateSummary = { normal: 120, delayed: 0, missing: 0, unavailable: 0 };
+    fixture.overview.globalCoverage = { ...fixture.overview.globalCoverage, activePublicStationCount: 120, inventoryEligibleCount: 120, evaluatedCount: 120, normalInferenceCount: 120, inventoryMissingCount: 0, inventoryDelayedCount: 0, inventoryUnavailableCount: 0 };
+    render(<OpsDashboard createAdapter={adapterFor(fixture)} />);
+    await waitFor(() => expect(screen.getAllByText('정상').length).toBeGreaterThanOrEqual(2));
+    expect(screen.queryByText('일부 데이터 확인 필요')).not.toBeInTheDocument();
+    expect(screen.queryByText('일부 데이터 결측')).not.toBeInTheDocument();
+  });
+
   test.each([
-    ['MISSING', '현재 화면 상태: PARTIAL (MISSING)'],
-    ['DELAYED', '현재 화면 상태: DELAYED'],
-    ['INSUFFICIENT_DATA', '현재 화면 상태: INSUFFICIENT_DATA'],
-    ['UNAVAILABLE', '현재 화면 상태: UNAVAILABLE'],
-    ['EMPTY', '운영 가능한 공개 대여소가 없습니다.'],
+    ['MISSING', '일부 데이터 확인 필요'],
+    ['DELAYED', '데이터 갱신 지연'],
+    ['INSUFFICIENT_DATA', '판단 정보 부족'],
+    ['UNAVAILABLE', '데이터 사용 불가'],
+    ['EMPTY', '운영 대상 없음'],
   ])('renders %s without fabricating zero values', async (fixture, expected) => {
     render(<OpsDashboard createAdapter={adapterFor(dashboardFixture(fixture))} />);
-    await waitFor(() => expect(screen.getByText(expected)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText(expected).length).toBeGreaterThan(0));
     expect(screen.queryByText('반납 위험 0건')).not.toBeInTheDocument();
+  });
+
+  test.each(['NOT_GENERATED', 'EXPIRED'])('does not present %s or normal-zero coverage as normal', async (freshness) => {
+    const fixture = dashboardFixture('SUCCESS');
+    fixture.overview.globalResultId = freshness === 'NOT_GENERATED' ? null : fixture.overview.globalResultId;
+    fixture.overview.freshness = { state: freshness };
+    fixture.overview.globalCoverage = { ...fixture.overview.globalCoverage, evaluatedCount: 0, normalInferenceCount: 0 };
+    fixture.overview.rentalRiskSummary = { ...fixture.overview.rentalRiskSummary, criticalCount: null, highCount: null, watchCount: null, lowCount: null };
+    render(<OpsDashboard createAdapter={adapterFor(fixture)} />);
+    await waitFor(() => expect(screen.getAllByText('판단 정보 부족').length).toBeGreaterThan(0));
+    expect(screen.queryByText('정상')).not.toBeInTheDocument();
+    expect(screen.queryByText('일부 데이터 확인 필요')).not.toBeInTheDocument();
+  });
+
+  test.each([null, 0])('does not present raw MISSING as normal when the missing count is %s', async (missingCount) => {
+    const fixture = dashboardFixture('MISSING');
+    fixture.overview.globalCoverage = { ...fixture.overview.globalCoverage, inventoryMissingCount: missingCount };
+    render(<OpsDashboard createAdapter={adapterFor(fixture)} />);
+    await waitFor(() => expect(screen.getByText('일부 데이터 확인 필요')).toBeInTheDocument());
+    expect(screen.getAllByText('일부 데이터 결측')).toHaveLength(2);
+    expect(screen.getByText('원본 상태가 결측으로 보고되었습니다. 상세 상태에서 커버리지 수치를 확인해 주세요.')).toBeInTheDocument();
+    expect(screen.queryByText('정상')).not.toBeInTheDocument();
   });
 
   test('renders a primary error and forbidden primary state', async () => {
