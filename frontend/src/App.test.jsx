@@ -318,12 +318,9 @@ test('logout from the actual login route uses the same privacy cleanup', async (
   });
 });
 
-test('a stale parent session response cannot re-authenticate App after login-page logout', async () => {
-  const childSession = deferred();
-  const staleParentSession = deferred();
-  getCurrentUser
-    .mockImplementationOnce(() => childSession.promise)
-    .mockImplementationOnce(() => staleParentSession.promise);
+test('the login route shares one session request so logout clears the authenticated user cache', async () => {
+  const sharedSession = deferred();
+  getCurrentUser.mockImplementationOnce(() => sharedSession.promise);
   const currentUserCache = 'ddarung.consumer-r2.recent-search.v1.test-user';
   const otherUserCache = 'ddarung.consumer-r2.recent-search.v1.other-user';
   const pendingLoginInput = 'ddarung.pendingPrediction.v1';
@@ -335,12 +332,11 @@ test('a stale parent session response cannot re-authenticate App after login-pag
   window.sessionStorage.setItem(journeyDraft, 'private draft');
 
   visit('/login');
-  await waitFor(() => expect(getCurrentUser).toHaveBeenCalledTimes(2));
-  await act(async () => { childSession.resolve({ authenticated: true, user: { id: 'test-user' } }); });
+  await waitFor(() => expect(getCurrentUser).toHaveBeenCalledTimes(1));
+  await act(async () => { sharedSession.resolve({ authenticated: true, user: { id: 'test-user' } }); });
   fireEvent.click(await screen.findByText('Login page logout'));
   await waitFor(() => expect(screen.getByTestId('login-logout-state')).toHaveTextContent('success'));
 
-  await act(async () => { staleParentSession.resolve({ authenticated: true, user: { id: 'test-user' } }); });
   await act(async () => {
     window.history.pushState({}, '', '/#guide/ST-1');
     window.dispatchEvent(new PopStateEvent('popstate'));

@@ -67,6 +67,7 @@ function App() {
   const [user, setUser] = useState(null);
   const userRef = useRef(null);
   const sessionGeneration = useRef(0);
+  const sessionRequest = useRef(null);
   const [subscription, setSubscription] = useState({ status: 'PROCESSING' });
   const [subscriptionReload, setSubscriptionReload] = useState(0);
   const mainResults = useRef(new Map());
@@ -102,8 +103,11 @@ function App() {
 
   const checkSession = useCallback(() => {
     const requestGeneration = sessionGeneration.current;
+    if (sessionRequest.current?.generation === requestGeneration) {
+      return sessionRequest.current.promise;
+    }
     setAuthState('loading');
-    return getCurrentUser().then((auth) => {
+    const promise = getCurrentUser().then((auth) => {
       if (requestGeneration !== sessionGeneration.current) return { authenticated: false, user: null };
       const currentUser = auth.authenticated ? auth.user : null;
       userRef.current = currentUser;
@@ -116,7 +120,11 @@ function App() {
       setUser(null);
       setAuthState('error');
       return { authenticated: false, user: null };
+    }).finally(() => {
+      if (sessionRequest.current?.promise === promise) sessionRequest.current = null;
     });
+    sessionRequest.current = { generation: requestGeneration, promise };
+    return promise;
   }, []);
   useEffect(() => {
     if (!skipSessionCheck) checkSession();
@@ -222,6 +230,7 @@ function App() {
   const handleLogout = useCallback(async () => {
     await logout();
     sessionGeneration.current += 1;
+    sessionRequest.current = null;
     clearUserBoundCache(userRef.current);
     try { window.sessionStorage.removeItem(JOURNEY_DRAFT_KEY); } catch { /* Storage can be disabled. */ }
     userRef.current = null;
