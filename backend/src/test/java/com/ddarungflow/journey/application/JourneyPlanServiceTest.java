@@ -608,25 +608,31 @@ class JourneyPlanServiceTest {
     }
 
     @Test
-    void invalidScheduleSchemaRetainsFactualSegmentsAndTheCompiledDraft() {
-        JourneyAiGateway ai = new JourneyAiGateway() {
-            @Override public IntentResult compileIntent(String input) { return new IntentResult(validIntent(), null); }
-            @Override public List<com.ddarungflow.journey.ai.ToolCallRequest> validateToolPlan(
-                    List<com.ddarungflow.journey.ai.ToolCallRequest> requests) { return requests; }
-            @Override public ScheduleResult selectSchedule(ConsumerAiEvidenceBundle evidence, ScheduleConstraints constraints) {
-                throw new JourneyAiException(JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID, "sensitive provider payload",
-                        JourneyAiFailureStage.CANONICAL_SCHEMA);
-            }
-        };
-        JourneyPlanService.Decision decision = planAndConfirm(unifiedService(new InMemoryPersistence(), ai,
+    void invalidScheduleSchemaFallsBackToARealScheduleAndRetainsTheCompiledDraft() {
+        JourneyPlanService.Decision decision = planAndConfirm(unifiedService(new InMemoryPersistence(), schemaInvalidScheduleAi(),
                 new CountingReturnPort(), completeEvidence()), unifiedInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE, "서울숲 카페 여정"));
 
-        assertThat(decision.status()).isEqualTo(JourneyStatus.UNAVAILABLE);
-        assertThat(decision.warnings()).contains("AI_OUTPUT_SCHEMA_INVALID");
+        assertServerBuiltSchedule(decision, "SELECT_SCHEDULE_SCHEMA");
         assertThat(decision.normalizedIntent().path("aiIntent").isObject()).isTrue();
         assertThat(decision.normalizedIntent().toString()).doesNotContain("sensitive provider payload");
         assertThat(decision.unifiedPlan().segments()).extracting(UnifiedJourneyPlan.Segment::type)
-                .containsExactly(UnifiedJourneyPlan.SegmentType.ACCESS, UnifiedJourneyPlan.SegmentType.RENT);
+                .contains(UnifiedJourneyPlan.SegmentType.VISIT);
+    }
+
+    @Test
+    void invalidScheduleSchemaStaysUnavailableWhenNoRealStopFits() {
+        JourneyPlanService.PlanInput initial = unifiedInput(JourneyPlanService.RequestMode.NATURAL_LANGUAGE, "서울숲 카페 여정");
+        initial = new JourneyPlanService.PlanInput(initial.requestMode(), initial.naturalLanguageText(), initial.origin(),
+                initial.destination(), initial.departureAt(), initial.maxJourneyMinutes(), initial.requiredBikeCount(),
+                initial.preferences(), initial.avoid(), null,
+                new JourneyPlanService.PlanConstraints(4, List.of("CAFE"), 1, "BIKE_ONLY"));
+
+        JourneyPlanService.Decision decision = planAndConfirm(longAccessService(schemaInvalidScheduleAi()), initial);
+
+        assertThat(decision.status()).isEqualTo(JourneyStatus.UNAVAILABLE);
+        assertThat(decision.warnings()).contains("AI_TOOL_VALUE_MISMATCH").doesNotContain("AI_SCHEDULE_FALLBACK");
+        assertThat(decision.unifiedPlan().segments()).extracting(UnifiedJourneyPlan.Segment::type)
+                .doesNotContain(UnifiedJourneyPlan.SegmentType.VISIT);
     }
 
     @Test
@@ -1205,6 +1211,18 @@ class JourneyPlanServiceTest {
                     List<com.ddarungflow.journey.ai.ToolCallRequest> requests) { return requests; }
             @Override public ScheduleResult selectSchedule(ConsumerAiEvidenceBundle evidence, ScheduleConstraints constraints) {
                 return new ScheduleResult(validSelection(), null);
+            }
+        };
+    }
+
+    private JourneyAiGateway schemaInvalidScheduleAi() {
+        return new JourneyAiGateway() {
+            @Override public IntentResult compileIntent(String input) { return new IntentResult(validIntent(), null); }
+            @Override public List<com.ddarungflow.journey.ai.ToolCallRequest> validateToolPlan(
+                    List<com.ddarungflow.journey.ai.ToolCallRequest> requests) { return requests; }
+            @Override public ScheduleResult selectSchedule(ConsumerAiEvidenceBundle evidence, ScheduleConstraints constraints) {
+                throw new JourneyAiException(JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID, "sensitive provider payload",
+                        JourneyAiFailureStage.CANONICAL_SCHEMA);
             }
         };
     }
