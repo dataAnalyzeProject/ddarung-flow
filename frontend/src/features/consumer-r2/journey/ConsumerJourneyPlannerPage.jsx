@@ -28,6 +28,7 @@ const ERROR_COPY = {
   AI_PROVIDER_TIMEOUT: "AI 응답 시간이 초과되었습니다. 입력은 유지되니 다시 시도해 주세요.",
   AI_OUTPUT_SCHEMA_INVALID: "AI 응답 형식을 확인하지 못했습니다. 입력을 유지한 채 다시 시도해 주세요.",
   AI_TOOL_VALUE_MISMATCH: "AI 일정이 실제 근거와 일치하지 않아 전체 일정을 만들지 못했습니다. 입력은 유지됩니다.",
+  AI_SCHEDULE_UNAVAILABLE: "AI 일정을 만들지 못했습니다. 입력과 확인된 실제 근거는 유지되니 다시 시도해 주세요.",
   AI_PROVIDER_REFUSAL: "AI가 이 설명으로 조건을 정리하지 못했습니다. 설명을 바꿔 다시 시도해 주세요.",
 };
 
@@ -40,7 +41,7 @@ function errorCopy(error) {
 
 function unavailableError(decision) {
   const codes = (decision?.warnings || []).map((warning) => typeof warning === "string" ? warning : warning?.code);
-  return { code: codes.find((code) => ERROR_COPY[code]) || "AI_PROVIDER_UNAVAILABLE" };
+  return { code: codes.find((code) => ERROR_COPY[code]) || "AI_SCHEDULE_UNAVAILABLE" };
 }
 
 function verifiedPlace(place) {

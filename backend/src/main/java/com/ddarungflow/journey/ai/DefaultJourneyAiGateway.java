@@ -4,7 +4,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * E0 may instantiate and wire this adapter. D0 keeps it independent from JourneyPlanService.
@@ -60,16 +62,42 @@ public class DefaultJourneyAiGateway implements JourneyAiGateway {
         if (!properties.enabled()) return ScheduleResult.unavailable(JourneyAiErrorCode.AI_DISABLED);
         if (!properties.providerConfigured()) return ScheduleResult.unavailable(JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE);
         ObjectNode input = objectMapper.createObjectNode();
-        input.set("evidence", objectMapper.valueToTree(evidence));
+        input.set("evidence", objectMapper.valueToTree(scheduleEvidence(evidence)));
         input.set("constraints", objectMapper.valueToTree(constraints));
+        for (int attempt = 0; ; attempt++) {
+            try {
+                return requestSchedule(input);
+            } catch (JourneyAiException exception) {
+                if (attempt > 0 || exception.code() != JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID
+                        || exception.failureStage() != JourneyAiFailureStage.OUTPUT_TEXT_JSON) {
+                    throw exception;
+                }
+            }
+        }
+    }
+
+    ConsumerAiEvidenceBundle scheduleEvidence(ConsumerAiEvidenceBundle evidence) {
+        Map<String, ConsumerAiEvidenceBundle.Evidence> bicycleRoutes = new LinkedHashMap<>();
+        evidence.routes().forEach((id, route) -> {
+            if (route.status() == ConsumerAiEvidenceBundle.EvidenceStatus.NORMAL
+                    && "BICYCLE".equals(route.textFacts().get("travelMode"))) {
+                bicycleRoutes.put(id, route);
+            }
+        });
+        return new ConsumerAiEvidenceBundle(evidence.rentalCandidates(), evidence.pois(), bicycleRoutes,
+                evidence.weather(), evidence.airQuality());
+    }
+
+    private ScheduleResult requestSchedule(ObjectNode input) {
         return client.requestStructuredOutput(input, """
                 Return only a schedule selection matching the supplied schema.
                 The evidence bundle is authoritative. Select only existing rental, POI, route, weather,
-                and air-quality evidence IDs. Route IDs must form the exact ordered bicycle chain for
-                the selected POI stops. Never invent or rewrite probability, inventory, distance,
-                duration, timestamps, route geometry, weather, or air-quality facts. Keep stay minutes
-                and stop count within the supplied constraints. Numeric facts may only be copied exactly
-                through factRefs and factValues.
+                and air-quality evidence IDs. The supplied route evidence contains only usable bicycle
+                routes; route IDs must form the exact ordered bicycle chain for the selected POI stops.
+                Never invent or rewrite probability, inventory, distance, duration, timestamps, route
+                geometry, weather, or air-quality facts. Keep stay minutes and stop count within the
+                supplied constraints. Numeric facts may only be copied exactly through factRefs and
+                factValues.
                 Each evidence entry separates its fields into a textFacts object and a numericFacts
                 object. factRefs and factValues may ONLY reference a factName that exists in that
                 entry's numericFacts — never a factName that only exists in textFacts (for example

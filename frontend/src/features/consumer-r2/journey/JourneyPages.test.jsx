@@ -240,7 +240,9 @@ test.each([
 
 test.each([
   [{ status: "UNAVAILABLE", warnings: ["AI_PROVIDER_TIMEOUT"] }, "응답 시간이 초과"],
-  [{ status: "UNAVAILABLE" }, "AI 서비스에 연결"],
+  [{ status: "UNAVAILABLE" }, "AI 일정을 만들지 못했습니다"],
+  [{ status: "UNAVAILABLE", warnings: ["AI_SCHEDULE_STAGE_VALIDATE_SELECTION"] }, "AI 일정을 만들지 못했습니다"],
+  [{ status: "UNAVAILABLE", warnings: ["AI_PROVIDER_UNAVAILABLE"] }, "AI 서비스에 연결"],
   [{ status: "UNKNOWN" }, "AI 응답 형식"],
   [decision("READY"), "AI 응답 형식"],
 ])("an unavailable or unknown initial response cannot look like successful AI compilation", async (response, message) => {
