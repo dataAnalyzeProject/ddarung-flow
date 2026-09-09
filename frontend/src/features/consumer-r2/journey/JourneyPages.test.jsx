@@ -170,6 +170,7 @@ test("a quick departure preset fills a future time in one click", async () => {
   const adapter = plannerAdapter(draftDecision({}, verifiedContext));
   render(<ConsumerJourneyPlannerPage adapter={adapter} />);
   await compile();
+  expect(screen.getByText(/실제 대여소 도착시각 기준 1~4시간 범위/)).toBeInTheDocument();
   const field = screen.getByLabelText(/출발 희망 시각/);
   fireEvent.change(field, { target: { value: "" } });
   expect(field).toHaveValue("");
@@ -267,6 +268,32 @@ test("a failed structured request preserves all values and an unavailable plan n
   expect(screen.getByLabelText(/라이딩 이용 시간/)).toHaveValue(85);
   expect(screen.getByLabelText(/출발 장소/)).toHaveValue("성수");
   expect(screen.getByText("서울숲에서 여유롭게 달리고 싶어요")).toBeInTheDocument();
+  expect(onResult).not.toHaveBeenCalled();
+});
+
+test("rental prediction unavailability is explained as a time-range issue without clearing confirmed values", async () => {
+  const draft = draftDecision({}, verifiedContext);
+  const adapter = plannerAdapter(draft);
+  adapter.answerClarification.mockResolvedValue({
+    decisionId: draft.decisionId,
+    revision: 2,
+    status: "UNAVAILABLE",
+    warnings: ["JOURNEY_RENTAL_UNAVAILABLE"],
+  });
+  const onResult = jest.fn();
+  render(<ConsumerJourneyPlannerPage adapter={adapter} onResult={onResult} />);
+  await compile();
+  fireEvent.change(screen.getByLabelText(/출발 희망 시각/), { target: { value: "2030-09-03T10:00" } });
+  fireEvent.change(screen.getByLabelText(/라이딩 이용 시간/), { target: { value: "85" } });
+  submitConfirmation();
+  const alert = await screen.findByRole("alert");
+  expect(alert).toHaveTextContent("현재 선택한 출발 시각에는 대여 가능성 예측을 제공할 수 없습니다");
+  expect(alert).toHaveTextContent("지금 출발·30분 뒤·1시간 뒤");
+  expect(alert).not.toHaveTextContent(/AI 서비스|AI 일정/);
+  expect(screen.getByLabelText(/출발 희망 시각/)).toHaveValue("2030-09-03T10:00");
+  expect(screen.getByLabelText(/라이딩 이용 시간/)).toHaveValue(85);
+  expect(screen.getByLabelText(/출발 장소/)).toHaveValue("성수");
+  expect(screen.getByLabelText("공원")).toBeChecked();
   expect(onResult).not.toHaveBeenCalled();
 });
 
