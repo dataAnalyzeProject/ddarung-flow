@@ -13,8 +13,10 @@ from pipeline.src.inventory_current_refresher import (
     next_cycle_delay,
     next_refresh_schedule,
     publish_snapshot,
+    record_failed_run,
     refresh_once,
     refresh_cycle,
+    sanitized_reason_code,
 )
 from pipeline.src.collectors.bike_inventory_collector import SeoulBikeTransportError
 from pipeline.src.inventory_refresher_healthcheck import (
@@ -98,17 +100,57 @@ class SnapshotTests(unittest.TestCase):
             return_value=partial,
         ), patch(
             "pipeline.src.inventory_current_refresher.publish_snapshot"
-        ) as publish:
+        ) as publish, patch(
+            "pipeline.src.inventory_current_refresher._record_failure_safely"
+        ) as record_failure:
             with self.assertRaisesRegex(ValueError, "complete pagination evidence"):
                 refresh_once("key", "database")
 
         publish.assert_not_called()
+        self.assertEqual(record_failure.call_args.args[3:5], ("QUALITY", "VALIDATION_FAILURE"))
+        self.assertEqual(record_failure.call_args.kwargs["source_count"], 1000)
+
+    def test_refresh_once_passes_actual_collection_counts_to_success_ledger(self):
+        complete = collection([
+            {"stationId": "ST-1", "stationName": "102. 망원역", "parkingBikeTotCnt": "0"},
+            {"stationId": "ST-2", "stationName": "103. 합정역", "parkingBikeTotCnt": "2"},
+        ])
+
+        with patch(
+            "pipeline.src.inventory_current_refresher.SeoulBikeApiClient"
+        ), patch(
+            "pipeline.src.inventory_current_refresher.collect_bike_inventory",
+            return_value=complete,
+        ), patch(
+            "pipeline.src.inventory_current_refresher.publish_snapshot",
+            return_value={"published_count": 3, "normal_count": 2, "missing_count": 1},
+        ) as publish:
+            self.assertEqual(refresh_once("key", "database", minimum_rows=2), 3)
+
+        self.assertEqual(publish.call_args.kwargs["source_count"], 2)
+        self.assertIsNotNone(publish.call_args.kwargs["run_id"])
+        self.assertIsNotNone(publish.call_args.kwargs["started_at"])
+
+    def test_refresh_once_records_sanitized_source_failure(self):
+        with patch(
+            "pipeline.src.inventory_current_refresher.SeoulBikeApiClient"
+        ), patch(
+            "pipeline.src.inventory_current_refresher.collect_bike_inventory",
+            side_effect=SeoulBikeTransportError("TIMEOUT", True),
+        ), patch(
+            "pipeline.src.inventory_current_refresher._record_failure_safely"
+        ) as record_failure:
+            with self.assertRaises(SeoulBikeTransportError):
+                refresh_once("key", "database")
+
+        self.assertEqual(record_failure.call_args.args[3:5], ("SOURCE", "TIMEOUT"))
 
 
 class FakeCursor:
-    def __init__(self):
+    def __init__(self, row=(1, 1, 0)):
         self.executed = []
         self.many = []
+        self.row = row
 
     def __enter__(self):
         return self
@@ -121,6 +163,9 @@ class FakeCursor:
 
     def executemany(self, sql, rows):
         self.many.append((sql, list(rows)))
+
+    def fetchone(self):
+        return self.row
 
 
 class FakeConnection:
@@ -146,6 +191,48 @@ class PublisherTests(unittest.TestCase):
         self.assertIn("NULLIF(TRIM(s.station_number), '') IS NULL", cursor.executed[1][0])
         self.assertIn("ON CONFLICT (station_id) DO UPDATE", cursor.executed[2][0])
         self.assertIn("inventory_status = 'MISSING'", cursor.executed[3][0])
+
+    def test_successful_publish_records_source_backed_counts_in_same_transaction(self):
+        cursor = FakeCursor(row=(3, 2, 1))
+        rows = [("ST-1", "102", 0, datetime.now(timezone.utc), "NORMAL")]
+
+        result = publish_snapshot(
+            "masked",
+            rows,
+            run_id="run-1",
+            started_at=datetime.now(timezone.utc),
+            source_count=2,
+            connection_factory=lambda _: FakeConnection(cursor),
+        )
+
+        self.assertEqual(result, {"published_count": 3, "normal_count": 2, "missing_count": 1})
+        ledger_sql, ledger_params = cursor.executed[-1]
+        self.assertIn("INSERT INTO admin_data_pipeline_runs", ledger_sql)
+        self.assertEqual(ledger_params[0:2], ("run-1", "CURRENT_INVENTORY"))
+        self.assertEqual(ledger_params[-5:], (2, 1, 3, 2, 1))
+
+
+class PipelineLedgerTests(unittest.TestCase):
+    def test_failure_ledger_keeps_only_sanitized_code_and_partial_counts(self):
+        cursor = FakeCursor()
+        record_failed_run(
+            "masked",
+            "run-2",
+            datetime.now(timezone.utc),
+            "QUALITY",
+            "validation_failure",
+            source_count=2733,
+            connection_factory=lambda _: FakeConnection(cursor),
+        )
+
+        sql, params = cursor.executed[0]
+        self.assertIn("status = 'FAILURE'", sql)
+        self.assertEqual(params[2:4], ("QUALITY", "VALIDATION_FAILURE"))
+        self.assertEqual(params[-2:], (2733, None))
+
+    def test_untrusted_failure_text_is_not_written(self):
+        self.assertEqual(sanitized_reason_code("password=secret"), "OTHER_FAILURE")
+        self.assertEqual(sanitized_reason_code("HTTP_5XX"), "HTTP_5XX")
 
 
 class RefreshCycleTests(unittest.TestCase):

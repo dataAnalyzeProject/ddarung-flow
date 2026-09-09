@@ -7,6 +7,7 @@ import random
 import re
 import time
 from datetime import datetime, timezone
+from uuid import uuid4
 
 import psycopg
 
@@ -21,6 +22,8 @@ from pipeline.src.collectors.bike_inventory_collector import (
 DEFAULT_REFRESH_INTERVAL_SECONDS = 300
 DEGRADED_RECOVERY_DELAYS_SECONDS = (60, 120, 240, 300)
 DEGRADED_RECOVERY_JITTER_SECONDS = 10
+PIPELINE_KEY = "CURRENT_INVENTORY"
+REASON_CODE_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
 
 
 def build_snapshot_rows(collection_result, minimum_rows=1000):
@@ -67,7 +70,14 @@ def build_snapshot_rows(collection_result, minimum_rows=1000):
     return [by_station[station_id] for station_id in sorted(by_station)]
 
 
-def publish_snapshot(database_url, rows, connection_factory=psycopg.connect):
+def publish_snapshot(
+    database_url,
+    rows,
+    run_id=None,
+    started_at=None,
+    source_count=None,
+    connection_factory=psycopg.connect,
+):
     if not rows:
         raise ValueError("snapshot rows must not be empty")
     collected_at = rows[0][3]
@@ -134,15 +144,155 @@ def publish_snapshot(database_url, rows, connection_factory=psycopg.connect):
                 """,
                 (collected_at,),
             )
+            cursor.execute(
+                """
+                SELECT COUNT(*),
+                       SUM(CASE WHEN i.inventory_status = 'NORMAL' THEN 1 ELSE 0 END),
+                       SUM(CASE WHEN i.inventory_status = 'MISSING' THEN 1 ELSE 0 END)
+                FROM station_inventory_current i
+                JOIN stations s ON s.station_id = i.station_id
+                WHERE s.active = TRUE AND i.collected_at = %s
+                """,
+                (collected_at,),
+            )
+            published_count, normal_count, missing_count = cursor.fetchone()
+            if run_id is not None:
+                completed_at = datetime.now(timezone.utc)
+                cursor.execute(
+                    """
+                    INSERT INTO admin_data_pipeline_runs (
+                        run_id, pipeline_key, status, failure_stage, reason_code,
+                        started_at, completed_at, source_collected_at,
+                        source_count, validated_count, published_count, normal_count, missing_count
+                    ) VALUES (%s, %s, 'SUCCESS', NULL, NULL, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        run_id,
+                        PIPELINE_KEY,
+                        started_at,
+                        completed_at,
+                        collected_at,
+                        source_count,
+                        len(rows),
+                        published_count,
+                        normal_count,
+                        missing_count,
+                    ),
+                )
+    return {
+        "published_count": published_count,
+        "normal_count": normal_count,
+        "missing_count": missing_count,
+    }
+
+
+def sanitized_reason_code(value):
+    candidate = str(value or "").strip().upper()
+    return candidate if REASON_CODE_PATTERN.fullmatch(candidate) else "OTHER_FAILURE"
+
+
+def record_failed_run(
+    database_url,
+    run_id,
+    started_at,
+    failure_stage,
+    reason_code,
+    source_collected_at=None,
+    source_count=None,
+    validated_count=None,
+    connection_factory=psycopg.connect,
+):
+    completed_at = datetime.now(timezone.utc)
+    with connection_factory(database_url) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO admin_data_pipeline_runs (
+                    run_id, pipeline_key, status, failure_stage, reason_code,
+                    started_at, completed_at, source_collected_at,
+                    source_count, validated_count, published_count, normal_count, missing_count
+                ) VALUES (%s, %s, 'FAILURE', %s, %s, %s, %s, %s, %s, %s, NULL, NULL, NULL)
+                ON CONFLICT (run_id) DO UPDATE SET
+                    status = 'FAILURE', failure_stage = EXCLUDED.failure_stage,
+                    reason_code = EXCLUDED.reason_code, completed_at = EXCLUDED.completed_at,
+                    source_collected_at = EXCLUDED.source_collected_at,
+                    source_count = EXCLUDED.source_count, validated_count = EXCLUDED.validated_count,
+                    published_count = NULL, normal_count = NULL, missing_count = NULL
+                """,
+                (
+                    run_id,
+                    PIPELINE_KEY,
+                    failure_stage,
+                    sanitized_reason_code(reason_code),
+                    started_at,
+                    completed_at,
+                    source_collected_at,
+                    source_count,
+                    validated_count,
+                ),
+            )
+
+
+def _record_failure_safely(*args, **kwargs):
+    try:
+        record_failed_run(*args, **kwargs)
+    except Exception:
+        # The refresh failure remains authoritative even if its diagnostic ledger cannot be written.
+        pass
 
 
 def refresh_once(api_key, database_url, now=None, minimum_rows=1000):
     collected_at = now or datetime.now(timezone.utc)
+    started_at = datetime.now(timezone.utc)
+    run_id = str(uuid4())
     client = SeoulBikeApiClient(api_key)
-    result = collect_bike_inventory(client, collected_at)
-    rows = build_snapshot_rows(result, minimum_rows=minimum_rows)
-    publish_snapshot(database_url, rows)
-    return len(rows)
+    try:
+        result = collect_bike_inventory(client, collected_at)
+    except SeoulBikeTransportError as exception:
+        _record_failure_safely(database_url, run_id, started_at, "SOURCE", exception.category)
+        raise
+    except Exception:
+        _record_failure_safely(database_url, run_id, started_at, "SOURCE", "OTHER_FAILURE")
+        raise
+
+    source_rows = result.get("payload", {}).get("rentBikeStatus", {}).get("row")
+    source_count = len(source_rows) if isinstance(source_rows, list) else None
+    source_collected_at = result.get("collected_at")
+    try:
+        rows = build_snapshot_rows(result, minimum_rows=minimum_rows)
+    except Exception:
+        _record_failure_safely(
+            database_url,
+            run_id,
+            started_at,
+            "QUALITY",
+            "VALIDATION_FAILURE",
+            source_collected_at=source_collected_at,
+            source_count=source_count,
+        )
+        raise
+
+    try:
+        summary = publish_snapshot(
+            database_url,
+            rows,
+            run_id=run_id,
+            started_at=started_at,
+            source_count=source_count,
+        )
+    except Exception:
+        _record_failure_safely(
+            database_url,
+            run_id,
+            started_at,
+            "SERVING",
+            "PUBLISH_FAILURE",
+            source_collected_at=source_collected_at,
+            source_count=source_count,
+            validated_count=len(rows),
+        )
+        raise
+    return summary["published_count"]
 
 
 def refresh_cycle(api_key, database_url, refresh=refresh_once):
