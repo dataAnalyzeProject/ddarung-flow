@@ -55,15 +55,55 @@ describe('CandidatesPage', () => {
   });
 
   test.each([
-    [{ items: [], dataState: 'NORMAL' }, '표시할 항목 없음', 'candidates-root-state--normal'],
-    [{ items: [], dataState: 'MISSING' }, '일부 정보만 사용 가능', 'candidates-root-state--missing'],
-    [{ items: [], dataState: 'DELAYED' }, '정보 갱신 지연', 'candidates-root-state--delayed'],
-    [{ items: [], dataState: 'INSUFFICIENT_DATA' }, '판단에 필요한 정보 부족', 'candidates-root-state--insufficient-data'],
-    [{ items: [], dataState: 'UNAVAILABLE' }, '현재 사용할 수 없음', 'candidates-root-state--unavailable'],
-  ])('renders root %s state distinctly', async (partial, label, stateClass) => {
+    [{ items: [], dataState: 'NORMAL' }, '표시할 항목 없음', '정상', 'candidates-root-state--normal'],
+    [{ items: [], dataState: 'DELAYED' }, '정보 갱신 지연', '정보 갱신 지연', 'candidates-root-state--delayed'],
+    [{ items: [], dataState: 'INSUFFICIENT_DATA' }, '판단에 필요한 정보 부족', '판단 정보 부족', 'candidates-root-state--insufficient-data'],
+    [{ items: [], dataState: 'UNAVAILABLE' }, '현재 사용할 수 없음', '현재 사용 불가', 'candidates-root-state--unavailable'],
+  ])('renders root %s state distinctly', async (partial, panelLabel, badgeLabel, stateClass) => {
     render(<CandidatesPage createAdapter={adapterFor(() => Promise.resolve({ ...first, ...partial }))} />);
-    expect(await screen.findByText(label)).toBeInTheDocument();
-    expect(within(screen.getByLabelText('목록 기준')).getByText(partial.dataState)).toHaveClass('candidates-root-state', stateClass);
+    expect((await screen.findAllByText(panelLabel)).length).toBeGreaterThan(0);
+    expect(within(screen.getByLabelText('목록 기준')).getByText(badgeLabel)).toHaveClass('candidates-root-state', stateClass);
+  });
+
+  test('summarizes measured inventory gaps without exposing the raw root state in the primary message', async () => {
+    const partial = {
+      ...first,
+      dataState: 'MISSING',
+      freshness: { state: 'FRESH' },
+      globalCoverage: {
+        ...first.globalCoverage,
+        activePublicStationCount: 2735,
+        evaluatedCount: 2719,
+        normalInferenceCount: 2719,
+        inventoryMissingCount: 16,
+      },
+    };
+    render(<CandidatesPage createAdapter={adapterFor(() => Promise.resolve(partial))} />);
+
+    expect(await screen.findByText('일부 데이터 확인 필요')).toBeInTheDocument();
+    expect(screen.getByText('서울 전체 2,735곳 중 2,719곳은 정상적으로 평가되었습니다. 최신 재고를 확인할 수 없는 16곳은 이번 후보 산정에서 제외되었습니다.')).toBeInTheDocument();
+    const context = screen.getByLabelText('목록 기준');
+    expect(within(context).getByText('일부 데이터 결측')).toHaveClass('candidates-root-state', 'candidates-root-state--missing');
+    expect(context).toHaveTextContent('2,719곳 정상 평가 · 16곳 재고 확인 불가');
+    expect(within(context).queryByText('MISSING')).not.toBeInTheDocument();
+    expect(screen.queryByText('일부 정보만 사용 가능')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('상세 상태 보기'));
+    const technicalState = screen.getByLabelText('원본 상태 상세');
+    expect(technicalState).toHaveTextContent('원본 데이터 상태MISSING');
+    expect(technicalState).toHaveTextContent('FreshnessFRESH');
+  });
+
+  test('does not invent a reassuring normal count when missing coverage is unavailable', async () => {
+    render(<CandidatesPage createAdapter={adapterFor(() => Promise.resolve({
+      ...first,
+      items: [],
+      dataState: 'MISSING',
+      globalCoverage: { ...first.globalCoverage, activePublicStationCount: null, normalInferenceCount: 0, inventoryMissingCount: null },
+    }))} />);
+
+    expect(await screen.findByText('데이터 확인 필요')).toBeInTheDocument();
+    expect(screen.getByText('일부 대여소의 최신 재고를 확인할 수 없습니다. 아래 데이터 범위에서 상세 상태를 확인해 주세요.')).toBeInTheDocument();
+    expect(screen.queryByText(/정상적으로 평가되었습니다/)).not.toBeInTheDocument();
   });
 
   test('reports a missing Global result without treating it as an empty ranking', async () => {
@@ -81,7 +121,10 @@ describe('CandidatesPage', () => {
 
   test('uses a neutral root state badge for an unsupported source value', async () => {
     render(<CandidatesPage createAdapter={adapterFor(() => Promise.resolve({ ...first, dataState: 'UNKNOWN_SOURCE_STATE' }))} />);
-    expect(await screen.findByText('UNKNOWN_SOURCE_STATE')).toHaveClass('candidates-root-state', 'candidates-root-state--unknown');
+    const context = await screen.findByLabelText('목록 기준');
+    expect(within(context).getByText('확인 필요')).toHaveClass('candidates-root-state', 'candidates-root-state--unknown');
+    fireEvent.click(screen.getByText('상세 상태 보기'));
+    expect(screen.getByLabelText('원본 상태 상세')).toHaveTextContent('원본 데이터 상태UNKNOWN_SOURCE_STATE');
   });
 
   test.each([[403, 'OPS_CANDIDATE_READ'], [500, null]])('renders access/error state for request failures', async (status, permission) => {
