@@ -74,7 +74,12 @@ test("keeps Q&A CRUD on the existing authenticated client", async () => {
 });
 
 test("fetch implementation obtains a fresh CSRF token for each alert mutation", async () => {
-  const response = (body, status = 200) => ({ ok: true, status, json: async () => body });
+  const response = (body, status = 200) => ({
+    ok: true,
+    status,
+    headers: { get: () => status === 204 ? null : "application/json" },
+    json: async () => body,
+  });
   global.fetch = jest.fn()
     .mockResolvedValueOnce(response({ headerName: "X-CSRF-TOKEN", token: "one" }))
     .mockResolvedValueOnce(response(null, 204))
@@ -85,4 +90,32 @@ test("fetch implementation obtains a fresh CSRF token for each alert mutation", 
   await adapter.executeRecheck("sub-1");
   expect(global.fetch).toHaveBeenNthCalledWith(2, "http://localhost:8080/api/v1/recheck-subscriptions/sub-1", expect.objectContaining({ method: "DELETE", headers: expect.objectContaining({ "X-CSRF-TOKEN": "one" }) }));
   expect(global.fetch).toHaveBeenNthCalledWith(4, "http://localhost:8080/api/v1/recheck-subscriptions/sub-1/execute", expect.objectContaining({ method: "POST", headers: expect.objectContaining({ "X-CSRF-TOKEN": "two" }) }));
+});
+
+test.each([
+  ["HTML", "text/html", async () => "<html>login</html>", "UNEXPECTED_CONTENT_TYPE"],
+  ["unexpected content type", "text/plain", async () => ({ notifications: [] }), "UNEXPECTED_CONTENT_TYPE"],
+  ["malformed JSON", "application/json", async () => { throw new SyntaxError("bad json"); }, "INVALID_RESPONSE_BODY"],
+])("rejects a successful %s response instead of treating it as data", async (_label, contentType, parse, code) => {
+  global.fetch = jest.fn().mockResolvedValue({
+    ok: true,
+    status: 200,
+    headers: { get: () => contentType },
+    json: parse,
+  });
+
+  const adapter = createConsumerSupportAdapter();
+
+  await expect(adapter.loadAlerts()).rejects.toMatchObject({ status: 200, code });
+});
+
+test("rejects a successful JSON body with an unexpected alert shape", async () => {
+  const api = {
+    request: jest.fn()
+      .mockResolvedValueOnce({ notifications: [] })
+      .mockResolvedValueOnce([]),
+  };
+  const adapter = createConsumerSupportAdapter({ api, qna: {} });
+
+  await expect(adapter.loadAlerts()).rejects.toMatchObject({ code: "INVALID_RESPONSE_BODY" });
 });

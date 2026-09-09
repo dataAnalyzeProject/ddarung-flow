@@ -12,7 +12,16 @@ jest.mock('./features/premium/subscriptionApi', () => ({ fetchSubscription: jest
 jest.mock('./features/admin-v2/shell/AdminV2PreviewApp', () => () => <h1>Admin preview</h1>);
 jest.mock('./features/admin-v2/shell/AdminV2ProductionApp', () => () => <h1>Admin production</h1>);
 jest.mock('./features/consumer-r2/entry', () => ({
-  LoginPage: () => <h1>Login</h1>,
+  LoginPage: ({ adapter }) => {
+    const React = require('react');
+    const [authenticated, setAuthenticated] = React.useState(false);
+    const [logoutState, setLogoutState] = React.useState('idle');
+    React.useEffect(() => { adapter.checkSession().then((auth) => setAuthenticated(auth.authenticated)); }, [adapter]);
+    const performLogout = async () => {
+      try { await adapter.logout(); setLogoutState('success'); } catch { setLogoutState('failed'); }
+    };
+    return <section><h1>Login</h1><output data-testid="login-logout-state">{logoutState}</output>{authenticated ? <button onClick={performLogout}>Login page logout</button> : null}</section>;
+  },
   OpeningPage: ({ onNavigate, onStart }) => <section><h1>Opening</h1><button onClick={onStart}>Opening CTA</button><button onClick={() => onNavigate('ride')}>Header ride</button></section>,
 }));
 jest.mock('./features/consumer-r2/main/ConsumerMainPage', () => function MockMain({ currentResult, currentView, onInputChange, onNavigate, onOpenGuide, onOpenRide, onOpenStation, onSearchComplete, onStartNew, onViewChange, restoreSearch }) {
@@ -71,6 +80,13 @@ let mockResultB;
 const mockLoadDecision = jest.fn();
 const mockMainRestoreChange = jest.fn();
 const mockDecision = { decisionId: 'decision-1', revision: 1, expiresAt: '2030-09-03T01:05:00Z', normalizedIntent: { origin: { placeId: 'journey-origin', displayName: '일정 출발지', latitude: 37.62, longitude: 127.03 }, requiredBikeCount: 4 }, candidates: [{ candidateId: 'candidate-id-is-not-station', stationId: 'ST-J', arrivalAt: '2030-09-03T01:00:00Z', horizonMinutes: 120, requiredBikeCount: 4, rentalProbability: 0.91 }], unifiedPlan: { selectedRentalCandidateId: 'rental:ST-J', segments: [] } };
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => { resolve = resolvePromise; reject = rejectPromise; });
+  return { promise, resolve, reject };
+}
 
 function output(name) { return JSON.parse(screen.getByTestId(name).textContent); }
 jest.mock('./features/consumer-r2/premium', () => ({
@@ -228,7 +244,7 @@ test('logout updates App auth before another personal route opens', async () => 
   expect(logout).toHaveBeenCalledTimes(1);
 });
 
-test('logout returns to the same fresh RESULT while moving it into the anonymous session', async () => {
+test('logout clears the fresh RESULT, locations, selected station, and view from the anonymous session', async () => {
   mockResultA.candidates.push({ stationId: 'ST-B', horizonMinutes: 90, predictionProbability: 0.74, arrivalAt: '2030-09-03T01:03:00Z', expiresAt: '2030-09-03T01:01:00Z', featureAsOf: '2030-09-03T00:39:00Z', routeDetail: { pathPoints: [[37.55, 126.97], [37.57, 126.98]], durationMinutes: 23 } });
   visit('/#main');
   fireEvent.click(await screen.findByText('Search A'));
@@ -240,10 +256,118 @@ test('logout returns to the same fresh RESULT while moving it into the anonymous
   await screen.findByRole('heading', { name: 'Main' });
   expect(window.location.hash).toBe('#main');
   expect(window.history.state.searchSessionId).not.toBe(priorSessionId);
-  expect(output('main-input')).toEqual(mockInputA);
-  expect(output('main-result')).toEqual(mockResultA);
-  expect(output('main-view')).toEqual({ selectedStationId: 'ST-B', sortKey: 'DISTANCE', showTransit: true });
+  expect(output('main-input')).toBeNull();
+  expect(output('main-result')).toBeNull();
+  expect(output('main-view')).toBeNull();
+  expect(window.history.state).not.toEqual(expect.objectContaining({
+    restoreSearch: expect.anything(),
+    selectedStationId: expect.anything(),
+    mainView: expect.anything(),
+  }));
+  expect(JSON.stringify(window.history.state)).not.toMatch(/latitude|longitude|predictionProbability/);
   expect(logout).toHaveBeenCalledTimes(1);
+});
+
+test('logout removes only the current user cache and preserves login-return input', async () => {
+  const currentUserCache = 'ddarung.consumer-r2.recent-search.v1.test-user';
+  const otherUserCache = 'ddarung.consumer-r2.recent-search.v1.other-user';
+  const pendingLoginInput = 'ddarung.pendingPrediction.v1';
+  const journeyDraft = 'consumer-journey-planner-draft';
+  const pendingLoginInputValue = ' {"origin":"로그인 전 입력","requiredBikeCount":2}\n';
+  window.localStorage.setItem(currentUserCache, JSON.stringify([mockInputA]));
+  window.localStorage.setItem(otherUserCache, JSON.stringify([mockInputB]));
+  window.sessionStorage.setItem(pendingLoginInput, pendingLoginInputValue);
+  window.sessionStorage.setItem(journeyDraft, JSON.stringify({ text: '이전 사용자 일정' }));
+
+  const view = visit('/#mypage');
+  fireEvent.click(await screen.findByText('Logout'));
+  await screen.findByRole('heading', { name: 'Archive anonymous' });
+
+  expect(window.localStorage.getItem(currentUserCache)).toBeNull();
+  expect(window.localStorage.getItem(otherUserCache)).not.toBeNull();
+  expect(window.sessionStorage.getItem(journeyDraft)).toBeNull();
+  expect(window.sessionStorage.getItem(pendingLoginInput)).toBe(pendingLoginInputValue);
+
+  view.unmount();
+  getCurrentUser.mockResolvedValue({ authenticated: true, user: { id: 'next-user' } });
+  visit('/#journey');
+  await screen.findByRole('heading', { name: 'Planner active' });
+  expect(window.sessionStorage.getItem(journeyDraft)).toBeNull();
+});
+
+test('logout from the actual login route uses the same privacy cleanup', async () => {
+  const currentUserCache = 'ddarung.consumer-r2.recent-search.v1.test-user';
+  const otherUserCache = 'ddarung.consumer-r2.recent-search.v1.other-user';
+  const pendingLoginInput = 'ddarung.pendingPrediction.v1';
+  const journeyDraft = 'consumer-journey-planner-draft';
+  const pendingLoginInputValue = '{"destination":"로그인 복귀 입력"}';
+  window.localStorage.setItem(currentUserCache, 'current');
+  window.localStorage.setItem(otherUserCache, 'other');
+  window.sessionStorage.setItem(pendingLoginInput, pendingLoginInputValue);
+  window.sessionStorage.setItem(journeyDraft, 'private draft');
+
+  visit('/login');
+  fireEvent.click(await screen.findByText('Login page logout'));
+
+  await waitFor(() => {
+    expect(logout).toHaveBeenCalledTimes(1);
+    expect(window.localStorage.getItem(currentUserCache)).toBeNull();
+    expect(window.localStorage.getItem(otherUserCache)).toBe('other');
+    expect(window.sessionStorage.getItem(journeyDraft)).toBeNull();
+    expect(window.sessionStorage.getItem(pendingLoginInput)).toBe(pendingLoginInputValue);
+  });
+});
+
+test('the login route shares one session request so logout clears the authenticated user cache', async () => {
+  const sharedSession = deferred();
+  getCurrentUser.mockImplementationOnce(() => sharedSession.promise);
+  const currentUserCache = 'ddarung.consumer-r2.recent-search.v1.test-user';
+  const otherUserCache = 'ddarung.consumer-r2.recent-search.v1.other-user';
+  const pendingLoginInput = 'ddarung.pendingPrediction.v1';
+  const journeyDraft = 'consumer-journey-planner-draft';
+  const pendingValue = ' {"origin":"로그인 복귀"}\n';
+  window.localStorage.setItem(currentUserCache, 'current');
+  window.localStorage.setItem(otherUserCache, 'other');
+  window.sessionStorage.setItem(pendingLoginInput, pendingValue);
+  window.sessionStorage.setItem(journeyDraft, 'private draft');
+
+  visit('/login');
+  await waitFor(() => expect(getCurrentUser).toHaveBeenCalledTimes(1));
+  await act(async () => { sharedSession.resolve({ authenticated: true, user: { id: 'test-user' } }); });
+  fireEvent.click(await screen.findByText('Login page logout'));
+  await waitFor(() => expect(screen.getByTestId('login-logout-state')).toHaveTextContent('success'));
+
+  await act(async () => {
+    window.history.pushState({}, '', '/#guide/ST-1');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  });
+
+  expect(await screen.findByRole('heading', { name: 'Gate ANONYMOUS' })).toBeInTheDocument();
+  expect(window.localStorage.getItem(currentUserCache)).toBeNull();
+  expect(window.localStorage.getItem(otherUserCache)).toBe('other');
+  expect(window.sessionStorage.getItem(journeyDraft)).toBeNull();
+  expect(window.sessionStorage.getItem(pendingLoginInput)).toBe(pendingValue);
+});
+
+test('a rejected login-page logout clears no browser state', async () => {
+  logout.mockRejectedValueOnce(new Error('logout failed'));
+  const currentUserCache = 'ddarung.consumer-r2.recent-search.v1.test-user';
+  const otherUserCache = 'ddarung.consumer-r2.recent-search.v1.other-user';
+  const pendingLoginInput = 'ddarung.pendingPrediction.v1';
+  const journeyDraft = 'consumer-journey-planner-draft';
+  window.localStorage.setItem(currentUserCache, 'current');
+  window.localStorage.setItem(otherUserCache, 'other');
+  window.sessionStorage.setItem(pendingLoginInput, 'pending');
+  window.sessionStorage.setItem(journeyDraft, 'draft');
+
+  visit('/login');
+  fireEvent.click(await screen.findByText('Login page logout'));
+  await waitFor(() => expect(screen.getByTestId('login-logout-state')).toHaveTextContent('failed'));
+
+  expect(window.localStorage.getItem(currentUserCache)).toBe('current');
+  expect(window.localStorage.getItem(otherUserCache)).toBe('other');
+  expect(window.sessionStorage.getItem(pendingLoginInput)).toBe('pending');
+  expect(window.sessionStorage.getItem(journeyDraft)).toBe('draft');
 });
 
 test.each(['expired RESULT', 'input in progress'])('logout does not migrate %s into the anonymous session', async (scenario) => {

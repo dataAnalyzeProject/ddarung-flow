@@ -10,6 +10,7 @@ import { ConsumerQnaPage, ConsumerAlertsPage } from './features/consumer-r2/supp
 import { PremiumAccessGatePage, PremiumSandboxCheckoutPage } from './features/consumer-r2/premium';
 import { AsyncState, ConsumerContainer, ConsumerR2Theme } from './features/consumer-r2/shared';
 import { consumerPersonalAdapter } from './features/consumer-r2/adapters/personal/consumerPersonalAdapter';
+import { consumerAuthAdapter } from './features/consumer-r2/adapters/auth';
 import { candidateGuideContext, consumerHistoryState, consumeConsumerReturn, guideContextForStation, isFreshMainResult, isFutureTimestamp, journeyHistoryInput, mainHistoryView, navigationTarget, newConsumerEntryId, routeFromHash, searchHistoryInput, storeConsumerReturn } from './features/consumer-r2/adapters/navigation/consumerNavigation';
 import AdminV2PreviewApp from './features/admin-v2/shell/AdminV2PreviewApp';
 import AdminV2ProductionApp from './features/admin-v2/shell/AdminV2ProductionApp';
@@ -19,6 +20,15 @@ import { fetchSubscription } from './features/premium/subscriptionApi';
 import { clearAdminReturnTarget, consumeAdminReturnTarget } from './features/admin-v2/auth/adminSession';
 
 export { navigationTarget } from './features/consumer-r2/adapters/navigation/consumerNavigation';
+
+const RECENT_SEARCH_PREFIX = 'ddarung.consumer-r2.recent-search.v1';
+const JOURNEY_DRAFT_KEY = 'consumer-journey-planner-draft';
+
+function clearUserBoundCache(user) {
+  const accountId = user?.id || user?.userId || user?.providerUserId;
+  if (!accountId) return;
+  try { window.localStorage.removeItem(`${RECENT_SEARCH_PREFIX}.${accountId}`); } catch { /* Storage can be disabled. */ }
+}
 
 function readLocation(searchSessionId) {
   if (window.location.pathname !== '/') return { pathname: window.location.pathname, ...routeFromHash(), state: window.history.state || {} };
@@ -55,6 +65,9 @@ function App() {
   const [location, setLocation] = useState(() => readLocation(searchSessionId.current));
   const [authState, setAuthState] = useState('loading');
   const [user, setUser] = useState(null);
+  const userRef = useRef(null);
+  const sessionGeneration = useRef(0);
+  const sessionRequest = useRef(null);
   const [subscription, setSubscription] = useState({ status: 'PROCESSING' });
   const [subscriptionReload, setSubscriptionReload] = useState(0);
   const mainResults = useRef(new Map());
@@ -88,24 +101,43 @@ function App() {
     if (['failed', 'cancelled'].includes(params.get('login'))) clearAdminReturnTarget();
   }, [isLoginPath]);
 
-  const refreshSession = useCallback(() => {
+  const checkSession = useCallback(() => {
+    const requestGeneration = sessionGeneration.current;
+    if (sessionRequest.current?.generation === requestGeneration) {
+      return sessionRequest.current.promise;
+    }
     setAuthState('loading');
-    return getCurrentUser().then((auth) => {
-      setUser(auth.authenticated ? auth.user : null);
+    const promise = getCurrentUser().then((auth) => {
+      if (requestGeneration !== sessionGeneration.current) return { authenticated: false, user: null };
+      const currentUser = auth.authenticated ? auth.user : null;
+      userRef.current = currentUser;
+      setUser(currentUser);
       setAuthState(auth.authenticated ? 'authenticated' : 'anonymous');
-    }).catch(() => { setUser(null); setAuthState('error'); });
+      return auth;
+    }).catch(() => {
+      if (requestGeneration !== sessionGeneration.current) return { authenticated: false, user: null };
+      userRef.current = null;
+      setUser(null);
+      setAuthState('error');
+      return { authenticated: false, user: null };
+    }).finally(() => {
+      if (sessionRequest.current?.promise === promise) sessionRequest.current = null;
+    });
+    sessionRequest.current = { generation: requestGeneration, promise };
+    return promise;
   }, []);
   useEffect(() => {
-    if (!skipSessionCheck) refreshSession();
-  }, [skipSessionCheck, refreshSession]);
+    if (!skipSessionCheck) checkSession();
+  }, [skipSessionCheck, checkSession]);
 
   useEffect(() => {
     if (!needsSubscription || authState !== 'authenticated' || skipSessionCheck) return undefined;
     let active = true;
+    const requestGeneration = sessionGeneration.current;
     setSubscription({ status: 'PROCESSING' });
     fetchSubscription().then((value) => {
-      if (active) setSubscription(value?.status ? value : { status: 'ERROR' });
-    }).catch(() => { if (active) setSubscription({ status: 'ERROR' }); });
+      if (active && requestGeneration === sessionGeneration.current) setSubscription(value?.status ? value : { status: 'ERROR' });
+    }).catch(() => { if (active && requestGeneration === sessionGeneration.current) setSubscription({ status: 'ERROR' }); });
     return () => { active = false; };
   }, [needsSubscription, authState, route, stationId, subscriptionReload, skipSessionCheck]);
 
@@ -196,12 +228,12 @@ function App() {
   };
   const login = () => navigate('login');
   const handleLogout = useCallback(async () => {
-    const source = readLocation(searchSessionId.current);
-    const mainEntryId = source.route === 'main' ? source.state.entryId : source.state.mainEntryId;
-    const result = mainEntryId ? resultFor(source.state, mainEntryId) : null;
-    const restoreSearch = result ? searchHistoryInput(source.state.restoreSearch) : null;
-    const mainView = result ? mainHistoryView(source.state.mainView) : null;
     await logout();
+    sessionGeneration.current += 1;
+    sessionRequest.current = null;
+    clearUserBoundCache(userRef.current);
+    try { window.sessionStorage.removeItem(JOURNEY_DRAFT_KEY); } catch { /* Storage can be disabled. */ }
+    userRef.current = null;
     setUser(null);
     setAuthState('anonymous');
     setSubscription({ status: 'ANONYMOUS' });
@@ -209,11 +241,11 @@ function App() {
     decisions.current.clear();
     const entryId = newConsumerEntryId();
     searchSessionId.current = newConsumerEntryId();
-    if (result) mainResults.current.set(entryId, { inputKey: JSON.stringify(restoreSearch), result });
-    window.history.replaceState(consumerHistoryState({ entryId, mainEntryId: entryId, searchSessionId: searchSessionId.current, restoreSearch, mainView }), '');
+    window.history.replaceState(consumerHistoryState({ entryId, searchSessionId: searchSessionId.current }), '');
     syncLocation();
-  }, [resultFor, syncLocation]);
+  }, [syncLocation]);
   const handleCheckoutSuccess = useCallback((value) => setSubscription(value), []);
+  const loginAdapter = useMemo(() => ({ ...consumerAuthAdapter, checkSession, logout: handleLogout }), [checkSession, handleLogout]);
   const personalAdapter = useMemo(() => ({ ...consumerPersonalAdapter, logout: handleLogout }), [handleLogout]);
   const handleInputChange = useCallback((input) => {
     const current = readLocation(searchSessionId.current);
@@ -277,11 +309,11 @@ function App() {
 
   if (isAdminV2Preview) return <AdminV2PreviewApp />;
   if (isAdminV2Production) return <AdminV2ProductionApp />;
-  if (isLoginPath) return <LoginPage />;
+  if (isLoginPath) return <LoginPage adapter={loginAdapter} />;
   // HOME is a landing anyone can return to, so it renders regardless of intro history or auth state.
   if (route === 'home') return <OpeningPage authState={authState} user={user} onNavigate={navigate} onLogin={login} onStart={() => navigate('main', { intent: 'new' })} />;
   if (route !== 'main' && ['loading', 'error'].includes(authState)) {
-    return <ConsumerR2Theme><ConsumerContainer as="main" id="main-content"><AsyncState state={authState === 'loading' ? 'loading' : 'error'} title={authState === 'loading' ? '로그인 상태를 확인하고 있습니다' : '로그인 상태를 확인하지 못했습니다'} onAction={refreshSession} /></ConsumerContainer></ConsumerR2Theme>;
+    return <ConsumerR2Theme><ConsumerContainer as="main" id="main-content"><AsyncState state={authState === 'loading' ? 'loading' : 'error'} title={authState === 'loading' ? '로그인 상태를 확인하고 있습니다' : '로그인 상태를 확인하지 못했습니다'} onAction={checkSession} /></ConsumerContainer></ConsumerR2Theme>;
   }
   const common = { authState, user, onNavigate: navigate, onLogin: login };
   const accessState = authState === 'authenticated' ? subscription.status : 'ANONYMOUS';

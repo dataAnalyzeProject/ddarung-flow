@@ -13,6 +13,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.UUID;
 
+import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
@@ -59,6 +60,38 @@ class SecurityConfigTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(header().doesNotExist("Location"))
                 .andExpect(jsonPath("$.code").value("AUTH_REQUIRED"));
+    }
+
+    @Test
+    void anonymousProtectedApiReturnsJsonAuthRequiredInsteadOfRedirect() throws Exception {
+        mockMvc.perform(get("/api/v1/private-probe"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().doesNotExist("Location"))
+                .andExpect(header().string("Content-Type", startsWith("application/json")))
+                .andExpect(jsonPath("$.code").value("AUTH_REQUIRED"));
+    }
+
+    @Test
+    void anonymousAuthMeRemainsPublic() throws Exception {
+        mockMvc.perform(get("/api/v1/auth/me"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.authenticated").value(false));
+    }
+
+    @Test
+    void anonymousProtectedApiUnderContextPathReturnsJsonAuthRequired() throws Exception {
+        mockMvc.perform(get("/app/api/v1/private-probe").contextPath("/app"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().doesNotExist("Location"))
+                .andExpect(header().string("Content-Type", startsWith("application/json")))
+                .andExpect(jsonPath("$.code").value("AUTH_REQUIRED"));
+    }
+
+    @Test
+    void anonymousAuthMeUnderContextPathRemainsPublic() throws Exception {
+        mockMvc.perform(get("/app/api/v1/auth/me").contextPath("/app"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.authenticated").value(false));
     }
 
     @Test

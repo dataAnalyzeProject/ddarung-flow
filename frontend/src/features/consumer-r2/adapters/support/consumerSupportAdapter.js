@@ -28,7 +28,23 @@ const EVENT_META = {
 
 async function request(path, options = {}) {
   const response = await fetch(`${API_BASE_URL}${path}`, { credentials: "include", ...options });
-  const body = response.status === 204 ? null : await response.json().catch(() => ({}));
+  if (response.status === 204) return null;
+  const contentType = response.headers.get("content-type") || "";
+  if (!/^application\/(?:[^;]+\+)?json(?:;|$)/i.test(contentType)) {
+    throw Object.assign(new Error("서버가 JSON 응답을 반환하지 않았습니다."), {
+      status: response.status,
+      code: "UNEXPECTED_CONTENT_TYPE",
+    });
+  }
+  let body;
+  try {
+    body = await response.json();
+  } catch {
+    throw Object.assign(new Error("서버 응답을 해석하지 못했습니다."), {
+      status: response.status,
+      code: "INVALID_RESPONSE_BODY",
+    });
+  }
   if (!response.ok) {
     throw Object.assign(new Error(body?.message || "요청을 처리하지 못했습니다."), {
       status: response.status,
@@ -116,9 +132,14 @@ export function createConsumerSupportAdapter({
         api.request("/api/v1/notifications"),
         api.request("/api/v1/recheck-subscriptions"),
       ]);
+      if (!Array.isArray(notifications) || !Array.isArray(subscriptions)) {
+        throw Object.assign(new Error("알림 응답 형식이 올바르지 않습니다."), {
+          code: "INVALID_RESPONSE_BODY",
+        });
+      }
       return {
-        notifications: (Array.isArray(notifications) ? notifications : []).map(mapNotification).filter(Boolean),
-        subscriptions: Array.isArray(subscriptions) ? subscriptions : [],
+        notifications: notifications.map(mapNotification).filter(Boolean),
+        subscriptions,
       };
     },
     markRead: (id) => api.mutation(`/api/v1/notifications/${encodeURIComponent(id)}/read`, "POST"),
