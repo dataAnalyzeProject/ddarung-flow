@@ -29,6 +29,7 @@ const ERROR_COPY = {
   AI_OUTPUT_SCHEMA_INVALID: "AI 응답 형식을 확인하지 못했습니다. 입력을 유지한 채 다시 시도해 주세요.",
   AI_TOOL_VALUE_MISMATCH: "AI 일정이 실제 근거와 일치하지 않아 전체 일정을 만들지 못했습니다. 입력은 유지됩니다.",
   AI_SCHEDULE_UNAVAILABLE: "AI 일정을 만들지 못했습니다. 입력과 확인된 실제 근거는 유지되니 다시 시도해 주세요.",
+  JOURNEY_RENTAL_UNAVAILABLE: "현재 선택한 출발 시각에는 대여 가능성 예측을 제공할 수 없습니다. 지금 출발·30분 뒤·1시간 뒤 중 하나로 바꿔 다시 시도해 주세요.",
   AI_PROVIDER_REFUSAL: "AI가 이 설명으로 조건을 정리하지 못했습니다. 설명을 바꿔 다시 시도해 주세요.",
 };
 
@@ -338,7 +339,7 @@ export default function ConsumerJourneyPlannerPage({ adapter = consumerJourneyAd
         <div className="cr22-journey__confirm-places">{["origin", "destination"].map((field) => <PlacePicker key={field} adapter={adapter} autoQuery={autoPicked[field]} disabled={working} error={errors[field]} field={field} place={values[field]} query={values[`${field}Query`]} onChange={(place, query) => { setAutoPicked((current) => Object.fromEntries(Object.entries(current).filter(([picked]) => picked !== field))); updateValues({ [field]: place, [`${field}Query`]: query }); }} />)}</div>
         <div className="cr22-journey__confirm-numbers">
           <div className="cr22-journey__time-field">
-            <FormField label="출발 희망 시각" required error={errors.departureAt} hint="‘지금 출발’은 준비 시간을 고려해 10분 뒤로 맞춰요."><input name="departureAt" type="datetime-local" min={localDateTime(Date.now())} disabled={working} value={values.departureAt} onChange={(event) => updateValues({ departureAt: event.target.value })} /></FormField>
+            <FormField label="출발 희망 시각" required error={errors.departureAt} hint="대여 가능성 예측은 실제 대여소 도착시각 기준 1~4시간 범위에서 제공됩니다. ‘지금 출발’은 준비 시간을 고려해 10분 뒤로 맞춰요."><input name="departureAt" type="datetime-local" min={localDateTime(Date.now())} disabled={working} value={values.departureAt} onChange={(event) => updateValues({ departureAt: event.target.value })} /></FormField>
             <div className="cr22-journey__quick-times">{QUICK_DEPARTURES.map(([label, minutes]) => <button key={label} type="button" disabled={working} onClick={() => updateValues({ departureAt: departureFromNow(minutes) })}>{label}</button>)}</div>
           </div>
           <FormField label="라이딩 이용 시간 (분)" required error={errors.maxJourneyMinutes}><input name="maxJourneyMinutes" type="number" min="1" max="480" step="1" disabled={working} value={values.maxJourneyMinutes} onChange={(event) => updateValues({ maxJourneyMinutes: event.target.value })} /></FormField>
