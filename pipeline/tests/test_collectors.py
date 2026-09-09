@@ -72,14 +72,14 @@ def test_collect_bike_inventory_reads_real_response_and_all_pages():
     responses = [
         {
             "rentBikeStatus": {
-                "list_total_count": 1001,
+                "list_total_count": 1000,
                 "RESULT": {"CODE": "INFO-000"},
                 "row": first_rows,
             }
         },
         {
             "rentBikeStatus": {
-                "list_total_count": 1001,
+                "list_total_count": 1,
                 "RESULT": {"CODE": "INFO-000"},
                 "row": second_rows,
             }
@@ -104,7 +104,7 @@ def test_collect_bike_inventory_reads_real_response_and_all_pages():
     assert result["payload"]["collection_evidence"] == result["collection_evidence"]
 
 
-def test_collect_bike_inventory_finishes_at_provider_total_without_empty_sentinel_page():
+def test_collect_bike_inventory_full_page_requires_a_terminal_page():
     response = {
         "rentBikeStatus": {
             "list_total_count": 2,
@@ -115,13 +115,20 @@ def test_collect_bike_inventory_finishes_at_provider_total_without_empty_sentine
             ],
         }
     }
-    client = FakeBikeClient([response])
+    terminal = {
+        "rentBikeStatus": {
+            "list_total_count": 1,
+            "RESULT": {"CODE": "INFO-000"},
+            "row": [{"stationId": "ST-3", "parkingBikeTotCnt": "1"}],
+        }
+    }
+    client = FakeBikeClient([response, terminal])
 
     result = collect_bike_inventory(client, COLLECTED_AT, page_size=2)
 
-    assert client.calls == [(1, 2)]
+    assert client.calls == [(1, 2), (3, 4)]
     assert result["collection_evidence"]["status"] == "COMPLETE"
-    assert result["collection_evidence"]["expected_row_count"] == 2
+    assert result["collection_evidence"]["expected_row_count"] == 3
 
 
 @pytest.mark.parametrize(
@@ -175,7 +182,7 @@ def test_collect_bike_inventory_accepts_strict_integer_provider_total_string():
         (
             {
                 "rentBikeStatus": {
-                    "list_total_count": 3,
+                    "list_total_count": 0,
                     "RESULT": {"CODE": "INFO-000"},
                     "row": [],
                 }
@@ -183,9 +190,9 @@ def test_collect_bike_inventory_accepts_strict_integer_provider_total_string():
             "EMPTY_FOLLOW_UP_PAGE",
         ),
         (
-            {
-                "rentBikeStatus": {
-                    "list_total_count": 4,
+                {
+                    "rentBikeStatus": {
+                    "list_total_count": 2,
                     "RESULT": {"CODE": "INFO-000"},
                     "row": [{"stationId": "ST-3", "parkingBikeTotCnt": "1"}],
                 }
@@ -195,7 +202,7 @@ def test_collect_bike_inventory_accepts_strict_integer_provider_total_string():
         (
             {
                 "rentBikeStatus": {
-                    "list_total_count": 3,
+                    "list_total_count": 1,
                     "RESULT": {"CODE": "INFO-000"},
                     "row": [{"stationId": "ST-2", "parkingBikeTotCnt": "1"}],
                 }
@@ -205,7 +212,7 @@ def test_collect_bike_inventory_accepts_strict_integer_provider_total_string():
         (
             {
                 "rentBikeStatus": {
-                    "list_total_count": 3,
+                    "list_total_count": 1,
                     "RESULT": {"CODE": "INFO-000"},
                     "row": [None],
                 }
@@ -217,7 +224,7 @@ def test_collect_bike_inventory_accepts_strict_integer_provider_total_string():
 def test_collect_bike_inventory_marks_invalid_follow_up_page_partial(second_page, reason):
     first_page = {
         "rentBikeStatus": {
-            "list_total_count": 3,
+            "list_total_count": 2,
             "RESULT": {"CODE": "INFO-000"},
             "row": [
                 {"stationId": "ST-1", "parkingBikeTotCnt": "1"},
@@ -237,7 +244,7 @@ def test_collect_bike_inventory_marks_invalid_follow_up_page_partial(second_page
 def test_collect_bike_inventory_follow_up_transport_failure_is_not_published_as_partial_result():
     first_page = {
         "rentBikeStatus": {
-            "list_total_count": 3,
+            "list_total_count": 2,
             "RESULT": {"CODE": "INFO-000"},
             "row": [
                 {"stationId": "ST-1", "parkingBikeTotCnt": "1"},
@@ -268,6 +275,8 @@ def test_collect_bike_inventory_keeps_empty_response_for_quality_check():
     result = collect_bike_inventory(FakeBikeClient([response]), COLLECTED_AT)
 
     assert result["payloads"] == [response]
+    assert result["collection_evidence"]["status"] == "PARTIAL"
+    assert result["collection_evidence"]["reason"] == "EMPTY_INITIAL_PAGE"
 
 
 def test_collect_bike_inventory_propagates_client_failure():
@@ -307,14 +316,14 @@ def test_bike_transport_errors_are_sanitized_and_classified(monkeypatch, failure
 def test_page_retry_retries_only_the_failed_page_and_continues(capsys):
     first_page = {
         "rentBikeStatus": {
-            "list_total_count": 1001,
+            "list_total_count": 1000,
             "RESULT": {"CODE": "INFO-000"},
             "row": [{"stationId": str(index), "parkingBikeTotCnt": "1"} for index in range(1000)],
         }
     }
     second_page = {
         "rentBikeStatus": {
-            "list_total_count": 1001,
+            "list_total_count": 1,
             "RESULT": {"CODE": "INFO-000"},
             "row": [{"stationId": "1000", "parkingBikeTotCnt": "1"}],
         }

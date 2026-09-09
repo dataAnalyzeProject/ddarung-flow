@@ -212,22 +212,14 @@ def collect_bike_inventory(client, collected_at, page_size=1000, sleep=time.slee
             break
 
         declared_page_count = _provider_total_count(node.get("list_total_count"))
-        if declared_page_count is None:
-            failure_reason = "PAGE_CONTINUITY_BREAK"
-            break
-        if expected_row_count is None:
-            expected_row_count = declared_page_count
-        elif declared_page_count != expected_row_count:
+        if declared_page_count is None or declared_page_count != len(rows):
             failure_reason = "PAGE_CONTINUITY_BREAK"
             break
 
-        remaining_count = expected_row_count - len(merged_rows)
-        expected_page_row_count = min(page_size, remaining_count)
-        if remaining_count < 0 or len(rows) != expected_page_row_count:
-            if payloads[:-1] and not rows and remaining_count > 0:
-                failure_reason = "EMPTY_FOLLOW_UP_PAGE"
-            else:
-                failure_reason = "PAGE_CONTINUITY_BREAK"
+        if not rows:
+            failure_reason = (
+                "EMPTY_FOLLOW_UP_PAGE" if payloads[:-1] else "EMPTY_INITIAL_PAGE"
+            )
             terminal_page_row_count = len(rows)
             break
         page_station_ids = []
@@ -251,8 +243,10 @@ def collect_bike_inventory(client, collected_at, page_size=1000, sleep=time.slee
         seen_station_ids.update(page_station_ids)
         terminal_page_row_count = len(rows)
 
-        # provider의 전체 행 수와 지금까지 받은 행 수가 일치해야 cycle이 끝난다.
-        if len(merged_rows) == expected_row_count:
+        # list_total_count는 전체 건수가 아니라 현재 페이지의 행 수다.
+        # 요청 크기보다 짧은 정상 페이지를 받았을 때만 수집 완료로 판정한다.
+        if len(rows) < page_size:
+            expected_row_count = len(merged_rows)
             break
         start_index += page_size
 
