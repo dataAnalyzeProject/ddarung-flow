@@ -13,6 +13,11 @@ public interface JourneyAiGateway {
         return ScheduleResult.unavailable(JourneyAiErrorCode.AI_PROVIDER_UNAVAILABLE);
     }
 
+    default ScheduleResult selectSchedule(ConsumerAiEvidenceBundle evidence, ScheduleConstraints constraints,
+                                          ScheduleCorrection correction) {
+        return selectSchedule(evidence, constraints);
+    }
+
     record IntentResult(JourneyIntent intent, JourneyAiErrorCode unavailableCode) {
         public static IntentResult unavailable(JourneyAiErrorCode code) { return new IntentResult(null, code); }
         public boolean available() { return intent != null; }
@@ -24,6 +29,16 @@ public interface JourneyAiGateway {
             if (maximumStops < 0 || maximumStops > 3 || minimumStayMinutes < 1
                     || maximumStayMinutes < minimumStayMinutes || availableMinutes < 1) {
                 throw new IllegalArgumentException("invalid schedule constraints");
+            }
+        }
+    }
+
+    record ScheduleCorrection(String failureStage, int availableMinutes, Long observedDurationSeconds,
+                              EvidenceSelectionValidator.Selection rejectedSelection) {
+        public ScheduleCorrection {
+            if (failureStage == null || failureStage.isBlank() || availableMinutes < 1
+                    || (observedDurationSeconds != null && observedDurationSeconds < 0)) {
+                throw new IllegalArgumentException("invalid schedule correction");
             }
         }
     }

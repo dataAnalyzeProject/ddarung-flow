@@ -108,7 +108,7 @@ class DefaultJourneyAiGatewayTest {
     }
 
     @Test
-    void retriesScheduleOnceWhenOutputTextIsNotJson() throws Exception {
+    void leavesTheSingleScheduleCorrectionRetryToThePlanService() throws Exception {
         AtomicInteger attempts = new AtomicInteger();
         JourneyAiProperties properties = new JourneyAiProperties(true, null, "test-key", "test-model", Duration.ofSeconds(1));
         ResponsesApiClient client = new ResponsesApiClient(properties, mapper, request ->
@@ -117,12 +117,26 @@ class DefaultJourneyAiGatewayTest {
                         : completedResponse(validSchedule())));
         DefaultJourneyAiGateway gateway = new DefaultJourneyAiGateway(properties, mapper, JourneyAiSchemas.intent(mapper), client);
 
-        JourneyAiGateway.ScheduleResult result = gateway.selectSchedule(
+        assertThatThrownBy(() -> gateway.selectSchedule(
                 new ConsumerAiEvidenceBundle(Map.of(), Map.of(), Map.of(), Map.of(), Map.of()),
-                new JourneyAiGateway.ScheduleConstraints(1, 10, 120, 60));
+                new JourneyAiGateway.ScheduleConstraints(1, 10, 120, 60)))
+                .extracting(exception -> ((JourneyAiException) exception).failureStage())
+                .isEqualTo(JourneyAiFailureStage.OUTPUT_TEXT_JSON);
+        assertThat(attempts).hasValue(1);
+    }
 
-        assertThat(result.available()).isTrue();
-        assertThat(attempts).hasValue(2);
+    @Test
+    void buildsAConstrainedCorrectionInputFromServerValidationFailure() throws Exception {
+        DefaultJourneyAiGateway gateway = new DefaultJourneyAiGateway(
+                JourneyAiProperties.disabled(), mapper, JourneyAiSchemas.intent(mapper));
+        var scheduleInput = gateway.scheduleInput(
+                new ConsumerAiEvidenceBundle(Map.of(), Map.of(), Map.of(), Map.of(), Map.of()),
+                new JourneyAiGateway.ScheduleConstraints(1, 10, 120, 60),
+                new JourneyAiGateway.ScheduleCorrection("DURATION_EXCEEDED", 60, 4200L, null));
+
+        assertThat(scheduleInput.path("correction").path("failureStage").asText()).isEqualTo("DURATION_EXCEEDED");
+        assertThat(scheduleInput.path("correction").path("availableMinutes").asInt()).isEqualTo(60);
+        assertThat(scheduleInput.path("correction").path("observedDurationSeconds").asLong()).isEqualTo(4200L);
     }
 
     @Test
@@ -213,7 +227,7 @@ class DefaultJourneyAiGatewayTest {
     }
 
     @Test
-    void stopsAfterSecondOutputTextJsonFailureAndDoesNotRetryOtherFailures() throws Exception {
+    void doesNotRetryScheduleProviderOrSchemaFailuresInsideTheGateway() throws Exception {
         AtomicInteger malformedAttempts = new AtomicInteger();
         JourneyAiProperties properties = new JourneyAiProperties(true, null, "test-key", "test-model", Duration.ofSeconds(1));
         DefaultJourneyAiGateway malformedGateway = new DefaultJourneyAiGateway(properties, mapper, JourneyAiSchemas.intent(mapper),
@@ -230,7 +244,7 @@ class DefaultJourneyAiGatewayTest {
                     assertThat(failure.code()).isEqualTo(JourneyAiErrorCode.AI_OUTPUT_SCHEMA_INVALID);
                     assertThat(failure.failureStage()).isEqualTo(JourneyAiFailureStage.OUTPUT_TEXT_JSON);
                 });
-        assertThat(malformedAttempts).hasValue(2);
+        assertThat(malformedAttempts).hasValue(1);
 
         AtomicInteger canonicalAttempts = new AtomicInteger();
         DefaultJourneyAiGateway canonicalGateway = new DefaultJourneyAiGateway(properties, mapper, JourneyAiSchemas.intent(mapper),
