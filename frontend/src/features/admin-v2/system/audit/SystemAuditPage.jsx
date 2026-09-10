@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStatePanel from '../../components/AsyncStatePanel';
 
 const EMPTY_FILTERS = { action: '', result: '', reasonCode: '', from: '', to: '' };
+const RESULT_LABEL = { SUCCESS: '성공', FAILURE: '실패' };
+const resultLabel = (value) => RESULT_LABEL[value] || value;
 
 function isAccessError(error) { return error?.status === 401 || error?.status === 403; }
 function formatDate(value) { return new Date(value).toLocaleString('ko-KR'); }
@@ -50,7 +52,7 @@ export default function SystemAuditPage({ createAdapter }) {
     <header className="system-audit-header"><div><p className="system-audit-eyebrow">SYS-03</p><h1>관리자 변경 이력</h1><p>관리자 작업을 읽기 전용으로 확인합니다.</p></div></header>
     <form className="system-audit-filters" onSubmit={submit} aria-label="감사 이력 필터">
       <label>작업<input value={filters.action} onChange={(event) => updateFilter('action', event.target.value)} /></label>
-      <label>결과<select value={filters.result} onChange={(event) => updateFilter('result', event.target.value)}><option value="">전체</option><option value="SUCCESS">SUCCESS</option><option value="FAILURE">FAILURE</option></select></label>
+      <label>결과<select value={filters.result} onChange={(event) => updateFilter('result', event.target.value)}><option value="">전체</option><option value="SUCCESS">성공</option><option value="FAILURE">실패</option></select></label>
       <label>사유 코드<input value={filters.reasonCode} onChange={(event) => updateFilter('reasonCode', event.target.value)} /></label>
       <label>시작 시각<input type="datetime-local" value={filters.from} onChange={(event) => updateFilter('from', event.target.value)} /></label>
       <label>종료 시각<input type="datetime-local" value={filters.to} onChange={(event) => updateFilter('to', event.target.value)} /></label>
@@ -62,7 +64,7 @@ export default function SystemAuditPage({ createAdapter }) {
       {error ? <><AsyncStatePanel state={isAccessError(error) ? 'FORBIDDEN' : 'ERROR'} code={error.code} requiredPermission={isAccessError(error) ? 'AUDIT_READ' : undefined} />{!isAccessError(error) ? <button type="button" onClick={() => setRetryVersion((version) => version + 1)}>다시 시도</button> : null}</> : null}
       {!loading && !error && data?.items.length === 0 ? <AsyncStatePanel state="EMPTY" /> : null}
       {!loading && !error && data?.items.length ? <>
-        <div className="system-audit-table-wrap"><table><caption>관리자 변경 이력</caption><thead><tr><th scope="col">발생 시각</th><th scope="col">작업</th><th scope="col">대상 유형</th><th scope="col">수행 역할</th><th scope="col">결과</th><th scope="col">사유 코드</th></tr></thead><tbody>{data.items.map((item, index) => <tr key={`${item.occurredAt}-${item.action}-${index}`}><td>{formatDate(item.occurredAt)}</td><td>{item.action}</td><td>{item.targetType}</td><td>{item.actorRoleCodes.join(', ')}</td><td><span className={`system-audit-result system-audit-result--${item.result.toLowerCase()}`} aria-label={`결과: ${item.result}`}>{item.result}</span></td><td>{item.reasonCode || '-'}</td></tr>)}</tbody></table></div>
+        <div className="system-audit-table-wrap"><table><caption>관리자 변경 이력</caption><thead><tr><th scope="col">발생 시각</th><th scope="col">작업</th><th scope="col">대상 유형</th><th scope="col">수행 역할</th><th scope="col">결과</th><th scope="col">사유 코드</th></tr></thead><tbody>{data.items.map((item, index) => <tr key={`${item.occurredAt}-${item.action}-${index}`}><td>{formatDate(item.occurredAt)}</td><td>{item.action}</td><td>{item.targetType}</td><td>{item.actorRoleCodes.join(', ')}</td><td><span className={`system-audit-result system-audit-result--${item.result.toLowerCase()}`} aria-label={`결과: ${resultLabel(item.result)}`}>{resultLabel(item.result)}</span></td><td>{item.reasonCode || '-'}</td></tr>)}</tbody></table></div>
         <nav className="system-audit-pagination" aria-label="감사 이력 페이지"><button type="button" disabled={page <= 0} onClick={() => setPage((current) => current - 1)}>이전</button><span>{totalPages === null ? `현재 ${page + 1} 페이지` : `현재 ${totalPages === 0 ? 0 : page + 1} / ${totalPages} 페이지`}</span><button type="button" disabled={!hasNext} onClick={() => setPage((current) => current + 1)}>다음</button></nav>
       </> : null}
     </section>

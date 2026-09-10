@@ -251,7 +251,8 @@ describe('AdminV2ProductionApp', () => {
     expect(await screen.findByRole('heading', { name: '시스템 상태' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '시스템 상태' })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: '현재 사용할 수 없음 상태' })).toBeInTheDocument();
-    expect(screen.getAllByText('NOT_INSTRUMENTED')).toHaveLength(4);
+    expect(screen.getAllByText('계측되지 않음')).toHaveLength(3);
+    expect(screen.getByText('NOT_INSTRUMENTED')).toBeInTheDocument();
     expect(screen.queryByText('RELEASE_NOT_AVAILABLE')).not.toBeInTheDocument();
   });
 

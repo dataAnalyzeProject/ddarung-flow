@@ -16,6 +16,12 @@ const ROOT_DATA_STATE_LABEL = {
   INSUFFICIENT_DATA: '판단 정보 부족',
   UNAVAILABLE: '현재 사용 불가',
 };
+const FRESHNESS_STATE_LABEL = {
+  FRESH: '최신',
+  STALE: '오래됨',
+  EXPIRED: '만료됨',
+  NOT_GENERATED: '생성되지 않음',
+};
 const COVERAGE_FIELDS = [
   ['activePublicStationCount', '활성 공개 대여소 (전체)'],
   ['inventoryEligibleCount', '재고 적격 대여소 (서울 전체)'],
@@ -120,7 +126,7 @@ export default function CandidatesPage({ createAdapter }) {
       <div>
         <p className="candidates-eyebrow">UI-OPS-03</p>
         <h1>집중관리 목록</h1>
-        <p>서울 전체 Global result의 미래 대여 부족 확률을 기준으로 우선 확인 대여소를 정렬합니다.</p>
+        <p>서울 전체 결과의 미래 대여 부족 확률을 기준으로 우선 확인 대여소를 정렬합니다.</p>
       </div>
       <div className="candidates-reference-time">
         <span>기준 시각</span>
@@ -130,7 +136,7 @@ export default function CandidatesPage({ createAdapter }) {
     <section className="candidates-decision-context" aria-label="목록 조건 및 기준">
       <div className="candidates-controls">
         <p>조회 조건</p>
-        <label>예측 horizon<select value={horizonMinutes} onChange={(event) => { resetLoadMore(); setHorizonMinutes(Number(event.target.value)); }}>{[60, 120, 180, 240].map((value) => <option key={value} value={value}>{value}분</option>)}</select></label>
+        <label>예측 구간<select value={horizonMinutes} onChange={(event) => { resetLoadMore(); setHorizonMinutes(Number(event.target.value)); }}>{[60, 120, 180, 240].map((value) => <option key={value} value={value}>{value}분</option>)}</select></label>
         <label>필요 자전거 수<select value={requiredBikeCount} onChange={(event) => { resetLoadMore(); setRequiredBikeCount(Number(event.target.value)); }}>{[1, 2, 3, 4, 5].map((value) => <option key={value} value={value}>{value}대</option>)}</select></label>
       </div>
       <div className="candidates-context" aria-label="목록 기준">
@@ -143,7 +149,7 @@ export default function CandidatesPage({ createAdapter }) {
     <div className="candidates-workspace">
     <section className="candidates-list" aria-labelledby="candidates-heading">
       <div className="candidates-list-heading">
-        <div><h2 id="candidates-heading">우선 확인 후보</h2><p>API가 제공한 순서를 그대로 표시합니다.</p></div>
+        <div><h2 id="candidates-heading">우선 확인 후보</h2><p>서버가 내려준 순서를 그대로 표시합니다.</p></div>
         <nav aria-label="운영 화면 이동"><a href="/admin/ops/risk-map">대여 부족 위험 지도</a><a href="/admin/ops/analysis">반복 품절 패턴</a></nav>
       </div>
       {rootUiState !== 'SUCCESS' && !hasUsableMeasuredRanking ? <div className="candidates-state-panel">
@@ -161,6 +167,6 @@ export default function CandidatesPage({ createAdapter }) {
     </section>
     {selectedCandidate ? <aside className="candidates-detail" aria-label="선택된 후보 상세"><div><p className="candidates-detail-kicker">선택된 후보 상세</p><h2>선택된 후보: {selectedCandidate.station?.name || '이름 확인 필요'}</h2><span className="candidates-station-number">{selectedCandidate.station?.stationNumber || '번호 확인 필요'}</span></div><dl><div><dt>현재 재고</dt><dd>{formatBikes(selectedCandidate.station?.currentBikes)}</dd></div><div><dt>예측 목표 시각</dt><dd>{formatTime(selectedCandidate.prediction?.predictionTargetAt)}</dd></div><div><dt>대여 부족 확률</dt><dd className="candidates-detail-probability">{formatPercent(selectedCandidate.prediction?.selectedShortageProbability)}</dd></div><div><dt>데이터 상태</dt><dd><span className="candidates-data-state">{selectedCandidate.dataState || '확인 정보 없음'}</span></dd></div></dl><a className="candidates-map-link" href="/admin/ops/risk-map">수급 위험 지도에서 보기</a></aside> : null}
     </div>
-    <section className="candidates-coverage" aria-label="데이터 범위"><div className="candidates-coverage-heading"><h2>서울 전체 데이터 범위</h2></div><details className="candidates-technical-state"><summary>상세 상태 보기</summary><div aria-label="원본 상태 상세"><span><b>원본 데이터 상태</b>{rootDataState}</span><span><b>Freshness</b>{result?.freshness?.state || 'NOT_GENERATED'}</span><span><b>발행 시각</b>{formatTime(result?.publishedAt)}</span>{result?.limitations?.length ? <span><b>원본 제한 사항</b>{result.limitations.join(', ')}</span> : null}</div></details><div className="candidates-coverage-values">{COVERAGE_FIELDS.map(([field, label]) => <span key={field}><b>{label}</b>{formatCount(coverageValue(result, globalCoverage, field))}</span>)}</div></section>
+    <section className="candidates-coverage" aria-label="데이터 범위"><div className="candidates-coverage-heading"><h2>서울 전체 데이터 범위</h2></div><details className="candidates-technical-state"><summary>상세 상태 보기</summary><div aria-label="원본 상태 상세"><span><b>원본 데이터 상태</b>{ROOT_DATA_STATE_LABEL[rootDataState] || rootDataState}</span><span><b>신선도</b>{FRESHNESS_STATE_LABEL[result?.freshness?.state] || result?.freshness?.state || FRESHNESS_STATE_LABEL.NOT_GENERATED}</span><span><b>발행 시각</b>{formatTime(result?.publishedAt)}</span>{result?.limitations?.length ? <span><b>원본 제한 사항</b>{result.limitations.join(', ')}</span> : null}</div></details><div className="candidates-coverage-values">{COVERAGE_FIELDS.map(([field, label]) => <span key={field}><b>{label}</b>{formatCount(coverageValue(result, globalCoverage, field))}</span>)}</div></section>
   </main>;
 }

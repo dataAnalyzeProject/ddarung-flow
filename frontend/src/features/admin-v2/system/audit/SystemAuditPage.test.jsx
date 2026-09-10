@@ -13,8 +13,8 @@ describe('SystemAuditPage', () => {
     expect(screen.getByText('불러오는 중')).toBeInTheDocument();
     await act(async () => pending.resolve(response));
     expect(await screen.findByRole('heading', { name: '관리자 변경 이력' })).toBeInTheDocument();
-    expect(screen.getByRole('table', { name: '관리자 변경 이력' })).toHaveTextContent('ROLE_CHANGEUSERAUDITOR, ACCESS_ADMINSUCCESSROLE_CHANGED');
-    expect(screen.getByLabelText('결과: SUCCESS')).toBeInTheDocument();
+    expect(screen.getByRole('table', { name: '관리자 변경 이력' })).toHaveTextContent('ROLE_CHANGEUSERAUDITOR, ACCESS_ADMIN성공ROLE_CHANGED');
+    expect(screen.getByLabelText('결과: 성공')).toBeInTheDocument();
   });
 
   test('keeps filters visible for an empty successful response', async () => {

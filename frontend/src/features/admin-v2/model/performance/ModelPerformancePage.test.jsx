@@ -34,9 +34,9 @@ describe('ModelPerformancePage', () => {
     renderPage();
     expect(await screen.findByRole('heading', { name: '성능 · 신뢰도' })).toBeInTheDocument();
     expect(screen.getByText('현재 서빙 모델')).toBeInTheDocument();
-    expect(screen.getByText('LIVE INFERENCE')).toBeInTheDocument();
+    expect(screen.getByText('실시간 추론 중')).toBeInTheDocument();
     expect(screen.getByText('현재 서빙 모델과 동일한 버전의 평가 결과')).toBeInTheDocument();
-    expect(screen.getByText('평가 snapshot')).toBeInTheDocument();
+    expect(screen.getByText('평가 스냅샷')).toBeInTheDocument();
     expect(screen.getAllByText('model-5.2')).toHaveLength(2);
   });
 
@@ -45,29 +45,29 @@ describe('ModelPerformancePage', () => {
     ['artifact mismatch', runtime({ artifactSha256: 'b'.repeat(64) })],
   ])('marks %s as a runtime/evaluation mismatch', async (_, runtimeResult) => {
     renderPage({ load: jest.fn().mockResolvedValue({ base: base(), runtime: runtimeResult }) });
-    expect(await screen.findByText('현재 서빙 모델과 평가 snapshot 버전이 다름')).toBeInTheDocument();
+    expect(await screen.findByText('현재 서빙 모델과 평가 스냅샷 버전이 다름')).toBeInTheDocument();
     expect(screen.queryByText('현재 서빙 모델과 동일한 버전의 평가 결과')).not.toBeInTheDocument();
   });
 
   test.each(['ERROR', 'FORBIDDEN'])('keeps evaluation metrics visible when runtime is %s', async (state) => {
     renderPage({ load: jest.fn().mockResolvedValue({ base: base(), runtime: { state, error: new Error('runtime unavailable') } }) });
-    expect(await screen.findByText('UNKNOWN')).toBeInTheDocument();
-    expect(screen.getByText('실시간 inference runtime 확인 불가')).toBeInTheDocument();
+    expect(await screen.findByText('확인 불가')).toBeInTheDocument();
+    expect(screen.getByText('실시간 추론 런타임 확인 불가')).toBeInTheDocument();
     expect(screen.getByText('0.0304')).toBeInTheDocument();
     expect(screen.getAllByText('표본 부족').length).toBeGreaterThan(0);
   });
 
   test('renders malformed runtime as unknown without replacing evaluation values', async () => {
     renderPage({ load: jest.fn().mockResolvedValue({ base: base(), runtime: { state: 'ERROR', error: { code: 'MODEL_RUNTIME_RESPONSE_INVALID' } } }) });
-    expect(await screen.findByText('UNKNOWN')).toBeInTheDocument();
+    expect(await screen.findByText('확인 불가')).toBeInTheDocument();
     expect(screen.getByText('model-5.2')).toBeInTheDocument();
-    expect(screen.queryByText('LIVE INFERENCE')).not.toBeInTheDocument();
+    expect(screen.queryByText('실시간 추론 중')).not.toBeInTheDocument();
   });
 
   test('keeps preview fixture adapters source-safe when runtime is unavailable', async () => {
     const loadBase = jest.fn().mockResolvedValue(base());
     render(<ModelPerformancePage createAdapter={() => ({ loadBase })} />);
-    expect(await screen.findByText('UNKNOWN')).toBeInTheDocument();
+    expect(await screen.findByText('확인 불가')).toBeInTheDocument();
     expect(screen.getByText('model-5.2')).toBeInTheDocument();
   });
 
@@ -91,7 +91,7 @@ describe('ModelPerformancePage', () => {
 
   test('does not render uncontracted runtime fields such as a private path', async () => {
     renderPage({ load: jest.fn().mockResolvedValue({ base: base(), runtime: runtime({ privatePath: '/private/model/artifact' }) }) });
-    expect(await screen.findByText('LIVE INFERENCE')).toBeInTheDocument();
+    expect(await screen.findByText('실시간 추론 중')).toBeInTheDocument();
     expect(screen.queryByText('/private/model/artifact')).not.toBeInTheDocument();
   });
 
@@ -108,7 +108,7 @@ describe('ModelPerformancePage', () => {
       sampleCount: index === 1 ? 999 : 1100 + index, brierScore: index === 1 ? null : 0.0304,
     }));
     renderPage({ load: jest.fn().mockResolvedValue({ base: base({ combinations }), runtime: runtime() }) });
-    const table = await screen.findByRole('table', { name: 'source 반환 조합의 Brier score 및 표본 수' });
+    const table = await screen.findByRole('table', { name: '서버가 내려준 조합의 Brier score 및 표본 수' });
     expect(within(table).getAllByRole('row')).toHaveLength(21);
     expect(screen.getAllByText('표본 부족')).toHaveLength(1);
     expect(screen.getAllByText('UNKNOWN_INSUFFICIENT_SAMPLES')).toHaveLength(1);
@@ -121,7 +121,7 @@ describe('ModelPerformancePage', () => {
       brierScore: 0.0304, baselineBrierScore: 0.0501, skillScore: 0.39, shortageRecall: 0.61,
     }));
     renderPage({ load: jest.fn().mockResolvedValue({ base: base(), runtime: runtime(), diagnostics: { state: 'SUCCESS', data: { segments } } }) });
-    const table = await screen.findByRole('table', { name: 'segment별 성능 진단' });
+    const table = await screen.findByRole('table', { name: '구간별 성능 진단' });
     expect(within(table).getAllByRole('row')).toHaveLength(51);
     expect(screen.getByText('1000')).toBeInTheDocument();
     expect(screen.queryByText('1050')).not.toBeInTheDocument();
@@ -134,7 +134,7 @@ describe('ModelPerformancePage', () => {
     expect(screen.getByText('51–100 / 전체 120건 · 2 / 3 페이지')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '다음' }));
-    expect(within(screen.getByRole('table', { name: 'segment별 성능 진단' })).getAllByRole('row')).toHaveLength(21);
+    expect(within(screen.getByRole('table', { name: '구간별 성능 진단' })).getAllByRole('row')).toHaveLength(21);
     expect(screen.getByText('101–120 / 전체 120건 · 3 / 3 페이지')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '다음' })).toBeDisabled();
   });
@@ -142,7 +142,7 @@ describe('ModelPerformancePage', () => {
   test('omits the diagnostics pager when every segment already fits one page', async () => {
     const segments = Array.from({ length: 50 }, (_, index) => ({ axis: 'STATION', segmentValue: `${2000 + index}`, status: 'NORMAL', sampleCount: 1200 }));
     renderPage({ load: jest.fn().mockResolvedValue({ base: base(), runtime: runtime(), diagnostics: { state: 'SUCCESS', data: { segments } } }) });
-    expect(await screen.findByRole('table', { name: 'segment별 성능 진단' })).toBeInTheDocument();
+    expect(await screen.findByRole('table', { name: '구간별 성능 진단' })).toBeInTheDocument();
     expect(screen.queryByRole('navigation', { name: '진단 목록 페이지' })).not.toBeInTheDocument();
     expect(screen.getByText('50개')).toBeInTheDocument();
   });

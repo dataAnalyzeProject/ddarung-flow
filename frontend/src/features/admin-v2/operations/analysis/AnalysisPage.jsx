@@ -5,11 +5,12 @@ const DAYS = ['월', '화', '수', '목', '금', '토', '일'];
 const VIEW = 'WEEKDAY';
 const DATA_STATES = { EMPTY: 'EMPTY', DELAYED: 'DELAYED', MISSING: 'EMPTY', INSUFFICIENT_DATA: 'INSUFFICIENT_DATA', UNAVAILABLE: 'UNAVAILABLE' };
 const COVERAGE = [
-  ['selectedWindowProfileCount', 'Selected Window Profiles', count],
-  ['profileCoverageRate', 'Profile Coverage', percent],
-  ['cellCoverageRate', 'Cell Coverage', percent],
-  ['usableCellCount', 'Usable / Expected Cells', (_, coverage) => `${count(coverage.usableCellCount)} / ${count(coverage.expectedCellCount)}`],
+  ['selectedWindowProfileCount', '선택된 관측 창 프로필', count],
+  ['profileCoverageRate', '프로필 커버리지', percent],
+  ['cellCoverageRate', '칸 커버리지', percent],
+  ['usableCellCount', '사용 가능 / 기대 칸', (_, coverage) => `${count(coverage.usableCellCount)} / ${count(coverage.expectedCellCount)}`],
 ];
+const STATE_LABELS = { NORMAL: '정상', DELAYED: '지연', MISSING: '결측', EMPTY: '표시할 항목 없음', PARTIAL: '일부 사용 가능', UNAVAILABLE: '사용 불가', INSUFFICIENT_DATA: '판단 정보 부족' };
 
 function percent(value) { return typeof value === 'number' ? `${(value * 100).toFixed(1)}%` : '표본 부족'; }
 function count(value) { return typeof value === 'number' ? value.toLocaleString('ko-KR') : '확인 정보 없음'; }
@@ -22,7 +23,7 @@ function heatmapStyle(rate) {
 }
 
 function DataStatePanel({ dataState, referenceTime }) {
-  if (dataState === 'MISSING') return <section className="analysis-missing-layout" aria-live="polite" aria-label="관측 데이터 누락 상태"><section className="analysis-data-state"><div className="analysis-missing-icon" aria-hidden="true">!</div><strong>관측 데이터가 누락되었습니다.</strong><mark>MISSING</mark><p>MISSING · 관측 근거가 없어 분석 차트를 표시하지 않습니다.</p><div className="analysis-missing-reference"><b>기준 시각</b><span>{time(referenceTime)}</span></div><a href="/admin/ops">운영 상황판으로 돌아가기</a></section><aside className="analysis-display-rule"><h2>표시 기준</h2><p>관측 데이터가 정상적으로 수집되어 사용 가능한 경우에만 분석 차트가 표시됩니다.</p></aside></section>;
+  if (dataState === 'MISSING') return <section className="analysis-missing-layout" aria-live="polite" aria-label="관측 데이터 누락 상태"><section className="analysis-data-state"><div className="analysis-missing-icon" aria-hidden="true">!</div><strong>관측 데이터가 누락되었습니다.</strong><mark>{STATE_LABELS.MISSING}</mark><p>관측 근거가 없어 분석 차트를 표시하지 않습니다.</p><div className="analysis-missing-reference"><b>기준 시각</b><span>{time(referenceTime)}</span></div><a href="/admin/ops">운영 상황판으로 돌아가기</a></section><aside className="analysis-display-rule"><h2>표시 기준</h2><p>관측 데이터가 정상적으로 수집되어 사용 가능한 경우에만 분석 차트가 표시됩니다.</p></aside></section>;
   return <AsyncStatePanel state={DATA_STATES[dataState] || 'UNAVAILABLE'} code={dataState === 'EMPTY' ? 'EMPTY' : undefined} />;
 }
 
@@ -38,9 +39,9 @@ function Heatmap({ cells }) {
   const firstObservedCell = (cells || []).find((cell) => cell?.observedStockoutRate != null);
   const selectedCell = indexed.get(selectedKey) || firstObservedCell;
   return <section className="analysis-heatmap" aria-labelledby="analysis-heatmap-heading">
-    <div className="analysis-section-heading"><div><h2 id="analysis-heatmap-heading">요일 × 시간대 168 cells</h2><p>색의 진하기는 실제 품절 관측률 연속값이며, 수치·표본·기여 대여소 정보도 함께 제공합니다.</p></div><span className="analysis-cell-count">168 cells</span></div>
+    <div className="analysis-section-heading"><div><h2 id="analysis-heatmap-heading">요일 × 시간대 168칸</h2><p>색의 진하기는 실제 품절 관측률 연속값이며, 수치·표본·기여 대여소 정보도 함께 제공합니다.</p></div><span className="analysis-cell-count">168칸</span></div>
     <div className="analysis-heatmap-scroll" tabIndex="0" aria-label="요일과 시간대별 품절 관측 표를 가로로 스크롤"><table><caption>요일과 시간대별 품절 관측률, 표본 수, 기여 대여소 수</caption><thead><tr><th scope="col">요일</th>{Array.from({ length: 24 }, (_, hour) => <th scope="col" key={hour}>{hour}시</th>)}</tr></thead><tbody>{DAYS.map((day, index) => <tr key={day}><th scope="row">{day}</th>{Array.from({ length: 24 }, (_, hour) => { const cell = indexed.get(`${index + 1}-${hour}`); const rate = cell?.observedStockoutRate; const key = `${index + 1}-${hour}`; return <td key={hour}><button type="button" className={`analysis-heatmap-cell${rate == null ? ' analysis-heatmap-cell--empty' : ''}`} style={heatmapStyle(rate)} aria-label={cellLabel(index + 1, hour, cell)} aria-pressed={key === selectedKey || (!selectedKey && cell === firstObservedCell)} onClick={() => setSelectedKey(key)}><b>{rate == null ? '—' : `${Math.round(rate * 100)}%`}</b><small>{cell?.sampleCount == null ? '표본 없음' : `${cell.sampleCount}건`}</small><small>{cell?.contributingStationCount == null ? '기여 정보 없음' : `${cell.contributingStationCount}곳`}</small></button></td>; })}</tr>)}</tbody></table></div>
-    {selectedCell ? <div className="analysis-heatmap-detail"><b>선택 {DAYS[selectedCell.dayOfWeek - 1]}요일 {selectedCell.hourOfDay}시</b><span>품절 관측률 {percent(selectedCell.observedStockoutRate)}</span><span>sampleCount {count(selectedCell.sampleCount)}</span><span>contributingStationCount {count(selectedCell.contributingStationCount)}</span></div> : <p className="analysis-heatmap-detail">선택할 관측 정보가 없습니다.</p>}
+    {selectedCell ? <div className="analysis-heatmap-detail"><b>선택 {DAYS[selectedCell.dayOfWeek - 1]}요일 {selectedCell.hourOfDay}시</b><span>품절 관측률 {percent(selectedCell.observedStockoutRate)}</span><span>표본 {count(selectedCell.sampleCount)}건</span><span>기여 대여소 {count(selectedCell.contributingStationCount)}곳</span></div> : <p className="analysis-heatmap-detail">선택할 관측 정보가 없습니다.</p>}
     <p className="analysis-heatmap-note">빈 칸은 0%가 아니라 관측 정보가 없는 상태입니다.</p>
   </section>;
 }
@@ -93,11 +94,11 @@ export default function AnalysisPage({ createAdapter }) {
   const coverage = currentResult?.coverage || {};
   return <main className="analysis-page" aria-label="반복 품절 패턴">
     <header className="analysis-header"><div><p className="analysis-eyebrow">UI-OPS-04 · OBSERVED_STOCKOUT_RATE</p><h1>반복 품절 패턴</h1><p>미래 예측이 아닌 과거 실제 관측을 요일·시간대별로 확인합니다.</p></div><dl><div><dt>기준 시각</dt><dd>{time(currentResult?.referenceTime)}</dd></div><div><dt>생성 시각</dt><dd>{time(currentResult?.generatedAt)}</dd></div></dl></header>
-    <section className="analysis-context" aria-label="분석 조건과 데이터 상태"><div><b>표시 기준</b><span>요일 요약 · 시간대 상세</span></div><div><b>risk type</b><span>{currentResult?.riskType || '확인 정보 없음'}</span></div>{loading ? <p className="analysis-refreshing" role="status">분석을 다시 불러오는 중입니다.</p> : null}</section>
+    <section className="analysis-context" aria-label="분석 조건과 데이터 상태"><div><b>표시 기준</b><span>요일 요약 · 시간대 상세</span></div><div><b>위험 유형</b><span>{currentResult?.riskType || '확인 정보 없음'}</span></div>{loading ? <p className="analysis-refreshing" role="status">분석을 다시 불러오는 중입니다.</p> : null}</section>
     {waitingForView ? <AsyncStatePanel state="LOADING" /> : error ? <RequestErrorPanel error={error} onRetry={() => setRetryVersion((version) => version + 1)} /> : <>{uiState !== 'SUCCESS' ? <DataStatePanel dataState={currentResult?.dataState} referenceTime={currentResult?.referenceTime} /> : null}
-    {showData ? <><section className="analysis-meta-grid" aria-label="관측 창과 분석 근거"><div><b>선택된 관측 창</b><strong>{currentResult?.selectedWindowStart && currentResult?.selectedWindowEnd ? `${currentResult.selectedWindowStart} ~ ${currentResult.selectedWindowEnd}` : '확인 정보 없음'}</strong></div><div><b>data state</b><mark className={`analysis-state analysis-state--${String(currentResult?.dataState || 'unknown').toLowerCase()}`}>{currentResult?.dataState || 'UNAVAILABLE'}</mark></div><div><b>metric</b><strong>{currentResult?.metric || '확인 정보 없음'}</strong></div><div><b>rule version</b><strong>{currentResult?.ruleVersion || '확인 정보 없음'}</strong></div><div><b>window rule version</b><strong>{currentResult?.windowRuleVersion || '확인 정보 없음'}</strong></div></section>
+    {showData ? <><section className="analysis-meta-grid" aria-label="관측 창과 분석 근거"><div><b>선택된 관측 창</b><strong>{currentResult?.selectedWindowStart && currentResult?.selectedWindowEnd ? `${currentResult.selectedWindowStart} ~ ${currentResult.selectedWindowEnd}` : '확인 정보 없음'}</strong></div><div><b>데이터 상태</b><mark className={`analysis-state analysis-state--${String(currentResult?.dataState || 'unknown').toLowerCase()}`}>{STATE_LABELS[currentResult?.dataState] || STATE_LABELS.UNAVAILABLE}</mark></div><div><b>지표</b><strong>{currentResult?.metric || '확인 정보 없음'}</strong></div><div><b>규칙 버전</b><strong>{currentResult?.ruleVersion || '확인 정보 없음'}</strong></div><div><b>관측 창 규칙 버전</b><strong>{currentResult?.windowRuleVersion || '확인 정보 없음'}</strong></div></section>
     <section className="analysis-coverage" aria-label="커버리지 요약">{COVERAGE.map(([key, label, formatter]) => <div key={key}><b>{label}</b><span>{formatter(coverage[key], coverage)}</span></div>)}</section>
     <div className="analysis-main-grid"><Buckets result={currentResult || { view: VIEW, buckets: [] }} /><Heatmap cells={currentResult?.weekdayHourCells} /></div>
-    <section className="analysis-evidence" aria-labelledby="analysis-evidence-heading"><h2 id="analysis-evidence-heading">해석 및 데이터 의미</h2><dl><div><dt>metric</dt><dd>{currentResult?.metric || '확인 정보 없음'}</dd></div><div><dt>dimensions</dt><dd>WEEKDAY/HOUR · weekdayHourCells 168 cells</dd></div><div><dt>관측 창</dt><dd>선택 프로필 {count(currentResult?.selectedWindowProfileCount)}개 · 다른 창 제외 {count(currentResult?.excludedDifferentWindowProfileCount)}개</dd></div><div><dt>제한 사항</dt><dd>{currentResult?.limitations?.length ? currentResult.limitations.join(', ') : '확인 정보 없음'}</dd></div></dl></section></> : null}</>}
+    <section className="analysis-evidence" aria-labelledby="analysis-evidence-heading"><h2 id="analysis-evidence-heading">해석 및 데이터 의미</h2><dl><div><dt>지표</dt><dd>{currentResult?.metric || '확인 정보 없음'}</dd></div><div><dt>분석 축</dt><dd>요일 · 시간대 168칸</dd></div><div><dt>관측 창</dt><dd>선택 프로필 {count(currentResult?.selectedWindowProfileCount)}개 · 다른 창 제외 {count(currentResult?.excludedDifferentWindowProfileCount)}개</dd></div><div><dt>제한 사항</dt><dd>{currentResult?.limitations?.length ? currentResult.limitations.join(', ') : '확인 정보 없음'}</dd></div></dl></section></> : null}</>}
   </main>;
 }

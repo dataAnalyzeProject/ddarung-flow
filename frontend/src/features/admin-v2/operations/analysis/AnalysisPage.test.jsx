@@ -49,10 +49,10 @@ describe('AnalysisPage', () => {
     result.weekdayHourCells[1].sampleCount = 88;
     result.weekdayHourCells[1].contributingStationCount = 6;
     render(<AnalysisPage createAdapter={() => ({ load: jest.fn().mockResolvedValue(result) })} />);
-    expect(await screen.findByText('sampleCount 10')).toBeInTheDocument();
+    expect(await screen.findByText('표본 10건')).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText(/월요일 1시 · 품절 관측률 42.0%/));
-    expect(screen.getByText('sampleCount 88')).toBeInTheDocument();
-    expect(screen.getByText('contributingStationCount 6')).toBeInTheDocument();
+    expect(screen.getByText('표본 88건')).toBeInTheDocument();
+    expect(screen.getByText('기여 대여소 6곳')).toBeInTheDocument();
   });
 
   test('does not fabricate a missing window rule version', async () => {
@@ -60,7 +60,7 @@ describe('AnalysisPage', () => {
     result.windowRuleVersion = null;
     render(<AnalysisPage createAdapter={() => ({ load: jest.fn().mockResolvedValue(result) })} />);
     const evidence = await screen.findByRole('region', { name: '관측 창과 분석 근거' });
-    expect(evidence).toHaveTextContent('window rule version');
+    expect(evidence).toHaveTextContent('관측 창 규칙 버전');
     expect(evidence).toHaveTextContent('확인 정보 없음');
   });
 
@@ -69,7 +69,7 @@ describe('AnalysisPage', () => {
     render(<AnalysisPage createAdapter={() => ({ load })} />);
     await screen.findByText('요일별 관측 요약');
     expect(screen.getByText('요일 요약 · 시간대 상세')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '요일 × 시간대 168 cells' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '요일 × 시간대 168칸' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '요일별' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '시간대별' })).not.toBeInTheDocument();
     expect(load).toHaveBeenCalledTimes(1);
@@ -112,10 +112,10 @@ describe('AnalysisPage', () => {
     result.coverage = { ...result.coverage, selectedWindowProfileCount: 17, profileCoverageRate: .721, cellCoverageRate: .438, usableCellCount: 11, expectedCellCount: 13 };
     render(<AnalysisPage createAdapter={() => ({ load: jest.fn().mockResolvedValue(result) })} />);
     const coverage = await screen.findByLabelText('커버리지 요약');
-    expect(coverage).toHaveTextContent('Selected Window Profiles');
-    expect(coverage).toHaveTextContent('Profile Coverage');
-    expect(coverage).toHaveTextContent('Cell Coverage');
-    expect(coverage).toHaveTextContent('Usable / Expected Cells');
+    expect(coverage).toHaveTextContent('선택된 관측 창 프로필');
+    expect(coverage).toHaveTextContent('프로필 커버리지');
+    expect(coverage).toHaveTextContent('칸 커버리지');
+    expect(coverage).toHaveTextContent('사용 가능 / 기대 칸');
     expect(coverage).toHaveTextContent('17');
     expect(coverage).toHaveTextContent('72.1%');
     expect(coverage).toHaveTextContent('43.8%');
@@ -130,7 +130,7 @@ describe('AnalysisPage', () => {
     result.dataState = 'INSUFFICIENT_DATA';
     result.buckets[0].observedStockoutRate = 0;
     render(<AnalysisPage createAdapter={() => ({ load: jest.fn().mockResolvedValue(result) })} />);
-    expect(await screen.findByText('INSUFFICIENT_DATA')).toBeInTheDocument();
+    expect(await screen.findByText('판단 정보 부족')).toBeInTheDocument();
     expect(screen.getAllByText('0.0%').length).toBeGreaterThan(0);
   });
 
@@ -164,7 +164,7 @@ describe('AnalysisPage', () => {
     result.dataState = 'MISSING';
     render(<AnalysisPage createAdapter={() => ({ load: jest.fn().mockResolvedValue(result) })} />);
     expect(await screen.findByText('관측 데이터가 누락되었습니다.')).toBeInTheDocument();
-    expect(screen.getByText(/MISSING · 관측 근거가 없어 분석 차트를 표시하지 않습니다/)).toBeInTheDocument();
+    expect(screen.getByText(/관측 근거가 없어 분석 차트를 표시하지 않습니다/)).toBeInTheDocument();
     expect(screen.queryByText('일부 정보만 사용 가능')).not.toBeInTheDocument();
     expect(screen.queryByText('현재 사용할 수 없음')).not.toBeInTheDocument();
   });

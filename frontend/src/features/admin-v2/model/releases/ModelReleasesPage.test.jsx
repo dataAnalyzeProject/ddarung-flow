@@ -9,16 +9,16 @@ function adapterFor(result, action = jest.fn().mockResolvedValue({}), refresh, e
 describe('ModelReleasesPage', () => {
   test('shows runtime identity and registry lifecycle without batch UI', async () => {
     render(<ModelReleasesPage createAdapter={adapterFor(base)} />); await waitFor(() => expect(screen.getByRole('heading', { name: '모델 버전 관리' })).toBeInTheDocument());
-    expect(screen.getByText('runtime-v1')).toBeInTheDocument(); expect(screen.getByText('LIVE_SERVING_EFFECT_UNVERIFIED')).toBeInTheDocument(); expect(screen.getByText('safe-v1')).toBeInTheDocument(); expect(screen.queryByText('예측 배치')).not.toBeInTheDocument();
+    expect(screen.getByText('runtime-v1')).toBeInTheDocument(); expect(screen.getByText('서빙 반영 미확인')).toBeInTheDocument(); expect(screen.getByText('safe-v1')).toBeInTheDocument(); expect(screen.queryByText('예측 배치')).not.toBeInTheDocument();
   });
   test('does not fail the release page when runtime permission is absent', async () => {
     const result = { ...base, permissions: ['MODEL_RELEASE_READ'], runtime: { state: 'ACCESS_LIMITED', permission: 'MODEL_METRICS_READ' }, registry: { state: 'ACCESS_LIMITED', permission: 'MODEL_METRICS_READ' } };
-    render(<ModelReleasesPage createAdapter={adapterFor(result)} />); await waitFor(() => expect(screen.getByText('runtime identity 접근 제한')).toBeInTheDocument()); expect(screen.getByText('레지스트리 접근 제한')).toBeInTheDocument();
+    render(<ModelReleasesPage createAdapter={adapterFor(result)} />); await waitFor(() => expect(screen.getByText('서빙 모델 식별 정보 접근 제한')).toBeInTheDocument()); expect(screen.getByText('레지스트리 접근 제한')).toBeInTheDocument();
   });
   test('refreshes runtime and registry after a lifecycle action', async () => {
     const action = jest.fn().mockResolvedValue({}); const refresh = jest.fn().mockResolvedValue({ runtime: { ...runtime, data: { ...runtime.data, modelVersion: 'runtime-v2' } }, registry: { state: 'SUCCESS', data: [] }, history: base.history });
     render(<ModelReleasesPage createAdapter={adapterFor({ ...base, permissions: [...base.permissions, 'MODEL_VALIDATE'] }, action, refresh)} />); const button = await screen.findByRole('button', { name: 'safe-v1 검증' }); fireEvent.click(button);
-    await waitFor(() => expect(refresh).toHaveBeenCalledWith({ permissions: expect.arrayContaining(['MODEL_METRICS_READ']) })); expect(screen.getByText('runtime-v2')).toBeInTheDocument(); expect(screen.getByText('등록된 ModelOps lifecycle 항목 없음')).toBeInTheDocument();
+    await waitFor(() => expect(refresh).toHaveBeenCalledWith({ permissions: expect.arrayContaining(['MODEL_METRICS_READ']) })); expect(screen.getByText('runtime-v2')).toBeInTheDocument(); expect(screen.getByText('등록된 모델 수명주기 항목 없음')).toBeInTheDocument();
   });
   test('keeps data when an action fails', async () => {
     const action = jest.fn().mockRejectedValue({ code: 'MODEL_PROMOTION_GATE_FAILED' }); render(<ModelReleasesPage createAdapter={adapterFor({ ...base, permissions: [...base.permissions, 'MODEL_VALIDATE'] }, action)} />); const button = await screen.findByRole('button', { name: 'safe-v1 검증' }); fireEvent.click(button);
@@ -47,7 +47,7 @@ describe('ModelReleasesPage', () => {
     const verifyServing = jest.fn().mockResolvedValue({ state: 'VERIFIED', refreshed: { runtime, registry: { state: 'SUCCESS', data: [{ ...approved, state: 'ACTIVE' }] }, history: base.history } });
     render(<ModelReleasesPage createAdapter={adapterFor({ ...base, permissions: [...base.permissions, 'MODEL_ACTIVATE'], registry: { state: 'SUCCESS', data: [approved] } }, action, undefined, { verifyServing })} />);
     fireEvent.click(await screen.findByRole('button', { name: 'runtime-v1 활성화' }));
-    await waitFor(() => expect(screen.getByText('VERIFIED')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('확인됨')).toBeInTheDocument());
     expect(verifyServing).toHaveBeenCalledWith({ candidateModelId: 1, permissions: expect.arrayContaining(['MODEL_ACTIVATE']) });
   });
 
@@ -56,13 +56,13 @@ describe('ModelReleasesPage', () => {
     render(<ModelReleasesPage createAdapter={adapterFor({ ...base, permissions: [...base.permissions, 'MODEL_ARTIFACT_REGISTER'] }, undefined, refresh, { register })} />);
     await screen.findByRole('form', { name: '모델 업로드 및 등록' });
     fireEvent.change(screen.getByLabelText('모델 버전'), { target: { value: 'model-v2' } });
-    fireEvent.change(screen.getByLabelText('코드 commit'), { target: { value: 'def456' } });
-    fireEvent.change(screen.getByLabelText('데이터 manifest hash'), { target: { value: 'd'.repeat(64) } });
-    fireEvent.change(screen.getByLabelText('설정 hash'), { target: { value: 'c'.repeat(64) } });
-    fireEvent.change(screen.getByLabelText('Feature schema'), { target: { value: 'v2' } });
+    fireEvent.change(screen.getByLabelText('코드 커밋'), { target: { value: 'def456' } });
+    fireEvent.change(screen.getByLabelText('데이터 매니페스트 해시'), { target: { value: 'd'.repeat(64) } });
+    fireEvent.change(screen.getByLabelText('설정 해시'), { target: { value: 'c'.repeat(64) } });
+    fireEvent.change(screen.getByLabelText('피처 스키마'), { target: { value: 'v2' } });
     const artifactFile = new File(['model'], 'model.bin'); const manifestFile = new File(['{}'], 'manifest.json'); const evaluationsFile = new File(['[]'], 'evaluations.json');
-    fireEvent.change(screen.getByLabelText('모델 artifact'), { target: { files: [artifactFile] } });
-    fireEvent.change(screen.getByLabelText('Manifest'), { target: { files: [manifestFile] } });
+    fireEvent.change(screen.getByLabelText('모델 아티팩트'), { target: { files: [artifactFile] } });
+    fireEvent.change(screen.getByLabelText('매니페스트'), { target: { files: [manifestFile] } });
     fireEvent.change(screen.getByLabelText('20조합 평가'), { target: { files: [evaluationsFile] } });
     fireEvent.click(screen.getByRole('button', { name: '업로드 및 등록' }));
     await waitFor(() => expect(register).toHaveBeenCalledWith(expect.objectContaining({ artifactFile, manifestFile, evaluationsFile, metadata: expect.objectContaining({ version: 'model-v2', featureSchemaVersion: 'v2' }) })));
@@ -72,9 +72,9 @@ describe('ModelReleasesPage', () => {
   test('offers factual runtime reconciliation only when no ACTIVE registry model exists', async () => {
     const action = jest.fn().mockResolvedValue({}); const refresh = jest.fn().mockResolvedValue({ runtime, registry: { state: 'SUCCESS', data: [{ ...model, state: 'ACTIVE' }] }, history: base.history });
     render(<ModelReleasesPage createAdapter={adapterFor({ ...base, permissions: [...base.permissions, 'MODEL_ACTIVATE'] }, action, refresh)} />);
-    fireEvent.click(await screen.findByRole('button', { name: '현재 serving 동기화' }));
+    fireEvent.click(await screen.findByRole('button', { name: '현재 서빙 모델과 동기화' }));
     await waitFor(() => expect(action).toHaveBeenCalledWith({ type: 'RECONCILE', id: undefined }));
-    await waitFor(() => expect(screen.queryByRole('button', { name: '현재 serving 동기화' })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole('button', { name: '현재 서빙 모델과 동기화' })).not.toBeInTheDocument());
   });
 
   test('folds the registry, register, and history blocks by default and keeps the lifecycle counts visible', async () => {
