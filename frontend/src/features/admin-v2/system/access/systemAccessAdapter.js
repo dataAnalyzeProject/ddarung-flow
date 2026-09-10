@@ -44,5 +44,14 @@ export function createLiveSystemAccessAdapter() {
         body: JSON.stringify(body),
       });
     },
+    async changeAccountRole(publicUserId, body, { signal } = {}) {
+      const csrf = await request('/api/v1/auth/csrf', { signal });
+      return request(`/api/v1/admin/users/${publicUserId}/role`, {
+        method: 'PATCH',
+        signal,
+        headers: { 'Content-Type': 'application/json', [csrf.headerName]: csrf.token },
+        body: JSON.stringify(body),
+      });
+    },
   };
 }

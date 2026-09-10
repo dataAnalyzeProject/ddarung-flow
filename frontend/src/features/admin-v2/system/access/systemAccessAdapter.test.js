@@ -25,6 +25,14 @@ describe('live system access adapter', () => {
     expect(SystemAccessApiError).toBeDefined();
   });
 
+  test('changes the account type through the PATCH role endpoint with a csrf token', async () => {
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve({ headerName: 'X-CSRF-TOKEN', token: 'csrf-token' }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve({ accountRole: 'ADMIN' }) });
+    await createLiveSystemAccessAdapter().changeAccountRole(opaqueId, { role: 'ADMIN', reason: '운영 담당 배정' });
+    expect(global.fetch).toHaveBeenNthCalledWith(2, expect.stringContaining(`/api/v1/admin/users/${opaqueId}/role`), expect.objectContaining({ method: 'PATCH', headers: expect.objectContaining({ 'X-CSRF-TOKEN': 'csrf-token' }), body: JSON.stringify({ role: 'ADMIN', reason: '운영 담당 배정' }) }));
+  });
+
   test('does not invent a 403 error code when the source response has no code', async () => {
     global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 403, json: () => Promise.resolve({}) });
     await expect(createLiveSystemAccessAdapter().loadUser(opaqueId)).rejects.toEqual(expect.objectContaining({ status: 403, code: null }));

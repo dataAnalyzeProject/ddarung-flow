@@ -10,6 +10,7 @@ const DIFF_LABELS = { ADDED: '추가', REMOVED: '제거', EXPIRY_EXTENDED: '만�
 const HIGH_RISK_ROLE_CODES = new Set(['OPS_MANAGER', 'MODEL_APPROVER', 'ACCESS_ADMIN', 'SUPER_ADMIN']);
 function isHighRiskRole(role) { return Boolean(role && HIGH_RISK_ROLE_CODES.has(role.roleCode)); }
 
+function accountRoleTarget(role) { return role === 'ADMIN' ? 'ADMIN으로' : 'USER로'; }
 function normalizeReason(value) { return value.replace(/\s+/g, ' ').trim(); }
 function sameInstant(left, right) { return left === right || (left && right && new Date(left).getTime() === new Date(right).getTime()); }
 function toInputTime(value) {
@@ -47,12 +48,14 @@ function AssignmentDiff({ changes, catalog }) {
   return <ul className="system-access-diff">{changes.map((change) => <li key={change.roleCode}><strong>{catalog.find((role) => role.roleCode === change.roleCode)?.displayName || change.roleCode}</strong><span>{DIFF_LABELS[change.type]}</span></li>)}</ul>;
 }
 
-function DetailPanel({ detail, catalog, access, onSave, onRefresh, mutation }) {
+function DetailPanel({ detail, catalog, access, onSave, onRefresh, onChangeAccountRole, mutation, accountMutation = { state: 'IDLE' } }) {
   const [requested, setRequested] = useState([]);
   const [reason, setReason] = useState('');
   const [confirming, setConfirming] = useState(false);
+  const [accountReason, setAccountReason] = useState('');
+  const [confirmingAccount, setConfirmingAccount] = useState(false);
   const current = useMemo(() => detail?.adminRoles || [], [detail]);
-  useEffect(() => { setRequested(current.map((role) => ({ roleCode: role.roleCode, expiresAt: role.expiresAt || null }))); setReason(''); setConfirming(false); }, [detail, current]);
+  useEffect(() => { setRequested(current.map((role) => ({ roleCode: role.roleCode, expiresAt: role.expiresAt || null }))); setReason(''); setConfirming(false); setAccountReason(''); setConfirmingAccount(false); }, [detail, current]);
   if (!detail) return <section className="system-access-card" aria-label="선택된 사용자"><p>목록에서 사용자를 선택하면 현재 역할과 요청 역할을 비교할 수 있습니다.</p></section>;
 
   const changes = classifyAssignments(current, requested);
@@ -70,13 +73,33 @@ function DetailPanel({ detail, catalog, access, onSave, onRefresh, mutation }) {
   const toggleRole = (roleCode, checked) => setRequested((previous) => checked ? [...previous, { roleCode, expiresAt: null }] : previous.filter((role) => role.roleCode !== roleCode));
   const setExpiry = (roleCode, value) => setRequested((previous) => previous.map((role) => role.roleCode === roleCode ? { ...role, expiresAt: toIso(value) } : role));
   const submit = () => { setConfirming(false); onSave({ expectedVersion: detail.version, assignments: requested, reason: normalizedReason }); };
+  const isUserAccount = detail.accountRole === 'USER';
+  const nextAccountRole = isUserAccount ? 'ADMIN' : 'USER';
+  const accountPermission = isUserAccount ? 'ACCESS_ASSIGN' : 'ACCESS_REVOKE';
+  const canChangeAccountRole = isUserAccount ? canAssign : canRevoke;
+  const rolesBlockDemotion = !isUserAccount && current.length > 0;
+  const normalizedAccountReason = normalizeReason(accountReason);
+  const accountBlocked = !canChangeAccountRole || rolesBlockDemotion || normalizedAccountReason.length < 2
+    || normalizedAccountReason.length > 200 || accountMutation.state === 'SUBMITTING' || typeof onChangeAccountRole !== 'function';
+  const submitAccountRole = () => { setConfirmingAccount(false); onChangeAccountRole({ role: nextAccountRole, reason: normalizedAccountReason }); };
 
   return <section className="system-access-card system-access-detail" aria-label="선택된 사용자 역할 편집">
     <header><div className="system-access-detail-title"><p>선택한 사용자 역할 편집</p><h2>{detail.displayName}</h2></div><dl className="system-access-summary"><div><dt>계정 유형</dt><dd>{detail.accountRole}</dd></div><div><dt>보호 상태</dt><dd>{detail.protectedUser ? '보호됨' : '보호 정보 없음'}</dd></div><div><dt>고위험 역할</dt><dd>{currentHighRisk.length ? currentHighRisk.map(({ roleCode }) => catalog.find((role) => role.roleCode === roleCode)?.displayName || roleCode).join(', ') : '없음'}</dd></div><div><dt>현재 버전</dt><dd>{detail.version}</dd></div></dl></header>
-    {detail.accountRole === 'USER' ? <p className="system-access-warning">이 계정은 USER입니다. 서버가 관리자 역할 부여를 제한하면 변경할 수 없습니다.</p> : null}
+    {isUserAccount ? <p className="system-access-warning">이 계정은 USER입니다. 관리자 역할을 부여하려면 먼저 계정 유형을 ADMIN으로 승격해야 합니다.</p> : null}
+    <section className="system-access-account" aria-label="계정 유형 변경">
+      <h3>계정 유형 변경</h3>
+      <p>현재 계정 유형은 {detail.accountRole}입니다. {isUserAccount ? 'ADMIN으로 승격한 뒤에만 관리자 역할을 부여할 수 있습니다.' : '관리자 역할을 모두 회수한 뒤에만 USER로 내릴 수 있습니다. 마지막 ADMIN은 내릴 수 없습니다.'}</p>
+      {rolesBlockDemotion ? <p className="system-access-warning">관리자 역할이 남아 있어 USER로 변경할 수 없습니다. 위에서 역할을 모두 회수한 뒤 다시 시도하세요.</p> : null}
+      {!canChangeAccountRole ? <p className="system-access-error">계정 유형 변경에는 {accountPermission} 권한이 필요합니다.</p> : null}
+      <label className="system-access-reason">계정 유형 변경 사유<textarea aria-label="계정 유형 변경 사유" value={accountReason} onChange={(event) => setAccountReason(event.target.value)} minLength="2" maxLength="200" /><small>{normalizedAccountReason.length}/200자</small></label>
+      <button type="button" onClick={() => setConfirmingAccount(true)} disabled={accountBlocked}>{accountMutation.state === 'SUBMITTING' ? '변경 중' : `${accountRoleTarget(nextAccountRole)} 변경`}</button>
+      {accountMutation.state === 'SUCCESS' ? <p role="status">계정 유형을 변경했습니다.</p> : null}
+      {accountMutation.state === 'ERROR' ? <p role="alert" className="system-access-error">{accountMutation.error?.code || '계정 유형 변경에 실패했습니다.'}</p> : null}
+      <ReasonDialog open={confirmingAccount} title="계정 유형 변경 확인" onClose={() => setConfirmingAccount(false)}><p>{detail.accountRole}에서 {accountRoleTarget(nextAccountRole)} 계정 유형을 바꿉니다. 서버가 권한과 마지막 ADMIN 규칙을 검사합니다.</p><button type="button" onClick={submitAccountRole}>계정 유형 변경 요청 보내기</button></ReasonDialog>
+    </section>
     <fieldset><legend>요청할 관리자 역할 전체</legend><p className="system-access-field-help">역할 선택 · 선택한 사용자에게 요청할 전체 관리자 역할입니다.</p>{catalog.map((role) => {
       const assignment = requested.find((item) => item.roleCode === role.roleCode);
-      return <div className="system-access-role" key={role.roleCode}><label><input type="checkbox" aria-label={`${role.displayName} 역할`} checked={Boolean(assignment)} onChange={(event) => toggleRole(role.roleCode, event.target.checked)} /> {role.displayName}</label><p>{role.description}</p>{assignment ? <label>만료 시각<input type="datetime-local" aria-label={`${role.displayName} 만료 시각`} value={toInputTime(assignment.expiresAt)} onChange={(event) => setExpiry(role.roleCode, event.target.value)} /><span>{assignment.expiresAt ? formatTime(assignment.expiresAt) : '만료 없음'}</span></label> : null}{(role.protectedRole || role.systemRole) ? <small>보호 또는 시스템 역할: 변경 전 확인이 필요합니다.</small> : null}</div>;
+      return <div className="system-access-role" key={role.roleCode}><label><input type="checkbox" aria-label={`${role.displayName} 역할`} checked={Boolean(assignment)} disabled={isUserAccount} onChange={(event) => toggleRole(role.roleCode, event.target.checked)} /> {role.displayName}</label><p>{role.description}</p>{assignment ? <label>만료 시각<input type="datetime-local" aria-label={`${role.displayName} 만료 시각`} value={toInputTime(assignment.expiresAt)} onChange={(event) => setExpiry(role.roleCode, event.target.value)} /><span>{assignment.expiresAt ? formatTime(assignment.expiresAt) : '만료 없음'}</span></label> : null}{(role.protectedRole || role.systemRole) ? <small>보호 또는 시스템 역할: 변경 전 확인이 필요합니다.</small> : null}</div>;
     })}</fieldset>
     {invalidExpiry ? <p role="alert" className="system-access-error">만료 시각은 현재보다 이후여야 합니다.</p> : null}
     <div className="system-access-review-grid"><section aria-labelledby="requested-diff"><h3 id="requested-diff">현재 역할과 요청 역할 비교</h3><AssignmentDiff changes={changes} catalog={catalog} /></section><section aria-labelledby="permission-impact"><h3 id="permission-impact">권한 영향</h3><p>획득: {impact.gained.length ? impact.gained.join(', ') : '없음'}</p><p>상실: {impact.lost.length ? impact.lost.join(', ') : '없음'}</p></section></div>
@@ -96,7 +119,7 @@ function DetailPanel({ detail, catalog, access, onSave, onRefresh, mutation }) {
 export default function SystemAccessPage({ createAdapter = createLiveSystemAccessAdapter }) {
   const adapter = useMemo(() => createAdapter(), [createAdapter]);
   const [pageData, setPageData] = useState(null); const [page, setPage] = useState(0); const [query, setQuery] = useState(''); const [appliedQuery, setAppliedQuery] = useState('');
-  const [pageError, setPageError] = useState(null); const [loading, setLoading] = useState(true); const [selectedId, setSelectedId] = useState(null); const [detail, setDetail] = useState(null); const [detailError, setDetailError] = useState(null); const [detailLoading, setDetailLoading] = useState(false); const [mutation, setMutation] = useState({ state: 'IDLE' });
+  const [pageError, setPageError] = useState(null); const [loading, setLoading] = useState(true); const [selectedId, setSelectedId] = useState(null); const [detail, setDetail] = useState(null); const [detailError, setDetailError] = useState(null); const [detailLoading, setDetailLoading] = useState(false); const [mutation, setMutation] = useState({ state: 'IDLE' }); const [accountMutation, setAccountMutation] = useState({ state: 'IDLE' });
   const pageGeneration = useRef(0); const detailGeneration = useRef(0); const selectedIdRef = useRef(null); const detailController = useRef(null);
   useEffect(() => { const controller = new AbortController(); const generation = ++pageGeneration.current; setLoading(true); setPageError(null); adapter.loadPage({ page, size: PAGE_SIZE, sort: SORT, q: appliedQuery, signal: controller.signal }).then((next) => { if (!controller.signal.aborted && generation === pageGeneration.current) setPageData(next); }).catch((error) => { if (!controller.signal.aborted && generation === pageGeneration.current) setPageError(error); }).finally(() => { if (!controller.signal.aborted && generation === pageGeneration.current) setLoading(false); }); return () => controller.abort(); }, [adapter, page, appliedQuery]);
   useEffect(() => () => detailController.current?.abort(), []);
@@ -111,19 +134,23 @@ export default function SystemAccessPage({ createAdapter = createLiveSystemAcces
     const generation = ++detailGeneration.current;
     setDetailLoading(true);
     adapter.loadUser(publicUserId, { signal: controller.signal })
-      .then((next) => { if (!controller.signal.aborted && generation === detailGeneration.current) { setDetail(next); setMutation({ state: 'IDLE' }); } })
+      .then((next) => { if (!controller.signal.aborted && generation === detailGeneration.current) { setDetail(next); setMutation({ state: 'IDLE' }); setAccountMutation({ state: 'IDLE' }); } })
       .catch((error) => { if (!controller.signal.aborted && generation === detailGeneration.current) setDetailError(error); })
       .finally(() => { if (!controller.signal.aborted && generation === detailGeneration.current) { detailController.current = null; setDetailLoading(false); } });
   };
-  const selectUser = (publicUserId) => { setMutation({ state: 'IDLE' }); loadDetail(publicUserId); };
+  const selectUser = (publicUserId) => { setMutation({ state: 'IDLE' }); setAccountMutation({ state: 'IDLE' }); loadDetail(publicUserId); };
   const save = (body) => { if (!selectedId || mutation.state === 'SUBMITTING') return; const stableId = selectedId; setMutation({ state: 'SUBMITTING' }); adapter.replaceRoles(stableId, body).then(() => {
     if (selectedIdRef.current !== stableId) return null;
     return adapter.loadUser(stableId);
   }).then((fresh) => { if (fresh && selectedIdRef.current === stableId) { setDetail(fresh); setPageData((previous) => previous ? { ...previous, users: { ...previous.users, items: previous.users.items.map((user) => user.userId === stableId ? { ...user, adminRoles: fresh.adminRoles, protectedUser: fresh.protectedUser, version: fresh.version } : user) } } : previous); setMutation({ state: 'SUCCESS' }); } }).catch((error) => { if (selectedIdRef.current !== stableId) return; setMutation({ state: error.code === 'ROLE_ASSIGNMENT_VERSION_CONFLICT' ? 'CONFLICT' : 'ERROR', error }); }); };
+  const changeAccountRole = (body) => { if (!selectedId || accountMutation.state === 'SUBMITTING') return; const stableId = selectedId; setAccountMutation({ state: 'SUBMITTING' }); Promise.resolve().then(() => adapter.changeAccountRole(stableId, body)).then(() => {
+    if (selectedIdRef.current !== stableId) return null;
+    return adapter.loadUser(stableId);
+  }).then((fresh) => { if (fresh && selectedIdRef.current === stableId) { setDetail(fresh); setPageData((previous) => previous ? { ...previous, users: { ...previous.users, items: previous.users.items.map((user) => user.userId === stableId ? { ...user, role: fresh.accountRole, adminRoles: fresh.adminRoles, protectedUser: fresh.protectedUser, version: fresh.version } : user) } } : previous); setAccountMutation({ state: 'SUCCESS' }); } }).catch((error) => { if (selectedIdRef.current !== stableId) return; setAccountMutation({ state: 'ERROR', error }); }); };
   const submitSearch = (event) => { event.preventDefault(); setPage(0); setAppliedQuery(query.trim()); };
   const users = pageData?.users?.items || []; const catalog = pageData?.roles || [];
   return <main className="system-access-page"><header className="system-access-header"><p>UI-SYS-02</p><h1>관리자 역할·권한</h1><p>전체 역할과 권한 영향을 확인한 뒤 변경을 요청하세요. 모든 변경은 검토와 승인 후 반영됩니다.</p></header>
     {loading ? <AsyncStatePanel state="LOADING" /> : null}{!loading && pageError ? <AsyncStatePanel state={errorState(pageError)} code={pageError.code} requiredPermission={pageError.status === 403 ? 'ACCESS_READ' : undefined} /> : null}
-    {!loading && !pageError ? <div className="system-access-layout"><section className="system-access-card" aria-label="사용자 목록"><form onSubmit={submitSearch}><label>사용자 검색<input value={query} onChange={(event) => setQuery(event.target.value)} /></label><button type="submit">검색</button></form>{users.length ? <ul className="system-access-users">{users.map((user) => <li key={user.userId}><button type="button" aria-pressed={selectedId === user.userId} onClick={() => selectUser(user.userId)}>{user.displayName}<span>{user.role}</span></button></li>)}</ul> : <p>표시할 사용자가 없습니다.</p>}<nav aria-label="사용자 목록 페이지"><button type="button" disabled={page <= 0} onClick={() => setPage((value) => value - 1)}>이전</button><span>{page + 1}페이지</span><button type="button" disabled={(page + 1) * PAGE_SIZE >= (pageData?.users?.total || 0)} onClick={() => setPage((value) => value + 1)}>다음</button></nav></section><div>{!selectedId ? <DetailPanel /> : null}{detailLoading ? <AsyncStatePanel state="LOADING" /> : null}{detailError ? <AsyncStatePanel state={errorState(detailError)} code={detailError.code} requiredPermission={detailError.status === 403 ? 'ACCESS_READ' : undefined} /> : null}{detail ? <DetailPanel detail={detail} catalog={catalog} access={pageData.access || { permissions: [] }} onSave={save} onRefresh={() => loadDetail(selectedId, false)} mutation={mutation} /> : null}</div></div> : null}
+    {!loading && !pageError ? <div className="system-access-layout"><section className="system-access-card" aria-label="사용자 목록"><form onSubmit={submitSearch}><label>사용자 검색<input value={query} onChange={(event) => setQuery(event.target.value)} /></label><button type="submit">검색</button></form>{users.length ? <ul className="system-access-users">{users.map((user) => <li key={user.userId}><button type="button" aria-pressed={selectedId === user.userId} onClick={() => selectUser(user.userId)}>{user.displayName}<span>{user.role}</span></button></li>)}</ul> : <p>표시할 사용자가 없습니다.</p>}<nav aria-label="사용자 목록 페이지"><button type="button" disabled={page <= 0} onClick={() => setPage((value) => value - 1)}>이전</button><span>{page + 1}페이지</span><button type="button" disabled={(page + 1) * PAGE_SIZE >= (pageData?.users?.total || 0)} onClick={() => setPage((value) => value + 1)}>다음</button></nav></section><div>{!selectedId ? <DetailPanel /> : null}{detailLoading ? <AsyncStatePanel state="LOADING" /> : null}{detailError ? <AsyncStatePanel state={errorState(detailError)} code={detailError.code} requiredPermission={detailError.status === 403 ? 'ACCESS_READ' : undefined} /> : null}{detail ? <DetailPanel detail={detail} catalog={catalog} access={pageData.access || { permissions: [] }} onSave={save} onRefresh={() => loadDetail(selectedId, false)} onChangeAccountRole={typeof adapter.changeAccountRole === 'function' ? changeAccountRole : undefined} mutation={mutation} accountMutation={accountMutation} /> : null}</div></div> : null}
   </main>;
 }
