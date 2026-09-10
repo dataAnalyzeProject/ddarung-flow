@@ -1,4 +1,4 @@
-import openingHero from "../../../assets/consumer-r2/opening/cr22-opening-hero-v1.webp";
+import openingHero from "../../../assets/consumer-r2/opening/cr22-opening-hero-v2.webp";
 import {
   ConsumerAppHeader,
   ConsumerButton,
