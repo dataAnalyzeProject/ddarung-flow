@@ -150,7 +150,7 @@ describe('admin v2 fixture access and routes', () => {
     expect(screen.getByText('ADMIN_PERMISSION_DENIED')).toBeInTheDocument();
     expect(screen.getByText('필요 권한: MODEL_RELEASE_READ')).toBeInTheDocument();
     expect(screen.queryByText('UI-MODEL-04')).not.toBeInTheDocument();
-    expect(screen.queryByText('FIXTURE / API_NOT_CONNECTED')).not.toBeInTheDocument();
+    expect(screen.queryByText('고정 데이터 · API 미연결')).not.toBeInTheDocument();
   });
 
   test.each([

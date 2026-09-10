@@ -13,15 +13,15 @@ describe('ModelOverview', () => {
   test('shows the exact live runtime identity independently of registry lifecycle', async () => {
     render(<ModelOverview createAdapter={adapterFor({ runtime, registry, registryStateCounts: { DRAFT: 0, VALIDATED: 0, APPROVED: 0, REJECTED: 0, ACTIVE: 1, RETIRED: 0 } })} />);
     await waitFor(() => expect(screen.getByRole('heading', { name: 'data-3.1-runtime-pointer' })).toBeInTheDocument());
-    expect(screen.getByText('LIVE INFERENCE')).toBeInTheDocument(); expect(screen.getByText('aaaaaaaaaaaa')).toBeInTheDocument(); expect(screen.getByLabelText('레지스트리 ACTIVE')).toHaveTextContent('1');
+    expect(screen.getByText('실시간 추론 중')).toBeInTheDocument(); expect(screen.getByText('aaaaaaaaaaaa')).toBeInTheDocument(); expect(screen.getByLabelText('레지스트리 ACTIVE')).toHaveTextContent('1');
   });
   test('keeps runtime unknown when it is unavailable even with a registry result', async () => {
     render(<ModelOverview createAdapter={adapterFor({ runtime: { state: 'ERROR', error: { code: 'MODEL_RUNTIME_UNAVAILABLE' } }, registry, registryStateCounts: { DRAFT: 0, VALIDATED: 0, APPROVED: 0, REJECTED: 0, ACTIVE: 1, RETIRED: 0 } })} />);
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'UNKNOWN' })).toBeInTheDocument()); expect(screen.getByText('MODEL_RUNTIME_UNAVAILABLE')).toBeInTheDocument(); expect(screen.getByLabelText('레지스트리 ACTIVE')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('heading', { name: '확인 불가' })).toBeInTheDocument()); expect(screen.getByText('MODEL_RUNTIME_UNAVAILABLE')).toBeInTheDocument(); expect(screen.getByLabelText('레지스트리 ACTIVE')).toBeInTheDocument();
   });
   test('does not turn an empty registry into zero-card emphasis', async () => {
     render(<ModelOverview createAdapter={adapterFor({ runtime, registry: { state: 'SUCCESS', data: [] }, registryStateCounts: { DRAFT: 0, VALIDATED: 0, APPROVED: 0, REJECTED: 0, ACTIVE: 0, RETIRED: 0 } })} />);
-    await waitFor(() => expect(screen.getByText('등록된 ModelOps lifecycle 항목 없음')).toBeInTheDocument()); expect(screen.queryByLabelText('레지스트리 DRAFT')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('등록된 모델 수명주기 항목 없음')).toBeInTheDocument()); expect(screen.queryByLabelText('레지스트리 DRAFT')).not.toBeInTheDocument();
   });
   test('renders registry access denial without hiding a successful runtime', async () => {
     render(<ModelOverview createAdapter={adapterFor({ runtime, registry: { state: 'FORBIDDEN', error: { code: 'ADMIN_PERMISSION_DENIED' } }, registryStateCounts: null })} />);

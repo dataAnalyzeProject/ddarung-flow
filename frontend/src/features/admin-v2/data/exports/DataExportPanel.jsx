@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 const STATUS_LABELS = { PENDING: '요청됨', GENERATING: '생성 중', COMPLETED: '완료', FAILED: '실패', EXPIRED: '만료' };
-const SOURCE_LABELS = { CURATED: '현재 Serving 재고', QUARANTINE_NORMALIZED: '격리 데이터' };
+const SOURCE_LABELS = { CURATED: '현재 서비스 재고', QUARANTINE_NORMALIZED: '격리 데이터' };
 const can = (permissions, permission) => Array.isArray(permissions) && permissions.includes(permission);
 const formatTime = (value) => value ? new Date(value).toLocaleString('ko-KR') : '—';
 const formatCount = (value) => typeof value === 'number' ? value.toLocaleString('ko-KR') : '—';
@@ -31,7 +31,7 @@ export default function DataExportPanel({ adapter, permissions }) {
     } catch (next) { setError(next); }
   };
   return <section className="data-export-panel" aria-labelledby="data-export-heading">
-    <div className="operations-data-section-heading"><div><h2 id="data-export-heading">데이터 내보내기</h2><p>현재 Serving 재고의 source-backed CSV 또는 Parquet 파일을 생성합니다.</p></div></div>
+    <div className="operations-data-section-heading"><div><h2 id="data-export-heading">데이터 내보내기</h2><p>현재 서비스 재고를 원본 그대로 담은 CSV 또는 Parquet 파일을 생성합니다.</p></div></div>
     <p className="operations-data-safety-notice">격리 데이터는 보존된 원본이 없어 내보내기를 지원하지 않습니다. 빈 파일을 0건으로 만들지 않습니다.</p>
     {canRequest && <form className="data-export-form" onSubmit={submit}>
       <label>형식<select value={format} onChange={(event) => setFormat(event.target.value)}><option>CSV</option><option>PARQUET</option></select></label>

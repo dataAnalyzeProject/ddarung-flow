@@ -48,7 +48,7 @@ describe('CandidatesPage', () => {
     const load = jest.fn().mockResolvedValueOnce(first).mockResolvedValueOnce(first).mockResolvedValueOnce(nextPage);
     render(<CandidatesPage createAdapter={adapterFor(load)} />);
     await screen.findByRole('heading', { name: '집중관리 목록' });
-    fireEvent.change(screen.getByLabelText('예측 horizon'), { target: { value: '120' } });
+    fireEvent.change(screen.getByLabelText('예측 구간'), { target: { value: '120' } });
     await waitFor(() => expect(load).toHaveBeenLastCalledWith(expect.objectContaining({ horizonMinutes: 120, requiredBikeCount: 1, limit: 25 })));
     fireEvent.click(screen.getByRole('button', { name: '더 보기' }));
     await waitFor(() => expect(load).toHaveBeenLastCalledWith(expect.objectContaining({ cursor: 'opaque-next', horizonMinutes: 120, requiredBikeCount: 1, limit: 25 })));
@@ -90,8 +90,8 @@ describe('CandidatesPage', () => {
     expect(screen.queryByText('일부 정보만 사용 가능')).not.toBeInTheDocument();
     fireEvent.click(screen.getByText('상세 상태 보기'));
     const technicalState = screen.getByLabelText('원본 상태 상세');
-    expect(technicalState).toHaveTextContent('원본 데이터 상태MISSING');
-    expect(technicalState).toHaveTextContent('FreshnessFRESH');
+    expect(technicalState).toHaveTextContent('원본 데이터 상태일부 데이터 결측');
+    expect(technicalState).toHaveTextContent('신선도최신');
   });
 
   test('does not invent a reassuring normal count when missing coverage is unavailable', async () => {
@@ -151,7 +151,7 @@ describe('CandidatesPage', () => {
     fireEvent.click(screen.getByRole('button', { name: '더 보기' }));
     await waitFor(() => expect(load).toHaveBeenLastCalledWith(expect.objectContaining({ horizonMinutes: 60, cursor: 'old-cursor' })));
 
-    fireEvent.change(screen.getByLabelText('예측 horizon'), { target: { value: '120' } });
+    fireEvent.change(screen.getByLabelText('예측 구간'), { target: { value: '120' } });
     await waitFor(() => expect(load).toHaveBeenLastCalledWith(expect.objectContaining({ horizonMinutes: 120 })));
     expect(load.mock.calls.at(-1)[0]).not.toHaveProperty('cursor');
     await act(async () => filtered.resolve({ ...first, nextCursor: 'new-cursor', items: [{ ...first.items[1], station: { ...first.items[1].station, name: '새 필터 후보' } }] }));

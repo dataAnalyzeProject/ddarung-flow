@@ -15,11 +15,11 @@ test('separates Global, MAP, history, and factual missing counts', async () => {
   const adapter = { load: () => Promise.resolve(result), listExports: jest.fn() };
   render(<DataStatusPage createAdapter={() => adapter} />);
   expect(await screen.findByRole('heading', { name: '데이터 상태' })).toBeInTheDocument();
-  expect(screen.getByRole('heading', { name: '서울 전체 Global 운영 분석' })).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: '서울 전체 운영 분석' })).toBeInTheDocument();
   expect(screen.getByRole('heading', { name: '현재 지도 범위' })).toBeInTheDocument();
   expect(screen.getByText('지연 재고')).toBeInTheDocument();
   expect(screen.getByText('재고 지연')).toBeInTheDocument();
-  expect(screen.getByText('fresh until')).toBeInTheDocument();
+  expect(screen.getByText('신선도 유효 시각')).toBeInTheDocument();
   expect(screen.getByText('model-v1')).toBeInTheDocument();
   expect(screen.getByText('아직 분석한 범위 없음')).toBeInTheDocument();
   expect(screen.getByRole('heading', { name: '예측 배치 (이력 전용)' })).toBeInTheDocument();
@@ -33,7 +33,7 @@ test('collapses every block by default and keeps each block state visible while 
   render(<DataStatusPage createAdapter={() => adapter} />);
   expect(await screen.findByRole('heading', { name: '데이터 상태' })).toBeInTheDocument();
 
-  const blocks = ['현재 재고', '서울 전체 Global 운영 분석', '현재 지도 범위', 'Profile', '예측 배치 (이력 전용)', '데이터 내보내기'];
+  const blocks = ['현재 재고', '서울 전체 운영 분석', '현재 지도 범위', '대여소 이용 패턴', '예측 배치 (이력 전용)', '데이터 내보내기'];
   const details = blocks.map((name) => screen.getByRole('heading', { name }).closest('details'));
   details.forEach((block, index) => {
     expect(block).not.toBeNull();
@@ -49,9 +49,9 @@ test('collapses every block by default and keeps each block state visible while 
 test('expands a block on click without changing what it reports', async () => {
   const adapter = { load: () => Promise.resolve(result), listExports: jest.fn() };
   render(<DataStatusPage createAdapter={() => adapter} />);
-  const block = (await screen.findByRole('heading', { name: '서울 전체 Global 운영 분석' })).closest('details');
+  const block = (await screen.findByRole('heading', { name: '서울 전체 운영 분석' })).closest('details');
   fireEvent.click(block.querySelector('summary'));
   expect(block.open).toBe(true);
-  expect(within(block).getByText('fresh until')).toBeVisible();
+  expect(within(block).getByText('신선도 유효 시각')).toBeVisible();
   expect(within(block).getByText('model-v1')).toBeVisible();
 });

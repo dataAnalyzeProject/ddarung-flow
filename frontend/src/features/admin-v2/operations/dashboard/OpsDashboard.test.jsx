@@ -177,6 +177,6 @@ describe('OpsDashboard', () => {
   test('the allowed overview bridge renders the dashboard instead of RoutePlaceholder', async () => {
     render(<OverviewRoute createAdapter={adapterFor(dashboardFixture('SUCCESS'))} />);
     await waitFor(() => expect(screen.getByRole('heading', { name: '운영 상황판' })).toBeInTheDocument());
-    expect(screen.queryByText('FIXTURE / API_NOT_CONNECTED')).not.toBeInTheDocument();
+    expect(screen.queryByText('고정 데이터 · API 미연결')).not.toBeInTheDocument();
   });
 });
