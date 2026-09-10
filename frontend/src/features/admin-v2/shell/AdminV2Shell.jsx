@@ -32,6 +32,7 @@ export default function AdminV2Shell({ consoles, activeConsole, activeRoute, acc
       <div className="admin-v2-header-context">
         <AdminConsoleSwitcher consoles={consoles} activeConsole={activeConsole} onSelect={onConsoleSelect} />
         <ReferenceTimeBar generatedAt={access.generatedAt} source={access.source} />
+        <a className="admin-v2-service-link" href="/">서비스 화면으로</a>
         <div className="admin-v2-account-context" aria-label="현재 관리자 권한">
           <span>현재 권한</span><strong>{access.adminRoles?.join(', ') || '알 수 없음'}</strong>
           {showLogout && <button type="button" className="admin-v2-logout" onClick={handleLogout} disabled={logoutState === 'pending'}>{logoutState === 'pending' ? '로그아웃 중' : '로그아웃'}</button>}

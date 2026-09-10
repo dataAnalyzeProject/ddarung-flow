@@ -7,6 +7,15 @@ const props = {
   onConsoleSelect: jest.fn(), onRouteNavigate: jest.fn(), showLogout: true,
 };
 
+describe('AdminV2Shell service link', () => {
+  test('always offers a way back to the consumer service', () => {
+    const { rerender } = render(<AdminV2Shell {...props} />);
+    expect(screen.getByRole('link', { name: '서비스 화면으로' })).toHaveAttribute('href', '/');
+    rerender(<AdminV2Shell {...props} showLogout={false} />);
+    expect(screen.getByRole('link', { name: '서비스 화면으로' })).toHaveAttribute('href', '/');
+  });
+});
+
 describe('AdminV2Shell logout', () => {
   test('shows logout only when requested by the live shell', () => {
     const { rerender } = render(<AdminV2Shell {...props} />);

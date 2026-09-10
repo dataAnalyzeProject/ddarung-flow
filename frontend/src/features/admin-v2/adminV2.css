@@ -45,6 +45,8 @@
 .admin-v2-brand img { display: block; height: 34px; object-fit: contain; width: auto; }
 .admin-v2-brand-context { border-left: 1px solid var(--admin-v2-border); color: var(--admin-v2-ink); font-size: .9rem; font-weight: 750; padding-left: 16px; }
 .admin-v2-header-context { align-items: center; display: flex; flex: 0 1 auto; gap: 20px; justify-content: flex-end; min-width: 0; }
+.admin-v2-service-link { align-items: center; background: transparent; border: 1px solid var(--admin-v2-border); border-radius: 7px; color: var(--admin-v2-muted); display: inline-flex; flex: 0 0 auto; font-size: .78rem; font-weight: 700; min-height: 32px; padding: 5px 10px; text-decoration: none; white-space: nowrap; }
+.admin-v2-service-link:hover { background: var(--admin-v2-surface); color: var(--admin-v2-ink); }
 .admin-v2-account-context { align-items: center; border-left: 1px solid var(--admin-v2-border); color: var(--admin-v2-muted); display: flex; flex: 0 0 auto; font-size: .78rem; gap: 8px; min-width: 0; padding-left: 16px; white-space: nowrap; }
 .admin-v2-account-context > span { flex: 0 0 auto; }
 .admin-v2-account-context strong { color: var(--admin-v2-ink); font-weight: 750; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

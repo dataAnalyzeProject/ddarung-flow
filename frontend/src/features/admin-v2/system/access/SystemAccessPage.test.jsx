@@ -189,6 +189,54 @@ describe('SystemAccessPage', () => {
     expect(replaceRoles).not.toHaveBeenCalled();
   });
 
+  test('promotes a USER account through the account-role endpoint and refreshes the row', async () => {
+    const userDetail = { ...detail, displayName: '일반 A', accountRole: 'USER', adminRoles: [] };
+    const promoted = { ...userDetail, accountRole: 'ADMIN', version: 8 };
+    const userPage = { ...page, users: { ...page.users, items: [{ ...page.users.items[0], displayName: '일반 A', role: 'USER', adminRoles: [] }] } };
+    const changeAccountRole = jest.fn().mockResolvedValue(promoted);
+    const loadUser = jest.fn().mockResolvedValueOnce(userDetail).mockResolvedValueOnce(promoted);
+    render(<SystemAccessPage createAdapter={adapterFor({ loadPage: jest.fn().mockResolvedValue(userPage), loadUser, changeAccountRole })} />);
+    fireEvent.click(await screen.findByRole('button', { name: /일반 A/ }));
+    await screen.findByRole('heading', { name: '일반 A' });
+    expect(screen.getByLabelText('운영 조회자 역할')).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('계정 유형 변경 사유'), { target: { value: '  운영   담당 배정  ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'ADMIN으로 변경' }));
+    expect(changeAccountRole).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: '계정 유형 변경 요청 보내기' }));
+    await waitFor(() => expect(changeAccountRole).toHaveBeenCalledWith(opaqueId, { role: 'ADMIN', reason: '운영 담당 배정' }));
+    expect(await screen.findByText('계정 유형을 변경했습니다.')).toBeInTheDocument();
+    expect(screen.getByLabelText('운영 조회자 역할')).toBeEnabled();
+  });
+
+  test('blocks demotion while admin roles remain and surfaces the source error code otherwise', async () => {
+    const changeAccountRole = jest.fn().mockRejectedValue({ status: 409, code: 'LAST_SUPER_ADMIN_REQUIRED' });
+    const bare = { ...detail, adminRoles: [] };
+    const { rerender } = render(<SystemAccessPage createAdapter={adapterFor({ changeAccountRole })} />);
+    fireEvent.click(await screen.findByRole('button', { name: /관리자 A/ }));
+    await screen.findByRole('heading', { name: '관리자 A' });
+    fireEvent.change(screen.getByLabelText('계정 유형 변경 사유'), { target: { value: '권한 회수' } });
+    expect(screen.getByText(/관리자 역할이 남아 있어 USER로 변경할 수 없습니다/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'USER로 변경' })).toBeDisabled();
+
+    rerender(<SystemAccessPage createAdapter={adapterFor({ loadUser: jest.fn().mockResolvedValue(bare), changeAccountRole })} />);
+    fireEvent.click(await screen.findByRole('button', { name: /관리자 A/ }));
+    await screen.findByRole('heading', { name: '관리자 A' });
+    fireEvent.change(screen.getByLabelText('계정 유형 변경 사유'), { target: { value: '권한 회수' } });
+    fireEvent.click(screen.getByRole('button', { name: 'USER로 변경' }));
+    fireEvent.click(screen.getByRole('button', { name: '계정 유형 변경 요청 보내기' }));
+    expect(await screen.findByText('LAST_SUPER_ADMIN_REQUIRED')).toBeInTheDocument();
+  });
+
+  test('disables the account-role control when the actor lacks the matching permission', async () => {
+    const readOnly = { ...page, access: { permissions: ['ACCESS_READ'] } };
+    render(<SystemAccessPage createAdapter={adapterFor({ loadPage: jest.fn().mockResolvedValue(readOnly), loadUser: jest.fn().mockResolvedValue({ ...detail, adminRoles: [] }), changeAccountRole: jest.fn() })} />);
+    fireEvent.click(await screen.findByRole('button', { name: /관리자 A/ }));
+    await screen.findByRole('heading', { name: '관리자 A' });
+    fireEvent.change(screen.getByLabelText('계정 유형 변경 사유'), { target: { value: '권한 회수' } });
+    expect(screen.getByText('계정 유형 변경에는 ACCESS_REVOKE 권한이 필요합니다.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'USER로 변경' })).toBeDisabled();
+  });
+
   test('keeps detail error separate from safe user-list data', async () => {
     const loadUser = jest.fn().mockRejectedValue({ status: 404, code: 'ADMIN_USER_NOT_FOUND' });
     render(<SystemAccessPage createAdapter={adapterFor({ loadUser })} />);

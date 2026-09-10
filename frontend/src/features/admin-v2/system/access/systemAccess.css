@@ -33,4 +33,9 @@
 .system-access-warning { background: var(--admin-v2-critical-soft); border: 1px solid #f5b8b0; border-radius: 8px; color: var(--admin-v2-ink); margin: 0; padding: 11px 13px; }.system-access-error { color: #b42318; font-weight: 700; }.system-access-reason { display: grid; gap: 6px; margin: 0; }.system-access-reason small { color: var(--admin-v2-muted); justify-self: end; }.system-access-detail > button { background: var(--admin-v2-accent); border-color: var(--admin-v2-accent); color: #fff; justify-self: end; min-width: 160px; }
 @media (max-width: 1040px) { .system-access-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }.system-access-summary div:nth-child(3) { border-left: 0; border-top: 1px solid var(--admin-v2-border); }.system-access-summary div:nth-child(4) { border-top: 1px solid var(--admin-v2-border); } }
 @media (max-width: 860px) { .system-access-layout { grid-template-columns: 1fr; }.system-access-review-grid { grid-template-columns: 1fr; } }
+.system-access-account { border: 1px solid var(--admin-v2-border); border-radius: 10px; display: grid; gap: 10px; padding: 14px; }
+.system-access-account h3 { font-size: .9rem; font-weight: 800; margin: 0; }
+.system-access-account > p { color: var(--admin-v2-muted); font-size: .84rem; margin: 0; }
+.system-access-account > button { background: var(--admin-v2-accent); border-color: var(--admin-v2-accent); color: #fff; justify-self: end; min-width: 160px; }
+.system-access-account > button:disabled { background: #fff; border-color: #cfd7e2; color: var(--admin-v2-ink); }
 @media (max-width: 540px) { .system-access-card > form { grid-template-columns: 1fr; }.system-access-summary { grid-template-columns: 1fr; }.system-access-summary div + div, .system-access-summary div:nth-child(3), .system-access-summary div:nth-child(4) { border-left: 0; border-top: 1px solid var(--admin-v2-border); }.system-access-role { grid-template-columns: 1fr; } }
