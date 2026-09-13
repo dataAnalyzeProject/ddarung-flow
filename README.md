@@ -8,6 +8,7 @@
 - **구성:** Consumer Web · Data/ML · Operations
 - **핵심 기술:** React · Spring Boot · Python · PostgreSQL · Airflow · OCI · GitHub Actions
 - **Portfolio Final 기준:** `2026-09-12` · `main@12ee414f48f1141e39aff8fb3198b683e5a42b9a`
+- **5분 서비스 가이드 영상:** [YouTube에서 보기](https://youtu.be/7Tuu9zB14ME)
 - **상세 프로젝트 문서:** [Public Notion](https://app.notion.com/p/3cd00ce3705c81d09070db8b3dfc04bf)
 - **기준 코드:** [Portfolio baseline commit](https://github.com/dataAnalyzeProject/ddarung-flow/tree/12ee414f48f1141e39aff8fb3198b683e5a42b9a)
 
@@ -267,6 +268,7 @@ cd backend
 
 ## 12. 더 자세히 보기
 
+- **5분 서비스 가이드 영상:** [YouTube](https://youtu.be/7Tuu9zB14ME)
 - **프로젝트 전체 설명 · 화면 · 데이터/ML · Operations:** [따라가요 Public Notion](https://app.notion.com/p/3cd00ce3705c81d09070db8b3dfc04bf)
 - **최종 포트폴리오 코드 기준:** [`main@12ee414`](https://github.com/dataAnalyzeProject/ddarung-flow/tree/12ee414f48f1141e39aff8fb3198b683e5a42b9a)
 - **GitHub Repository:** [dataAnalyzeProject/ddarung-flow](https://github.com/dataAnalyzeProject/ddarung-flow)
