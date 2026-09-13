@@ -1,0 +1,23 @@
+{
+  "files": {
+    "main.css": "/ddarung-flow/static/css/main.b979a590.css",
+    "main.js": "/ddarung-flow/static/js/main.b910847a.js",
+    "static/js/453.782f0a85.chunk.js": "/ddarung-flow/static/js/453.782f0a85.chunk.js",
+    "static/media/bike-station-marker.png": "/ddarung-flow/static/media/bike-station-marker.4f7ab9e3c2960180cfd3.png",
+    "static/media/route-map.png": "/ddarung-flow/static/media/route-map.bcd89179004bd0fd6e77.png",
+    "static/media/current-location-marker.png": "/ddarung-flow/static/media/current-location-marker.cc704f3499337bfafd04.png",
+    "static/media/ddaragayo-logo.png": "/ddarung-flow/static/media/ddaragayo-logo.b3ff9ab0e7856a3cda71.png",
+    "static/media/cr22-opening-hero-v2.webp": "/ddarung-flow/static/media/cr22-opening-hero-v2.f024fad3f7694541c2ff.webp",
+    "static/media/cr22-main-initial-hero-v1.webp": "/ddarung-flow/static/media/cr22-main-initial-hero-v1.fc8f9f56b838a5bed833.webp",
+    "static/media/cr22-guide-empty-ai-calendar-v1.webp": "/ddarung-flow/static/media/cr22-guide-empty-ai-calendar-v1.cc84fe07551d27617ed6.webp",
+    "static/media/cr22-main-walk-v1.webp": "/ddarung-flow/static/media/cr22-main-walk-v1.16883c1a1e987c666dee.webp",
+    "index.html": "/ddarung-flow/index.html",
+    "main.b979a590.css.map": "/ddarung-flow/static/css/main.b979a590.css.map",
+    "main.b910847a.js.map": "/ddarung-flow/static/js/main.b910847a.js.map",
+    "453.782f0a85.chunk.js.map": "/ddarung-flow/static/js/453.782f0a85.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.b979a590.css",
+    "static/js/main.b910847a.js"
+  ]
+}
