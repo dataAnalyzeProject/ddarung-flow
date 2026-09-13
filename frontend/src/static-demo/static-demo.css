@@ -1,0 +1,95 @@
+.static-demo-shell {
+  min-height: 100vh;
+  background: #fff;
+}
+
+.static-demo-boundary {
+  min-height: 38px;
+  padding: 6px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: #10254a;
+  color: #fff;
+  font: 700 12px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.static-demo-boundary nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+}
+
+.static-demo-boundary button {
+  min-height: 28px;
+  padding: 4px 9px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #dce7f7;
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.static-demo-boundary button[aria-current="page"] {
+  background: #fff;
+  color: #10254a;
+}
+
+.static-demo-boundary button:focus-visible {
+  outline: 3px solid #35d0ba;
+  outline-offset: 1px;
+}
+
+.static-demo-page > .admin-v2-shell {
+  height: calc(100vh - 38px);
+  height: calc(100dvh - 38px);
+}
+
+.static-demo-map__image,
+.ops-risk-map.is-static-demo {
+  width: 100%;
+  min-height: 220px;
+  display: block;
+  object-fit: cover;
+  object-position: center;
+  background: #edf5f6 url("../assets/main/route-map.png") center / cover no-repeat;
+}
+
+.cr293-map > .static-demo-map__image {
+  height: 100%;
+  min-height: inherit;
+}
+
+.cr22-station__map > .static-demo-map__image {
+  height: 100%;
+}
+
+@media (max-width: 720px) {
+  .static-demo-boundary {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+    padding: 7px 12px;
+  }
+
+  .static-demo-boundary nav {
+    width: 100%;
+  }
+
+  .static-demo-page > .admin-v2-shell {
+    height: calc(100vh - 72px);
+    height: calc(100dvh - 72px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .static-demo-shell *,
+  .static-demo-shell *::before,
+  .static-demo-shell *::after {
+    scroll-behavior: auto !important;
+  }
+}

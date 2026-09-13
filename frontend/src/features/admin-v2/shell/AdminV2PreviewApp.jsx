@@ -13,6 +13,7 @@ function accessFailure() { return { state: 'ACCESS_ERROR', code: 'ADMIN_ACCESS_U
 function browserLocation() { return { pathname: window.location.pathname, search: window.location.search }; }
 
 export default function AdminV2PreviewApp({ pathname, search, createAccessAdapter = createFixtureAdminAccessAdapter }) {
+  const allowedRouteIds = process.env.REACT_APP_STATIC_DEMO === 'true' ? ['UI-OPS-01'] : PRODUCTION_RELEASED_ROUTE_IDS;
   const initial = browserLocation();
   const suppliedPathname = pathname ?? initial.pathname;
   const suppliedSearch = search ?? initial.search;
@@ -49,6 +50,10 @@ export default function AdminV2PreviewApp({ pathname, search, createAccessAdapte
   }, [createAccessAdapter, fixtureId, retryVersion]);
 
   const navigate = useCallback((nextPath, replace = false) => {
+    if (process.env.REACT_APP_STATIC_DEMO === 'true') {
+      setLocation({ pathname: nextPath, search: location.search });
+      return;
+    }
     const nextUrl = `${nextPath}${location.search}`;
     window.history[replace ? 'replaceState' : 'pushState']({}, '', nextUrl);
     setLocation({ pathname: nextPath, search: location.search });
@@ -67,9 +72,9 @@ export default function AdminV2PreviewApp({ pathname, search, createAccessAdapte
   if (resolution.type === 'NOT_FOUND') return <AsyncStatePanel state="EMPTY" code="NOT_FOUND" />;
   if (resolution.type === 'FORBIDDEN') return <AsyncStatePanel state="FORBIDDEN" code="ADMIN_PERMISSION_DENIED" requiredPermission={resolution.route.requiredPermission} />;
   const route = resolution.route;
-  if (!PRODUCTION_RELEASED_ROUTE_IDS.includes(route.id)) return <AsyncStatePanel state="EMPTY" code="ROUTE_NOT_IN_REDESIGN_SCOPE" />;
-  const consoles = visibleConsoles(access.permissions, PRODUCTION_RELEASED_ROUTE_IDS);
+  if (!allowedRouteIds.includes(route.id)) return <AsyncStatePanel state="EMPTY" code="ROUTE_NOT_IN_REDESIGN_SCOPE" />;
+  const consoles = visibleConsoles(access.permissions, allowedRouteIds);
   const Page = route.Component;
   const createAdapter = createPreviewAdapterForRoute(route.id);
-  return <AdminV2Shell consoles={consoles} activeConsole={route.console} activeRoute={route} access={access} allowedRouteIds={PRODUCTION_RELEASED_ROUTE_IDS} onConsoleSelect={(consoleId) => navigate(routesForConsole(consoleId, access.permissions, PRODUCTION_RELEASED_ROUTE_IDS)[0].previewPath)} onRouteNavigate={(nextRoute) => navigate(nextRoute.previewPath)}><Page route={route} {...(createAdapter ? { createAdapter } : {})} /></AdminV2Shell>;
+  return <AdminV2Shell consoles={consoles} activeConsole={route.console} activeRoute={route} access={access} allowedRouteIds={allowedRouteIds} serviceHref={process.env.REACT_APP_STATIC_DEMO === 'true' ? '#demo/home' : '/'} onConsoleSelect={(consoleId) => navigate(routesForConsole(consoleId, access.permissions, allowedRouteIds)[0].previewPath)} onRouteNavigate={(nextRoute) => navigate(nextRoute.previewPath)}><Page route={route} {...(createAdapter ? { createAdapter } : {})} /></AdminV2Shell>;
 }

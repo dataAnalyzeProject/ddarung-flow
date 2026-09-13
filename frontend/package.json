@@ -2,6 +2,7 @@
   "name": "ddarung-flow-frontend",
   "private": true,
   "version": "0.1.0",
+  "homepage": "/ddarung-flow",
   "type": "module",
   "scripts": {
     "start": "react-scripts start",

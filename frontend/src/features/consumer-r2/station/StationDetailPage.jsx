@@ -46,11 +46,12 @@ function formatCollectedAt(collectedAt) {
   }).format(date);
 }
 
-function StationMap({ station }) {
+function StationMap({ mapRenderer: MapRenderer, station }) {
   const mapRef = useRef(null);
   const [state, setState] = useState("loading");
 
   useEffect(() => {
+    if (MapRenderer) return undefined;
     const latitude = Number(station?.latitude);
     const longitude = Number(station?.longitude);
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
@@ -68,7 +69,9 @@ function StationMap({ station }) {
       })
       .catch(() => active && setState("unavailable"));
     return () => { active = false; };
-  }, [station]);
+  }, [MapRenderer, station]);
+
+  if (MapRenderer) return <MapRenderer station={station} variant="station" />;
 
   return (
     <section className="cr22-station__map" aria-label="대여소 위치">
@@ -171,6 +174,7 @@ function NearbyPanel({ nearby, state, onNavigate }) {
 export default function StationDetailPage({
   adapter = consumerStationAdapter,
   authState = "authenticated",
+  mapRenderer,
   onNavigate,
   stationId,
   user,
@@ -228,7 +232,7 @@ export default function StationDetailPage({
               <div><span>현재 대여 가능</span><strong>{displayCount(station || {})}</strong></div>
               <div className="cr22-station__inventory-meta"><span className="cr22-station__status">{status.label}</span><time dateTime={station?.collectedAt || undefined}>{formatCollectedAt(station?.collectedAt)}</time><p>{status.detail}</p></div>
             </section>
-            <StationMap station={station} />
+            <StationMap mapRenderer={mapRenderer} station={station} />
           </section>
 
           <aside className="cr22-station__history-notice"><ConsumerIcon name="info" size={18} /><span>평소 패턴은 최근 90일 관측값입니다. 미래의 대여 가능 대수를 예측하지 않습니다.</span></aside>

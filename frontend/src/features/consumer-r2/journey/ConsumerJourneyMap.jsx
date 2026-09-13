@@ -9,7 +9,7 @@ function validPoint(point) {
     && Math.abs(point.latitude) <= 90 && Math.abs(point.longitude) <= 180;
 }
 
-export default function ConsumerJourneyMap({ segments = [] }) {
+export default function ConsumerJourneyMap({ mapRenderer: MapRenderer, segments = [] }) {
   const canvasRef = useRef(null);
   const [state, setState] = useState("loading");
   const routes = useMemo(() => segments.filter((segment) => (
@@ -18,7 +18,7 @@ export default function ConsumerJourneyMap({ segments = [] }) {
   const missingRoute = segments.some((segment) => ["ACCESS", "RIDE"].includes(segment.type) && !routes.includes(segment));
 
   useEffect(() => {
-    if (!routes.length) return undefined;
+    if (MapRenderer || !routes.length) return undefined;
     let active = true;
     let resizeObserver;
     const container = canvasRef.current;
@@ -65,7 +65,9 @@ export default function ConsumerJourneyMap({ segments = [] }) {
       markers.forEach((marker) => marker.setMap(null));
       container.replaceChildren();
     };
-  }, [routes]);
+  }, [MapRenderer, routes]);
+
+  if (MapRenderer) return <MapRenderer segments={segments} variant="journey" />;
 
   return <MapShell ariaLabel="실제 여정 경로 지도" legend={routes.length && state === "ready" ? <div className="cr22-journey__map-legend">{Object.keys(SEGMENT_COLORS).map((type) => <span key={type}><i className={`is-${type.toLowerCase()}`} />{type}</span>)}</div> : null} footer={<p className="cr22-journey__map-note"><ConsumerIcon name="info" size={16} /> 실제 구간별 경로만 표시합니다.{missingRoute ? " 경로를 확인하지 못한 구간은 연결하지 않았습니다." : ""}</p>}>
     {routes.length ? <>

@@ -220,7 +220,7 @@ function EvidenceDialog({ aiFailed, onClose, open, plan, serverBuilt }) {
   );
 }
 
-function ResultContent({ adapter, decision, now, onNavigate, onSaved, onUpdated, recheckAdapter }) {
+function ResultContent({ adapter, decision, mapRenderer, now, onNavigate, onSaved, onUpdated, recheckAdapter }) {
   const plan = decision.unifiedPlan;
   const intent = decision.normalizedIntent || {};
   const constraints = intent.constraints || {};
@@ -289,7 +289,7 @@ function ResultContent({ adapter, decision, now, onNavigate, onSaved, onUpdated,
     <div className="cr22-journey__result-title"><div><p className="cr22-journey__breadcrumb"><ConsumerIcon name="home" size={15} /> <span aria-hidden="true">›</span> AI 플래너 <span aria-hidden="true">›</span> 결과</p><h1>{title} <StatusBadge tone="premium">PREMIUM</StatusBadge></h1><p className="cr22-journey__result-status" role="status">{serverBuiltSchedule ? <StatusBadge tone="caution">AI 미적용</StatusBadge> : null}{aiScheduleFailed ? <StatusBadge tone="danger">AI 일정 실패</StatusBadge> : null}{planStatus ? <StatusBadge tone={planStatus === "UNAVAILABLE" ? "danger" : "caution"}>{planStatus}</StatusBadge> : null}<span>{statusCopy}</span></p></div><div><ConsumerButton variant="secondary" icon={<ConsumerIcon name="info" />} onClick={() => setEvidenceOpen(true)}>{aiScheduleFailed ? "확인된 근거" : serverBuiltSchedule ? "추천 이유" : "AI 추천 이유"}</ConsumerButton><ConsumerButton variant="secondary" icon={<ConsumerIcon name="retry" />} onClick={() => { const panel = document.getElementById("structured-replan"); if (!panel) return; panel.open = true; panel.scrollIntoView({ block: "nearest" }); }}>조건 변경 후 재추천</ConsumerButton><ConsumerButton icon={<ConsumerIcon name="plan" />} disabled={Boolean(action)} loading={action === "save"} loadingLabel="저장 중…" onClick={save}>이 계획 저장</ConsumerButton></div></div>
     {savedJourneyId ? <ConsumerButton variant="secondary" disabled={Boolean(action)} onClick={() => setRecheckOpen(true)}>알림 신청</ConsumerButton> : null}
     <Summary plan={plan} />
-    <div className="cr22-journey__result-layout"><div><Timeline intent={intent} plan={plan} /></div><ConsumerJourneyMap segments={plan.segments} /></div>
+    <div className="cr22-journey__result-layout"><div><Timeline intent={intent} plan={plan} /></div><ConsumerJourneyMap mapRenderer={mapRenderer} segments={plan.segments} /></div>
     <details className="cr22-card cr22-journey__replan-card" id="structured-replan">
       <summary className="cr22-card__header"><h2>구조화 조건으로 다시 계획</h2></summary>
       <div className="cr22-journey__replan">
@@ -306,7 +306,7 @@ function ResultContent({ adapter, decision, now, onNavigate, onSaved, onUpdated,
   </>;
 }
 
-export default function ConsumerJourneyPlanResultPage({ adapter = consumerJourneyAdapter, authState = "authenticated", decisionId, initialDecision, now, onLogin, onNavigate, onResult, onSaved, recheckAdapter = consumerSupportAdapter, user }) {
+export default function ConsumerJourneyPlanResultPage({ adapter = consumerJourneyAdapter, authState = "authenticated", decisionId, initialDecision, mapRenderer, now, onLogin, onNavigate, onResult, onSaved, recheckAdapter = consumerSupportAdapter, user }) {
   const [state, setState] = useState(initialDecision ? { type: "ready", decision: initialDecision } : { type: "loading" });
   const [reloadKey, setReloadKey] = useState(0);
   const readyDecision = state.type === "ready" && (!decisionId || state.decision.decisionId === decisionId) ? state.decision : null;
@@ -330,7 +330,7 @@ export default function ConsumerJourneyPlanResultPage({ adapter = consumerJourne
     <ConsumerContainer as="main" id="main-content" className="cr22-journey__content">
       {state.type === "loading" ? <AsyncState state="loading" title="AI 계획을 불러오는 중입니다" description="저장된 decision과 현재 근거 상태를 확인하고 있습니다." /> : null}
       {state.type === "error" ? <AsyncState state="error" title={state.error?.status === 410 ? "AI 계획이 만료되었습니다" : state.error?.status === 404 ? "AI 계획을 찾을 수 없습니다" : "AI 계획을 불러오지 못했습니다"} description={ERROR_COPY[state.error?.code] || "조건을 다시 입력하거나 잠시 후 다시 시도해 주세요."} onAction={() => setReloadKey((current) => current + 1)} /> : null}
-      {state.type === "ready" ? <ResultContent key={`${state.decision.decisionId}:${state.decision.revision}`} adapter={adapter} decision={state.decision} now={now} onNavigate={onNavigate} onSaved={onSaved} onUpdated={(decision) => setState({ type: "ready", decision })} recheckAdapter={recheckAdapter} /> : null}
+      {state.type === "ready" ? <ResultContent key={`${state.decision.decisionId}:${state.decision.revision}`} adapter={adapter} decision={state.decision} mapRenderer={mapRenderer} now={now} onNavigate={onNavigate} onSaved={onSaved} onUpdated={(decision) => setState({ type: "ready", decision })} recheckAdapter={recheckAdapter} /> : null}
     </ConsumerContainer>
   </ConsumerR2Theme>;
 }

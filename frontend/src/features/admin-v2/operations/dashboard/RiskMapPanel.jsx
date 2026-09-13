@@ -2,12 +2,19 @@ import { useEffect, useRef, useState } from 'react';
 import { loadKakaoMapSdk } from '../../../map/kakaoMapApi';
 import { createMiniRiskKakaoMapAdapter } from './miniRiskKakaoMapAdapter';
 
+const STATIC_DEMO = process.env.REACT_APP_STATIC_DEMO === 'true';
+const loadStaticMap = () => Promise.resolve({});
+const createStaticMap = (container) => {
+  container.classList.add('is-static-demo');
+  return { destroy() {}, focusStation() {}, setStations() {} };
+};
+
 function stateNotice(state, dataState) {
   const labels = { DELAYED: '정보 갱신 지연', PARTIAL: '일부 데이터 누락', INSUFFICIENT_DATA: '판단 정보 부족', UNAVAILABLE: '현재 사용할 수 없음' };
   return state !== 'SUCCESS' && labels[state] ? `${labels[state]} · ${dataState}` : null;
 }
 
-export default function RiskMapPanel({ items, selectedStationNumber, onSelect, referenceTime, state, dataState, loadMapSdk = loadKakaoMapSdk, createMapAdapter = createMiniRiskKakaoMapAdapter }) {
+export default function RiskMapPanel({ items, selectedStationNumber, onSelect, referenceTime, state, dataState, loadMapSdk = STATIC_DEMO ? loadStaticMap : loadKakaoMapSdk, createMapAdapter = STATIC_DEMO ? createStaticMap : createMiniRiskKakaoMapAdapter }) {
   const containerRef = useRef(null);
   const adapterRef = useRef(null);
   const previousSelectionRef = useRef(null);
