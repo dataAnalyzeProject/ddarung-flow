@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#123c34">
+  <meta name="description" content="따라가요의 핵심 사용자 흐름을 sample data로 재현한 backend-free portfolio demo">
+  <title>따라가요 — Portfolio Demo</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23123c34'/%3E%3Ccircle cx='18' cy='42' r='10' fill='none' stroke='%23b9ed72' stroke-width='5'/%3E%3Ccircle cx='47' cy='42' r='10' fill='none' stroke='%23b9ed72' stroke-width='5'/%3E%3Cpath d='M18 42l10-20 9 20m-15-11h22L35 18' fill='none' stroke='%23fff' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#app-main">본문 바로가기</a>
+  <div class="demo-boundary" role="status">
+    <span class="boundary-dot" aria-hidden="true"></span>
+    <strong>Portfolio Demo</strong>
+    <span>Sample Data</span>
+    <span>Backend Offline</span>
+  </div>
+
+  <header class="site-header">
+    <a class="brand" href="#home" data-route="home" aria-label="따라가요 데모 홈">
+      <span class="brand-mark" aria-hidden="true">따</span>
+      <span><strong>따라가요</strong><small>DDARUNG FLOW</small></span>
+    </a>
+    <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav">메뉴</button>
+    <nav id="site-nav" aria-label="데모 화면">
+      <a href="#search" data-route="search">대여 추천</a>
+      <a href="#planner" data-route="planner">AI 플래너</a>
+      <a href="#admin" data-route="admin">운영 화면</a>
+      <a href="#evidence" data-route="evidence">프로젝트 근거</a>
+    </nav>
+  </header>
+
+  <div class="route-rail" aria-label="추천 흐름 진행 단계">
+    <span class="rail-label">추천 흐름</span>
+    <ol>
+      <li data-step="search"><span>1</span>조건</li>
+      <li data-step="candidates"><span>2</span>비교</li>
+      <li data-step="station"><span>3</span>상세</li>
+      <li data-step="guide"><span>4</span>가이드</li>
+    </ol>
+  </div>
+
+  <main id="app-main" tabindex="-1">
+    <section class="view view-home is-active" data-view="home" aria-labelledby="home-title">
+      <div class="hero-grid shell">
+        <div class="hero-copy">
+          <p class="eyebrow">SEOUL BIKE · ARRIVAL-FIRST DECISION</p>
+          <h1 id="home-title">도착했을 때 빌릴 수 있을까?</h1>
+          <p class="hero-lede">따라가요는 출발지가 아니라 <em>목적지 도착 시점</em>을 기준으로 주변 대여소를 비교합니다. 이 보존판에서는 고정된 예시 데이터로 실제 제품의 판단 흐름을 직접 살펴볼 수 있습니다.</p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="#search" data-route="search">추천 흐름 시작</a>
+            <a class="button button-quiet" href="#evidence" data-route="evidence">실제 프로젝트 근거</a>
+          </div>
+          <p class="sample-stamp"><b>고정 예시 시각</b> 2026-08-29 14:00 KST · 현재 재고가 아닙니다</p>
+        </div>
+        <div class="hero-map" aria-label="목적지 주변 대여소 예시 지도">
+          <div class="river" aria-hidden="true"></div>
+          <div class="street street-a" aria-hidden="true"></div>
+          <div class="street street-b" aria-hidden="true"></div>
+          <div class="destination-pin"><span>목적지</span></div>
+          <button class="map-station station-a" type="button" data-route="station" aria-label="여의나루역 1번 출구 대여소 상세"><b>높음</b><small>14대</small></button>
+          <button class="map-station station-b" type="button" data-route="station" aria-label="여의도공원 대여소 상세"><b>중간</b><small>7대</small></button>
+          <button class="map-station station-c" type="button" data-route="station" aria-label="마포대교 남단 대여소 상세"><b>낮음</b><small>2대</small></button>
+          <div class="map-note">SAMPLE MAP · NO LIVE MAP API</div>
+        </div>
+      </div>
+      <div class="home-strip shell" aria-label="제품 핵심">
+        <article><span>H1–H4</span><p>60–240분 도착 horizon</p></article>
+        <article><span>3단계</span><p>높음 · 중간 · 낮음</p></article>
+        <article><span>근거 우선</span><p>재고 · 날씨 · 이동 조건</p></article>
+      </div>
+    </section>
+
+    <section class="view" data-view="search" aria-labelledby="search-title">
+      <div class="shell narrow">
+        <div class="section-heading">
+          <p class="eyebrow">STEP 1 · ARRIVAL CONDITIONS</p>
+          <h1 id="search-title">도착 조건을 정해 보세요</h1>
+          <p>입력값은 브라우저 안에서만 예시 결과를 바꿉니다. 서버로 전송되지 않습니다.</p>
+        </div>
+        <form id="search-form" class="search-card">
+          <label>출발지<span class="field-value">서울역</span><input name="origin" value="서울역" autocomplete="off"></label>
+          <label>목적지<span class="field-value">여의도공원</span><input name="destination" value="여의도공원" autocomplete="off"></label>
+          <div class="form-row">
+            <label>도착까지<select name="horizon"><option value="60">60분</option><option value="120" selected>120분</option><option value="180">180분</option><option value="240">240분</option></select></label>
+            <label>필요 자전거<select name="count"><option>1대</option><option selected>2대</option><option>3대</option><option>4대</option></select></label>
+          </div>
+          <fieldset><legend>날씨 조건</legend><div class="segmented"><label><input type="radio" name="weather" value="맑음" checked><span>맑음 24°C</span></label><label><input type="radio" name="weather" value="흐림"><span>흐림 21°C</span></label><label><input type="radio" name="weather" value="비"><span>비 19°C</span></label></div></fieldset>
+          <button class="button button-primary button-wide" type="submit">예시 대여소 비교하기</button>
+        </form>
+        <aside class="inline-boundary"><strong>Sample calculation</strong><span>실시간 재고·날씨·예측 API를 호출하지 않습니다.</span></aside>
+      </div>
+    </section>
+
+    <section class="view" data-view="candidates" aria-labelledby="candidates-title">
+      <div class="shell">
+        <div class="section-heading split-heading">
+          <div><p class="eyebrow">STEP 2 · CANDIDATE COMPARISON</p><h1 id="candidates-title">도착 시점 추천 대여소</h1><p id="candidate-summary">여의도공원 · 120분 후 · 2대 필요</p></div>
+          <button class="button button-quiet" type="button" data-route="search">조건 수정</button>
+        </div>
+        <div class="decision-callout"><span class="signal signal-high">높음</span><div><strong>여의나루역 1번 출구를 먼저 확인하세요</strong><p>예시 조건에서 도착 시 대여 가능성이 가장 높습니다.</p></div></div>
+        <div class="candidate-grid">
+          <article class="candidate-card candidate-best">
+            <div class="candidate-top"><span class="rank">추천 1</span><span class="signal signal-high">높음 · 82%</span></div>
+            <h2>여의나루역 1번 출구</h2><p class="station-code">ST-207 · 목적지에서 도보 4분</p>
+            <dl><div><dt>예시 현재 재고</dt><dd>14대</dd></div><div><dt>도착 예상 재고</dt><dd>9–12대</dd></div><div><dt>거치대</dt><dd>30개</dd></div></dl>
+            <button class="button button-primary button-wide" type="button" data-route="station">상세 근거 보기</button>
+          </article>
+          <article class="candidate-card">
+            <div class="candidate-top"><span class="rank">추천 2</span><span class="signal signal-mid">중간 · 61%</span></div>
+            <h2>여의도공원</h2><p class="station-code">ST-219 · 목적지에서 도보 7분</p>
+            <dl><div><dt>예시 현재 재고</dt><dd>7대</dd></div><div><dt>도착 예상 재고</dt><dd>3–6대</dd></div><div><dt>거치대</dt><dd>20개</dd></div></dl>
+            <button class="button button-secondary button-wide" type="button" data-route="station">상세 근거 보기</button>
+          </article>
+          <article class="candidate-card">
+            <div class="candidate-top"><span class="rank">추천 3</span><span class="signal signal-low">낮음 · 28%</span></div>
+            <h2>마포대교 남단</h2><p class="station-code">ST-221 · 목적지에서 도보 9분</p>
+            <dl><div><dt>예시 현재 재고</dt><dd>2대</dd></div><div><dt>도착 예상 재고</dt><dd>0–2대</dd></div><div><dt>거치대</dt><dd>15개</dd></div></dl>
+            <button class="button button-secondary button-wide" type="button" data-route="station">상세 근거 보기</button>
+          </article>
+        </div>
+        <p class="disclaimer">확률·재고·도보 시간은 제품 흐름 설명을 위한 fixture이며 실제 의사결정에 사용할 수 없습니다.</p>
+      </div>
+    </section>
+
+    <section class="view" data-view="station" aria-labelledby="station-title">
+      <div class="shell">
+        <button class="back-link" type="button" data-route="candidates">← 후보 비교로</button>
+        <div class="station-layout">
+          <div>
+            <p class="eyebrow">STEP 3 · STATION DETAIL</p><h1 id="station-title">여의나루역 1번 출구</h1><p class="station-code">ST-207 · Sample station</p>
+            <div class="probability-panel"><div class="probability-ring" aria-label="예시 대여 가능성 82퍼센트"><span>82<small>%</small></span></div><div><span class="signal signal-high">대여 가능성 높음</span><p>120분 뒤 2대 이상 남아 있을 가능성이 높은 예시입니다.</p></div></div>
+            <div class="evidence-list">
+              <article><span class="evidence-icon">재</span><div><strong>재고 흐름</strong><p>14대에서 최근 한 시간 동안 완만한 감소</p></div><b>긍정</b></article>
+              <article><span class="evidence-icon">날</span><div><strong>날씨 영향</strong><p>맑음 24°C · 대여 수요 증가 가능성 반영</p></div><b class="neutral">주의</b></article>
+              <article><span class="evidence-icon">길</span><div><strong>목적지 접근</strong><p>도보 4분 · 큰 교차로 1회</p></div><b>긍정</b></article>
+            </div>
+          </div>
+          <aside class="mini-map"><div class="mini-route"><span class="mini-start">ST-207</span><i></i><span class="mini-end">여의도공원</span></div><dl><div><dt>도보 거리</dt><dd>280m</dd></div><div><dt>예상 시간</dt><dd>4분</dd></div><div><dt>예시 기준</dt><dd>14:00 KST</dd></div></dl><button class="button button-primary button-wide" type="button" data-route="guide">이 대여소 이용 가이드</button></aside>
+        </div>
+      </div>
+    </section>
+
+    <section class="view" data-view="guide" aria-labelledby="guide-title">
+      <div class="shell narrow">
+        <button class="back-link" type="button" data-route="station">← 대여소 상세로</button>
+        <div class="section-heading"><p class="eyebrow">STEP 4 · RIDING GUIDE</p><h1 id="guide-title">여의나루에서 한강으로</h1><p>추천 이후 실제 이동을 돕는 대표 가이드 화면입니다.</p></div>
+        <ol class="guide-timeline">
+          <li><span>1</span><div><strong>출구에서 대여소 찾기</strong><p>1번 출구에서 오른쪽으로 80m 이동합니다.</p></div><time>2분</time></li>
+          <li><span>2</span><div><strong>자전거 상태 확인</strong><p>타이어·브레이크·안장 높이를 확인합니다.</p></div><time>2분</time></li>
+          <li><span>3</span><div><strong>한강 자전거길 진입</strong><p>보행자 구간에서는 내려서 이동합니다.</p></div><time>4분</time></li>
+        </ol>
+        <div class="guide-actions"><button class="button button-secondary" type="button" data-route="planner">AI 플래너 대표 화면</button><button class="button button-primary" type="button" data-route="home">처음으로</button></div>
+      </div>
+    </section>
+
+    <section class="view" data-view="planner" aria-labelledby="planner-title">
+      <div class="shell">
+        <div class="section-heading"><p class="eyebrow">AI PLANNER · REPRESENTATIVE VIEW</p><h1 id="planner-title">오늘의 한강 라이딩 계획</h1><p>자연어 요청을 구조화한 예시 결과입니다. 생성형 AI나 경로 API를 호출하지 않습니다.</p></div>
+        <div class="planner-layout">
+          <aside class="planner-request"><span>예시 요청</span><blockquote>“서울역에서 출발해서 2시간 안에 여의도 한강공원을 둘러보고 싶어요.”</blockquote><dl><div><dt>이용 시간</dt><dd>120분</dd></div><div><dt>테마</dt><dd>한강 · 휴식</dd></div><div><dt>방문 장소</dt><dd>2곳</dd></div></dl></aside>
+          <div class="planner-result"><div class="planner-status"><span class="signal signal-high">SAMPLE PLAN</span><strong>대여 → 라이딩 → 반납</strong></div><ol><li><time>14:00</time><div><strong>서울역에서 이동</strong><p>지하철 1호선 → 여의나루역</p></div></li><li><time>14:35</time><div><strong>ST-207에서 대여</strong><p>예시 대여 가능성 82%</p></div></li><li><time>14:45</time><div><strong>한강 자전거길</strong><p>여의도공원 · 샛강생태공원</p></div></li><li><time>15:45</time><div><strong>ST-241에 반납</strong><p>예시 반도착 가능 거치대 6개</p></div></li></ol><button class="button button-secondary" type="button" data-route="guide">라이딩 가이드 보기</button></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="view" data-view="admin" aria-labelledby="admin-title">
+      <div class="admin-shell">
+        <aside class="admin-sidebar"><a class="brand admin-brand" href="#admin" data-route="admin"><span class="brand-mark">따</span><span><strong>운영 콘솔</strong><small>READ-ONLY DEMO</small></span></a><nav aria-label="운영 메뉴"><a class="is-current" href="#admin">상황판</a><span>위험 지도</span><span>데이터 상태</span><span>모델 진단</span></nav><p>쓰기 기능 없음<br>Fixture snapshot</p></aside>
+        <div class="admin-content"><div class="admin-heading"><div><p class="eyebrow">ADMIN DASHBOARD · SAMPLE</p><h1 id="admin-title">운영 상황판</h1></div><div class="admin-filter"><label>예측 horizon<select><option>60분</option></select></label><label>필요 자전거<select><option>2대</option></select></label></div></div><div class="admin-context"><span><b>기준시각</b>2026-08-29 14:00</span><span><b>데이터 상태</b><mark>정상 예시</mark></span><span><b>평가 대여소</b>2,741곳</span></div><div class="admin-metrics"><article><span>CRITICAL</span><strong>12</strong><small>즉시 확인 예시</small></article><article><span>HIGH</span><strong>37</strong><small>우선 대응 예시</small></article><article><span>WATCH</span><strong>84</strong><small>관찰 대상 예시</small></article><article><span>NORMAL</span><strong>2,608</strong><small>정상 평가 예시</small></article></div><div class="admin-panels"><article><div class="panel-title"><h2>대여 부족 위험 상위 5곳</h2><span>FIXTURE</span></div><ol class="risk-list"><li><b>1</b><span>마포대교 남단<small>ST-221 · 현재 2대</small></span><em>CRITICAL</em><strong>86%</strong></li><li><b>2</b><span>국회의사당역 3번 출구<small>ST-223 · 현재 3대</small></span><em>HIGH</em><strong>74%</strong></li><li><b>3</b><span>샛강역 1번 출구<small>ST-231 · 현재 4대</small></span><em>HIGH</em><strong>69%</strong></li></ol></article><article class="admin-map"><div class="heat heat-one"></div><div class="heat heat-two"></div><div class="heat heat-three"></div><span>SAMPLE RISK MAP<br>NO LIVE DATA</span></article></div></div>
+      </div>
+    </section>
+
+    <section class="view" data-view="evidence" aria-labelledby="evidence-title">
+      <div class="shell narrow">
+        <div class="section-heading"><p class="eyebrow">PROJECT / EVIDENCE</p><h1 id="evidence-title">데모와 실제 증거를 구분했습니다</h1><p>이 페이지는 제품 UI를 보존한 정적 데모입니다. 실제 서비스가 동작했던 기록은 아래 공개 근거에서 확인할 수 있습니다.</p></div>
+        <div class="evidence-links">
+          <a href="https://youtu.be/7Tuu9zB14ME" target="_blank" rel="noreferrer"><span>Recorded live demo</span><strong>5분 서비스 가이드 영상</strong><small>실제 운영 당시 화면 · YouTube ↗</small></a>
+          <a href="https://github.com/dataAnalyzeProject/ddarung-flow" target="_blank" rel="noreferrer"><span>Source & delivery</span><strong>GitHub repository</strong><small>코드 · PR · CI 근거 ↗</small></a>
+          <a href="https://app.notion.com/p/3cd00ce3705c81d09070db8b3dfc04bf" target="_blank" rel="noreferrer"><span>Detailed case study</span><strong>Public Notion</strong><small>역할 · 설계 · 검증 · 한계 ↗</small></a>
+          <a href="https://kimsunho.toxh13.chatgpt.site/portfolio/ddarung-flow/" target="_blank" rel="noreferrer"><span>Portfolio</span><strong>따라가요 Project 01</strong><small>개인 기여와 프로젝트 맥락 ↗</small></a>
+        </div>
+        <div class="boundary-card"><h2>이 데모가 하지 않는 것</h2><ul><li>실시간 따릉이·날씨·경로 요청</li><li>모델 inference 또는 생성형 AI 호출</li><li>로그인·OAuth·결제</li><li>관리자 쓰기 작업과 데이터베이스 연결</li></ul><p>모든 숫자와 상태는 제품 흐름을 설명하기 위한 sample fixture입니다.</p></div>
+      </div>
+    </section>
+  </main>
+
+  <footer><div class="shell"><span>따라가요 · Static Portfolio Demo</span><span>Backend-free · Sample fixture only</span></div></footer>
+  <script src="app.js" defer></script>
+</body>
+</html>
