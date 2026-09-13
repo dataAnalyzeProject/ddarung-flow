@@ -46,47 +46,23 @@
 
 ## 2. 핵심 사용자 흐름
 
-```mermaid
-flowchart LR
-    A[지도에서 현재 재고 확인] --> B[출발지·목적지 입력]
-    B --> C[이동 조건·필요 수량 선택]
-    C --> D[목적지 주변 후보 탐색]
-    D --> E[후보별 예상 도착시각 계산]
-    E --> F{로그인 상태}
-    F -->|미로그인| G[소셜 로그인]
-    F -->|로그인| H[예측 실행]
-    G --> H
-    H --> I[도착시점 대여 가능성 계산]
-    I --> J[확률·현재 재고·거리·시간 비교]
-    J --> K[사용자가 대여소 선택]
-```
+![출발 조건을 도착 시점의 대여소 선택으로 연결하는 따라가요 Consumer 흐름](docs/portfolio/assets/01-consumer-flow.svg)
+
+*입력 → 도착시각 기준 예측 → 비교·선택의 흐름입니다. 지원 horizon이 아직 열리지 않은 `TOO_SOON` 상태에서는 확률을 만들지 않고 최신 현재 재고와 안내만 제공합니다.*
 
 현재 재고 탐색은 빠르게 확인할 수 있도록 공개 흐름으로 두고, 미래 대여 가능성 예측과 사용자 상태를 다루는 보호 기능은 로그인 이후로 분리했습니다.
 
 ---
 
-## 3. 데이터에서 사용자 선택까지
+## 3. 서비스 아키텍처
 
 따라가요의 중심은 “모델을 만들었다”가 아니라 **데이터·모델 결과를 실제 사용자 선택으로 연결했다는 점**입니다.
 
-```mermaid
-flowchart LR
-    RAW[공공자전거 원천 데이터] --> PIPE[Python · Airflow 파이프라인]
-    PIPE --> QUALITY[정제 · 품질 검증]
-    QUALITY --> DATA[(PostgreSQL / 서비스 데이터)]
-    QUALITY --> MODEL[승인 모델 · artifact]
+![외부 데이터부터 Data ML, Spring 서비스, Consumer와 Operations까지 이어지는 따라가요 서비스 아키텍처](docs/portfolio/assets/02-service-architecture.svg)
 
-    USER[사용자 조건] --> WEB[React Consumer Web]
-    WEB --> API[Spring Boot API]
-    API --> DATA
-    API --> MODEL
-    API --> EXT[지도 · 장소 · 이동 정보]
-    API --> WEB
+*외부 지도·환경 데이터는 경로와 맥락을 보완하고, Core 예측은 검증된 서비스 데이터와 승인 모델 흐름에서 분리해 다룹니다. AI Planner는 결과를 설명·정리하는 보조 기능입니다.*
 
-    WEB --> DECISION[후보 비교 · 사용자 선택]
-```
-
-### 데이터·모델에서 지킨 원칙
+## 4. Data / ML 구조와 원칙
 
 - 원천 데이터를 바로 학습에 사용하지 않고 **정합성·결측·결합 품질을 먼저 확인**했습니다.
 - 현재 재고와 미래 예측은 같은 숫자처럼 섞지 않고 **각각의 기준시각을 구분**했습니다.
@@ -98,7 +74,7 @@ flowchart LR
 
 ---
 
-## 4. 주요 기능
+## 5. 주요 기능
 
 ### Consumer Core
 
@@ -126,9 +102,17 @@ flowchart LR
 - 모델 artifact와 추론 흐름 관리
 - CI/CD 및 staging runtime 검증 근거 관리
 
+### 화면 예시
+
+아래 이미지는 대여소 상세 화면의 실제 포트폴리오 자산입니다.
+
+![따라가요 대여소 상세 화면](presentation-assets/consumer/notion/06-station-detail.png)
+
+Consumer 검색 → 예측 → 후보 비교 → 선택 가이드와 Data/ML·Operations의 상세 화면 및 검증 이미지는 [Public Notion](https://app.notion.com/p/3cd00ce3705c81d09070db8b3dfc04bf)에서 확인할 수 있습니다.
+
 ---
 
-## 5. 기술 스택
+## 6. 기술 스택
 
 | 영역 | 기술 |
 |---|---|
@@ -143,7 +127,7 @@ flowchart LR
 
 ---
 
-## 6. 시스템 설계에서 중요하게 본 것
+## 7. 시스템 설계 원칙
 
 ### 현재 재고와 미래 예측의 책임 분리
 
@@ -159,16 +143,6 @@ flowchart LR
 
 ---
 
-## 7. 화면 예시
-
-아래 이미지는 대여소 상세 화면의 실제 포트폴리오 자산입니다.
-
-![따라가요 대여소 상세 화면](presentation-assets/consumer/notion/06-station-detail.png)
-
-Consumer 검색 → 예측 → 후보 비교 → 선택 가이드와 Data/ML·Operations의 상세 화면 및 검증 이미지는 [Public Notion](https://app.notion.com/p/3cd00ce3705c81d09070db8b3dfc04bf)에서 확인할 수 있습니다.
-
----
-
 ## 8. 팀 구성 · 역할 분담 · 협업
 
 이 프로젝트는 **5인 팀 프로젝트**입니다. 아래 역할은 각 팀원이 주로 소유한 영역과 대표 작업을 설명하기 위한 것이며, 하나의 기능을 한 사람이 단독으로 완성했다는 의미가 아닙니다. 데이터 결과가 백엔드 계약으로 이어지고, 백엔드 API가 프론트 화면과 연결되며, 최종 변경은 PR·리뷰·통합·CI/CD를 거쳐 하나의 서비스로 합쳐졌습니다.
@@ -181,15 +155,6 @@ Consumer 검색 → 예측 → 후보 비교 → 선택 가이드와 Data/ML·Op
 | **유제훈** | Frontend · 관리자 시각화 | 로그인 상태와 입력 복원 흐름, 로그인 화면 UI, 관리자 Data/Export·ModelOps 화면, Premium 보조 UI 등 프론트엔드 기능 |
 | **김로운** | Frontend · Consumer / Admin UI | Consumer 메인·예측 결과·정렬·상세 UI, 도착예정 날씨 UI, AdminShell·대시보드·권한/감사 화면과 관리자 adapter 통합 |
 
-### 김선호의 개인 기여
-
-포트폴리오 작성자 **김선호**의 주 역할은 `PM / 관리`이며, 팀 전체 구현을 개인 성과로 합산하지 않고 아래 범위를 개인 기여로 구분합니다.
-
-- **WBS · 작업 기준 관리:** 프로젝트 범위, 작업 계약, 우선순위와 인수 기준을 문서화하고 실제 작업 상태와 연결
-- **통합 관리:** 각 팀원의 작업 브랜치·PR·기준선을 검토하고 데이터·백엔드·프론트 결과가 최종 사용자 흐름으로 이어지도록 통합
-- **CI/CD · 배포 근거:** CI, Staging CD, Runtime Evidence를 기준으로 변경사항이 실제 배포 상태와 일치하는지 검증
-- **발표·인수 근거:** 기능 완료를 주장하기 전에 코드·실화면·테스트·배포 증거를 맞추고 최종 발표 및 공개 문서의 근거를 정리
-
 ### 협업 방식
 
 1. **Notion WBS / 작업 계약**으로 각 작업의 범위·담당자·완료 기준을 먼저 고정했습니다.
@@ -199,9 +164,27 @@ Consumer 검색 → 예측 → 후보 비교 → 선택 가이드와 Data/ML·Op
 
 이 구조를 통해 개인 담당 영역은 명확하게 유지하면서도, 최종 결과는 **데이터 → 모델 → Backend → Consumer/Operations → 배포**가 연결된 팀 산출물로 관리했습니다.
 
+![5인 팀의 역할 경계와 김선호의 계약 PR CI CD 릴리스 증거 연결 레인을 보여 주는 협업 도해](docs/portfolio/assets/03-team-collaboration.svg)
+
+*역할 카드는 위계가 아니라 책임 경계를 나타냅니다. 김선호의 레인은 팀 구현을 개인 성과로 합산하지 않고, 계약·통합·검증 근거의 연결 책임을 표현합니다.*
+
 ---
 
-## 9. 최종 검증 기준
+## 9. My Technical Contribution — 김선호
+
+포트폴리오 작성자 **김선호**는 팀 전체 구현을 개인 성과로 합산하지 않고, 다음의 연결·운영 책임을 맡았습니다.
+
+![김선호의 Data Engineering, Cloud Data, Integration Release, Cloud Operations 연결 기여](docs/portfolio/assets/04-kim-sunho-integration-cicd.svg)
+
+- **Data Engineering:** 실시간 API 수집을 Airflow의 Raw·품질·Curated 흐름으로 연결하고, 재실행 중복 방지와 실패 경계를 확인했습니다.
+- **Cloud Data / Storage:** OCI Object Storage의 Raw·Curated·artifact 전달에서 manifest, lineage, checksum, immutable upload 근거를 검토했습니다.
+- **Cloud / Infrastructure:** Docker·OCIR·OCI staging의 배포 후보와 same-SHA, smoke·rollback 증거를 분리해 확인했습니다.
+- **Integration / Release Engineering:** Notion 작업 계약, 분리 브랜치·PR, changed path, CI quality gate, main 병합을 하나의 추적 가능한 흐름으로 관리했습니다.
+- **Runtime Verification:** deployed commit 일치, backend·inference·postgres 실행, restart count와 오류 marker를 별도 runtime evidence로 읽었습니다. 이는 브라우저 수용성 검증과는 다릅니다.
+
+---
+
+## 10. 최종 검증 기준
 
 포트폴리오 기준 코드는 다음 commit으로 고정합니다.
 
@@ -221,7 +204,7 @@ Consumer 검색 → 예측 → 후보 비교 → 선택 가이드와 Data/ML·Op
 
 ---
 
-## 10. 의도적으로 제외한 범위
+## 11. 의도적으로 제외한 범위
 
 5주 프로젝트에서 검증 가능한 핵심 가치에 집중하기 위해 아래 기능은 현재 완료 기능으로 주장하지 않습니다.
 
@@ -234,7 +217,7 @@ Consumer 검색 → 예측 → 후보 비교 → 선택 가이드와 Data/ML·Op
 
 ---
 
-## 11. 로컬 실행
+## 12. 실행 방법
 
 ### Frontend
 
@@ -266,7 +249,7 @@ cd backend
 
 ---
 
-## 12. 더 자세히 보기
+## 13. 더 자세히 보기
 
 - **5분 서비스 가이드 영상:** [YouTube](https://youtu.be/7Tuu9zB14ME)
 - **프로젝트 전체 설명 · 화면 · 데이터/ML · Operations:** [따라가요 Public Notion](https://app.notion.com/p/3cd00ce3705c81d09070db8b3dfc04bf)
