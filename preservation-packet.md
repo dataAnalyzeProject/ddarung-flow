@@ -20,7 +20,8 @@ Recorded: 2026-09-14 KST
 - Main application behavior: unchanged
 - Static source branch: `archive/static-demo-source`
 - Static source SHA: `d05c4977ec0098f7a6331ee29ff6f045871312d9`
-- Static artifact deployment SHA: `DEPLOYMENT_COMMIT_PENDING`
+- Static artifact deployment SHA: `7c79cd3c14fd1a5399ebdeba77b4483b56ca90a9`
+- GitHub Pages deployment #34766195379: `SUCCESS`
 - PR #432: `MERGED`
 - Post-merge CI #947: `SUCCESS`, same main SHA
 - Staging CD #373: `SUCCESS`, same main SHA
@@ -44,9 +45,11 @@ Recorded: 2026-09-14 KST
 - Screens: Home/Main, Prediction input/result, Station Detail, Riding Guide,
   AI Planner/result, and Admin Dashboard
 - Public QA viewports: 1440×1000 and 390×844
-- Expected horizontal overflow: none
-- Expected console errors/warnings: 0
-- Expected backend/inference/database/OAuth/payment/live-inventory/weather calls: 0
+- Public horizontal overflow: none across all seven routes at both viewports
+- Public console errors/warnings: 0
+- Public requests from a fresh browser: document, built JS/CSS, logo, and stored
+  hero image only
+- Backend/inference/database/OAuth/payment/live-inventory/weather calls: 0
 - [Desktop side-by-side](evidence/comparison/home-1440-reference-left-static-right.png)
 - [Mobile side-by-side](evidence/comparison/home-390-reference-left-static-right.png)
 
