@@ -46,20 +46,9 @@
 
 ## 2. 핵심 사용자 흐름
 
-```mermaid
-flowchart LR
-    A[지도에서 현재 재고 확인] --> B[출발지·목적지 입력]
-    B --> C[이동 조건·필요 수량 선택]
-    C --> D[목적지 주변 후보 탐색]
-    D --> E[후보별 예상 도착시각 계산]
-    E --> F{로그인 상태}
-    F -->|미로그인| G[소셜 로그인]
-    F -->|로그인| H[예측 실행]
-    G --> H
-    H --> I[도착시점 대여 가능성 계산]
-    I --> J[확률·현재 재고·거리·시간 비교]
-    J --> K[사용자가 대여소 선택]
-```
+![출발 조건을 도착 시점의 대여소 선택으로 연결하는 따라가요 Consumer 흐름](docs/portfolio/assets/01-consumer-flow.svg)
+
+*입력 → 도착시각 기준 예측 → 비교·선택의 흐름입니다. 지원 horizon이 아직 열리지 않은 `TOO_SOON` 상태에서는 확률을 만들지 않고 최신 현재 재고와 안내만 제공합니다.*
 
 현재 재고 탐색은 빠르게 확인할 수 있도록 공개 흐름으로 두고, 미래 대여 가능성 예측과 사용자 상태를 다루는 보호 기능은 로그인 이후로 분리했습니다.
 
@@ -69,22 +58,9 @@ flowchart LR
 
 따라가요의 중심은 “모델을 만들었다”가 아니라 **데이터·모델 결과를 실제 사용자 선택으로 연결했다는 점**입니다.
 
-```mermaid
-flowchart LR
-    RAW[공공자전거 원천 데이터] --> PIPE[Python · Airflow 파이프라인]
-    PIPE --> QUALITY[정제 · 품질 검증]
-    QUALITY --> DATA[(PostgreSQL / 서비스 데이터)]
-    QUALITY --> MODEL[승인 모델 · artifact]
+![외부 데이터부터 Data ML, Spring 서비스, Consumer와 Operations까지 이어지는 따라가요 서비스 아키텍처](docs/portfolio/assets/02-service-architecture.svg)
 
-    USER[사용자 조건] --> WEB[React Consumer Web]
-    WEB --> API[Spring Boot API]
-    API --> DATA
-    API --> MODEL
-    API --> EXT[지도 · 장소 · 이동 정보]
-    API --> WEB
-
-    WEB --> DECISION[후보 비교 · 사용자 선택]
-```
+*외부 지도·환경 데이터는 경로와 맥락을 보완하고, Core 예측은 검증된 서비스 데이터와 승인 모델 흐름에서 분리해 다룹니다. AI Planner는 결과를 설명·정리하는 보조 기능입니다.*
 
 ### 데이터·모델에서 지킨 원칙
 
@@ -199,6 +175,10 @@ Consumer 검색 → 예측 → 후보 비교 → 선택 가이드와 Data/ML·Op
 
 이 구조를 통해 개인 담당 영역은 명확하게 유지하면서도, 최종 결과는 **데이터 → 모델 → Backend → Consumer/Operations → 배포**가 연결된 팀 산출물로 관리했습니다.
 
+![5인 팀의 역할 경계와 김선호의 계약 PR CI CD 릴리스 증거 연결 레인을 보여 주는 협업 도해](docs/portfolio/assets/03-team-collaboration.svg)
+
+*역할 카드는 위계가 아니라 책임 경계를 나타냅니다. 김선호의 레인은 팀 구현을 개인 성과로 합산하지 않고, 계약·통합·검증 근거의 연결 책임을 표현합니다.*
+
 ---
 
 ## 9. 최종 검증 기준
@@ -210,6 +190,10 @@ Consumer 검색 → 예측 → 후보 비교 → 선택 가이드와 Data/ML·Op
 ```
 
 해당 `main` 기준으로 확인한 배포·검증 파이프라인:
+
+![Notion 작업 계약에서 PR, exact SHA 검증, OCI staging의 smoke rollback runtime evidence를 거쳐 release로 이어지는 통합 릴리스 흐름](docs/portfolio/assets/04-kim-sunho-integration-cicd.svg)
+
+*릴리스는 변경 경로와 CI를 먼저 확인하고, main 병합 뒤에는 exact SHA stale guard와 변경 이미지 판별을 거칩니다. staging의 smoke·rollback·runtime evidence는 배포 사실을 확인하는 별도 단계입니다.*
 
 | 검증 | 결과 |
 |---|---|
