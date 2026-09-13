@@ -7,7 +7,7 @@ Four README diagrams make the portfolio’s verified product flow, architecture,
 ## Shared system
 
 - Canvas: `1600 × 900` or card-format equivalent; white field, navy `#102A43`, blue `#2563EB`, teal `#0F9D8A`, pale blue `#EAF2FF`, pale teal `#E6F7F3`, muted slate `#5C6B7A`.
-- Typography: system sans-serif; title 34–42px, section 16–18px, body 15–17px. Use text labels as the accessible source, and arrows with visible direction.
+- Typography: system sans-serif; title 34–42px, section 16–18px, body 15–17px. Use text labels as the accessible source, and arrows with visible direction. Every SVG declares and uses `.text-main`, `.text-muted`, `.text-white`, `.text-teal`, and `.text-blue`; dark surfaces receive only explicit white or teal text classes.
 - Layout: an editorial 16:9 board, generous gutters, 16px corner language, thin structural rules. Accent color encodes category only; labels carry every state.
 - Accessibility: every file has a title and description, non-color labels, and a readable logical order. Decorative rules and arrows use `aria-hidden`.
 
@@ -21,11 +21,11 @@ Four README diagrams make the portfolio’s verified product flow, architecture,
 
 ## 03 — Team collaboration
 
-**Message:** five peer role boundaries meet through contracts and evidence. Use five equal cards: Kim Sunho (PM / Integration / DevOps), Hwang Junhyeong (Data / ML), Sun Gyeongwon (Backend / API / DB), Yoo Jehun (Frontend / Admin visualization), Kim Rowoon (Frontend / Consumer / Admin UI). A horizontal Kim Sunho lane connects WBS, PR integration, CI/CD, and release evidence without placing him above implementation cards.
+**Message:** five peer role boundaries meet through contracts and evidence. Use five equal cards: 김선호 (PM / Integration / DevOps), 황준형 (Data / ML), 선경원 (Backend / API / DB), 유제훈 (Frontend / 관리자 시각화), 김로운 (Frontend / Consumer / Admin UI). A horizontal Kim Sunho lane connects WBS, PR integration, CI/CD, and release evidence without placing him above implementation cards.
 
 ## 04 — Integration and release engineering
 
-**Message:** release is an evidence chain, not a deployment button. The exact path is Notion WBS → branch → PR → changed paths → quality gates → main merge → exact-SHA stale guard / changed-image detection → Docker push → OCIR → OCI staging → smoke / rollback / runtime evidence → release. The runtime evidence card lists deployed commit match, healthy services, restart checks, HTTP 5xx and key error log checks. Do not imply any unobserved release result.
+**Message:** Kim Sunho connects verified data, cloud, integration, and operations boundaries; this is not a claim of ownership over model training or evaluation. Four pillars show (1) Realtime APIs → Airflow → Raw → Quality → Curated with duplicate-prevention and failure-boundary notes, (2) OCI Object Storage for Raw/Curated/artifact with manifest, lineage, checksum, immutable upload, (3) Notion Contract → Branch → PR → Changed Path → five CI quality gates → main, and (4) Docker → OCIR → OCI Staging → smoke/rollback/runtime evidence. The release handoff visibly connects main → exact SHA verification → stale candidate guard → changed image detection → Docker build/push. The five CI branches are Frontend (npm test, npm run build), Backend (Gradle test), Pipeline (pytest), Inference (unit test, compose config, docker build), and Workflow Validation (release flag, actionlint, secret/key guard). Runtime evidence lists deployed commit match, backend/inference/postgres running, restart checks, and HTTP 5xx/unhandled/DB/inference failure marker checks; it does not claim frontend health or browser acceptance.
 
 ## Source boundary
 
